@@ -61,7 +61,7 @@ def main(argv=None):
     print(f"  구역 {len(zs)}개 (제외: 유령 {n_ghost}, 가구 {n_furn})  바닥 인식률 {stats['coverage_pct']}%")
     if "ghost_layer_rescan" in stats.get("warnings", []):
         # cp949 콘솔 호환을 위해 특수기호 대신 텍스트 사용
-        print("  주의: 이중 표면(유령층) 감지 — 해당 지역 판정 불가, 재스캔 권장")
+        print("  주의: 이중 표면(유령층) 감지, 해당 지역 판정 불가. 재스캔 권장")
     if stats["worst"] is not None:
         print(f"  최대 {stats['value_max_mm']}mm @ ({stats['worst']['point_x']:.2f},"
               f" {stats['worst']['point_y']:.2f})  기준 {stats['applied_criteria']['name']}"

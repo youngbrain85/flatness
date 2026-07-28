@@ -17,12 +17,12 @@ def analyze_floor(path, scale_to_m, criterion, u_mm, out_dir,
                               info, scale_to_m, subcell_m)
     n_valid_sub = int(np.isfinite(grid.median_z).sum())
     if n_valid_sub < 10:
-        raise ValueError("유효 서브셀 부족 — 바닥 미검출")
+        raise ValueError("유효 서브셀 부족: 바닥 미검출")
     levels = detect_levels(grid.median_z)
     zmap, residuals = build_zones(grid, levels)
     ok_zones = [z for z in zmap.zones if z.status == "ok"]
     if not ok_zones:
-        raise ValueError("판정 가능한 바닥 구역 없음 — 재스캔 또는 파라미터 확인 필요")
+        raise ValueError("판정 가능한 바닥 구역 없음: 재스캔 또는 파라미터 확인 필요")
     span = criterion.span_m if criterion.span_m else 3.0
     cells = evaluate_cells(residuals, grid, span_m=span, cell_m=cell_m,
                            zone_labels=zmap.labels)
