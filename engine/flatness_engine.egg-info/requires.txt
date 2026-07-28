@@ -1,0 +1,6 @@
+numpy>=1.26
+laspy[lazrs]>=2.5
+matplotlib>=3.8
+
+[dev]
+pytest>=8
