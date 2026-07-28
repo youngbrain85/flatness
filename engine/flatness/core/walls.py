@@ -145,8 +145,8 @@ def evaluate_wall(grid, criterion, u_mm):
     ys, xs = np.nonzero(np.isfinite(grid.median_z))
     if len(xs) < 10:
         raise ValueError("벽 유효 서브셀 부족")
-    cu = (xs + 0.5) * grid.size_m
-    cv = (ys + 0.5) * grid.size_m
+    cu = grid.origin[0] + (xs + 0.5) * grid.size_m
+    cv = grid.origin[1] + (ys + 0.5) * grid.size_m
     a, b, c = fit_plane_ransac(cu, cv, grid.median_z[ys, xs].astype(float))
     residuals = residual_grid(grid, (a, b, c))
     span = criterion.span_m if criterion.span_m else 3.0
