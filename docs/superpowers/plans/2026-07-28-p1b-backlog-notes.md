@@ -5,10 +5,10 @@
 
 ## P1b (다중 구역·벽면·파서 확장) 필수 티켓
 
-1. **대좌표(georeferenced) 입력 float64 센터링** — las_reader/ply_reader가 실좌표를 즉시 float32 캐스트: UTM급 좌표(x~2e5, y~4e6)에서 ulp 3~50cm로 서브셀 비닝 지터·판정 붕괴. 수정: 청크를 float64로 받아 bbox_min(또는 LAS 헤더 오프셋) 차감 후 float32 캐스트 (조용한 품질 저하 클래스 — P2 실데이터 투입 전 필수)
-2. **span_m=1.0 기준의 대각 방향 이산화 보정** — half=round(0.5/0.0707)=7 → 대각 풀 라인 L=0.99m < min_span 1.0로 전멸(floor-kcs-finish7plus 선택 시 4방향이 조용히 2방향). 보정: 대각 half=ceil 후 L_eff 캡 또는 `L ≥ min_span_m − step` 허용
+1. [해결: P1b] **대좌표(georeferenced) 입력 float64 센터링** — las_reader/ply_reader가 실좌표를 즉시 float32 캐스트: UTM급 좌표(x~2e5, y~4e6)에서 ulp 3~50cm로 서브셀 비닝 지터·판정 붕괴. 수정: 청크를 float64로 받아 bbox_min(또는 LAS 헤더 오프셋) 차감 후 float32 캐스트 (조용한 품질 저하 클래스 — P2 실데이터 투입 전 필수)
+2. [해결: P1b] **span_m=1.0 기준의 대각 방향 이산화 보정** — half=round(0.5/0.0707)=7 → 대각 풀 라인 L=0.99m < min_span 1.0로 전멸(floor-kcs-finish7plus 선택 시 4방향이 조용히 2방향). 보정: 대각 half=ceil 후 L_eff 캡 또는 `L ≥ min_span_m − step` 허용
 3. **fit_plane_ransac n<3 가드** — 현재 pipeline의 `len(xs)<10` 가드에 의존. 다중 구역에서 구역별 호출 시 가드 유지 필수
-4. .laz 디스패치 직접 픽스처 테스트, PLY face-skip 전용 테스트 + 오류 경로 네거티브 테스트
+4. [해결: P1b] .laz 픽스처 테스트 완료, PLY face-skip 전용 테스트 + 오류 경로 네거티브 테스트
 5. 단위 모호 구간 경계(정확히 200/1000)의 포함 여부를 스펙 §5.1.1에 한 줄 명시
 
 ## P1d (성능·마무리) 티켓
