@@ -1,0 +1,13 @@
+[
+  {"name": "floor-kcs-finish7plus", "surface": "floor", "metric": "flatness", "span_m": 1, "pass_mm": 10, "rework_mm": 30, "source": "KCS 14 20 10 표 3.7-1 (마감두께 7mm 이상)"},
+  {"name": "floor-kcs-finish7minus", "surface": "floor", "metric": "flatness", "span_m": 3, "pass_mm": 10, "rework_mm": 30, "source": "KCS 14 20 10 표 3.7-1 (마감두께 7mm 미만)"},
+  {"name": "floor-kcs-exposed", "surface": "floor", "metric": "flatness", "span_m": 3, "pass_mm": 7, "rework_mm": 21, "source": "KCS 14 20 10 표 3.7-1 (제물치장·얇은 마감)"},
+  {"name": "floor-molit-cushion", "surface": "floor", "metric": "flatness", "span_m": 3, "pass_mm": 7, "rework_mm": 21, "source": "국토부 바닥충격음 고시 (완충재 바탕)"},
+  {"name": "floor-lh-exposed", "surface": "floor", "metric": "flatness", "span_m": 3, "pass_mm": 6, "rework_mm": 18, "source": "LHCS 14 20 10 05 표 3.11-7 (제물치장·도장·벽지)"},
+  {"name": "floor-lh-thick", "surface": "floor", "metric": "flatness", "span_m": 3, "pass_mm": 10, "rework_mm": 30, "source": "LHCS 14 20 10 05 표 3.11-7 (마감 13mm 초과)"},
+  {"name": "wall-kcs-tilt-exposed", "surface": "wall", "metric": "flatness", "span_m": 3, "pass_mm": 6, "rework_mm": 18, "source": "KCS 21 50 05 §3.2.6 (노출 모서리·줄눈)"},
+  {"name": "wall-kcs-tilt-other", "surface": "wall", "metric": "flatness", "span_m": 3, "pass_mm": 9, "rework_mm": 27, "source": "KCS 21 50 05 §3.2.6 (기타)"},
+  {"name": "wall-kcs-plumb", "surface": "wall", "metric": "plumbness", "span_m": null, "pass_mm": 25, "rework_mm": 75, "source": "KCS 21 50 05 §3.2.2 (H≤30m)"},
+  {"name": "wall-plaster-surface", "surface": "wall", "metric": "flatness", "span_m": 3, "pass_mm": 3, "rework_mm": 9, "source": "주택건설 전문시방서 31310 (미장 바름면)"},
+  {"name": "wall-plaster-base", "surface": "wall", "metric": "flatness", "span_m": 3, "pass_mm": 6, "rework_mm": 18, "source": "주택건설 전문시방서 31310 (미장 바탕면)"}
+]
