@@ -6,7 +6,7 @@ import numpy as np
 _CSV_FIELDS = ["ix", "iy", "center_x", "center_y", "value_mm", "span_used_m", "occupancy", "grade", "worst_x", "worst_y"]
 
 
-def build_stats(cells, grades, crit, u_mm, warnings, meta, zones=None):
+def build_stats(cells, grades, crit, u_mm, warnings, meta, zones=None, coverage_pct=None):
     valid = [c for c in cells if c.value_mm is not None]
     counts = {k: 0 for k in ("pass", "borderline", "repair", "rework", "na")}
     for g in grades:
@@ -37,7 +37,8 @@ def build_stats(cells, grades, crit, u_mm, warnings, meta, zones=None):
         "worst": None if worst is None else {
             "value_mm": round(worst.value_mm, 2), "cell_ix": worst.ix, "cell_iy": worst.iy,
             "point_x": worst.worst_x, "point_y": worst.worst_y},
-        "coverage_pct": round(100 * len(valid) / n, 1) if n else 0.0,
+        "coverage_pct": (round(float(coverage_pct), 1) if coverage_pct is not None
+                         else (round(100 * len(valid) / n, 1) if n else 0.0)),
         "reduced_span_cells": sum(1 for c in valid if c.span_used_m < (crit.span_m or 0)),
         "applied_criteria": {"name": crit.name, "source": crit.source, "span_m": crit.span_m,
                              "pass_mm": crit.pass_mm, "rework_mm": crit.rework_mm, "u_mm": u_mm},

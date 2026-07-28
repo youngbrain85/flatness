@@ -51,3 +51,13 @@ def test_write_outputs_empty_cells(tmp_path):
     assert (tmp_path / "stats.json").exists()
     lines = (tmp_path / "results.csv").read_text(encoding="utf-8").strip().splitlines()
     assert len(lines) == 1 and lines[0].startswith("ix,iy")
+
+def test_coverage_pct_param_overrides_cell_based():
+    # 티켓 16: 파이프라인 덮어쓰기 대신 파라미터로 편입 — 호출자별 의미 분화 방지
+    crit = load_criteria()["floor-kcs-exposed"]
+    cells = _cells()
+    grades, warns = grade_cells(cells, crit, 5.0)
+    s = build_stats(cells, grades, crit, 5.0, warns, {}, coverage_pct=87.34)
+    assert s["coverage_pct"] == 87.3
+    s2 = build_stats(cells, grades, crit, 5.0, warns, {})
+    assert s2["coverage_pct"] == round(100 * 2 / 3, 1)  # 기존 셀 기반 유지

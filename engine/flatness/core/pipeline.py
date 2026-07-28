@@ -43,8 +43,7 @@ def analyze_floor(path, scale_to_m, criterion, u_mm, out_dir,
     meta = {"file": str(path), "n_points": info.n_points, "scale_to_m": scale_to_m,
             "subcell_m": subcell_m, "cell_m": cell_m, "engine_version": "p1b-0.2.0"}
     stats = build_stats(cells, grades, criterion, u_mm, sorted(set(warns)), meta,
-                        zones=zones_out)
-    stats["coverage_pct"] = coverage  # 셀 기반 계산을 서브셀 기반 정의로 덮어씀
+                        zones=zones_out, coverage_pct=coverage)
     write_outputs(out_dir, stats, cells, grades)
     render_heatmap(cells, grades, out_dir / "heatmap.png", cell_m=cell_m)
     return stats
