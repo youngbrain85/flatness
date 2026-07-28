@@ -14,9 +14,11 @@ class SubcellGrid:
     shape: tuple
     median_z: np.ndarray
     counts: np.ndarray
+    bimodal: np.ndarray  # 쌍봉(유령층 의심) 서브셀 플래그
 
 
-def build_subcell_grid(chunks, info, scale_to_m, subcell_m=0.05):
+def build_subcell_grid(chunks, info, scale_to_m, subcell_m=0.05,
+                       min_points=3, bimodal_gap_m=0.008, bimodal_min_frac=0.3):
     lo = info.bbox_min * scale_to_m
     hi = info.bbox_max * scale_to_m
     nx = max(1, int(np.ceil((hi[0] - lo[0]) / subcell_m)))
@@ -40,10 +42,21 @@ def build_subcell_grid(chunks, info, scale_to_m, subcell_m=0.05):
     ends = np.r_[starts[1:], len(idx)]
     median_z = np.full(ny * nx, np.nan, dtype=np.float32)
     counts = np.zeros(ny * nx, dtype=np.int32)
+    bimodal = np.zeros(ny * nx, dtype=bool)
     for s, e in zip(starts, ends):
         seg = np.sort(z[s:e])
         k = len(seg)
-        median_z[idx[s]] = seg[(k - 1) // 2] if k % 2 else 0.5 * (seg[k // 2 - 1] + seg[k // 2])
         counts[idx[s]] = k
+        if k < min_points:
+            continue  # 저밀도 서브셀: NaN 유지 (신뢰도 마스크)
+        median_z[idx[s]] = seg[(k - 1) // 2] if k % 2 else 0.5 * (seg[k // 2 - 1] + seg[k // 2])
+        if k >= 4:
+            gaps = np.diff(seg)
+            gi = int(np.argmax(gaps))
+            lower, upper = gi + 1, k - (gi + 1)
+            # 정렬 z의 최대 간극이 크고 양측 점유가 충분하면 이중 표면(유령층)
+            if gaps[gi] > bimodal_gap_m and lower >= k * bimodal_min_frac and upper >= k * bimodal_min_frac:
+                bimodal[idx[s]] = True
     return SubcellGrid(size_m=subcell_m, origin=lo[:2].copy(), shape=(ny, nx),
-                       median_z=median_z.reshape(ny, nx), counts=counts.reshape(ny, nx))
+                       median_z=median_z.reshape(ny, nx), counts=counts.reshape(ny, nx),
+                       bimodal=bimodal.reshape(ny, nx))
