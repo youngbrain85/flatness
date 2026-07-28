@@ -21,6 +21,11 @@ def _now():
 class FakeDB(DBClient):
     def __init__(self):
         self.jobs = {}
+        self.scans = {}
+        self.criteria = {}
+        self.app_settings = {}
+        self.analyses = {}
+        self.current_analysis = {}  # scan_id -> analysis_id (is_current 대체)
 
     # -- 잡 큐 -----------------------------------------------------------
     def enqueue_job(self, type_, payload):
@@ -77,3 +82,31 @@ class FakeDB(DBClient):
             job["run_after"] = _now() + timedelta(seconds=10 * job["attempts"])
         job["locked_at"] = None
         job["locked_by"] = None
+
+    # -- 조회 -----------------------------------------------------------
+    def get_scan(self, scan_id):
+        return self.scans[scan_id]
+
+    def get_criteria(self, criteria_id):
+        return self.criteria[criteria_id]
+
+    def get_analysis(self, analysis_id):
+        return self.analyses[analysis_id]
+
+    def get_app_setting(self, key):
+        return self.app_settings[key]
+
+    # -- 갱신 -----------------------------------------------------------
+    def update_scan(self, scan_id, fields):
+        self.scans[scan_id].update(fields)
+
+    def insert_analysis(self, fields):
+        analysis_id = str(uuid4())
+        self.analyses[analysis_id] = {**fields, "id": analysis_id}
+        return analysis_id
+
+    def update_analysis(self, analysis_id, fields):
+        self.analyses[analysis_id].update(fields)
+
+    def set_current_analysis(self, scan_id, analysis_id):
+        self.current_analysis[scan_id] = analysis_id

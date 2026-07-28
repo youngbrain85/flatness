@@ -2,11 +2,17 @@
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
+# flatness-engine 설치 안내: flatworker/jobs.py는 `import flatness`(엔진 패키지)를
+# 전제한다. PyPI에 배포되지 않은 로컬 경로 의존이라 이 pyproject의 dependencies에
+# "flatness-engine @ file:../engine" 형태로 넣지 않는다(빌드 백엔드/환경에 따라
+# 상대경로 file: URL 해석이 깨지기 쉬움) — 대신 별도 설치 단계로 문서화한다:
+#   pip install -e ../engine && pip install -e .
+# (docs/SUPABASE_SETUP.md·worker/README.md에 동일 안내, Task 7)
 [project]
 name = "flatworker"
 version = "0.1.0"
 requires-python = ">=3.11"
-dependencies = ["httpx>=0.27", "python-dotenv>=1.0"]
+dependencies = ["httpx>=0.27", "python-dotenv>=1.0", "numpy>=1.26"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]
