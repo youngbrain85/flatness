@@ -59,8 +59,8 @@ def analyze_wall(path, scale_to_m, criterion, u_mm, out_dir,
     """벽면 분석 오케스트레이션 — 벽 검출 → 벽별 투영·판정 → 통합 stats (스펙 §5.1.8)."""
     info = read_info(path, chunk_size=chunk_size)
     cols = build_column_grid(iter_chunks(path, chunk_size=chunk_size), info, scale_to_m)
-    zmin2d, zmax2d, cnt2d, origin, _ = cols
-    walls = detect_wall_lines(zmin2d, zmax2d, cnt2d, origin, 0.05)
+    zmin2d, zmax2d, cnt2d, cnt_mid2d, origin, _ = cols
+    walls = detect_wall_lines(zmin2d, zmax2d, cnt2d, cnt_mid2d, origin, 0.05)
     if not walls:
         raise ValueError("벽면 미검출: 스캔 범위 또는 파라미터 확인")
     out_dir.mkdir(parents=True, exist_ok=True)

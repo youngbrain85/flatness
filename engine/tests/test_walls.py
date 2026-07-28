@@ -16,15 +16,15 @@ def test_flat_wall_fixture_geometry():
 
 def test_floor_only_no_walls():
     (grids), info = _cols(flat_floor(size=(4.0, 4.0), spacing=0.02))
-    zmin2d, zmax2d, cnt2d, origin, shape = grids
-    walls = detect_wall_lines(zmin2d, zmax2d, cnt2d, origin, 0.05)
+    zmin2d, zmax2d, cnt2d, cnt_mid2d, origin, shape = grids
+    walls = detect_wall_lines(zmin2d, zmax2d, cnt2d, cnt_mid2d, origin, 0.05)
     assert walls == []
 
 def test_one_wall_detected():
     pts = np.vstack([flat_floor(size=(4.0, 3.0), spacing=0.02),
                      flat_wall(length=4.0, height=2.4, spacing=0.02, y0=0.0)])
-    (zmin2d, zmax2d, cnt2d, origin, shape), info = _cols(pts)
-    walls = detect_wall_lines(zmin2d, zmax2d, cnt2d, origin, 0.05)
+    (zmin2d, zmax2d, cnt2d, cnt_mid2d, origin, shape), info = _cols(pts)
+    walls = detect_wall_lines(zmin2d, zmax2d, cnt2d, cnt_mid2d, origin, 0.05)
     assert len(walls) == 1
     w = walls[0]
     assert abs(abs(w.direction[0]) - 1.0) < 0.05      # x축 방향 벽
@@ -35,15 +35,15 @@ def test_two_perpendicular_walls():
     pts = np.vstack([flat_floor(size=(4.0, 3.0), spacing=0.02),
                      flat_wall(length=4.0, height=2.4, spacing=0.02, y0=0.0),
                      flat_wall(length=3.0, height=2.4, spacing=0.02, axis='y', y0=0.0)])
-    (zmin2d, zmax2d, cnt2d, origin, shape), info = _cols(pts)
-    walls = detect_wall_lines(zmin2d, zmax2d, cnt2d, origin, 0.05)
+    (zmin2d, zmax2d, cnt2d, cnt_mid2d, origin, shape), info = _cols(pts)
+    walls = detect_wall_lines(zmin2d, zmax2d, cnt2d, cnt_mid2d, origin, 0.05)
     assert len(walls) == 2
 
 from flatness.core.walls import project_wall_points, wall_grid
 
 def _detect_one(pts):
-    (zmin2d, zmax2d, cnt2d, origin, shape), info = _cols(pts)
-    walls = detect_wall_lines(zmin2d, zmax2d, cnt2d, origin, 0.05)
+    (zmin2d, zmax2d, cnt2d, cnt_mid2d, origin, shape), info = _cols(pts)
+    walls = detect_wall_lines(zmin2d, zmax2d, cnt2d, cnt_mid2d, origin, 0.05)
     assert len(walls) == 1
     return walls[0], info
 
@@ -145,14 +145,15 @@ def test_wall_bump_graded():
     assert abs(worst.worst_x - 2.0) < 1.0 and abs(worst.worst_y - 1.2) < 1.0
 
 def test_ceiling_band_excluded(tmp_path):
-    # 티켓 18: 천장 슬래브가 밴드 안으로 들어와도 벽 상단 행을 오염시키지 않는다
-    # 픽스처 조정 근거: 브리프 원안은 천장을 바닥과 동일한 4x3 전체 면적으로 생성했으나,
-    # 그 경우 방 전체 xy 컬럼이 바닥(z≈0)+천장(z≈2.4) 샌드위치로 "벽 후보" 마스크를
-    # 100% 충족해 detect_wall_lines가 격자 정렬 가짜 벽을 최대 8개까지 검출한다(실측,
-    # 이 태스크 범위 밖의 기존 벽 검출 알고리즘 한계). project_wall_points의 밴드
-    # (band_m=0.1)를 그대로 자극하면서 이 아티팩트를 피하도록, 벽과 접하는 천장 폭을
-    # 0.05m(<band_m, 실측상 0.1m부터 2중 벽 검출 시작; 0.06m 미만이어야 아래 w<0.06
-    # 정합성 단언과도 충돌하지 않음)로 좁혔다 — 마진 검증 취지는 그대로.
+    # 티켓 18 — 상단(천장 접합부) 마진 회귀 테스트: project_wall_points가 v를
+    # wall.z_max - edge_margin_m로 클리핑하는지 좁은 픽스처로 직접 검증한다.
+    # (전체 방 규모 천장으로 인한 detect_wall_lines 팬텀 벽 검출 자체는 cnt_mid2d
+    # 조건(build_column_grid/detect_wall_lines, 후속 수정)으로 별도 차단되며,
+    # 그 회귀는 test_full_room_with_ceiling이 담당한다 — 이 테스트는 "천장 오염
+    # 차단"이 아니라 margin 클리핑 수식 자체의 정합성만 확인하는 좁은 스코프다.)
+    # 벽과 접하는 천장 폭을 0.05m(<band_m=0.1, <0.06 하단 w 정합성 단언 상한)로
+    # 좁혀, detect_wall_lines의 다중 라인 분열(0.1m부터 실측 확인) 없이 밴드
+    # (band_m=0.1) 안에 천장 점을 넣는다.
     wall = flat_wall(length=4.0, height=2.4, spacing=0.02, y0=0.0)
     ceiling = flat_floor(size=(4.0, 0.05), spacing=0.02)
     ceiling[:, 2] += 2.4  # z=2.4 천장, 벽과 맞닿는 폭 0.05m만 재현
@@ -161,3 +162,19 @@ def test_ceiling_band_excluded(tmp_path):
     uvw = np.vstack(project_wall_points(iter([pts]), info, 1.0, w))
     assert float(uvw[:, 1].max()) <= (w.z_max - 0.1) + 1e-9   # 상단 마진
     assert float(np.abs(uvw[:, 2]).max()) < 0.06               # 천장 점 w 오염 없음
+
+def test_full_room_with_ceiling(tmp_path):
+    # 전체 천장 슬래브 포함(실스캔 대표 케이스): 팬텀 벽 없이 실제 벽 1면만 검출되고,
+    # 천장 유무가 벽 그리드 결과를 바꾸지 않아야 한다(접합부 마진 + cnt_mid 조건)
+    floor = flat_floor(size=(4.0, 3.0), spacing=0.02)
+    wall = flat_wall(length=4.0, height=2.4, spacing=0.02, y0=0.0)
+    ceiling = flat_floor(size=(4.0, 3.0), spacing=0.02); ceiling[:, 2] += 2.4
+    pts_no_c = np.vstack([floor, wall])
+    pts_c = np.vstack([floor, wall, ceiling])
+    w1, info1 = _detect_one(pts_no_c)
+    w2, info2 = _detect_one(pts_c)          # 천장 있어도 정확히 1면 검출(팬텀 차단)
+    g1 = wall_grid(project_wall_points(iter([pts_no_c]), info1, 1.0, w1))
+    g2 = wall_grid(project_wall_points(iter([pts_c]), info2, 1.0, w2))
+    m1 = float(np.nanmax(np.abs(g1.median_z - np.nanmedian(g1.median_z))))
+    m2 = float(np.nanmax(np.abs(g2.median_z - np.nanmedian(g2.median_z))))
+    assert m2 < 0.002 and abs(m1 - m2) < 0.001   # 천장이 결과를 오염시키지 않음

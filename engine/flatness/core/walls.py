@@ -17,8 +17,13 @@ class WallLine:
     z_max: float
 
 
-def build_column_grid(chunks, info, scale_to_m, bin_m=0.05):
-    """xy 컬럼별 z 최소/최대/점수 누적 (스트리밍, bbox 상대 좌표)."""
+def build_column_grid(chunks, info, scale_to_m, bin_m=0.05, mid_margin_m=0.3):
+    """xy 컬럼별 z 최소/최대/점수·중간 대역 점유 누적 (스트리밍, bbox 상대 좌표).
+
+    cnt_mid2d: 전역 z 범위의 [mid_margin_m, H-mid_margin_m] 중간 대역 점유 카운트.
+    바닥+천장만 있는 컬럼은 상하 2클러스터라 중간 대역이 비고, 진짜 벽 컬럼은
+    중간 높이가 연속 점유된다 — 천장 포함 스캔에서 벽 후보를 가려내는 근거(티켓18 후속).
+    """
     lo = info.bbox_min * scale_to_m
     hi = info.bbox_max * scale_to_m
     nx = max(1, int(np.ceil((hi[0] - lo[0]) / bin_m)))
@@ -26,6 +31,9 @@ def build_column_grid(chunks, info, scale_to_m, bin_m=0.05):
     zmin2d = np.full((ny, nx), np.inf, dtype=np.float64)
     zmax2d = np.full((ny, nx), -np.inf, dtype=np.float64)
     cnt2d = np.zeros((ny, nx), dtype=np.int32)
+    cnt_mid2d = np.zeros((ny, nx), dtype=np.int32)
+    H = float(hi[2] - lo[2])
+    lo_mid, hi_mid = mid_margin_m, H - mid_margin_m  # 전역 z 기준 중간 대역
     for c in chunks:
         p = c.astype(np.float64) * scale_to_m
         ix = np.clip(((p[:, 0] - lo[0]) / bin_m).astype(np.int64), 0, nx - 1)
@@ -35,16 +43,23 @@ def build_column_grid(chunks, info, scale_to_m, bin_m=0.05):
         np.minimum.at(zmin2d.ravel(), flat, z)
         np.maximum.at(zmax2d.ravel(), flat, z)
         np.add.at(cnt2d.ravel(), flat, 1)
-    return zmin2d, zmax2d, cnt2d, np.zeros(2), (ny, nx)
+        if hi_mid > lo_mid:
+            mmid = (z > lo_mid) & (z < hi_mid)
+            np.add.at(cnt_mid2d.ravel(), flat[mmid], 1)
+    return zmin2d, zmax2d, cnt2d, cnt_mid2d, np.zeros(2), (ny, nx)
 
 
-def detect_wall_lines(zmin2d, zmax2d, cnt2d, origin, bin_m, min_height_m=0.8,
+def detect_wall_lines(zmin2d, zmax2d, cnt2d, cnt_mid2d, origin, bin_m, min_height_m=0.8,
                       min_length_m=1.0, dist_thresh_m=0.05, min_cells=40,
                       max_walls=8, n_iter=800, seed=0):
-    """벽 후보 컬럼 중심점들에 2D 라인 RANSAC 반복 추출 (최대 max_walls개)."""
+    """벽 후보 컬럼 중심점들에 2D 라인 RANSAC 반복 추출 (최대 max_walls개).
+
+    cnt_mid2d >= 3 조건으로 중간 높이가 비어있는(바닥+천장 샌드위치) 컬럼을
+    후보에서 제외 — 천장 포함 스캔의 팬텀 벽 검출 차단.
+    """
     rng = np.random.default_rng(seed)
     extent = zmax2d - zmin2d
-    mask = np.isfinite(extent) & (extent >= min_height_m) & (cnt2d >= 3)
+    mask = np.isfinite(extent) & (extent >= min_height_m) & (cnt2d >= 3) & (cnt_mid2d >= 3)
     ys, xs = np.nonzero(mask)
     pts = np.column_stack([origin[0] + (xs + 0.5) * bin_m,
                            origin[1] + (ys + 0.5) * bin_m])
