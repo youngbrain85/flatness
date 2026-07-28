@@ -12,6 +12,7 @@ from flatness.core.walls import (build_column_grid, detect_wall_lines,
 from flatness.criteria import grade_cells
 from flatness.outputs.stats import build_stats, write_outputs
 from flatness.outputs.heatmap import render_heatmap
+from flatness.outputs.summary import generate_summary
 
 
 def analyze_floor(path, scale_to_m, criterion, u_mm, out_dir,
@@ -51,6 +52,7 @@ def analyze_floor(path, scale_to_m, criterion, u_mm, out_dir,
             "surface": "floor"}
     stats = build_stats(cells, grades, criterion, u_mm, sorted(set(warns)), meta,
                         zones=zones_out, coverage_pct=coverage)
+    stats["auto_summary"] = generate_summary(stats)
     write_outputs(out_dir, stats, cells, grades)
     render_heatmap(cells, grades, out_dir / "heatmap.png", cell_m=cell_m)
     return stats
@@ -99,5 +101,6 @@ def analyze_wall(path, scale_to_m, criterion, u_mm, out_dir,
             "surface": "wall"}
     stats = build_stats(all_cells, all_grades, criterion, u_mm, sorted(warns), meta)
     stats["walls"] = walls_out
+    stats["auto_summary"] = generate_summary(stats)
     write_outputs(out_dir, stats, all_cells, all_grades)
     return stats
