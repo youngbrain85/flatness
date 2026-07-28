@@ -23,19 +23,29 @@ class CellResult:
     occupancy: float
     worst_x: float | None
     worst_y: float | None
+    zone_id: int | None = None  # 소속 구역 (P1b, 기본값으로 하위 호환)
 
 
-def _profile(residuals, ai, aj, di, dj, half_steps, step_m):
+def _profile(residuals, ai, aj, di, dj, half_steps, step_m, labels=None, zid=None):
     """앵커 (aj,ai)에서 (dj,di) 방향 ±half_steps 프로파일. (위치, 높이, (iy,ix)) 반환."""
     ny, nx = residuals.shape
     pos, height, idx = [], [], []
     for k in range(-half_steps, half_steps + 1):
         i, j = ai + k * di, aj + k * dj
         if 0 <= i < nx and 0 <= j < ny and not np.isnan(residuals[j, i]):
+            if labels is not None and labels[j, i] != zid:
+                continue  # 다른 구역(벽 너머 등) 서브셀 유입 차단 (스펙 §5.1.6)
             pos.append(k * step_m)
             height.append(float(residuals[j, i]))
             idx.append((j, i))
     return np.asarray(pos), np.asarray(height), idx
+
+
+def _dominant_zone(zone_labels, y0, y1, x0, x1):
+    """셀 블록의 지배(최빈) 구역 id, 할당 서브셀이 없으면 None."""
+    block = zone_labels[y0:y1, x0:x1]
+    ids, counts = np.unique(block[block > 0], return_counts=True)
+    return int(ids[np.argmax(counts)]) if ids.size else None
 
 
 def _line_anchors(ci, cj, x0, x1, y0, y1, di, dj):
@@ -73,7 +83,8 @@ def _line_anchors(ci, cj, x0, x1, y0, y1, di, dj):
     return anchors
 
 
-def evaluate_cells(residuals, grid, span_m, cell_m=1.0, min_occupancy=0.7, min_span_m=1.0):
+def evaluate_cells(residuals, grid, span_m, cell_m=1.0, min_occupancy=0.7,
+                   min_span_m=1.0, zone_labels=None):
     ny, nx = residuals.shape
     sub = grid.size_m
     ncx = max(1, int(np.ceil(nx * sub / cell_m)))
@@ -92,13 +103,21 @@ def evaluate_cells(residuals, grid, span_m, cell_m=1.0, min_occupancy=0.7, min_s
             # 셀 자체 점유율: 셀 영역 내 유효 서브셀 비율
             block = residuals[y0:y1, x0:x1]
             occupancy = float(np.count_nonzero(~np.isnan(block))) / max(1, block.size)
+            zid = None
+            if zone_labels is not None:
+                zid = _dominant_zone(zone_labels, y0, y1, x0, x1)
+                if zid is None:
+                    results.append(CellResult(cx, cy, center_x, center_y, None,
+                                              0.0, occupancy, None, None, None))
+                    continue
             best = None  # (심각도, gap_m, L_eff, (j,i))
             if occupancy >= min_occupancy:
                 for di, dj, step in dirs:
                     half = int(round(span_m / 2 / step))
                     expected = 2 * half + 1
                     for ai, aj in _line_anchors(ci, cj, x0, x1, y0, y1, di, dj):
-                        pos, height, idx = _profile(residuals, ai, aj, di, dj, half, step)
+                        pos, height, idx = _profile(residuals, ai, aj, di, dj, half, step,
+                                                    labels=zone_labels, zid=zid)
                         if len(pos) < 3:
                             continue
                         if len(pos) / expected < min_occupancy:
@@ -113,10 +132,10 @@ def evaluate_cells(residuals, grid, span_m, cell_m=1.0, min_occupancy=0.7, min_s
                             best = (severity, gap, L_eff, idx[wi])
             if best is None:
                 results.append(CellResult(cx, cy, center_x, center_y, None,
-                                          0.0, occupancy, None, None))
+                                          0.0, occupancy, None, None, zid))
             else:
                 _, gap, L_eff, (wj, wi_) = best
                 results.append(CellResult(
                     cx, cy, center_x, center_y, gap * 1000.0, L_eff, occupancy,
-                    grid.origin[0] + (wi_ + 0.5) * sub, grid.origin[1] + (wj + 0.5) * sub))
+                    grid.origin[0] + (wi_ + 0.5) * sub, grid.origin[1] + (wj + 0.5) * sub, zid))
     return results

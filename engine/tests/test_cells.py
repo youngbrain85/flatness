@@ -57,3 +57,26 @@ def test_sparse_cell_is_na():
     cells = evaluate_cells(r, g, span_m=3.0)
     na = [c for c in cells if c.value_mm is None]
     assert any(c.center_x > 4.5 and c.center_y > 4.5 for c in na)
+
+def test_zone_filter_blocks_cross_zone_leak():
+    # 좌(구역1, 잔차 0)·우(구역2, 잔차 +50mm) 인접 — 필터 없으면 경계 셀이 50mm 오염
+    res = np.zeros((60, 120), dtype=np.float32)
+    res[:, 60:] = 0.05
+    labels = np.ones((60, 120), dtype=np.int32)
+    labels[:, 60:] = 2
+    from flatness.core.subcell import SubcellGrid
+    g = SubcellGrid(0.05, np.zeros(2), (60, 120),
+                    res.copy(), np.full((60, 120), 9, np.int32), np.zeros((60, 120), bool))
+    cells = evaluate_cells(res, g, span_m=3.0, zone_labels=labels)
+    z1 = [c for c in cells if c.zone_id == 1 and c.value_mm is not None]
+    assert len(z1) > 0
+    assert all(c.value_mm < 0.5 for c in z1)  # 구역2의 +50mm가 새어들지 않음
+
+def test_no_zone_cell_is_na():
+    res = np.zeros((40, 40), dtype=np.float32)
+    labels = np.zeros((40, 40), dtype=np.int32)  # 전부 미할당
+    from flatness.core.subcell import SubcellGrid
+    g = SubcellGrid(0.05, np.zeros(2), (40, 40),
+                    res.copy(), np.full((40, 40), 9, np.int32), np.zeros((40, 40), bool))
+    cells = evaluate_cells(res, g, span_m=3.0, zone_labels=labels)
+    assert all(c.value_mm is None for c in cells)
