@@ -1,9 +1,0 @@
-Metadata-Version: 2.4
-Name: flatness-engine
-Version: 0.1.0
-Requires-Python: >=3.11
-Requires-Dist: numpy>=1.26
-Requires-Dist: laspy[lazrs]>=2.5
-Requires-Dist: matplotlib>=3.8
-Provides-Extra: dev
-Requires-Dist: pytest>=8; extra == "dev"
