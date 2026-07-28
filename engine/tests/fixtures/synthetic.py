@@ -14,6 +14,18 @@ def flat_floor(size=(6.0, 6.0), spacing=0.02, noise_sd=0.0, tilt=(0.0, 0.0), see
     return np.column_stack([gx.ravel(), gy.ravel(), z.ravel()])
 
 
+def flat_wall(length=4.0, height=2.4, spacing=0.02, y0=0.0, axis='x', noise_sd=0.0, seed=0):
+    """수직 벽 점군. axis='x': x가 벽 방향·y=y0(법선 y), axis='y': y가 벽 방향·x=y0."""
+    rng = np.random.default_rng(seed)
+    us = np.arange(0.0, length + spacing / 2, spacing)
+    vs = np.arange(0.0, height + spacing / 2, spacing)
+    gu, gv = np.meshgrid(us, vs)
+    off = rng.normal(0.0, noise_sd, gu.shape) if noise_sd > 0 else np.zeros_like(gu)
+    if axis == 'x':
+        return np.column_stack([gu.ravel(), (y0 + off).ravel(), gv.ravel()])
+    return np.column_stack([(y0 + off).ravel(), gu.ravel(), gv.ravel()])
+
+
 def add_bump(pts, center, radius, height):
     """코사인 범프 — 정점 높이가 정확히 height. + = 융기."""
     out = pts.copy()
