@@ -1,7 +1,7 @@
 """서브셀 비닝 — 점 단위 노이즈 극값이 판정을 지배하지 않도록 셀 중앙값 사용(스펙 §5.1.5).
 
 1a 구현 메모: 청크별 (셀번호, z)를 모아 정렬 후 그룹 중앙값을 구한다.
-점당 8바이트(int32+float32)로 3천만 점 ≈ 240MB — 1d 메모리 검증에서 재평가.
+점당 int64 인덱스+float32 z ≈ 12바이트로 3천만 점 ≈ 360MB — 1d 메모리 검증에서 재평가.
 """
 from dataclasses import dataclass
 import numpy as np
@@ -21,11 +21,13 @@ def build_subcell_grid(chunks, info, scale_to_m, subcell_m=0.05):
     hi = info.bbox_max * scale_to_m
     nx = max(1, int(np.ceil((hi[0] - lo[0]) / subcell_m)))
     ny = max(1, int(np.ceil((hi[1] - lo[1]) / subcell_m)))
+    lo32 = lo[:2].astype(np.float32)
+    sub32 = np.float32(subcell_m)
     idx_parts, z_parts = [], []
     for c in chunks:
         p = c.astype(np.float32) * np.float32(scale_to_m)
-        ix = np.clip(((p[:, 0] - lo[0]) / subcell_m).astype(np.int32), 0, nx - 1)
-        iy = np.clip(((p[:, 1] - lo[1]) / subcell_m).astype(np.int32), 0, ny - 1)
+        ix = np.clip(((p[:, 0] - lo32[0]) / sub32).astype(np.int32), 0, nx - 1)
+        iy = np.clip(((p[:, 1] - lo32[1]) / sub32).astype(np.int32), 0, ny - 1)
         idx_parts.append(iy.astype(np.int64) * nx + ix)
         z_parts.append(p[:, 2])
     idx = np.concatenate(idx_parts)
