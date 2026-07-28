@@ -26,7 +26,7 @@
 
 ## P2 (인프라 통합) 티켓
 
-9. **stats.json/cells.json 스키마 계약 문서화** — 반올림 정책(stats worst.point 비반올림 vs cells 3자리) 통일 포함. 대시보드·보고서가 소비하는 첫 외부 계약
+[해결: P2] 9. **stats.json/cells.json 스키마 계약 문서화** — 반올림 정책(stats worst.point 비반올림 vs cells 3자리) 통일 포함. 대시보드·보고서가 소비하는 첫 외부 계약
 10. CLI 예외 UX — FileNotFoundError 등 ValueError 외 예외가 트레이스백 노출(검증 스모크에서 실제 재현, exit 1 계약은 유지됨). 워커 래핑 전 정리
 11. 히트맵 축이 그리드 원점(bbox_min) 무시 — 절대좌표 스캔에서 stats와 축 라벨 불일치
 12. stats worst 선정 기준(raw mm 최대 vs 심각도 정규화) 정의 확정 — P3 대시보드 문구 설계와 연동
@@ -38,16 +38,17 @@
 [해결: P1d] 19. **[P2 전 필수] walls_out 월드 프레임 직렬화** — p0/direction/normal·u,v 오프셋 부재로 stats만으로 3D 역매핑 불가 (P2 스키마 계약 전에)
 20. 성장-분류 순서 결정 — 성장이 furniture/ghost 분류 전 실행되어 임계 회피 경로 존재(발생 확률 낮음). 순서 결정 + 가구 3m² 경계 테스트
 [해결: P1d] 21. engine_version·meta.surface 정리 — floor 경로 스탬프 갱신 누락("p1b-0.2.0"), floor meta에 surface 부재
-22. coverage_pct 표면 간 이중 의미(floor=서브셀 인식률, wall=셀 유효율) — P2 스키마 문서에 명시
+[해결: P2] 22. coverage_pct 표면 간 이중 의미(floor=서브셀 인식률, wall=셀 유효율) — P2 스키마 문서에 명시
 23. T-접합 교차벽 밴드 오염, 파일 K+2회 패스(성능), 벽 히트맵 축 라벨(u/v), bin_m 매직 상수 공유, 스펙 §5.1.7 대칭 파티션 부호 캐비앗
 [해결: P1d] 24. **천장 포함 스캔 팬텀 벽** — cnt_mid(중간 대역 점유) 조건으로 근본 해소 (P1d Task 1에서 발견·수정)
 
 ## P1d 최종 리뷰 이연 티켓 (2026-07-28)
 
-25. **[P2 필수] §5.4 JSON 연계 입력 스키마 정의** — 과업지시서 명시 항목인데 P1에서 CSV 임포트만 구현됨. P2 스키마 계약 문서(티켓 9·22)와 함께 정의할 것
+[해결: P2] 25. **[P2 필수] §5.4 JSON 연계 입력 스키마 정의** — 과업지시서 명시 항목인데 P1에서 CSV 임포트만 구현됨. P2 스키마 계약 문서(티켓 9·22)와 함께 정의할 것
 26. cnt_mid 중간 대역 앵커를 전역 min/max 대신 강건 백분위(z p1/p99)로 — 고고도 이상점 1개가 팬텀 벽 후보를 부활시킬 수 있음
-27. P2 스키마 계약 문서에 조건부 키 열거 필수 — preview3d_paths(floor만)·walls(wall만)·import meta scale_to_m 부재·warnings의 wall_{i}_skipped 개방 패턴·히트맵 파일명 관례, coverage_pct 3중 의미(floor=서브셀 인식률, wall/import=셀 유효율)
+[해결: P2] 27. P2 스키마 계약 문서에 조건부 키 열거 필수 — preview3d_paths(floor만)·walls(wall만)·import meta scale_to_m 부재·warnings의 wall_{i}_skipped 개방 패턴·히트맵 파일명 관례, coverage_pct 3중 의미(floor=서브셀 인식률, wall/import=셀 유효율)
 28. 벽 루프 render_heatmap이 try 밖(비-ValueError 렌더 실패 시 전체 중단 가능), import-colab의 벽 기준 거부 문구가 "알 수 없는 기준"으로 부정확
+29. **P2 이연**: SupabaseRest.set_current_analysis 2단계 PATCH 비원자성(데모 단일 워커라 수용, 정식 배포 시 단일 RPC로 원자화)
 
 ## 기록용 이연 minor (비차단)
 
