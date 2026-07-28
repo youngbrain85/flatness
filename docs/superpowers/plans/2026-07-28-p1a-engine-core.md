@@ -14,7 +14,7 @@
 
 - 단위 자동 확정 금지: `--units` 미지정 시 감지 결과·근거 출력 후 **exit code 2** (스펙 §5.1.1)
 - 부호 규약: **+ = 융기, − = 침하** (스펙 §5.1.7)
-- 판정식: s=span_used/span, pe=pass_mm×s, re=rework_mm×s, b1=pe−U, b2=min(pe+U, re) → 적합≤b1 < 경계≤b2 < 보수≤re < 재시공. pe+U≥re면 `uncertainty_swallows_repair` 경고 (스펙 §4.2)
+- 판정식(2차 개정): s=span_used/span, pe=pass_mm×s, re=rework_mm×s, **U_eff=U×s**, b1=pe−U_eff, b2=min(pe+U_eff, re) → 적합≤b1 < 경계≤b2 < 보수≤re < 재시공. pass+U≥rework면(s 무관) `uncertainty_swallows_repair` 경고 (스펙 §4.2 2차 개정 — U 고정 시 축소 스팬 평탄 셀이 적합 불가)
 - U 기본값: 바닥 5mm (스펙 §4.2, CLI `--uncertainty-mm`로 조정)
 - 축소 스팬: L<span이면 선형 환산(위 s), **L<1m이면 판정 불가** (스펙 §4.2)
 - 직선자 = 상부 볼록 포락선 아래 최대 틈새. LSQ 평면 편차 방식 금지 (스펙 §5.1.6)
@@ -1158,9 +1158,16 @@ def test_grading_boundaries():
     assert grade_value(22.0, c, 5.0, 3.0)[0] == "rework"
 
 def test_reduced_span_scales_linearly():
-    c = load_criteria()["floor-kcs-exposed"]  # L=1.5 → s=0.5: pe=3.5, re=10.5, b2=min(8.5,10.5)
+    c = load_criteria()["floor-kcs-exposed"]  # L=1.5 → s=0.5: pe=3.5, re=10.5, U_eff=2.5, b2=min(6.0,10.5)
     grade, _ = grade_value(9.0, c, 5.0, 1.5)
-    assert grade == "repair"  # 8.5 < 9 ≤ 10.5
+    assert grade == "repair"  # 6.0 < 9 ≤ 10.5
+
+def test_reduced_span_flat_cell_still_passes():
+    # 2차 개정 근거: U를 고정하면 pe(4.95) < U(5)로 b1<0 — 평탄한 가장자리 셀이 적합 불가.
+    # U_eff=U×s 환산으로 b1=(7−5)×0.707=1.41 > 0 → 평탄 셀 적합 유지
+    c = load_criteria()["floor-kcs-exposed"]
+    grade, warns = grade_value(0.1, c, 5.0, 2.12)
+    assert grade == "pass" and "reduced_span" in warns
 
 def test_uncertainty_swallows_repair_warning():
     c = load_criteria()["wall-plaster-surface"]  # pass 3, rework 9, U=8 → pe+U=11 ≥ 9
@@ -1224,14 +1231,19 @@ def load_criteria(path=None):
 
 
 def grade_value(value_mm, crit, u_mm, span_used_m):
-    """§4.2: s=span_used/span, pe=pass×s, re=rework×s, b1=pe−U, b2=min(pe+U, re)."""
+    """§4.2 2차 개정: s=span_used/span, pe=pass×s, re=rework×s, U_eff=U×s.
+
+    U를 고정하면 축소 스팬에서 pe < U가 되어 평탄 셀조차 적합 불가 —
+    드리프트 지배 불확도는 기저선 길이에 비례하므로 U도 같은 비율로 환산한다.
+    """
     warns = []
     s = 1.0 if crit.span_m is None else min(1.0, span_used_m / crit.span_m)
     if s < 1.0:
         warns.append("reduced_span")
     pe, re = crit.pass_mm * s, crit.rework_mm * s
-    b1, b2 = pe - u_mm, min(pe + u_mm, re)
-    if pe + u_mm >= re:
+    u_eff = u_mm * s
+    b1, b2 = pe - u_eff, min(pe + u_eff, re)
+    if crit.pass_mm + u_mm >= crit.rework_mm:
         warns.append("uncertainty_swallows_repair")
     if value_mm <= b1:
         return "pass", warns
@@ -1257,7 +1269,7 @@ def grade_cells(cells, crit, u_mm):
 - [ ] **Step 5: 통과 확인**
 
 Run: `python -m pytest tests/test_criteria.py -v`
-Expected: 4 PASS
+Expected: 5 PASS
 
 - [ ] **Step 6: Commit**
 

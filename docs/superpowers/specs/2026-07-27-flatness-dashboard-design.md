@@ -124,12 +124,13 @@
 - `criteria.thresholds` 배열 규약: `[{span_m: number|null, metric: 'flatness'|'plumbness', pass_mm: number, rework_mm: number, note?: string}]` + `CHECK (jsonb_typeof(thresholds)='array')` + 앱 레벨 zod/pydantic 검증
   - `pass_mm` = 시방서 허용치. `rework_mm`는 시방서에 없는 운영값(기본 pass×3, UI에서 조정)
 - **측정 불확도 U**: `app_settings` 테이블에 표면 유형별 저장. 잠정 초기값 **바닥 U=5mm, 벽면 U=8mm** (§1.3 문헌값 + 서브셀 중앙값·국소 스팬 평가로 무작위 노이즈가 억제되는 점을 반영한 잠정치). P5 반복 스캔 재현성 시험 후 갱신. 분석 시점 값이 `applied_criteria` 스냅샷에 U 포함으로 박제됨
-- **판정식** (경계값 b1=pass−U, b2=min(pass+U, rework_mm)):
+- **판정식 (2026-07-28 2차 개정 — 축소 스팬에서 U도 동일 비율 환산)**: s=span_used/span(≤1), pe=pass×s, re=rework×s, **U_eff=U×s**, b1=pe−U_eff, b2=min(pe+U_eff, re)
   - 적합: 지표 ≤ b1
   - 경계(현장 재확인 필요): b1 < 지표 ≤ b2
-  - 보수: b2 < 지표 ≤ rework_mm
-  - 재시공: 지표 > rework_mm
-  - 퇴화 케이스: pass+U ≥ rework_mm이면 보수 구간이 소멸(b2=rework) — 결과에 "측정 불확도가 보수 구간을 잠식함" 경고 표기
+  - 보수: b2 < 지표 ≤ re
+  - 재시공: 지표 > re
+  - 개정 근거: U를 고정하면 pe < U인 축소 스팬 셀(예: 3m 기준 7mm, U=5mm에서 span_used<2.14m)은 b1<0이 되어 완전 평탄면조차 '적합' 불가 — 구현 검증에서 가장자리 셀 전부가 경계로 오염됨을 확인. 드리프트 지배 측정 불확도는 기저선 길이에 대략 비례하므로 허용치·불확도를 같은 비율로 축소하면 4구간 구조가 모든 스팬에서 보존됨
+  - 퇴화 케이스: pass+U ≥ rework이면(s와 무관) 보수 구간이 소멸(b2=re) — 결과에 "측정 불확도가 보수 구간을 잠식함" 경고 표기
 - 전역 기본값(site_id NULL) + 현장별 재정의. `fn_resolve_criteria(site_id, surface_type)`는 **후보 목록 반환**(현장 기준이 있으면 현장 우선). criteria에 `is_default` 플래그((site_id, surface_type)당 1개, 부분 유니크 인덱스로 강제) — 업로드 화면의 기본 선택값
 - 분석 실행 시점에 적용 기준 전체(이름·조항·thresholds·U)를 `analyses.applied_criteria`(jsonb) 스냅샷 — 기준 개정이 과거 분석·발행 보고서를 소급 오염시키지 않음
 - **축소 스팬 환산**(3m 미만 소실): 가용 최대 직선 길이 L(1m ≤ L < span_m)로 측정하고 허용치를 `pass_mm × L / span_m`로 선형 환산(DIN 18202의 측점 간격별 다단계가 근사 선형인 점을 근거로 채택). L < 1m이면 판정 불가. 환산 적용 여부·L값을 stats와 보고서에 기록
