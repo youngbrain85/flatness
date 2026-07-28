@@ -92,7 +92,7 @@ def project_wall_points(chunks, info, scale_to_m, wall, band_m=0.1,
     """벽 평면 ±band 내 점을 (u, v, w) float64 청크로 변환. +w = 법선 방향 돌출.
 
     바닥 접합부(v < z_min+edge_margin)는 제외 — 밴드 안에 들어오는 바닥 점 띠가
-    하단 행을 오염시키는 것을 막는다(실물 벽 검측도 접합부 제외).
+    하단 행을 오염시키는 것을 막는다(실물 벽 검측도 접합부 제외). 천장 접합부도 동일 마진.
 
     부호 규약: +w = 실내(벽 주변 점 질량이 많은 쪽) 방향 돌출.
     실내 판별은 밴드 밖 ±interior_window 구간의 점 수 비교로 결정 —
@@ -114,7 +114,7 @@ def project_wall_points(chunks, info, scale_to_m, wall, band_m=0.1,
         n_pos += int((w[sel] > 0).sum())
         n_neg += int((w[sel] < 0).sum())
         m = (np.abs(w) <= band_m) & (u >= wall.u_min) & (u <= wall.u_max) \
-            & (v >= wall.z_min + edge_margin_m) & (v <= wall.z_max)
+            & (v >= wall.z_min + edge_margin_m) & (v <= wall.z_max - edge_margin_m)
         if m.any():
             out.append(np.column_stack([u[m], v[m], w[m]]))
     if n_neg > n_pos:

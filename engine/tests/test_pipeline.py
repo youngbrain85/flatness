@@ -1,6 +1,6 @@
 import numpy as np
 from tests.fixtures.synthetic import flat_floor, flat_wall, add_bump, add_step, write_binary_ply
-from flatness.core.pipeline import analyze_floor
+from flatness.core.pipeline import analyze_floor, analyze_wall
 from flatness.criteria import load_criteria
 
 CRIT = load_criteria()["floor-kcs-exposed"]  # pass 7 / rework 21, U=5 → b1=2, b2=12
@@ -83,3 +83,36 @@ def test_wall_end_to_end(tmp_path):
     assert 11.0 <= stats["worst"]["value_mm"] <= 13.0
     assert (tmp_path / "out" / "heatmap_wall1.png").exists()
     assert (tmp_path / "out" / "heatmap_wall2.png").exists()
+
+def test_wall_error_isolated(tmp_path, monkeypatch):
+    # 티켓 17: 한 벽의 평가 실패가 전체 분석을 죽이지 않는다
+    from flatness.core import pipeline as pl
+    from tests.fixtures.synthetic import flat_wall
+    calls = {"n": 0}
+    real = pl.evaluate_wall
+    def flaky(grid, criterion, u_mm, cell_m=1.0):
+        calls["n"] += 1
+        if calls["n"] == 2:
+            raise ValueError("주입된 벽 평가 실패")
+        return real(grid, criterion, u_mm, cell_m=cell_m)
+    monkeypatch.setattr(pl, "evaluate_wall", flaky)
+    pts = np.vstack([flat_floor(size=(4.0, 3.0), spacing=0.02),
+                     flat_wall(length=4.0, height=2.4, spacing=0.02, y0=0.0),
+                     flat_wall(length=3.0, height=2.4, spacing=0.02, axis='y', y0=0.0)])
+    write_binary_ply(pts, tmp_path / "room.ply")
+    crit = load_criteria()["wall-kcs-tilt-other"]
+    stats = pl.analyze_wall(tmp_path / "room.ply", 1.0, crit, 8.0, tmp_path / "out")
+    assert len(stats["walls"]) == 1                      # 성한 벽만
+    assert any(w.startswith("wall_") and w.endswith("_skipped") for w in stats["warnings"])
+
+def test_wall_frame_serialized(tmp_path):
+    # 티켓 19: stats만으로 벽 로컬 (u,v)를 월드로 역매핑 가능해야 함
+    from tests.fixtures.synthetic import flat_wall
+    pts = np.vstack([flat_floor(size=(4.0, 3.0), spacing=0.02),
+                     flat_wall(length=4.0, height=2.4, spacing=0.02, y0=0.0)])
+    write_binary_ply(pts, tmp_path / "room.ply")
+    crit = load_criteria()["wall-kcs-tilt-other"]
+    stats = analyze_wall(tmp_path / "room.ply", 1.0, crit, 8.0, tmp_path / "out")
+    fr = stats["walls"][0]["frame"]
+    assert set(fr) == {"p0", "direction", "normal", "u_min", "u_max", "z_min", "z_max"}
+    assert len(fr["p0"]) == 2 and len(fr["direction"]) == 2 and len(fr["normal"]) == 2

@@ -67,18 +67,29 @@ def analyze_wall(path, scale_to_m, criterion, u_mm, out_dir,
     all_cells, all_grades, walls_out = [], [], []
     warns = {"plumbness_relative_to_z"}  # z-up 기준 상대 수직도 고지(스펙 §5.1.8)
     for i, wall in enumerate(walls, 1):
-        uvw = project_wall_points(iter_chunks(path, chunk_size=chunk_size),
-                                  info, scale_to_m, wall)
-        grid = wall_grid(uvw, subcell_m=subcell_m)
-        if int(np.isfinite(grid.median_z).sum()) < 10:
-            continue  # 점이 희박한 파편 벽은 건너뜀
-        cells, grades, w, wm = evaluate_wall(grid, criterion, u_mm, cell_m=cell_m)
+        try:
+            uvw = project_wall_points(iter_chunks(path, chunk_size=chunk_size),
+                                      info, scale_to_m, wall)
+            grid = wall_grid(uvw, subcell_m=subcell_m)
+            if int(np.isfinite(grid.median_z).sum()) < 10:
+                warns.add(f"wall_{i}_skipped")  # 점이 희박한 파편 벽은 건너뜀
+                continue
+            cells, grades, w, wm = evaluate_wall(grid, criterion, u_mm, cell_m=cell_m)
+        except ValueError:
+            warns.add(f"wall_{i}_skipped")  # 벽별 실패 격리(티켓 17): 성한 벽 결과는 보존
+            continue
         cells = [_dc_replace(c, zone_id=i) for c in cells]
         render_heatmap(cells, grades, out_dir / f"heatmap_wall{i}.png", cell_m=cell_m)
         all_cells.extend(cells)
         all_grades.extend(grades)
         warns.update(w)
-        walls_out.append({"wall_id": i, "n_cells": len(cells), **wm})
+        walls_out.append({"wall_id": i, "n_cells": len(cells),
+                          "frame": {"p0": [round(float(v), 4) for v in wall.p0],
+                                    "direction": [round(float(v), 4) for v in wall.direction],
+                                    "normal": [round(float(v), 4) for v in wall.normal],
+                                    "u_min": round(wall.u_min, 4), "u_max": round(wall.u_max, 4),
+                                    "z_min": round(wall.z_min, 4), "z_max": round(wall.z_max, 4)},
+                          **wm})
     if not walls_out:
         raise ValueError("벽면 미검출: 유효 점이 있는 벽 없음")
     meta = {"file": str(path), "n_points": info.n_points, "scale_to_m": scale_to_m,
