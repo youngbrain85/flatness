@@ -4,7 +4,7 @@
 - 상태: 사용자 승인 대기
 - 근거: 과업지시서 세부과업 1 (수직·수평면 평활도 분석 결과 자동 보고서 생성 기능 개발), 기존 Colab 노트북(floor_flatness_analysis.ipynb) 재구축
 - 승인 이력: 아키텍처(A안 하이브리드 클라우드), 결과 화면 레이아웃(C안), 판정 기준(국내 시방서), 전체 범위 단일 설계 — 사용자 승인 완료
-- ⚠ 사용자 확인 필요 결정(리뷰 후 추가): §3.3 운영 비용(월 약 $35~40), §5.4 기존 결과 임포트 포함, §2.2 E57 후속 이관
+- 확정된 결정: §3.3 데모 단계 비용 0원(Supabase Free+로컬 워커, 2026-07-28 지시), §5.4 기존 결과 임포트 포함, §2.2 E57 후속 이관
 
 ## 1. 개요
 
@@ -57,9 +57,10 @@
 
 | 구성요소 | 기술 | 배포 | 역할 |
 |---|---|---|---|
-| 웹 대시보드 | Next.js(App Router, TypeScript), Three.js(점군 뷰어), Canvas 히트맵 | Vercel | UI 전체, Storage 직접 업로드 |
-| DB/저장소/인증 | Supabase (Postgres + Storage + Auth + Realtime) | Supabase Cloud **Pro** | 데이터·파일·인증·실시간 상태 |
-| 분석 워커 | Python 3.11+ (NumPy/SciPy/Open3D/laspy), Playwright(PDF) | Fly.io (Docker, 상주 1대) | precheck/분석/임포트/보고서 잡 처리 |
+| 웹 대시보드 | Next.js(App Router, TypeScript), Three.js(점군 뷰어), Canvas 히트맵 | **데모: 로컬 실행(localhost)** | UI 전체, 로컬 파일 수신·서빙 |
+| DB/인증 | Supabase (Postgres + Auth + Realtime + 사진 Storage) | Supabase Cloud **Free** | 메타데이터·판정 결과·인증·실시간·사진 |
+| 분석 워커 | Python 3.11+ (NumPy/SciPy/Open3D/laspy), Playwright(PDF) | **데모: 로컬 실행(동일 PC 폴링)** | precheck/분석/임포트/보고서 잡 처리 |
+| 파일 저장 | 로컬 디스크 `data/` (raw 원본·대형 산출물) | 워커 PC | 대용량 파일은 Supabase 미경유 → Free 티어 50MB/1GB 제한 비영향 |
 
 - 워커 ↔ DB 연결: Supavisor 세션 모드(또는 IPv6 직접 연결). 잡 클레임 쿼리는 단일 트랜잭션
 - 워커는 잡 type별 직렬 실행(분석 잡과 보고서 잡 동시 실행 금지 — 메모리 경합 방지)
@@ -69,7 +70,7 @@
 ```
 [iPhone LiDAR 앱] → PLY/LAS/LAZ/XYZ/TXT/CSV/PTS 파일
   ① 대시보드: 현장·측정위치 지정, 메타데이터 입력(표면 유형·측정일자·담당자·적용 기준·데이터 계보)
-     → 브라우저 → Supabase Storage 직접 업로드(TUS 재개 가능) → scans 생성(selected_criteria_id 저장)
+     → 브라우저 → 로컬 대시보드 서버가 `data/raw-scans/`에 저장(데모: TUS 불필요) → scans 생성(selected_criteria_id 저장)
   ② precheck 잡: 경량 사전 검사(파싱·단위 추정·확실한 계보 신호) → 사용자가 단위 확정
   ③ 단위 확정 시 분석 잡 자동 등록(jobs) → 워커 폴링(FOR UPDATE SKIP LOCKED) → 분석 실행
   ④ 결과 수치·판정 → DB(analyses), 산출물(히트맵·셀 JSON·뷰어 점군·3D 프리뷰 PNG·CSV) → Storage
@@ -79,19 +80,20 @@
   (별도) 기존 결과 임포트: Colab CSV/JSON 업로드 → import 잡 → analyses(external) 등록 (§5.4)
 ```
 
-### 3.3 운영 비용 (사용자 확인 필요)
+### 3.3 운영 비용 — 데모 단계 0원 확정 (2026-07-28 사용자 지시)
 
-"클라우드 무료/저가 티어" 확정에 대한 실측 검토 결과, **Supabase Free는 파일당 50MB 상한·총 1GB 저장·7일 미사용 일시정지** 때문에 수백 MB급 스캔 원본과 양립 불가. 아래 구성을 채택한다:
+**데모 단계(현재)**: 총 비용 **0원**. 대용량 파일(raw 원본·대형 산출물)은 Supabase를 거치지 않고 로컬 디스크에 저장하므로 Free 티어의 파일당 50MB·총 1GB 제한이 문제되지 않는다.
 
-| 항목 | 플랜 | 월 비용 | 근거 |
-|---|---|---|---|
-| Supabase | Pro | $25 | 파일 상한 50GB·저장 100GB·egress 250GB, 일시정지 없음 |
-| Fly.io 워커 | shared-cpu-1x 2GB 상주 | 약 $10~15 | Postgres 폴링 구조상 상주 필요 |
-| Vercel | Hobby | $0 | 비상업 약관 확인 필요 — 문제 시 Pro($20) 또는 Fly 셀프호스팅 |
-| **합계** | | **약 $35~40 (약 5만 원)** | |
+| 항목 | 데모 구성 | 비용 |
+|---|---|---|
+| Supabase | Free (DB 500MB·Auth·Realtime·사진 Storage) | $0 |
+| 대시보드 | Next.js 로컬 실행 (localhost) | $0 |
+| 워커 | Python 로컬 실행 (동일 PC 폴링) | $0 |
+| 파일 | 로컬 `data/` 디렉터리 | $0 |
 
-- 기각한 대안: Cloudflare R2 원본 분리(무료) — 비용 $0이지만 제2 클라우드·S3 서명 로직 추가로 복잡도 증가. 운영 중 저장량이 100GB에 근접하면 그때 R2 이전 검토
-- 원본 보존 정책: raw 파일 기본 영구 보존, 저장량 80% 도달 시 오래된 원본부터 아카이브/삭제 (관리 화면에 사용량 표시)
+- Supabase Free의 7일 미사용 일시정지는 데모 특성상 수용 — 대시보드에 일시정지 감지 시 재개 안내 표시
+- **정식 배포 시 확장 경로** (해당 시점에 사용자 승인 후 전환): Vercel(Hobby, 비상업 약관 확인) + Supabase Pro($25) + Fly.io 워커($10~15) ≈ 월 $35~40. 원본 저장이 커지면 Cloudflare R2 분리 검토. 코드 구조는 처음부터 파일 저장 경로·잡 실행 환경을 어댑터로 추상화해 전환 비용 최소화
+- 원본 보존 정책: raw 파일 기본 보존, 디스크 사용량은 관리 화면에 표시
 
 ## 4. 판정 기준 체계
 
@@ -207,7 +209,8 @@
 
 - 전 테이블 RLS 활성화. authenticated 전체 허용(내부용), criteria 전역 행·app_settings 수정은 admin 클레임
 - jobs: 클라이언트 정책 없음(service_role 전용), enqueue는 SECURITY DEFINER 함수
-- Storage 버킷 4개 전부 private + 만료 signed URL: `raw-scans/{site_id}/{scan_id}/raw.{ext}`, `artifacts/{analysis_id}/…`, `photos/{photo_id}.{ext}`, `reports/{report_id}/…` — 불변 ID만, 경로 생성은 DB 함수로 일원화
+- 경로 규약(불변 ID만, 생성 함수로 일원화): `raw-scans/{site_id}/{scan_id}/raw.{ext}`, `artifacts/{analysis_id}/…`, `photos/{photo_id}.{ext}`, `reports/{report_id}/…`
+- **데모 단계**: raw-scans/artifacts/reports는 로컬 `data/` 디렉터리에 동일 경로 규약으로 저장(로컬 대시보드가 서빙), photos만 Supabase Storage(private 버킷+signed URL). 정식 배포 시 전 경로를 버킷으로 이전
 
 ## 7. 화면 설계
 
@@ -261,7 +264,7 @@
    - 1b: 다중 구역 분할·품질 검사(유령층·coverage)·XYZ/CSV/PTS 파서
    - 1c: 벽면 파이프라인(기울기·수직도)
    - 1d: 임포트(§5.4)·3D 프리뷰 PNG·메모리 스파이크 테스트(3천만 점)
-2. **P2 인프라** — Supabase Pro 스키마+RLS+잡 큐+워커 배포(Fly.io)+Supavisor 연결 검증
+2. **P2 인프라** — Supabase Free 스키마+RLS+잡 큐+로컬 워커 실행 구성 (파일 저장·잡 실행은 어댑터로 추상화해 정식 배포 시 Fly.io/Pro 전환 대비)
 3. **P3 대시보드** — 로그인→현장 관리→업로드→단위 확인→결과 화면(C안)
 4. **P4 보고서** — 통합 선택→미리보기→PDF 생성·발행(자산 복사)
 5. **P5 검증·문서** — 실측 대조·U 갱신, 스캔 가이드라인 문서, 기준 원문 대조, **용역 결과 보고서 작성**(성과물 목록 매핑 포함)
