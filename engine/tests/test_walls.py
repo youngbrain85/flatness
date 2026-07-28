@@ -38,3 +38,41 @@ def test_two_perpendicular_walls():
     (zmin2d, zmax2d, cnt2d, origin, shape), info = _cols(pts)
     walls = detect_wall_lines(zmin2d, zmax2d, cnt2d, origin, 0.05)
     assert len(walls) == 2
+
+from flatness.core.walls import project_wall_points, wall_grid
+
+def _detect_one(pts):
+    (zmin2d, zmax2d, cnt2d, origin, shape), info = _cols(pts)
+    walls = detect_wall_lines(zmin2d, zmax2d, cnt2d, origin, 0.05)
+    assert len(walls) == 1
+    return walls[0], info
+
+def test_projection_flat_wall_w_near_zero():
+    pts = np.vstack([flat_floor(size=(4.0, 3.0), spacing=0.02),
+                     flat_wall(length=4.0, height=2.4, spacing=0.02, y0=0.0)])
+    wall, info = _detect_one(pts)
+    uvw = project_wall_points(iter([pts]), info, 1.0, wall)
+    allp = np.vstack(uvw)
+    assert abs(float(np.abs(allp[:, 2]).max())) < 0.06  # 밴드 내, 벽면 w ≈ 0(바닥점은 제외됨)
+    g = wall_grid(uvw)
+    assert np.isfinite(g.median_z).sum() > 1000          # 벽 영역 유효 서브셀 다수
+
+def test_projection_excludes_floor_points():
+    pts = np.vstack([flat_floor(size=(4.0, 3.0), spacing=0.02),
+                     flat_wall(length=4.0, height=2.4, spacing=0.02, y0=0.0)])
+    wall, info = _detect_one(pts)
+    uvw = np.vstack(project_wall_points(iter([pts]), info, 1.0, wall))
+    # 바닥은 벽 평면에서 y로 멀어지는 점 대부분 제외 — 남는 점은 벽 근처 좁은 띠뿐
+    n_wall = len(flat_wall(length=4.0, height=2.4, spacing=0.02))
+    assert len(uvw) < n_wall * 1.5
+
+def test_wall_bump_visible_in_grid():
+    w = flat_wall(length=4.0, height=2.4, spacing=0.02, y0=0.0)
+    r = np.hypot(w[:, 0] - 2.0, w[:, 2] - 1.2)
+    m = r < 0.3
+    w[m, 1] += 0.01 * 0.5 * (1.0 + np.cos(np.pi * r[m] / 0.3))  # 법선(y) 방향 10mm 돌출
+    pts = np.vstack([flat_floor(size=(4.0, 3.0), spacing=0.02), w])
+    wall, info = _detect_one(pts)
+    g = wall_grid(project_wall_points(iter([pts]), info, 1.0, wall))
+    base = float(np.nanmedian(g.median_z))
+    assert 0.008 < float(np.nanmax(g.median_z)) - base < 0.012  # 돌출이 w 중앙값에 보존
