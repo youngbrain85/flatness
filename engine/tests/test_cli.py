@@ -1,5 +1,6 @@
 import subprocess, sys, json, os
-from tests.fixtures.synthetic import flat_floor, write_binary_ply
+import numpy as np
+from tests.fixtures.synthetic import flat_floor, flat_wall, write_binary_ply
 
 def _run(*args):
     # 자식 파이썬의 stdout을 UTF-8로 고정하고 부모도 UTF-8로 디코드 —
@@ -28,3 +29,20 @@ def test_analyze_success_exit_0(tmp_path):
 def test_list_criteria(tmp_path):
     r = _run("list-criteria")
     assert r.returncode == 0 and "floor-kcs-exposed" in r.stdout
+
+def test_wall_criteria_cli(tmp_path):
+    from tests.fixtures.synthetic import flat_wall
+    pts = np.vstack([flat_floor(size=(4.0, 3.0), spacing=0.02),
+                     flat_wall(length=4.0, height=2.4, spacing=0.02, y0=0.0)])
+    write_binary_ply(pts, tmp_path / "room.ply")
+    r = _run("analyze", str(tmp_path / "room.ply"), "--out", str(tmp_path / "out"),
+             "--units", "m", "--criteria", "wall-kcs-tilt-other")
+    assert r.returncode == 0, r.stderr
+    assert "벽" in r.stdout
+
+def test_plumbness_criteria_rejected(tmp_path):
+    write_binary_ply(flat_floor(size=(2.0, 2.0), spacing=0.02), tmp_path / "s.ply")
+    r = _run("analyze", str(tmp_path / "s.ply"), "--out", str(tmp_path / "out"),
+             "--units", "m", "--criteria", "wall-kcs-plumb")
+    assert r.returncode == 1
+    assert "자동 병행" in r.stdout

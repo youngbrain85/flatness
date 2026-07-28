@@ -1,5 +1,5 @@
 import numpy as np
-from tests.fixtures.synthetic import flat_floor, add_bump, add_step, write_binary_ply
+from tests.fixtures.synthetic import flat_floor, flat_wall, add_bump, add_step, write_binary_ply
 from flatness.core.pipeline import analyze_floor
 from flatness.criteria import load_criteria
 
@@ -55,3 +55,21 @@ def test_ghost_patch_warns_and_masks(tmp_path):
     stats = analyze_floor(tmp_path / "ghost.ply", 1.0, CRIT, 5.0, tmp_path / "out")
     assert "ghost_layer_rescan" in stats["warnings"]
     assert stats["grade_counts"]["na"] >= 1  # 이중층 지역은 판정 불가
+
+def test_wall_end_to_end(tmp_path):
+    from flatness.core.pipeline import analyze_wall
+    from tests.fixtures.synthetic import flat_wall
+    w = flat_wall(length=4.0, height=2.4, spacing=0.02, y0=0.0)
+    r = np.hypot(w[:, 0] - 2.0, w[:, 2] - 1.2)
+    m = r < 0.3
+    w[m, 1] -= 0.012 * 0.5 * (1.0 + np.cos(np.pi * r[m] / 0.3))
+    pts = np.vstack([flat_floor(size=(4.0, 3.0), spacing=0.02), w,
+                     flat_wall(length=3.0, height=2.4, spacing=0.02, axis='y', y0=0.0)])
+    write_binary_ply(pts, tmp_path / "room.ply")
+    crit = load_criteria()["wall-kcs-tilt-other"]
+    stats = analyze_wall(tmp_path / "room.ply", 1.0, crit, 8.0, tmp_path / "out")
+    assert len(stats["walls"]) == 2
+    assert "plumbness_relative_to_z" in stats["warnings"]
+    assert 11.0 <= stats["worst"]["value_mm"] <= 13.0
+    assert (tmp_path / "out" / "heatmap_wall1.png").exists()
+    assert (tmp_path / "out" / "heatmap_wall2.png").exists()

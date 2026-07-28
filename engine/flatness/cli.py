@@ -17,7 +17,7 @@ def main(argv=None):
     a.add_argument("--out", type=Path, required=True)
     a.add_argument("--units", choices=sorted(_SCALES))
     a.add_argument("--criteria", default="floor-kcs-exposed")
-    a.add_argument("--uncertainty-mm", type=float, default=5.0)
+    a.add_argument("--uncertainty-mm", type=float, default=None)
     sub.add_parser("list-criteria", help="탑재된 판정 기준 목록")
     args = p.parse_args(argv)
 
@@ -32,9 +32,10 @@ def main(argv=None):
         print(f"오류: 알 수 없는 기준 '{args.criteria}': flatness list-criteria 참고")
         return 1
     crit = crits[args.criteria]
-    if crit.surface != "floor":
-        print(f"오류: 1a 엔진은 바닥 기준만 지원 ('{args.criteria}'는 {crit.surface})")
+    if crit.metric == "plumbness":
+        print("오류: 수직도는 자동 병행 판정: flatness 기준을 선택하세요 (flatness list-criteria)")
         return 1
+    u_mm = args.uncertainty_mm if args.uncertainty_mm is not None else (8.0 if crit.surface == "wall" else 5.0)
 
     if args.units is None:
         info = read_info(args.file)
@@ -44,10 +45,12 @@ def main(argv=None):
         print("위 후보 중 하나를 --units 로 명시해 다시 실행하세요.")
         return 2
 
-    from flatness.core.pipeline import analyze_floor
+    from flatness.core.pipeline import analyze_floor, analyze_wall
     try:
-        stats = analyze_floor(args.file, _SCALES[args.units], crit,
-                              args.uncertainty_mm, args.out)
+        if crit.surface == "wall":
+            stats = analyze_wall(args.file, _SCALES[args.units], crit, u_mm, args.out)
+        else:
+            stats = analyze_floor(args.file, _SCALES[args.units], crit, u_mm, args.out)
     except ValueError as e:
         print(f"분석 실패: {e}")
         return 1
@@ -56,9 +59,13 @@ def main(argv=None):
     print(f"  적합 {gc['pass']} / 경계 {gc['borderline']} / 보수 {gc['repair']}"
           f" / 재시공 {gc['rework']} / 판정불가 {gc['na']}")
     zs = stats.get("zones", [])
-    n_ghost = sum(1 for z in zs if z["status"] == "ghost")
-    n_furn = sum(1 for z in zs if z["status"] == "furniture")
-    print(f"  구역 {len(zs)}개 (제외: 유령 {n_ghost}, 가구 {n_furn})  바닥 인식률 {stats['coverage_pct']}%")
+    if zs:
+        n_ghost = sum(1 for z in zs if z["status"] == "ghost")
+        n_furn = sum(1 for z in zs if z["status"] == "furniture")
+        print(f"  구역 {len(zs)}개 (제외: 유령 {n_ghost}, 가구 {n_furn})  바닥 인식률 {stats['coverage_pct']}%")
+    for wnfo in stats.get("walls", []):
+        print(f"  벽 {wnfo['wall_id']}: 길이 {wnfo['length_m']}m 높이 {wnfo['height_m']}m"
+              f"  수직도 {wnfo['plumbness_mm']}mm ({wnfo['plumb_grade']})")
     if "ghost_layer_rescan" in stats.get("warnings", []):
         # cp949 콘솔 호환을 위해 특수기호 대신 텍스트 사용
         print("  주의: 이중 표면(유령층) 감지, 해당 지역 판정 불가. 재스캔 권장")
