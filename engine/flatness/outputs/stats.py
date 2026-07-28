@@ -6,7 +6,7 @@ import numpy as np
 _CSV_FIELDS = ["ix", "iy", "center_x", "center_y", "value_mm", "span_used_m", "occupancy", "grade", "worst_x", "worst_y"]
 
 
-def build_stats(cells, grades, crit, u_mm, warnings, meta):
+def build_stats(cells, grades, crit, u_mm, warnings, meta, zones=None):
     valid = [c for c in cells if c.value_mm is not None]
     counts = {k: 0 for k in ("pass", "borderline", "repair", "rework", "na")}
     for g in grades:
@@ -43,6 +43,7 @@ def build_stats(cells, grades, crit, u_mm, warnings, meta):
                              "pass_mm": crit.pass_mm, "rework_mm": crit.rework_mm, "u_mm": u_mm},
         "warnings": list(warnings),
         "meta": meta,
+        "zones": zones or [],
     }
 
 

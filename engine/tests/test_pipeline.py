@@ -28,3 +28,30 @@ def test_step_grades_repair(tmp_path):
     assert abs(stats["worst"]["value_mm"] - 15.0) <= 1.0
     assert abs(stats["worst"]["point_x"] - 3.0) < 1.0         # 단차선 부근
     assert stats["grade_counts"]["repair"] >= 1
+
+def test_two_rooms_independent_verdicts(tmp_path):
+    # 방 A(z=0) + 방 B(z=0.5, 10mm 함몰) — 구역 독립 판정, 교차 오염 없음
+    a = flat_floor(size=(4.0, 3.0), spacing=0.02)
+    b = add_bump(flat_floor(size=(4.0, 3.0), spacing=0.02), (2.0, 1.5), 0.3, -0.010)
+    b[:, 0] += 4.4
+    b[:, 2] += 0.5
+    write_binary_ply(np.vstack([a, b]), tmp_path / "rooms.ply")
+    stats = analyze_floor(tmp_path / "rooms.ply", 1.0, CRIT, 5.0, tmp_path / "out")
+    assert len([z for z in stats["zones"] if z["status"] == "ok"]) == 2
+    assert 9.0 <= stats["worst"]["value_mm"] <= 11.0
+    assert abs(stats["worst"]["point_x"] - 6.4) < 1.0   # 함몰은 방 B(4.4+2.0)에
+    assert stats["coverage_pct"] > 85.0
+    # 방 A 셀은 전부 적합(구역 경계·레벨 차가 새어들지 않음)
+    import json
+    cells = json.loads((tmp_path / "out" / "cells.json").read_text("utf-8"))
+    room_a = [c for c in cells if c["center_x"] < 4.0 and c["grade"] != "na"]
+    assert len(room_a) >= 6 and all(c["grade"] == "pass" for c in room_a)
+
+def test_ghost_patch_warns_and_masks(tmp_path):
+    base = flat_floor(size=(6.0, 4.0), spacing=0.02)
+    patch = flat_floor(size=(1.0, 1.0), spacing=0.02)
+    patch[:, 0] += 2.0; patch[:, 1] += 1.5; patch[:, 2] += 0.015
+    write_binary_ply(np.vstack([base, patch]), tmp_path / "ghost.ply")
+    stats = analyze_floor(tmp_path / "ghost.ply", 1.0, CRIT, 5.0, tmp_path / "out")
+    assert "ghost_layer_rescan" in stats["warnings"]
+    assert stats["grade_counts"]["na"] >= 1  # 이중층 지역은 판정 불가

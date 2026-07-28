@@ -55,6 +55,13 @@ def main(argv=None):
     print(f"분석 완료: 셀 {stats['n_cells']}개 (유효 {stats['n_valid']})")
     print(f"  적합 {gc['pass']} / 경계 {gc['borderline']} / 보수 {gc['repair']}"
           f" / 재시공 {gc['rework']} / 판정불가 {gc['na']}")
+    zs = stats.get("zones", [])
+    n_ghost = sum(1 for z in zs if z["status"] == "ghost")
+    n_furn = sum(1 for z in zs if z["status"] == "furniture")
+    print(f"  구역 {len(zs)}개 (제외: 유령 {n_ghost}, 가구 {n_furn})  바닥 인식률 {stats['coverage_pct']}%")
+    if "ghost_layer_rescan" in stats.get("warnings", []):
+        # cp949 콘솔 호환을 위해 특수기호 대신 텍스트 사용
+        print("  주의: 이중 표면(유령층) 감지 — 해당 지역 판정 불가, 재스캔 권장")
     if stats["worst"] is not None:
         print(f"  최대 {stats['value_max_mm']}mm @ ({stats['worst']['point_x']:.2f},"
               f" {stats['worst']['point_y']:.2f})  기준 {stats['applied_criteria']['name']}"
