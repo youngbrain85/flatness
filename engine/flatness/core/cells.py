@@ -123,7 +123,7 @@ def evaluate_cells(residuals, grid, span_m, cell_m=1.0, min_occupancy=0.7,
                         if len(pos) / expected < min_occupancy:
                             continue
                         L = float(pos.max() - pos.min())
-                        if L < min_span_m:
+                        if L + step < min_span_m:  # 이산화 여유 한 스텝 (백로그 티켓 2)
                             continue
                         gap, wi = max_gap_under_straightedge(pos, height)
                         L_eff = min(L, span_m)

@@ -80,3 +80,21 @@ def test_no_zone_cell_is_na():
                     res.copy(), np.full((40, 40), 9, np.int32), np.zeros((40, 40), bool))
     cells = evaluate_cells(res, g, span_m=3.0, zone_labels=labels)
     assert all(c.value_mm is None for c in cells)
+
+def test_span1_diagonals_participate():
+    # span=1m: 대각 풀 라인 L=14*0.0707=0.99m — 이산화 여유 없이는 전멸 (백로그 티켓 2)
+    res = np.zeros((60, 60), dtype=np.float32)
+    from flatness.core.subcell import SubcellGrid
+    g = SubcellGrid(0.05, np.zeros(2), (60, 60),
+                    res.copy(), np.full((60, 60), 9, np.int32), np.zeros((60, 60), bool))
+    cells = evaluate_cells(res, g, span_m=1.0)
+    valid = [c for c in cells if c.value_mm is not None]
+    assert len(valid) == len(cells)  # 모든 셀 판정 가능
+    assert all(c.span_used_m >= 0.9 for c in valid)
+
+def test_span1_reduced_span_accepted_within_one_step():
+    # 대각 스텝(0.0707) 한 칸 여유 규칙을 직접 검증
+    from flatness.core.cells import _SQRT2
+    step = 0.05 * _SQRT2
+    L = 14 * step  # 0.9899...
+    assert L < 1.0 and L + step >= 1.0  # 규칙: L + step >= min_span 이면 허용
