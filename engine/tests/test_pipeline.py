@@ -123,3 +123,4 @@ def test_meta_version_and_surface(tmp_path):
     stats = analyze_floor(tmp_path / "f.ply", 1.0, CRIT, 5.0, tmp_path / "out")
     assert stats["meta"]["engine_version"] == ENGINE_VERSION
     assert stats["meta"]["surface"] == "floor"
+    assert len(stats["meta"]["bbox_min"]) == 3  # 좌표 프레임 앵커 (P2 계약)

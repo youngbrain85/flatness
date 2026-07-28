@@ -50,7 +50,8 @@ def analyze_floor(path, scale_to_m, criterion, u_mm, out_dir,
                  for z in zmap.zones]
     meta = {"file": str(path), "n_points": info.n_points, "scale_to_m": scale_to_m,
             "subcell_m": subcell_m, "cell_m": cell_m, "engine_version": ENGINE_VERSION,
-            "surface": "floor"}
+            "surface": "floor",
+            "bbox_min": [round(float(v), 4) for v in (info.bbox_min * scale_to_m)]}
     stats = build_stats(cells, grades, criterion, u_mm, sorted(set(warns)), meta,
                         zones=zones_out, coverage_pct=coverage)
     stats["auto_summary"] = generate_summary(stats)
@@ -104,7 +105,8 @@ def analyze_wall(path, scale_to_m, criterion, u_mm, out_dir,
         raise ValueError("벽면 미검출: 유효 점이 있는 벽 없음")
     meta = {"file": str(path), "n_points": info.n_points, "scale_to_m": scale_to_m,
             "subcell_m": subcell_m, "cell_m": cell_m, "engine_version": ENGINE_VERSION,
-            "surface": "wall"}
+            "surface": "wall",
+            "bbox_min": [round(float(v), 4) for v in (info.bbox_min * scale_to_m)]}
     stats = build_stats(all_cells, all_grades, criterion, u_mm, sorted(warns), meta)
     stats["walls"] = walls_out
     stats["auto_summary"] = generate_summary(stats)
