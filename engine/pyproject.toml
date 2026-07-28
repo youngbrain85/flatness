@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "flatness-engine"
 version = "0.1.0"
 requires-python = ">=3.11"
-dependencies = ["numpy>=1.26", "laspy[lazrs]>=2.5", "matplotlib>=3.8"]
+dependencies = ["numpy>=1.26", "laspy[lazrs]>=2.5", "matplotlib>=3.8", "scipy>=1.11"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]
