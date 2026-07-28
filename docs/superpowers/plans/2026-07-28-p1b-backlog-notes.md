@@ -42,6 +42,13 @@
 23. T-접합 교차벽 밴드 오염, 파일 K+2회 패스(성능), 벽 히트맵 축 라벨(u/v), bin_m 매직 상수 공유, 스펙 §5.1.7 대칭 파티션 부호 캐비앗
 [해결: P1d] 24. **천장 포함 스캔 팬텀 벽** — cnt_mid(중간 대역 점유) 조건으로 근본 해소 (P1d Task 1에서 발견·수정)
 
+## P1d 최종 리뷰 이연 티켓 (2026-07-28)
+
+25. **[P2 필수] §5.4 JSON 연계 입력 스키마 정의** — 과업지시서 명시 항목인데 P1에서 CSV 임포트만 구현됨. P2 스키마 계약 문서(티켓 9·22)와 함께 정의할 것
+26. cnt_mid 중간 대역 앵커를 전역 min/max 대신 강건 백분위(z p1/p99)로 — 고고도 이상점 1개가 팬텀 벽 후보를 부활시킬 수 있음
+27. P2 스키마 계약 문서에 조건부 키 열거 필수 — preview3d_paths(floor만)·walls(wall만)·import meta scale_to_m 부재·warnings의 wall_{i}_skipped 개방 패턴·히트맵 파일명 관례, coverage_pct 3중 의미(floor=서브셀 인식률, wall/import=셀 유효율)
+28. 벽 루프 render_heatmap이 try 밖(비-ValueError 렌더 실패 시 전체 중단 가능), import-colab의 벽 기준 거부 문구가 "알 수 없는 기준"으로 부정확
+
 ## 기록용 이연 minor (비차단)
 
 - test_ply_roundtrip 이름 과장(파일 생성 확인 수준), severity 동률 타이브레이크 주석 부재, load_criteria 커스텀 경로 with 미사용, test_criteria 일부 주석 기호 위주, iter_chunks 지연 검증 특성, _ORDER 밖 등급 일반 ValueError, CLI 스크리닝 문구가 스펙 리터럴과 괄호만큼 상이(의미 동일)

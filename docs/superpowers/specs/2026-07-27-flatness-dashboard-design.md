@@ -158,7 +158,7 @@
    - 전역 최적 평면 편차는 '수평도(레벨)' 별도 지표 — 로버스트 피팅, 드리프트 경고 표기, 판정 미사용, 판정 히트맵과 나란히 배치하지 않음
 8. **벽면**: 동일 체계(다중 수직 평면→구역화→직선자). 수직도(plumbness)는 중력 기준 보장 데이터에서만 절대값 산출, 미보장 앱은 벽면 간 상대 기울기만(앱별 검증 화이트리스트). 각도 불확도의 mm 환산 병기
 9. **산출물** (Storage `artifacts/{analysis_id}/`)
-   - stats.json, cells.json(셀 격자), heatmap.png(**판정 4색 + 판정 불가 회색 = 5색**, 색각 이상 대비 검증), viewer.bin(≤150만 점 다운샘플 점군+편차 색상), histogram.png, preview3d_1.png·preview3d_2.png(**워커가 matplotlib 등각 뷰로 서버측 렌더** — 전체 뷰 + 최대 결함 구역 확대. 헤드리스 WebGL 배제), results.csv(셀별 상세), 자동 종합의견 초안
+   - stats.json, cells.json(셀 격자), heatmap.png(**판정 4색 + 판정 불가 회색 = 5색**, 색각 이상 대비 검증), viewer.bin(≤150만 점 다운샘플 점군+편차 색상), histogram.png, preview3d.png·preview3d_zoom.png(**워커가 matplotlib 등각 뷰로 서버측 렌더** — 전체 뷰 + 최대 결함 구역 확대. 헤드리스 WebGL 배제), results.csv(셀별 상세), 자동 종합의견 초안
 
 ### 5.2 성능 설계 (강제 제약)
 
