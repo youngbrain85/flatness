@@ -942,13 +942,24 @@ def test_flat_floor_all_cells_near_zero():
     assert sum(1 for c in cells if c.span_used_m >= 2.95) >= 16
     assert all(c.span_used_m >= 1.0 for c in cells)
 
-def test_bump_detected_within_tolerance():
-    pts = add_bump(flat_floor(size=(6.0, 6.0), spacing=0.02), (2.0, 2.0), 0.3, 0.01)
+def test_depression_detected_within_tolerance():
+    # 함몰(음수 범프): 포락선 지지점이 주변 바닥 → 직선자 해석 정답 = 깊이 10mm 정확히
+    pts = add_bump(flat_floor(size=(6.0, 6.0), spacing=0.02), (2.0, 2.0), 0.3, -0.01)
     r, g = _residuals(pts)
     cells = [c for c in evaluate_cells(r, g, span_m=3.0) if c.value_mm is not None]
     worst = max(cells, key=lambda c: c.value_mm)
     assert 9.0 <= worst.value_mm <= 11.0        # 직선자 값 ±1mm (스펙 §10.1)
     assert abs(worst.worst_x - 2.0) < 1.0 and abs(worst.worst_y - 2.0) < 1.0  # 위치 1셀 이내
+
+def test_bump_reads_hull_support_value():
+    # 볼록(범프): 직선자가 정점에 얹히는 지지선 기하로 해석값 ≈ h×(1−r/S)×중앙값감쇠 ≈ 8.6mm
+    # (결함 높이 10mm가 아님 — 실물 직선자도 동일하게 읽음. 2026-07-28 정정)
+    pts = add_bump(flat_floor(size=(6.0, 6.0), spacing=0.02), (2.0, 2.0), 0.3, 0.01)
+    r, g = _residuals(pts)
+    cells = [c for c in evaluate_cells(r, g, span_m=3.0) if c.value_mm is not None]
+    worst = max(cells, key=lambda c: c.value_mm)
+    assert 7.6 <= worst.value_mm <= 9.6         # 해석값 8.6mm ± 1mm
+    assert abs(worst.worst_x - 2.0) < 1.0 and abs(worst.worst_y - 2.0) < 1.0
 
 def test_small_area_uses_reduced_span():
     # 2.4m 폭 — 3m 스팬 불가 → 축소 스팬(≥1m)으로 평가
@@ -1103,7 +1114,7 @@ def evaluate_cells(residuals, grid, span_m, cell_m=1.0, min_occupancy=0.7, min_s
 - [ ] **Step 4: 통과 확인**
 
 Run: `python -m pytest tests/test_cells.py -v`
-Expected: 4 PASS
+Expected: 5 PASS
 
 - [ ] **Step 5: Commit**
 
@@ -1502,16 +1513,17 @@ from flatness.criteria import load_criteria
 
 CRIT = load_criteria()["floor-kcs-exposed"]  # pass 7 / rework 21, U=5 → b1=2, b2=12
 
-def test_bump_end_to_end(tmp_path):
-    # 6x6m 바닥 + 2% 경사 + (2,2)에 10mm 범프 → 경사 제거 후 범프 검출
+def test_depression_end_to_end(tmp_path):
+    # 6x6m 바닥 + 2% 경사 + (2,2)에 10mm 함몰 → 경사 제거 후 함몰 검출
+    # (함몰은 직선자 해석 정답이 정확히 깊이 — 2026-07-28 정정, 범프는 지지선 기하로 8.6mm가 정답)
     pts = add_bump(flat_floor(size=(6.0, 6.0), spacing=0.02, tilt=(0.02, 0.0)),
-                   (2.0, 2.0), 0.3, 0.010)
+                   (2.0, 2.0), 0.3, -0.010)
     write_binary_ply(pts, tmp_path / "scan.ply")
     stats = analyze_floor(tmp_path / "scan.ply", 1.0, CRIT, 5.0, tmp_path / "out")
     assert 9.0 <= stats["worst"]["value_mm"] <= 11.0          # ±1mm (스펙 §10.1)
     assert abs(stats["worst"]["point_x"] - 2.0) < 1.0         # 위치 1셀 이내
     assert abs(stats["worst"]["point_y"] - 2.0) < 1.0
-    assert stats["grade_counts"]["borderline"] >= 1           # 10mm → 경계(2<10≤12)
+    assert stats["grade_counts"]["borderline"] >= 1           # ≈10mm → 경계(2<10≤12)
     assert stats["grade_counts"]["pass"] >= 20                # 먼 셀은 적합(≈0mm)
     assert (tmp_path / "out" / "heatmap.png").exists()
     assert (tmp_path / "out" / "results.csv").exists()
