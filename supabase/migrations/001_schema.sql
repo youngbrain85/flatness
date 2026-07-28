@@ -93,6 +93,10 @@ create table criteria (
 create unique index criteria_global_name on criteria(surface, name) where site_id is null and is_active;
 create unique index criteria_site_name on criteria(site_id, surface, name) where site_id is not null and is_active;
 -- is_default 강제: (site_id, surface) 당 활성 기본값 1개 — 전역은 site_id NULL 별도 인덱스 (§4.2)
+-- 데모 조정: 스펙 §6.1 원문은 "WHERE is_default"뿐이나, 여기서는 "and is_active"를
+-- 추가했다 — 버전 개정으로 비활성화된 구 기본값 행이 is_default=true를 그대로 들고
+-- 있어도(이력 보존) 새 활성 기본값 행과 유니크 충돌을 일으키지 않게 하기 위함.
+-- fn_resolve_criteria(002)가 조회 시 is_active로 별도 필터링하므로 조회 의미는 그대로다.
 create unique index criteria_global_default on criteria(surface) where site_id is null and is_default and is_active;
 create unique index criteria_site_default on criteria(site_id, surface) where site_id is not null and is_default and is_active;
 
@@ -290,3 +294,17 @@ create policy site_write on criteria for all to authenticated
 
 -- jobs: 클라이언트 정책 없음(RLS는 활성화되어 있으나 policy가 0개이므로 authenticated/
 -- anon은 기본 거부, service_role은 RLS를 우회) — enqueue는 SECURITY DEFINER 함수로만(002)
+
+-- =============================================================================
+-- 컬럼 단위 권한 축소 (코드리뷰 Critical 반영): RLS는 행 단위 필터라 self_update
+-- 정책(id = auth.uid())만으로는 "어떤 컬럼을" 바꿀 수 있는지 제한하지 못한다.
+-- 즉 authenticated에게 테이블 단위 UPDATE 권한이 있는 한, 누구나 자기 행의
+-- is_admin을 true로 세팅해 app_settings·전역 criteria 쓰기 제한(admin_write,
+-- site_write 정책)을 스스로 우회할 수 있다. 이를 막기 위해 authenticated의
+-- profiles insert/update 권한을 컬럼 화이트리스트로 축소한다 — is_admin은
+-- 화이트리스트에서 제외되므로 authenticated는 절대 손댈 수 없고, 오직
+-- service_role(RLS 우회 + 컬럼 권한도 우회)의 SQL Editor 조작으로만 부여 가능하다.
+-- =============================================================================
+revoke insert, update on table profiles from authenticated;
+grant insert (id, display_name) on table profiles to authenticated;
+grant update (display_name) on table profiles to authenticated;
