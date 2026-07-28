@@ -1,7 +1,9 @@
 .superpowers/
 node_modules/
 __pycache__/
-.env*
+.env
+.env.*
+!.env.example
 *.pyc
 .next/
 .worktrees/
