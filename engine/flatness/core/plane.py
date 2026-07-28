@@ -22,7 +22,7 @@ def fit_plane_ransac(x, y, z, n_iter=500, thresh_m=0.005, seed=0):
         if mask.sum() > best_cnt:
             best_cnt, best_mask = int(mask.sum()), mask
     if best_mask is None or best_cnt < 3:
-        raise ValueError("평면 피팅 실패 — 점이 부족하거나 퇴화 구성")
+        raise ValueError("평면 피팅 실패: 점이 부족하거나 퇴화 구성")
     abc, *_ = np.linalg.lstsq(A_full[best_mask], np.asarray(z)[best_mask], rcond=None)
     return float(abc[0]), float(abc[1]), float(abc[2])
 

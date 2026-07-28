@@ -29,7 +29,7 @@ def main(argv=None):
         return 0
 
     if args.criteria not in crits:
-        print(f"오류: 알 수 없는 기준 '{args.criteria}' — flatness list-criteria 참고")
+        print(f"오류: 알 수 없는 기준 '{args.criteria}': flatness list-criteria 참고")
         return 1
     crit = crits[args.criteria]
     if crit.surface != "floor":

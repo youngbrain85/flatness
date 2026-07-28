@@ -1,5 +1,5 @@
 import numpy as np
-from tests.fixtures.synthetic import flat_floor, add_bump
+from tests.fixtures.synthetic import flat_floor
 from flatness.core.levels import detect_levels
 from flatness.core.zones import build_zones
 from tests.test_subcell import _grid

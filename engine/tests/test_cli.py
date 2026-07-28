@@ -1,9 +1,12 @@
-import subprocess, sys, json
+import subprocess, sys, json, os
 from tests.fixtures.synthetic import flat_floor, write_binary_ply
 
 def _run(*args):
+    # 자식 파이썬의 stdout을 UTF-8로 고정하고 부모도 UTF-8로 디코드 —
+    # PYTHONIOENCODING이 어떤 값이어도 결과가 동일하도록(환경 의존 제거)
+    env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
     return subprocess.run([sys.executable, "-m", "flatness.cli", *args],
-                          capture_output=True, text=True)
+                          capture_output=True, text=True, encoding="utf-8", env=env)
 
 def test_units_required_exit_2(tmp_path):
     write_binary_ply(flat_floor(size=(6.0, 6.0), spacing=0.02), tmp_path / "s.ply")
