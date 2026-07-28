@@ -35,8 +35,8 @@ def main(argv=None):
 
     if args.cmd == "import-colab":
         crit = crits.get(args.criteria)
-        if crit is None or crit.metric != "flatness":
-            print(f"오류: 알 수 없는 기준 '{args.criteria}': flatness list-criteria 참고")
+        if crit is None or crit.metric != "flatness" or crit.surface != "floor":
+            print(f"오류: 알 수 없는 기준 '{args.criteria}': 바닥(flatness) 기준을 지정하세요 (flatness list-criteria)")
             return 1
         from flatness.importer.colab_csv import import_colab_csv
         try:

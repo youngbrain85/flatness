@@ -38,3 +38,14 @@ def test_import_cli(tmp_path):
     r = _run("import-colab", str(tmp_path / "colab.csv"), "--out", str(tmp_path / "out"))
     assert r.returncode == 0, r.stderr
     assert "외부 결과" in r.stdout
+
+def test_import_rejects_wall_criteria(tmp_path):
+    # 임포트는 바닥 결과 전용 — 벽 기준 지정 시 명확히 거부 (표기 불일치 방지)
+    from tests.fixtures.synthetic import flat_floor
+    from tests.test_cli import _run
+    pts = flat_floor(size=(2.0, 2.0), spacing=0.02)
+    _write_csv(tmp_path / "colab.csv", pts, np.zeros(len(pts)))
+    r = _run("import-colab", str(tmp_path / "colab.csv"), "--out", str(tmp_path / "out"),
+             "--criteria", "wall-kcs-tilt-other")
+    assert r.returncode == 1
+    assert "바닥" in r.stdout

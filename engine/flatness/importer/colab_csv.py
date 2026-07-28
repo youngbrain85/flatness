@@ -5,7 +5,6 @@ Signed_Distance_mm는 기존 프로그램이 이미 평면 제거한 편차이�
 """
 import csv as _csv
 import numpy as np
-from flatness import ENGINE_VERSION  # noqa: F401  (버전 대비 참조용)
 from flatness.io.reader import CloudInfo
 from flatness.core.subcell import build_subcell_grid
 from flatness.core.cells import evaluate_cells
@@ -49,7 +48,6 @@ def import_colab_csv(path, criterion, u_mm, out_dir, subcell_m=0.05, cell_m=1.0)
     meta = {"file": str(path), "n_points": len(pts), "engine_version": "external-colab-v1",
             "surface": "floor", "source": "colab-import", "subcell_m": subcell_m, "cell_m": cell_m}
     stats = build_stats(cells, grades, criterion, u_mm, sorted(set(warns)), meta)
-    out_dir.mkdir(parents=True, exist_ok=True)
     stats["auto_summary"] = generate_summary(stats)
     write_outputs(out_dir, stats, cells, grades)
     render_heatmap(cells, grades, out_dir / "heatmap.png", cell_m=cell_m)
