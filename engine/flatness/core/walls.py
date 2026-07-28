@@ -130,3 +130,34 @@ def wall_grid(uvw_chunks, subcell_m=0.05):
         raise ValueError("벽 투영 점 없음")
     info = CloudInfo(len(allp), allp.min(axis=0), allp.max(axis=0))
     return build_subcell_grid(iter([allp]), info, 1.0, subcell_m=subcell_m)
+
+
+from flatness.core.plane import fit_plane_ransac, residual_grid
+from flatness.core.cells import evaluate_cells
+from flatness.criteria import grade_cells, grade_value, load_criteria
+
+
+def evaluate_wall(grid, criterion, u_mm):
+    """벽 평면 재피팅 잔차의 셀 직선자 판정 + 수직도(b=dw/dv) 산출.
+
+    셀 판정 = 국부 요철(평면 제거 후), 수직도 = 전역 기울기 — 바닥의 레벨 분리와 동일 원칙.
+    """
+    ys, xs = np.nonzero(np.isfinite(grid.median_z))
+    if len(xs) < 10:
+        raise ValueError("벽 유효 서브셀 부족")
+    cu = (xs + 0.5) * grid.size_m
+    cv = (ys + 0.5) * grid.size_m
+    a, b, c = fit_plane_ransac(cu, cv, grid.median_z[ys, xs].astype(float))
+    residuals = residual_grid(grid, (a, b, c))
+    span = criterion.span_m if criterion.span_m else 3.0
+    cells = evaluate_cells(residuals, grid, span_m=span, cell_m=1.0)
+    grades, warns = grade_cells(cells, criterion, u_mm)
+    height = float(cv.max() - cv.min())
+    length = float(cu.max() - cu.min())
+    plumb_mm = abs(b) * height * 1000.0  # b = 높이당 법선 편차(z-up 기준 상대 수직도)
+    pc = load_criteria()["wall-kcs-plumb"]
+    plumb_grade, _ = grade_value(plumb_mm, pc, u_mm, span_used_m=1.0)
+    metrics = {"height_m": round(height, 2), "length_m": round(length, 2),
+               "plumbness_mm": round(plumb_mm, 2), "plumb_grade": plumb_grade,
+               "plane_abc": [round(v, 6) for v in (a, b, c)]}
+    return cells, grades, list(warns), metrics

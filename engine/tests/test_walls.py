@@ -112,3 +112,34 @@ def test_partition_wall_center_of_bbox_sign_correct_flipped():
     base = float(np.nanmedian(g.median_z))
     delta = float(np.nanmax(g.median_z)) - base
     assert 0.008 < delta < 0.012  # 돌출이 +w로 보존 (은폐되지 않음)
+
+from flatness.core.walls import evaluate_wall
+from flatness.criteria import load_criteria
+
+CRIT_WALL = load_criteria()["wall-kcs-tilt-other"]  # flatness 3m/9mm
+
+def test_tilted_wall_plumbness_and_flat_cells():
+    # 기울어진 벽(w = 0.005×v): 2.4m 높이 → 수직도 12mm, 셀 잔차는 ≈0(기울기 분리)
+    w = flat_wall(length=4.0, height=2.4, spacing=0.02, y0=0.0)
+    w[:, 1] += 0.005 * w[:, 2]
+    pts = np.vstack([flat_floor(size=(4.0, 3.0), spacing=0.02), w])
+    wall, info = _detect_one(pts)
+    g = wall_grid(project_wall_points(iter([pts]), info, 1.0, wall))
+    cells, grades, warns, wm = evaluate_wall(g, CRIT_WALL, 8.0)
+    assert 10.0 <= wm["plumbness_mm"] <= 14.0
+    assert wm["plumb_grade"] == "pass"          # 12 ≤ b1=25−8=17
+    valid = [c for c in cells if c.value_mm is not None]
+    assert len(valid) >= 4 and all(c.value_mm < 1.0 for c in valid)
+
+def test_wall_bump_graded():
+    w = flat_wall(length=4.0, height=2.4, spacing=0.02, y0=0.0)
+    r = np.hypot(w[:, 0] - 2.0, w[:, 2] - 1.2)
+    m = r < 0.3
+    w[m, 1] -= 0.012 * 0.5 * (1.0 + np.cos(np.pi * r[m] / 0.3))  # 함몰 12mm(법선 반대)
+    pts = np.vstack([flat_floor(size=(4.0, 3.0), spacing=0.02), w])
+    wall, info = _detect_one(pts)
+    g = wall_grid(project_wall_points(iter([pts]), info, 1.0, wall))
+    cells, grades, warns, wm = evaluate_wall(g, CRIT_WALL, 8.0)
+    worst = max((c for c in cells if c.value_mm is not None), key=lambda c: c.value_mm)
+    assert 11.0 <= worst.value_mm <= 13.0       # 함몰=깊이 정확 (±1mm 게이트)
+    assert abs(worst.worst_x - 2.0) < 1.0 and abs(worst.worst_y - 1.2) < 1.0
