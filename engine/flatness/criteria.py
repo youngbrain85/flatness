@@ -24,14 +24,19 @@ def load_criteria(path=None):
 
 
 def grade_value(value_mm, crit, u_mm, span_used_m):
-    """§4.2: s=span_used/span, pe=pass×s, re=rework×s, b1=pe−U, b2=min(pe+U, re)."""
+    """§4.2 2차 개정: s=span_used/span, pe=pass×s, re=rework×s, U_eff=U×s.
+
+    U를 고정하면 축소 스팬에서 pe < U가 되어 평탄 셀조차 적합 불가 —
+    드리프트 지배 불확도는 기저선 길이에 비례하므로 U도 같은 비율로 환산한다.
+    """
     warns = []
     s = 1.0 if crit.span_m is None else min(1.0, span_used_m / crit.span_m)
     if s < 1.0:
         warns.append("reduced_span")
     pe, re = crit.pass_mm * s, crit.rework_mm * s
-    b1, b2 = pe - u_mm, min(pe + u_mm, re)
-    if pe + u_mm >= re:
+    u_eff = u_mm * s
+    b1, b2 = pe - u_eff, min(pe + u_eff, re)
+    if crit.pass_mm + u_mm >= crit.rework_mm:
         warns.append("uncertainty_swallows_repair")
     if value_mm <= b1:
         return "pass", warns
