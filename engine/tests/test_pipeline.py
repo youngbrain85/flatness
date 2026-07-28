@@ -56,6 +56,16 @@ def test_ghost_patch_warns_and_masks(tmp_path):
     assert "ghost_layer_rescan" in stats["warnings"]
     assert stats["grade_counts"]["na"] >= 1  # 이중층 지역은 판정 불가
 
+def test_low_coverage_warning(tmp_path):
+    # 티켓 14: 바닥 절반이 판정 불가 수준이면 low_coverage 경고
+    a = flat_floor(size=(3.0, 3.0), spacing=0.02)
+    junk = flat_floor(size=(3.0, 3.0), spacing=0.02, tilt=(0.4, 0.0))  # 40% 급경사(비바닥)
+    junk[:, 0] += 3.2
+    write_binary_ply(np.vstack([a, junk]), tmp_path / "s.ply")
+    stats = analyze_floor(tmp_path / "s.ply", 1.0, CRIT, 5.0, tmp_path / "out")
+    assert stats["coverage_pct"] < 70.0
+    assert "low_coverage" in stats["warnings"]
+
 def test_wall_end_to_end(tmp_path):
     from flatness.core.pipeline import analyze_wall
     from tests.fixtures.synthetic import flat_wall

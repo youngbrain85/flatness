@@ -26,7 +26,8 @@ class ZoneMap:
 
 
 def build_zones(grid, levels, band_m=0.05, min_area_m2=1.0,
-                furniture_gap_m=0.3, furniture_max_m2=3.0, ghost_frac=0.2):
+                furniture_gap_m=0.3, furniture_max_m2=3.0, ghost_frac=0.2,
+                grow_iters=12):
     mz = grid.median_z
     labels = np.zeros(mz.shape, dtype=np.int32)
     zones = []
@@ -47,6 +48,42 @@ def build_zones(grid, levels, band_m=0.05, min_area_m2=1.0,
     if not zones:
         return ZoneMap(labels, zones), residuals
     main = max(zones, key=lambda z: z.area_m2)  # 주 레벨 = 최대 면적 구역
+    # 평면 추종 영역 성장(티켓 13): 고정 높이 밴드가 놓친 경사 슬래브 영역 회복
+    from scipy.ndimage import binary_dilation
+    finite = np.isfinite(mz)
+    for _ in range(grow_iters):
+        changed = False
+        for z in zones:
+            if z.status != "ok":
+                continue
+            m = labels == z.zone_id
+            ys, xs = np.nonzero(m)
+            if len(xs) < 3:
+                continue
+            cx = (xs + 0.5) * grid.size_m
+            cy = (ys + 0.5) * grid.size_m
+            a, b, c = fit_plane_ransac(cx, cy, mz[ys, xs].astype(float))
+            # 고정 평면으로 인접 링을 소진될 때까지 흡수(내부 루프) —
+            # 링당 재피팅 없이 경사면 전체를 1~2 외부 반복에 수렴시킨다
+            # (2026-07-28 개정: 외부 반복당 1링 성장은 12회=0.6m 한계로 경사 테스트 미달 실측)
+            while True:
+                frontier = binary_dilation(m) & (labels == 0) & finite
+                fy, fx = np.nonzero(frontier)
+                if len(fx) == 0:
+                    break
+                pv = mz[fy, fx] - (a * (fx + 0.5) * grid.size_m + b * (fy + 0.5) * grid.size_m + c)
+                absorb = np.abs(pv) <= band_m
+                if not absorb.any():
+                    break
+                labels[fy[absorb], fx[absorb]] = z.zone_id
+                m = labels == z.zone_id
+                changed = True
+        if not changed:
+            break
+    for z in zones:  # 성장 반영 재집계
+        n_sub = int((labels == z.zone_id).sum())
+        z.n_subcells = n_sub
+        z.area_m2 = n_sub * sub_area
     for z in zones:
         m = labels == z.zone_id
         if z.zone_id != main.zone_id and z.level_m > main.level_m + furniture_gap_m \

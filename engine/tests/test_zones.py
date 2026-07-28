@@ -50,3 +50,13 @@ def test_min_area_filters_specks():
     mz[0, 0] = 2.0  # 고립 서브셀 — 면적 미달로 구역이 되면 안 됨
     zmap, _ = build_zones(g, detect_levels(mz))
     assert all(z.area_m2 >= 1.0 for z in zmap.zones)
+
+def test_sloped_slab_full_coverage():
+    # 티켓 13: 2.5% 경사에서 고정 높이 밴드는 커버리지 45.8%로 붕괴했음(P1b 최종 리뷰 실측)
+    g = _grid(flat_floor(size=(6.0, 6.0), spacing=0.02, tilt=(0.025, 0.0)))
+    zmap, res = build_zones(g, detect_levels(g.median_z))
+    ok = [z for z in zmap.zones if z.status == "ok"]
+    assert len(ok) == 1
+    n_valid = int(np.isfinite(g.median_z).sum())
+    assert (zmap.labels > 0).sum() >= 0.95 * n_valid   # 평면 추종 성장으로 회복
+    assert np.nanmax(np.abs(res)) < 5e-4               # 경사 제거 후 잔차 ≈ 0

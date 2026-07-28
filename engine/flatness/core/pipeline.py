@@ -39,6 +39,8 @@ def analyze_floor(path, scale_to_m, criterion, u_mm, out_dir,
         warns.append("ghost_zone_excluded")
     ok_sub = sum(z.n_subcells for z in ok_zones)
     coverage = round(100.0 * ok_sub / n_valid_sub, 1)  # 바닥 인식 비율 (스펙 §5.1.3)
+    if coverage < 70.0:
+        warns.append("low_coverage")  # 바닥 인식률 저하(티켓 14, 스펙 §5.3)
     zones_out = [{"zone_id": z.zone_id, "level_m": round(z.level_m, 3),
                   "area_m2": round(z.area_m2, 2), "status": z.status,
                   "plane_abc": None if z.plane_abc is None else [round(v, 6) for v in z.plane_abc]}
