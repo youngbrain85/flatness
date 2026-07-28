@@ -61,3 +61,16 @@ def test_coverage_pct_param_overrides_cell_based():
     assert s["coverage_pct"] == 87.3
     s2 = build_stats(cells, grades, crit, 5.0, warns, {})
     assert s2["coverage_pct"] == round(100 * 2 / 3, 1)  # 기존 셀 기반 유지
+
+def test_cell_rows_include_zone_id(tmp_path):
+    # 다중 벽/구역에서 (ix,iy)만으로는 행이 충돌 — zone_id로 판별 (P1c 최종 리뷰)
+    crit = load_criteria()["floor-kcs-exposed"]
+    cells = [CellResult(0, 0, 0.5, 0.5, 1.0, 3.0, 0.9, 0.5, 0.5, 1),
+             CellResult(0, 0, 0.5, 0.5, 2.0, 3.0, 0.9, 0.5, 0.5, 2)]
+    grades, warns = grade_cells(cells, crit, 5.0)
+    s = build_stats(cells, grades, crit, 5.0, warns, {})
+    write_outputs(tmp_path, s, cells, grades)
+    rows = json.loads((tmp_path / "cells.json").read_text("utf-8"))
+    assert rows[0]["zone_id"] == 1 and rows[1]["zone_id"] == 2
+    csv_rows = list(csv.DictReader(open(tmp_path / "results.csv", encoding="utf-8")))
+    assert csv_rows[0]["zone_id"] == "1" and csv_rows[1]["zone_id"] == "2"

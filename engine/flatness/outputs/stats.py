@@ -3,7 +3,7 @@ import csv
 import json
 import numpy as np
 
-_CSV_FIELDS = ["ix", "iy", "center_x", "center_y", "value_mm", "span_used_m", "occupancy", "grade", "worst_x", "worst_y"]
+_CSV_FIELDS = ["ix", "iy", "center_x", "center_y", "value_mm", "span_used_m", "occupancy", "grade", "worst_x", "worst_y", "zone_id"]
 
 
 def build_stats(cells, grades, crit, u_mm, warnings, meta, zones=None, coverage_pct=None):
@@ -55,7 +55,8 @@ def _cell_row(c, g):
             "span_used_m": round(c.span_used_m, 2), "occupancy": round(c.occupancy, 2),
             "grade": g if g is not None else "na",
             "worst_x": None if c.worst_x is None else round(c.worst_x, 3),
-            "worst_y": None if c.worst_y is None else round(c.worst_y, 3)}
+            "worst_y": None if c.worst_y is None else round(c.worst_y, 3),
+            "zone_id": c.zone_id}
 
 
 def write_outputs(out_dir, stats, cells, grades):

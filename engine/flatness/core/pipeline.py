@@ -72,7 +72,7 @@ def analyze_wall(path, scale_to_m, criterion, u_mm, out_dir,
         grid = wall_grid(uvw, subcell_m=subcell_m)
         if int(np.isfinite(grid.median_z).sum()) < 10:
             continue  # 점이 희박한 파편 벽은 건너뜀
-        cells, grades, w, wm = evaluate_wall(grid, criterion, u_mm)
+        cells, grades, w, wm = evaluate_wall(grid, criterion, u_mm, cell_m=cell_m)
         cells = [_dc_replace(c, zone_id=i) for c in cells]
         render_heatmap(cells, grades, out_dir / f"heatmap_wall{i}.png", cell_m=cell_m)
         all_cells.extend(cells)

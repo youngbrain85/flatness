@@ -137,7 +137,7 @@ from flatness.core.cells import evaluate_cells
 from flatness.criteria import grade_cells, grade_value, load_criteria
 
 
-def evaluate_wall(grid, criterion, u_mm):
+def evaluate_wall(grid, criterion, u_mm, cell_m=1.0):
     """벽 평면 재피팅 잔차의 셀 직선자 판정 + 수직도(b=dw/dv) 산출.
 
     셀 판정 = 국부 요철(평면 제거 후), 수직도 = 전역 기울기 — 바닥의 레벨 분리와 동일 원칙.
@@ -150,7 +150,7 @@ def evaluate_wall(grid, criterion, u_mm):
     a, b, c = fit_plane_ransac(cu, cv, grid.median_z[ys, xs].astype(float))
     residuals = residual_grid(grid, (a, b, c))
     span = criterion.span_m if criterion.span_m else 3.0
-    cells = evaluate_cells(residuals, grid, span_m=span, cell_m=1.0)
+    cells = evaluate_cells(residuals, grid, span_m=span, cell_m=cell_m)
     grades, warns = grade_cells(cells, criterion, u_mm)
     height = float(cv.max() - cv.min())
     length = float(cu.max() - cu.min())
