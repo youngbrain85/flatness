@@ -9,7 +9,6 @@ _WARN_TEXT = {
     "uncertainty_swallows_repair": "측정 불확도가 보수 구간을 잠식하여 경계 판정이 확대되었습니다.",
     "reduced_span": "일부 구간은 공간 제약으로 축소 스팬(허용치 선형 환산)으로 판정되었습니다.",
 }
-_GRADE_LABEL = {"pass": "적합", "borderline": "경계", "repair": "보수", "rework": "재시공"}
 
 
 def _worst_grade(gc):
@@ -30,10 +29,15 @@ def generate_summary(stats):
                  f"적용 기준은 {crit['name']}(허용 {crit['pass_mm']}mm, 불확도 U={crit['u_mm']}mm)입니다.")
     w = stats.get("worst")
     if w:
-        lines.append(f"최대 편차는 {w['value_mm']}mm로 좌표 ({w['point_x']:.1f}, {w['point_y']:.1f}) 부근에서 "
+        loc = f" (구역 {w['zone_id']})" if w.get("zone_id") not in (None,) else ""
+        if stats.get("meta", {}).get("surface") == "wall" and w.get("zone_id") is not None:
+            loc = f" (벽 {w['zone_id']})"
+        lines.append(f"최대 편차는 {w['value_mm']}mm로 좌표 ({w['point_x']:.1f}, {w['point_y']:.1f}){loc} 부근에서 "
                      f"관측되었습니다.")
     wg = _worst_grade(gc)
-    if wg == "pass":
+    if stats["n_valid"] == 0:
+        lines.append("유효 판정 셀이 없어 평활도 판정을 내릴 수 없습니다. 스캔 품질(점 밀도·범위)을 확인하고 재스캔을 권장합니다.")
+    elif wg == "pass":
         lines.append("전 구간이 적용 기준을 만족합니다.")
     elif wg == "borderline":
         lines.append("일부 구간이 경계 판정입니다. 현장 재확인(실물 직선자 검측)을 권장합니다.")
