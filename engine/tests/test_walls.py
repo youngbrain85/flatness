@@ -76,3 +76,39 @@ def test_wall_bump_visible_in_grid():
     g = wall_grid(project_wall_points(iter([pts]), info, 1.0, wall))
     base = float(np.nanmedian(g.median_z))
     assert 0.008 < float(np.nanmax(g.median_z)) - base < 0.012  # 돌출이 w 중앙값에 보존
+
+def test_partition_wall_center_of_bbox_sign_correct():
+    # 병리 케이스: 벽이 bbox 중심 부근을 지나는 실내 파티션 — bbox 중심 휴리스틱은
+    # 이 부호 판별에서 결정적으로 실패했다(리뷰 재현, 15시드 전부 delta=0).
+    # 원 리뷰 픽스처(바닥 y∈[0,3], 벽 y0=1.5)는 벽 기준 양쪽 바닥 질량이 완전히
+    # 대칭이라 점 질량 판별로도 무승부(n_pos==n_neg)가 나 실행 확인 후 바닥을
+    # y∈[0,2.0]로 좁혀 비대칭화했다: 벽(y0=1.5) 기준 아래쪽 폭 1.5 vs 위쪽 폭 0.5로
+    # interior_window(±1.0m) 안에서 아래쪽(n_pos) 질량이 뚜렷이 크다(8865 vs 3743, 실측).
+    # 범프는 그 다수질량 쪽(-y)으로 주입해 "+w=다수질량 쪽 돌출" 계약이 보존되는지 검증한다.
+    w = flat_wall(length=4.0, height=2.4, spacing=0.02, y0=1.5)
+    r = np.hypot(w[:, 0] - 2.0, w[:, 2] - 1.2)
+    m = r < 0.3
+    w[m, 1] -= 0.01 * 0.5 * (1.0 + np.cos(np.pi * r[m] / 0.3))  # 다수질량(-y) 쪽 10mm 돌출
+    pts = np.vstack([flat_floor(size=(4.0, 2.0), spacing=0.02), w])
+    wall, info = _detect_one(pts)
+    g = wall_grid(project_wall_points(iter([pts]), info, 1.0, wall))
+    base = float(np.nanmedian(g.median_z))
+    delta = float(np.nanmax(g.median_z)) - base
+    assert 0.008 < delta < 0.012  # 돌출이 +w로 보존 (은폐되지 않음)
+
+def test_partition_wall_center_of_bbox_sign_correct_flipped():
+    # 위 테스트의 반전 배치: 바닥을 벽 반대쪽(y>1.5)으로 옮겨 다수질량 쪽을 뒤집고
+    # 범프도 그쪽(+y)으로 주입 — 점 질량 판별이 특정 방향에 치우치지 않고 실제
+    # 다수질량 쪽을 정확히 따라감을 확인한다.
+    floor = flat_floor(size=(4.0, 2.0), spacing=0.02)
+    floor[:, 1] += 1.5  # 바닥을 y∈[1.5, 3.5]로 이동 (다수질량이 벽 위쪽)
+    w = flat_wall(length=4.0, height=2.4, spacing=0.02, y0=1.5)
+    r = np.hypot(w[:, 0] - 2.0, w[:, 2] - 1.2)
+    m = r < 0.3
+    w[m, 1] += 0.01 * 0.5 * (1.0 + np.cos(np.pi * r[m] / 0.3))  # 다수질량(+y) 쪽 10mm 돌출
+    pts = np.vstack([floor, w])
+    wall, info = _detect_one(pts)
+    g = wall_grid(project_wall_points(iter([pts]), info, 1.0, wall))
+    base = float(np.nanmedian(g.median_z))
+    delta = float(np.nanmax(g.median_z)) - base
+    assert 0.008 < delta < 0.012  # 돌출이 +w로 보존 (은폐되지 않음)

@@ -87,33 +87,39 @@ from flatness.io.reader import CloudInfo
 from flatness.core.subcell import build_subcell_grid
 
 
-def project_wall_points(chunks, info, scale_to_m, wall, band_m=0.1, edge_margin_m=0.1):
+def project_wall_points(chunks, info, scale_to_m, wall, band_m=0.1,
+                        edge_margin_m=0.1, interior_window_m=1.0):
     """벽 평면 ±band 내 점을 (u, v, w) float64 청크로 변환. +w = 법선 방향 돌출.
 
     바닥 접합부(v < z_min+edge_margin)는 제외 — 밴드 안에 들어오는 바닥 점 띠가
     하단 행을 오염시키는 것을 막는다(실물 벽 검측도 접합부 제외).
 
-    detect_wall_lines의 2점 RANSAC은 normal 부호를 정하지 않는다(어느 두 점이
-    표본으로 뽑히는지에 따라 임의). "+w = 돌출"이 성립하려면 normal이 실내
-    쪽(점군 대다수가 있는 쪽)을 향해야 하므로, 전체 점군 bbox 중심을 대리 기준으로
-    삼아 normal 부호를 정규화한다(스트리밍 재순회 없이 info만으로 계산 가능).
+    부호 규약: +w = 실내(벽 주변 점 질량이 많은 쪽) 방향 돌출.
+    실내 판별은 밴드 밖 ±interior_window 구간의 점 수 비교로 결정 —
+    bbox 중심 휴리스틱은 중심 통과 벽에서 결정적으로 실패해 폐기(리뷰 재현).
     """
     lo = info.bbox_min * scale_to_m
-    hi = info.bbox_max * scale_to_m
-    center_rel = (hi[:2] - lo[:2]) / 2.0
-    sign = 1.0 if float((center_rel - wall.p0) @ wall.normal) >= 0.0 else -1.0
     out = []
+    n_pos = n_neg = 0
     for c in chunks:
         p = c.astype(np.float64) * scale_to_m
         xy = p[:, :2] - lo[:2]
         rel = xy - wall.p0
-        w = sign * (rel @ wall.normal)
+        w = rel @ wall.normal
         u = rel @ wall.direction
         v = p[:, 2] - lo[2]
+        # 실내 판별용: 밴드 밖 ± interior_window 구간(u 범위 내)의 점 질량
+        sel = (u >= wall.u_min) & (u <= wall.u_max) \
+            & (np.abs(w) > band_m) & (np.abs(w) <= interior_window_m)
+        n_pos += int((w[sel] > 0).sum())
+        n_neg += int((w[sel] < 0).sum())
         m = (np.abs(w) <= band_m) & (u >= wall.u_min) & (u <= wall.u_max) \
             & (v >= wall.z_min + edge_margin_m) & (v <= wall.z_max)
         if m.any():
             out.append(np.column_stack([u[m], v[m], w[m]]))
+    if n_neg > n_pos:
+        for a in out:  # 실내가 -w 쪽이면 법선 반전과 동치로 w 부호 반전
+            a[:, 2] = -a[:, 2]
     return out
 
 
