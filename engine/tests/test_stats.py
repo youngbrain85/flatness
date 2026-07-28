@@ -1,0 +1,34 @@
+import csv, json
+from flatness.core.cells import CellResult
+from flatness.criteria import load_criteria, grade_cells
+from flatness.outputs.stats import build_stats, write_outputs
+
+def _cells():
+    return [
+        CellResult(0, 0, 0.5, 0.5, 1.0, 3.0, 0.95, 0.5, 0.5),
+        CellResult(1, 0, 1.5, 0.5, 10.0, 3.0, 0.9, 1.4, 0.5),
+        CellResult(2, 0, 2.5, 0.5, None, 0.0, 0.1, None, None),
+    ]
+
+def test_build_stats_counts_and_worst():
+    crit = load_criteria()["floor-kcs-exposed"]
+    cells = _cells()
+    grades, warns = grade_cells(cells, crit, 5.0)
+    s = build_stats(cells, grades, crit, 5.0, warns, {"file": "t.ply"})
+    assert s["n_cells"] == 3 and s["n_valid"] == 2
+    assert s["grade_counts"] == {"pass": 1, "borderline": 1, "repair": 0, "rework": 0, "na": 1}
+    assert s["worst"]["value_mm"] == 10.0 and s["worst"]["point_x"] == 1.4
+    assert s["value_max_mm"] == 10.0 and s["value_min_mm"] == 1.0 and s["value_mean_mm"] == 5.5
+    assert s["applied_criteria"]["u_mm"] == 5.0
+    assert s["coverage_pct"] == round(100 * 2 / 3, 1)
+
+def test_write_outputs(tmp_path):
+    crit = load_criteria()["floor-kcs-exposed"]
+    cells = _cells()
+    grades, warns = grade_cells(cells, crit, 5.0)
+    s = build_stats(cells, grades, crit, 5.0, warns, {})
+    write_outputs(tmp_path, s, cells, grades)
+    assert json.loads((tmp_path / "stats.json").read_text("utf-8"))["n_cells"] == 3
+    rows = list(csv.DictReader(open(tmp_path / "results.csv", encoding="utf-8")))
+    assert len(rows) == 3 and rows[1]["grade"] == "borderline" and rows[2]["grade"] == "na"
+    assert json.loads((tmp_path / "cells.json").read_text("utf-8"))[0]["grade"] == "pass"
