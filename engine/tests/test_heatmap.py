@@ -11,3 +11,9 @@ def test_heatmap_written(tmp_path):
     out = tmp_path / "heatmap.png"
     render_heatmap(cells, grades, out)
     assert out.stat().st_size > 1000  # PNG 파일 생성 확인
+
+def test_heatmap_empty_cells(tmp_path):
+    # 빈 셀 리스트: 크래시 없이 파일 생성
+    out = tmp_path / "empty.png"
+    render_heatmap([], [], out)
+    assert out.stat().st_size > 0
