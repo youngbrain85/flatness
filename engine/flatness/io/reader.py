@@ -4,8 +4,11 @@ from pathlib import Path
 import numpy as np
 from flatness.io.ply_reader import read_ply_chunks
 from flatness.io.las_reader import read_las_chunks
+from flatness.io.text_reader import read_text_chunks
 
-_READERS = {".ply": read_ply_chunks, ".las": read_las_chunks, ".laz": read_las_chunks}
+_READERS = {".ply": read_ply_chunks, ".las": read_las_chunks, ".laz": read_las_chunks,
+            ".xyz": read_text_chunks, ".txt": read_text_chunks,
+            ".csv": read_text_chunks, ".pts": read_text_chunks}
 
 
 @dataclass
