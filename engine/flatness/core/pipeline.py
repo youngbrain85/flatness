@@ -12,6 +12,7 @@ from flatness.core.walls import (build_column_grid, detect_wall_lines,
 from flatness.criteria import grade_cells
 from flatness.outputs.stats import build_stats, write_outputs
 from flatness.outputs.heatmap import render_heatmap
+from flatness.outputs.preview3d import render_preview3d
 from flatness.outputs.summary import generate_summary
 
 
@@ -53,6 +54,11 @@ def analyze_floor(path, scale_to_m, criterion, u_mm, out_dir,
     stats = build_stats(cells, grades, criterion, u_mm, sorted(set(warns)), meta,
                         zones=zones_out, coverage_pct=coverage)
     stats["auto_summary"] = generate_summary(stats)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    worst = stats.get("worst")
+    stats["preview3d_paths"] = render_preview3d(
+        residuals, grid, out_dir,
+        worst_xy=None if worst is None else (worst["point_x"], worst["point_y"]))
     write_outputs(out_dir, stats, cells, grades)
     render_heatmap(cells, grades, out_dir / "heatmap.png", cell_m=cell_m)
     return stats
