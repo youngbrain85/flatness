@@ -1,0 +1,59 @@
+import numpy as np
+from tests.fixtures.synthetic import flat_floor, add_bump
+from flatness.core.subcell import build_subcell_grid
+from flatness.core.plane import fit_plane_ransac, residual_grid
+from flatness.core.cells import evaluate_cells
+from flatness.io.reader import CloudInfo
+
+def _residuals(pts):
+    info = CloudInfo(len(pts), pts.min(axis=0).astype(float), pts.max(axis=0).astype(float))
+    g = build_subcell_grid(iter([pts.astype(np.float32)]), info, 1.0)
+    ys, xs = np.nonzero(~np.isnan(g.median_z))
+    cx = g.origin[0] + (xs + 0.5) * g.size_m
+    cy = g.origin[1] + (ys + 0.5) * g.size_m
+    abc = fit_plane_ransac(cx, cy, g.median_z[ys, xs].astype(float))
+    return residual_grid(g, abc), g
+
+def test_flat_floor_all_cells_near_zero():
+    r, g = _residuals(flat_floor(size=(6.0, 6.0), spacing=0.02))
+    cells = [c for c in evaluate_cells(r, g, span_m=3.0) if c.value_mm is not None]
+    assert len(cells) >= 25  # 6x6m → 최소 5x5개 유효 셀
+    assert all(c.value_mm < 0.5 for c in cells)
+    # 내부 셀은 온전한 스팬(그리드 경계 서브셀 1칸 손실 2.95m 허용), 모서리 셀은 축소 스팬
+    assert sum(1 for c in cells if c.span_used_m >= 2.95) >= 16
+    assert all(c.span_used_m >= 1.0 for c in cells)
+
+def test_depression_detected_within_tolerance():
+    # 함몰(음수 범프): 포락선 지지점이 주변 바닥 → 직선자 해석 정답 = 깊이 10mm 정확히
+    pts = add_bump(flat_floor(size=(6.0, 6.0), spacing=0.02), (2.0, 2.0), 0.3, -0.01)
+    r, g = _residuals(pts)
+    cells = [c for c in evaluate_cells(r, g, span_m=3.0) if c.value_mm is not None]
+    worst = max(cells, key=lambda c: c.value_mm)
+    assert 9.0 <= worst.value_mm <= 11.0        # 직선자 값 ±1mm (스펙 §10.1)
+    assert abs(worst.worst_x - 2.0) < 1.0 and abs(worst.worst_y - 2.0) < 1.0  # 위치 1셀 이내
+
+def test_bump_reads_hull_support_value():
+    # 볼록(범프): 직선자가 정점에 얹히는 지지선 기하로 해석값 ≈ h×(1−r/S)×중앙값감쇠 ≈ 8.6mm
+    # (결함 높이 10mm가 아님 — 실물 직선자도 동일하게 읽음. 2026-07-28 정정)
+    pts = add_bump(flat_floor(size=(6.0, 6.0), spacing=0.02), (2.0, 2.0), 0.3, 0.01)
+    r, g = _residuals(pts)
+    cells = [c for c in evaluate_cells(r, g, span_m=3.0) if c.value_mm is not None]
+    worst = max(cells, key=lambda c: c.value_mm)
+    assert 7.6 <= worst.value_mm <= 9.6         # 해석값 8.6mm ± 1mm
+    assert abs(worst.worst_x - 2.0) < 1.0 and abs(worst.worst_y - 2.0) < 1.0
+
+def test_small_area_uses_reduced_span():
+    # 2.4m 폭 — 3m 스팬 불가 → 축소 스팬(≥1m)으로 평가
+    r, g = _residuals(flat_floor(size=(2.4, 2.4), spacing=0.02))
+    cells = [c for c in evaluate_cells(r, g, span_m=3.0) if c.value_mm is not None]
+    assert len(cells) >= 1
+    assert all(1.0 <= c.span_used_m < 3.0 for c in cells)
+
+def test_sparse_cell_is_na():
+    pts = flat_floor(size=(6.0, 6.0), spacing=0.02)
+    # (5,5) 부근 1m 셀의 점 대부분 제거 → 점유율 미달 → 판정 불가
+    m = ~((pts[:, 0] > 4.55) & (pts[:, 1] > 4.55))
+    r, g = _residuals(pts[m])
+    cells = evaluate_cells(r, g, span_m=3.0)
+    na = [c for c in cells if c.value_mm is None]
+    assert any(c.center_x > 4.5 and c.center_y > 4.5 for c in na)
