@@ -10,7 +10,7 @@ _TYPES = {"char": "i1", "uchar": "u1", "int8": "i1", "uint8": "u1",
 def _parse_header(f):
     if f.readline().strip() != b"ply":
         raise ValueError("PLY 매직 누락")
-    fmt, n_vertex, props, in_vertex = None, None, [], False
+    fmt, n_vertex, props, in_vertex, first_elem = None, None, [], False, None
     while True:
         line = f.readline()
         if not line:
@@ -21,12 +21,16 @@ def _parse_header(f):
         if tok[0] == "format":
             fmt = tok[1]
         elif tok[0] == "element":
+            if first_elem is None:
+                first_elem = tok[1]
             in_vertex = tok[1] == "vertex"
             if in_vertex:
                 n_vertex = int(tok[2])
         elif tok[0] == "property" and in_vertex:
             if tok[1] == "list":
                 raise ValueError("vertex list property 미지원")
+            if tok[1] not in _TYPES:
+                raise ValueError(f"지원하지 않는 PLY property 타입: {tok[1]}")
             props.append((tok[2], _TYPES[tok[1]]))
         elif tok[0] == "end_header":
             break
@@ -34,6 +38,8 @@ def _parse_header(f):
         raise ValueError(f"미지원 PLY 포맷: {fmt}")
     if n_vertex is None:
         raise ValueError("vertex element 없음")
+    if first_elem != "vertex":
+        raise ValueError("vertex가 첫 element가 아닌 PLY는 지원하지 않음")
     names = [p[0] for p in props]
     if not all(c in names for c in ("x", "y", "z")):
         raise ValueError("x/y/z property 없음")

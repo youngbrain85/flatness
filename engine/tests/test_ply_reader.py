@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 from tests.fixtures.synthetic import flat_floor, write_ascii_ply, write_binary_ply
 from flatness.io.ply_reader import read_ply_chunks
 
@@ -29,3 +30,20 @@ def test_extra_properties_skipped(tmp_path):
     (tmp_path / "c.ply").write_bytes(header.encode() + body)
     got = _collect(tmp_path / "c.ply")
     assert np.allclose(got, [[0, 0, 0], [1, 1, 1]])
+
+def test_vertex_not_first_element_rejected(tmp_path):
+    # vertex 앞에 다른 element가 오는 비전형 PLY는 조용한 오독 대신 명시적 거부
+    header = ("ply\nformat binary_little_endian 1.0\nelement face 1\n"
+              "property uchar dummy\nelement vertex 1\n"
+              "property float x\nproperty float y\nproperty float z\nend_header\n")
+    (tmp_path / "a.ply").write_bytes(header.encode() + b"\x00" * 13)
+    with pytest.raises(ValueError, match="첫 element"):
+        list(read_ply_chunks(tmp_path / "a.ply"))
+
+def test_unknown_property_type_rejected(tmp_path):
+    # 미지원 property 타입은 KeyError가 아닌 ValueError
+    header = ("ply\nformat binary_little_endian 1.0\nelement vertex 1\n"
+              "property weird x\nproperty float y\nproperty float z\nend_header\n")
+    (tmp_path / "b.ply").write_bytes(header.encode())
+    with pytest.raises(ValueError, match="property 타입"):
+        list(read_ply_chunks(tmp_path / "b.ply"))

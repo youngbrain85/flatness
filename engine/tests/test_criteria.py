@@ -14,9 +14,9 @@ def test_grading_boundaries():
     assert grade_value(22.0, c, 5.0, 3.0)[0] == "rework"
 
 def test_reduced_span_scales_linearly():
-    c = load_criteria()["floor-kcs-exposed"]  # L=1.5 → s=0.5: pe=3.5, re=10.5, b2=min(8.5,10.5)
+    c = load_criteria()["floor-kcs-exposed"]  # L=1.5 → s=0.5: pe=3.5, re=10.5, U_eff=2.5, b2=min(6.0,10.5)
     grade, _ = grade_value(9.0, c, 5.0, 1.5)
-    assert grade == "repair"  # 8.5 < 9 ≤ 10.5
+    assert grade == "repair"  # 6.0 < 9 ≤ 10.5
 
 def test_uncertainty_swallows_repair_warning():
     c = load_criteria()["wall-plaster-surface"]  # pass 3, rework 9, U=8 → pe+U=11 ≥ 9
