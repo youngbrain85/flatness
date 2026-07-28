@@ -19,6 +19,11 @@ def main(argv=None):
     a.add_argument("--criteria", default="floor-kcs-exposed")
     a.add_argument("--uncertainty-mm", type=float, default=None)
     sub.add_parser("list-criteria", help="탑재된 판정 기준 목록")
+    ic = sub.add_parser("import-colab", help="기존 Colab 결과 CSV 임포트")
+    ic.add_argument("file", type=Path)
+    ic.add_argument("--out", type=Path, required=True)
+    ic.add_argument("--criteria", default="floor-kcs-exposed")
+    ic.add_argument("--uncertainty-mm", type=float, default=5.0)
     args = p.parse_args(argv)
 
     crits = load_criteria()
@@ -26,6 +31,24 @@ def main(argv=None):
         for c in crits.values():
             span = f"{c.span_m}m당" if c.span_m else "높이당"
             print(f"{c.name:26s} {c.surface:5s} {span} {c.pass_mm}mm  ({c.source})")
+        return 0
+
+    if args.cmd == "import-colab":
+        crit = crits.get(args.criteria)
+        if crit is None or crit.metric != "flatness":
+            print(f"오류: 알 수 없는 기준 '{args.criteria}': flatness list-criteria 참고")
+            return 1
+        from flatness.importer.colab_csv import import_colab_csv
+        try:
+            stats = import_colab_csv(args.file, crit, args.uncertainty_mm, args.out)
+        except (ValueError, OSError) as e:
+            print(f"임포트 실패: {e}")
+            return 1
+        gc = stats["grade_counts"]
+        print(f"외부 결과 임포트 완료: 셀 {stats['n_cells']}개 (유효 {stats['n_valid']})")
+        print(f"  적합 {gc['pass']} / 경계 {gc['borderline']} / 보수 {gc['repair']}"
+              f" / 재시공 {gc['rework']} / 판정불가 {gc['na']}")
+        print(f"  산출물: {args.out}")
         return 0
 
     if args.criteria not in crits:
