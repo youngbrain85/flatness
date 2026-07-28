@@ -31,6 +31,16 @@
 11. 히트맵 축이 그리드 원점(bbox_min) 무시 — 절대좌표 스캔에서 stats와 축 라벨 불일치
 12. stats worst 선정 기준(raw mm 최대 vs 심각도 정규화) 정의 확정 — P3 대시보드 문구 설계와 연동
 
+## P1c 최종 리뷰 이연 티켓 (2026-07-28) — P2 실데이터 투입 전 필수 3건 포함
+
+17. **[P2 전 필수] 벽별 오류 격리** — 한 벽의 투영/피팅 실패(ValueError)가 전체 분석 중단 + 부분 히트맵 잔존. 벽 루프 try/except → skip+경고
+18. **[P2 전 필수] 천장 접합부 마진** — edge margin이 하단만 적용, 천장 포함 실스캔에서 벽 상단 행 오염. `v <= z_max - edge_margin_m` 1줄
+19. **[P2 전 필수] walls_out 월드 프레임 직렬화** — p0/direction/normal·u,v 오프셋 부재로 stats만으로 3D 역매핑 불가 (P2 스키마 계약 전에)
+20. 성장-분류 순서 결정 — 성장이 furniture/ghost 분류 전 실행되어 임계 회피 경로 존재(발생 확률 낮음). 순서 결정 + 가구 3m² 경계 테스트
+21. engine_version·meta.surface 정리 — floor 경로 스탬프 갱신 누락("p1b-0.2.0"), floor meta에 surface 부재
+22. coverage_pct 표면 간 이중 의미(floor=서브셀 인식률, wall=셀 유효율) — P2 스키마 문서에 명시
+23. T-접합 교차벽 밴드 오염, 파일 K+2회 패스(성능), 벽 히트맵 축 라벨(u/v), bin_m 매직 상수 공유, 스펙 §5.1.7 대칭 파티션 부호 캐비앗
+
 ## 기록용 이연 minor (비차단)
 
 - test_ply_roundtrip 이름 과장(파일 생성 확인 수준), severity 동률 타이브레이크 주석 부재, load_criteria 커스텀 경로 with 미사용, test_criteria 일부 주석 기호 위주, iter_chunks 지연 검증 특성, _ORDER 밖 등급 일반 ValueError, CLI 스크리닝 문구가 스펙 리터럴과 괄호만큼 상이(의미 동일)
