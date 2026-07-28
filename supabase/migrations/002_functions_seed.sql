@@ -26,10 +26,12 @@
 --     유효한 SQL이며 CTE/서브쿼리 재구성은 불필요하다고 확인했다 — 아래 SQL은
 --     브리프 문구를 그대로 유지한다. (plpgsql SELECT INTO의 INTO 절도 대상
 --     목록 직후·FROM 앞이라는 올바른 위치에 있어 별도 문제 없음.)
---  2) 전 SECURITY DEFINER 함수에 `set search_path = public`을 고정한다
---     (Supabase 보안 권고: search_path가 고정되지 않은 SECURITY DEFINER
---     함수는 호출자가 세션 search_path를 조작해 의도치 않은 스키마의
---     동명 객체를 끌어들이는 권한 상승 경로가 될 수 있다). fn_resolve_criteria는
+--  2) 전 SECURITY DEFINER 함수에 `set search_path = public, pg_temp`을 고정한다
+--     (Supabase/PostgreSQL 공식 권고 형태 — pg_temp를 명시적으로 마지막에
+--     포함해 임시 스키마가 검색 경로 앞쪽에 암묵적으로 끼어들 여지를 차단한다).
+--     search_path가 고정되지 않은 SECURITY DEFINER 함수는 호출자가 세션
+--     search_path를 조작해 의도치 않은 스키마의 동명 객체를 끌어들이는
+--     권한 상승 경로가 될 수 있다. fn_resolve_criteria는
 --     SECURITY DEFINER가 아니라 SECURITY INVOKER(기본값)의 `language sql
 --     stable` 함수이므로 이 권고의 대상이 아니다 — 정의자 권한으로 실행되지
 --     않으므로 search_path 조작으로 얻을 수 있는 권한 상승이 없다(criteria
@@ -46,7 +48,7 @@
 
 -- 잡 큐 함수 (스펙 §6.1): 클레임은 SKIP LOCKED 원자, 전이는 analyses와 동일 트랜잭션
 create or replace function fn_job_claim(p_worker text)
-returns jobs language plpgsql security definer set search_path = public as $$
+returns jobs language plpgsql security definer set search_path = public, pg_temp as $$
 declare v_job jobs;
 begin
   select * into v_job from jobs
@@ -66,7 +68,7 @@ begin
 end $$;
 
 create or replace function fn_job_complete(p_job_id uuid)
-returns void language plpgsql security definer set search_path = public as $$
+returns void language plpgsql security definer set search_path = public, pg_temp as $$
 declare v_job jobs;
 begin
   select * into v_job from jobs where id = p_job_id;
@@ -76,7 +78,7 @@ begin
 end $$;
 
 create or replace function fn_job_fail(p_job_id uuid, p_error text)
-returns void language plpgsql security definer set search_path = public as $$
+returns void language plpgsql security definer set search_path = public, pg_temp as $$
 declare v_job jobs;
 begin
   select * into v_job from jobs where id = p_job_id;
@@ -97,7 +99,7 @@ begin
 end $$;
 
 create or replace function fn_enqueue_job(p_type job_type, p_payload jsonb)
-returns uuid language plpgsql security definer set search_path = public as $$
+returns uuid language plpgsql security definer set search_path = public, pg_temp as $$
 declare v_id uuid;
 begin
   insert into jobs(type, payload) values (p_type, p_payload) returning id into v_id;
@@ -115,7 +117,7 @@ returns setof criteria language sql stable as $$
 $$;
 
 create or replace function fn_reap_stuck_jobs(p_timeout_minutes int default 30)
-returns int language plpgsql security definer set search_path = public as $$
+returns int language plpgsql security definer set search_path = public, pg_temp as $$
 declare v_count int;
 begin
   with reaped as (
@@ -132,19 +134,30 @@ begin
 end $$;
 
 -- -----------------------------------------------------------------------------
--- 함수 실행 권한 (Supabase 보안 권고 — 위 헤더 메모 3번 참조): 클레임/완료/실패/
--- 리퍼는 워커(service_role)만 호출해야 하므로 anon·authenticated의 기본 EXECUTE를
--- 회수한다. 잡 등록·기준 조회는 로그인된 대시보드 사용자가 직접 RPC로 호출하므로
--- authenticated에는 유지하되, 비로그인(anon)에는 부여하지 않는다(§2.2: 로그인
--- 사용자 전원 동일 권한 — anon 접근은 이 시스템에서 전혀 상정하지 않음).
+-- 함수 실행 권한 (Supabase 보안 권고 — 위 헤더 메모 3번 참조, 코드리뷰 Critical 반영):
+-- Postgres는 함수 생성 시 PUBLIC에 EXECUTE를 기본 부여한다 — anon/authenticated
+-- 등 개별 역할만 revoke해서는 PUBLIC 경유 실행이 여전히 남아 하드닝이 무력화된다
+-- (모든 역할은 PUBLIC의 암묵적 멤버). 따라서 PUBLIC을 먼저 명시적으로 회수한
+-- 뒤, 필요한 역할에만 다시 grant한다. 잡 큐 클레임/완료/실패/리퍼 4종은
+-- 워커(service_role) 전용이므로 anon·authenticated에는 재부여하지 않는다.
+-- enqueue/resolve_criteria는 로그인된 대시보드 사용자가 직접 RPC로 호출하므로
+-- authenticated에 재부여한다. service_role도 Supabase의 기본 권한 부여
+-- (ALTER DEFAULT PRIVILEGES)에 기대지 않고 6종 전부 명시적으로 grant한다.
 -- -----------------------------------------------------------------------------
-revoke execute on function fn_job_claim(text) from anon, authenticated;
-revoke execute on function fn_job_complete(uuid) from anon, authenticated;
-revoke execute on function fn_job_fail(uuid, text) from anon, authenticated;
-revoke execute on function fn_reap_stuck_jobs(int) from anon, authenticated;
-revoke execute on function fn_enqueue_job(job_type, jsonb) from anon;
-revoke execute on function fn_resolve_criteria(uuid, surface_type) from anon;
+revoke execute on function fn_job_claim(text) from public, anon, authenticated;
+revoke execute on function fn_job_complete(uuid) from public, anon, authenticated;
+revoke execute on function fn_job_fail(uuid, text) from public, anon, authenticated;
+revoke execute on function fn_reap_stuck_jobs(int) from public, anon, authenticated;
+revoke execute on function fn_enqueue_job(job_type, jsonb) from public, anon;
+revoke execute on function fn_resolve_criteria(uuid, surface_type) from public, anon;
 grant execute on function fn_enqueue_job(job_type, jsonb) to authenticated;
+grant execute on function fn_resolve_criteria(uuid, surface_type) to authenticated;
+grant execute on function fn_job_claim(text) to service_role;
+grant execute on function fn_job_complete(uuid) to service_role;
+grant execute on function fn_job_fail(uuid, text) to service_role;
+grant execute on function fn_reap_stuck_jobs(int) to service_role;
+grant execute on function fn_enqueue_job(job_type, jsonb) to service_role;
+grant execute on function fn_resolve_criteria(uuid, surface_type) to service_role;
 
 -- =============================================================================
 -- 시드 데이터
