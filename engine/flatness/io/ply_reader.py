@@ -1,4 +1,4 @@
-"""PLY 리더 — vertex의 x/y/z만 float32 청크로 스트리밍. 면·기타 속성은 무시."""
+"""PLY 리더 — float64 원좌표 청크 스트리밍(센터링은 서브셀 비닝 책임). 면·기타 속성은 무시."""
 import numpy as np
 
 _TYPES = {"char": "i1", "uchar": "u1", "int8": "i1", "uint8": "u1",
@@ -61,9 +61,9 @@ def read_ply_chunks(path, chunk_size=2_000_000):
                 buf.append([float(v[sel[0]]), float(v[sel[1]]), float(v[sel[2]])])
                 done += 1
                 if len(buf) >= chunk_size:
-                    yield np.asarray(buf, dtype=np.float32); buf = []
+                    yield np.asarray(buf, dtype=np.float64); buf = []
             if buf:
-                yield np.asarray(buf, dtype=np.float32)
+                yield np.asarray(buf, dtype=np.float64)
         else:
             dt = np.dtype([(p[0], "<" + p[1]) for p in props])  # 중복 property명은 유효 PLY가 아님
             done = 0
@@ -72,5 +72,5 @@ def read_ply_chunks(path, chunk_size=2_000_000):
                 rec = np.fromfile(f, dtype=dt, count=k)
                 if len(rec) < k:
                     raise ValueError("PLY 본문이 header 개수보다 짧음")
-                yield np.column_stack([rec["x"], rec["y"], rec["z"]]).astype(np.float32)
+                yield np.column_stack([rec["x"], rec["y"], rec["z"]]).astype(np.float64)
                 done += k

@@ -11,3 +11,11 @@ def test_las_roundtrip(tmp_path):
     got = np.vstack(list(read_las_chunks(tmp_path / "a.las", chunk_size=13)))
     assert got.shape == (len(pts), 3)
     assert np.allclose(got, pts, atol=1e-3)  # 스케일 0.0001 양자화 허용
+
+
+def test_laz_roundtrip(tmp_path):
+    # lazrs 백엔드로 .laz 쓰기·읽기 (백로그 티켓 4)
+    pts = flat_floor(size=(1.0, 1.0), spacing=0.1)
+    write_las(pts, tmp_path / "a.laz")
+    got = np.vstack(list(read_las_chunks(tmp_path / "a.laz")))
+    assert np.allclose(got, pts, atol=1e-3)

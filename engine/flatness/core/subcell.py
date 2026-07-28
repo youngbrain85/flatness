@@ -21,15 +21,17 @@ def build_subcell_grid(chunks, info, scale_to_m, subcell_m=0.05):
     hi = info.bbox_max * scale_to_m
     nx = max(1, int(np.ceil((hi[0] - lo[0]) / subcell_m)))
     ny = max(1, int(np.ceil((hi[1] - lo[1]) / subcell_m)))
-    lo32 = lo[:2].astype(np.float32)
-    sub32 = np.float32(subcell_m)
+    # 대좌표 정밀도: float64로 센터링(bbox_min 차감)한 뒤 float32 저장.
+    # P1a의 즉시 float32 캐스트는 UTM급 좌표에서 ulp 3~50cm 지터를 유발해 개정됨.
     idx_parts, z_parts = [], []
     for c in chunks:
-        p = c.astype(np.float32) * np.float32(scale_to_m)
-        ix = np.clip(((p[:, 0] - lo32[0]) / sub32).astype(np.int32), 0, nx - 1)
-        iy = np.clip(((p[:, 1] - lo32[1]) / sub32).astype(np.int32), 0, ny - 1)
+        p = c.astype(np.float64) * scale_to_m
+        rel_x = p[:, 0] - lo[0]
+        rel_y = p[:, 1] - lo[1]
+        ix = np.clip((rel_x / subcell_m).astype(np.int32), 0, nx - 1)
+        iy = np.clip((rel_y / subcell_m).astype(np.int32), 0, ny - 1)
         idx_parts.append(iy.astype(np.int64) * nx + ix)
-        z_parts.append(p[:, 2])
+        z_parts.append((p[:, 2] - lo[2]).astype(np.float32))  # 상대 높이 저장
     idx = np.concatenate(idx_parts)
     z = np.concatenate(z_parts)
     order = np.argsort(idx, kind="stable")
