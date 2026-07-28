@@ -6,7 +6,7 @@
 >
 > **대상 독자**: 엔진 내부 구현을 모르는 프론트엔드(P3 대시보드)·보고서(P4)·워커 개발자.
 > **ENGINE_VERSION**: `engine/flatness/__init__.py`의 `ENGINE_VERSION` 상수(현재 `p1d-0.4.0`). `stats.meta.engine_version`이
-> 이 값을 그대로 담는다(단, §3의 "임포트 경로" 예외 참고).
+> 이 값을 그대로 담는다(단, §2의 "임포트 경로" 예외 참고).
 >
 > 이 문서의 모든 표는 아래 소스를 라인 단위로 대조해 작성했다(대조 방법·결과는 커밋 메시지 본문 참고):
 > `engine/flatness/outputs/stats.py`, `engine/flatness/core/pipeline.py`, `engine/flatness/core/cells.py`,
@@ -43,12 +43,12 @@
 | `value_mean_mm` \| `null` | float \| null | 유효 셀 평균(mm) | 위와 동일 |
 | `value_p95_mm` \| `null` | float \| null | 유효 셀 95백분위수(mm, `numpy.percentile` 선형보간) | 위와 동일 |
 | `worst` \| `null` | object \| null | 최댓값 셀 상세(아래 표). `n_valid==0`이면 `null` | — |
-| `coverage_pct` | float | §4 참고 — 경로별로 분모·분자 의미가 다름 | 소수 1자리 |
-| `reduced_span_cells` | int | `span_used_m < (crit.span_m or 0)`인 유효 셀 수. `crit.span_m`이 `null`인 기준(예: 수직도)에서는 항상 0 | — |
+| `coverage_pct` | float | §3 참고 — 경로별로 분모·분자 의미가 다름 | 소수 1자리 |
+| `reduced_span_cells` | int | `span_used_m < (crit.span_m or 0)`인 유효 셀 수. `crit.span_m`이 `null`인 기준에서는 항상 0 | — |
 | `applied_criteria` | object | 적용 기준 스냅샷(아래 표) | — |
-| `warnings` | `string[]` | §6 코드 사전 참고. 정렬됨(`sorted`) | — |
+| `warnings` | `string[]` | §5 코드 사전 참고. 정렬됨(`sorted`) | — |
 | `zones` | object[] | §2 참고 — floor만 채워지고 wall/import는 항상 `[]` | — |
-| `meta` | object | 호출자가 채운 그대로 저장(§3) | — |
+| `meta` | object | 호출자가 채운 그대로 저장. 공통 하위 키는 바로 아래 표, 경로별 조건부 키는 §2 참고 | — |
 | `auto_summary` | string | **`build_stats()`가 만들지 않음** — 세 파이프라인 함수가 반환 직후 `generate_summary(stats)`로 사후 추가(`outputs/summary.py:21`, 호출부 `core/pipeline.py:57,112`·`importer/colab_csv.py:51`). 그래도 세 경로 모두 최종 `stats.json`에는 항상 존재 | — |
 
 `worst` 하위 키(`outputs/stats.py:37-39`, `core/cells.py:16-26`):
@@ -70,6 +70,13 @@
 | `pass_mm` / `rework_mm` | float | 기준 허용치(mm) |
 | `u_mm` | float | 호출 시 전달된 측정 불확도(mm). CLI 기본값: 바닥 5.0, 벽 8.0(`cli.py:61`) |
 
+`meta` 공통 하위 키(세 경로 모두 무조건 존재, `core/pipeline.py:51,106`·`importer/colab_csv.py:48`) — 경로별 조건부 키(`scale_to_m`·`bbox_min`·`source`·`subcell_m`·`cell_m`·`engine_version`)는 §2 표 참고:
+
+| 키 | 타입 | 설명 |
+|---|---|---|
+| `file` | string | 입력 파일 경로 문자열(`str(path)`). 호출 시 전달된 경로를 그대로 담을 뿐 절대경로로 정규화하지 않음 — 상대 경로로 호출되면 그대로 상대 경로가 저장됨 |
+| `n_points` | int | 원시 점 수. floor/wall은 `info.n_points`(파일 전체 점 개수), import는 `len(pts)`(CSV에서 파싱에 성공한 유효 행 수) |
+
 ## 2. 조건부 키 표 (경로별)
 
 | 키 | floor | wall | import | 비고 |
@@ -87,12 +94,12 @@
 
 | 키 | 타입 | 설명 | 반올림 |
 |---|---|---|---|
-| `wall_id` | int | 1부터 시작하는 벽 후보 순번(검출 순서). §6의 `wall_{i}_skipped`와 같은 채번 체계지만, 스킵된 번호는 `walls[]`에 나타나지 않음(결번) | — |
+| `wall_id` | int | 1부터 시작하는 벽 후보 순번(검출 순서). §5의 `wall_{i}_skipped`와 같은 채번 체계지만, 스킵된 번호는 `walls[]`에 나타나지 않음(결번) | — |
 | `n_cells` | int | 이 벽만의 셀 수(전체 `stats.n_cells`는 모든 벽 합산) | — |
 | `height_m` / `length_m` | float | 벽 투영 그리드의 v(높이)·u(길이) 범위 | 소수 2자리 |
 | `plumbness_mm` | float | 전역 기울기 기반 수직도(`abs(b) * height_m * 1000`) | 소수 2자리 |
 | `plumb_grade` | `pass\|borderline\|repair\|rework` | `wall-kcs-plumb` 기준으로 판정. 입력값이 항상 존재하므로 `na`는 나오지 않음 | — |
-| `plane_abc` | `[a,b,c]` (3 float) | 벽 평면 재피팅 계수. **wall 프레임 좌표(u,v)로 직접 대입 가능**(§5 참고) | 소수 6자리 |
+| `plane_abc` | `[a,b,c]` (3 float) | 벽 평면 재피팅 계수. **wall 프레임 좌표(u,v)로 직접 대입 가능**(§4.2 참고) | 소수 6자리 |
 | `frame` | object | 아래 표 | — |
 
 `frame` 하위 키(`WallLine` 정의는 `core/walls.py:9-17`, JSON 직렬화는 `core/pipeline.py:98-102`):
@@ -107,6 +114,23 @@
 
 모든 `frame` 필드는 소수 4자리로 반올림(`core/pipeline.py:98-102`).
 
+### 2.2 `zones[]` 원소 (floor 전용, `core/pipeline.py:47-50`)
+
+wall/import 경로에서 `zones`는 항상 `[]`이므로(§2 표) 아래 필드는 floor에서만 나타난다.
+
+| 키 | 타입 | 설명 | 반올림 |
+|---|---|---|---|
+| `zone_id` | int | 구역 식별자(1부터, 검출 순서) | — |
+| `level_m` | float | 구역이 속한 레벨 밴드의 높이. **`meta.bbox_min[2]` 기준 상대 높이**(절대 좌표 아님 — `core/subcell.py:36` 주석 "상대 높이 저장" 참고) | 소수 3자리 |
+| `area_m2` | float | 구역 면적(서브셀 합) | 소수 2자리 |
+| `status` | `"ok"\|"ghost"\|"furniture"` | 아래 참고 | — |
+| `plane_abc` | `[a,b,c]` \| `null` | 구역 평면 재피팅 계수. **구역-로컬(=bbox 상대) 좌표로 피팅됨**(§4.1 "주의" 참고 — `center_x/center_y`를 그대로 대입하면 안 됨). `status`가 `ok`가 아니면 피팅 자체를 건너뛰므로 `null` | 소수 6자리 |
+
+`status` 값별 의미(`core/zones.py:87-95`):
+- `ok`: 판정 대상 정상 구역(평면 재피팅·셀 판정 모두 수행)
+- `ghost`: 구역 대부분이 이중 표면(유령층)으로 판정되어 재스캔이 필요 — **판정에서 제외**(`ghost_zone_excluded` 경고 동반, §5)
+- `furniture`: 가구 상판으로 추정되는 구역 — **판정에서 제외**(`furniture_excluded` 경고 동반, §5)
+
 ## 3. `coverage_pct`의 3중 의미
 
 같은 키가 경로에 따라 분모·분자가 다르다. 소비자는 **`meta.surface`와 `meta.source`로 반드시 분기**해야 한다(값만 보고는 구분 불가).
@@ -117,7 +141,7 @@
 | wall | **셀 유효율**: 판정 가능한 셀 수 / 전체 셀 수 | `100 * len(valid) / n` (기본 계산) | `analyze_wall`은 `coverage_pct` 인자를 넘기지 않음 → `outputs/stats.py:40-41`의 기본 분기 사용 |
 | import | **셀 유효율**(wall과 동일 공식) | `100 * len(valid) / n` | `import_colab_csv`도 `coverage_pct` 인자 없이 호출 |
 
-70% 미만이면 floor 경로에서만 `low_coverage` 경고가 붙는다(§6).
+70% 미만이면 floor 경로에서만 `low_coverage` 경고가 붙는다(§5).
 
 ## 4. 좌표 프레임
 
