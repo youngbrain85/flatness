@@ -2,6 +2,7 @@
 
 숫자 3개를 만들 수 없는 행(헤더, PTS 점 개수 행, 빈 줄, 주석)은 건너뛴다.
 """
+import math
 import numpy as np
 
 
@@ -13,9 +14,12 @@ def read_text_chunks(path, chunk_size=2_000_000):
             if len(parts) < 3:
                 continue
             try:
-                buf.append((float(parts[0]), float(parts[1]), float(parts[2])))
+                row = (float(parts[0]), float(parts[1]), float(parts[2]))
             except ValueError:
                 continue  # 비수치 행(헤더 등)
+            if not all(math.isfinite(v) for v in row):
+                continue  # nan/inf 행 스킵 (티켓 15)
+            buf.append(row)
             if len(buf) >= chunk_size:
                 yield np.asarray(buf, dtype=np.float64)
                 buf = []

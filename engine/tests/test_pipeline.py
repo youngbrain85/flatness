@@ -116,3 +116,10 @@ def test_wall_frame_serialized(tmp_path):
     fr = stats["walls"][0]["frame"]
     assert set(fr) == {"p0", "direction", "normal", "u_min", "u_max", "z_min", "z_max"}
     assert len(fr["p0"]) == 2 and len(fr["direction"]) == 2 and len(fr["normal"]) == 2
+
+def test_meta_version_and_surface(tmp_path):
+    from flatness import ENGINE_VERSION
+    write_binary_ply(flat_floor(size=(3.0, 3.0), spacing=0.02), tmp_path / "f.ply")
+    stats = analyze_floor(tmp_path / "f.ply", 1.0, CRIT, 5.0, tmp_path / "out")
+    assert stats["meta"]["engine_version"] == ENGINE_VERSION
+    assert stats["meta"]["surface"] == "floor"

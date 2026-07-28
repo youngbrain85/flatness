@@ -24,3 +24,9 @@ def test_blank_and_comment_lines_skipped(tmp_path):
     (tmp_path / "a.txt").write_text("# header\n\n0 0 0\nnot a number line\n1 1 1\n", encoding="utf-8")
     got = _collect(tmp_path / "a.txt")
     assert got.shape == (2, 3)
+
+def test_nonfinite_rows_skipped(tmp_path):
+    # 티켓 15: nan/inf 토큰이 bbox를 오염시켜 무의미한 오류를 유발하는 것을 방지
+    (tmp_path / "a.xyz").write_text("0 0 0\nnan 1 1\n1 inf 0\n2 2 0.01\n", encoding="utf-8")
+    got = _collect(tmp_path / "a.xyz")
+    assert got.shape == (2, 3)

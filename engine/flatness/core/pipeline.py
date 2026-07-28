@@ -1,6 +1,7 @@
 """바닥 분석 오케스트레이션 v2 — 다중 구역·품질 마스크 (스펙 §5.1.3~4, P1b)."""
 from dataclasses import replace as _dc_replace
 import numpy as np
+from flatness import ENGINE_VERSION
 from flatness.io.reader import iter_chunks, read_info
 from flatness.core.subcell import build_subcell_grid
 from flatness.core.levels import detect_levels
@@ -46,7 +47,8 @@ def analyze_floor(path, scale_to_m, criterion, u_mm, out_dir,
                   "plane_abc": None if z.plane_abc is None else [round(v, 6) for v in z.plane_abc]}
                  for z in zmap.zones]
     meta = {"file": str(path), "n_points": info.n_points, "scale_to_m": scale_to_m,
-            "subcell_m": subcell_m, "cell_m": cell_m, "engine_version": "p1b-0.2.0"}
+            "subcell_m": subcell_m, "cell_m": cell_m, "engine_version": ENGINE_VERSION,
+            "surface": "floor"}
     stats = build_stats(cells, grades, criterion, u_mm, sorted(set(warns)), meta,
                         zones=zones_out, coverage_pct=coverage)
     write_outputs(out_dir, stats, cells, grades)
@@ -93,7 +95,7 @@ def analyze_wall(path, scale_to_m, criterion, u_mm, out_dir,
     if not walls_out:
         raise ValueError("벽면 미검출: 유효 점이 있는 벽 없음")
     meta = {"file": str(path), "n_points": info.n_points, "scale_to_m": scale_to_m,
-            "subcell_m": subcell_m, "cell_m": cell_m, "engine_version": "p1c-0.3.0",
+            "subcell_m": subcell_m, "cell_m": cell_m, "engine_version": ENGINE_VERSION,
             "surface": "wall"}
     stats = build_stats(all_cells, all_grades, criterion, u_mm, sorted(warns), meta)
     stats["walls"] = walls_out
