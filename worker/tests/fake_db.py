@@ -1,18 +1,24 @@
 """FakeDB — 실 Supabase 없이 워커 로직을 검증하기 위한 인메모리 DBClient 구현.
 
-`fn_job_claim`/`fn_job_complete`/`fn_job_fail`(supabase/migrations/002_functions_seed.sql)의
-시맨틱을 그대로 모사한다: 클레임은 queued & run_after 통과 잡 중 가장 오래된 것,
-실패 시 attempts가 max_attempts에 도달하면 'failed'로 종결, 그렇지 않으면
+`fn_job_claim`/`fn_job_complete`/`fn_job_fail`(supabase/migrations/002_functions_seed.sql을
+003_dashboard_support.sql이 확장 재정의한 최종 버전)의 시맨틱을 그대로 모사한다:
+클레임은 queued & run_after 통과 잡 중 가장 오래된 것, 실패 시 attempts가
+max_attempts에 도달하면 'failed'로 종결, 그렇지 않으면
 `run_after = now() + 10s * attempts`로 재큐잉한다.
 
-부수효과(SQL 원문 그대로 대조, 코드리뷰 Important 반영): type='analyze'이고
-payload.analysis_id가 있으면 연결된 analyses.status도 함께 전이한다 —
-fn_job_claim은 'processing'(63-65행대), fn_job_fail은 재시도 여지가 있으면
-'queued'/max_attempts 소진이면 'failed'(88-97행대)로. fn_job_complete는 analyses를
-건드리지 않는다(주석: "analyses.status는 워커가 결과 저장 시 함께 갱신하므로 여기선
-잡만 종결" — handle_analyze가 이미 update_analysis(status=done, ...)로 직접
-갱신하기 때문). 대상 analysis_id가 self.analyses에 없으면(실 Postgres의 UPDATE가
-매칭 행 0건이어도 에러 없이 지나가는 것과 동일하게) 조용히 건너뛴다.
+부수효과(SQL 원문 그대로 대조, P3 최종 픽스 웨이브 Important 1 반영):
+- type이 'analyze' 또는 'import'이고 payload.analysis_id가 있으면 연결된
+  analyses.status도 함께 전이한다 — fn_job_claim은 'processing', fn_job_fail은
+  재시도 여지가 있으면 'queued'/max_attempts 소진이면 'failed'로. fn_job_complete는
+  analyses를 건드리지 않는다(주석: "analyses.status는 워커가 결과 저장 시 함께
+  갱신하므로 여기선 잡만 종결" — handle_analyze/handle_import가 이미
+  update_analysis(status=done, ...)로 직접 갱신하기 때문).
+- type이 'precheck'이고 payload.scan_id가 있으면 연결된 scans.status를 전이한다
+  (003_dashboard_support.sql 신규) — fn_job_claim은 scans를 건드리지 않는다
+  (scan_status enum에 'processing' 상당 값이 없음). fn_job_fail은 최종 실패 시
+  'failed', 재큐(재시도) 시 'uploaded'로 되돌린다.
+대상 행이 self.analyses/self.scans에 없으면(실 Postgres의 UPDATE가 매칭 행 0건이어도
+에러 없이 지나가는 것과 동일하게) 조용히 건너뛴다.
 """
 from datetime import datetime, timedelta, timezone
 from itertools import count
@@ -38,18 +44,33 @@ class FakeDB(DBClient):
 
     # -- 내부 헬퍼 -----------------------------------------------------------
     def _sync_linked_analysis_status(self, job, status):
-        """type='analyze' + payload.analysis_id 잡의 analyses.status 부수효과.
+        """type in ('analyze', 'import') + payload.analysis_id 잡의 analyses.status
+        부수효과.
 
-        fn_job_claim/fn_job_fail SQL의 `if v_job.type = 'analyze' and
+        fn_job_claim/fn_job_fail SQL의 `if v_job.type in ('analyze', 'import') and
         (v_job.payload ? 'analysis_id') then update analyses set status = ...`를
-        그대로 옮긴 것 — fn_job_complete는 이 헬퍼를 호출하지 않는다(SQL이 analyses를
-        건드리지 않으므로).
+        그대로 옮긴 것(003_dashboard_support.sql 확장) — fn_job_complete는 이 헬퍼를
+        호출하지 않는다(SQL이 analyses를 건드리지 않으므로).
         """
-        if job["type"] != "analyze" or "analysis_id" not in job["payload"]:
+        if job["type"] not in ("analyze", "import") or "analysis_id" not in job["payload"]:
             return
         analysis_id = job["payload"]["analysis_id"]
         if analysis_id in self.analyses:
             self.analyses[analysis_id]["status"] = status
+
+    def _sync_linked_scan_status_on_fail(self, job, status):
+        """type='precheck' + payload.scan_id 잡의 scans.status 부수효과(fail_job 전용).
+
+        fn_job_fail SQL의 `elsif v_job.type = 'precheck' and (v_job.payload ?
+        'scan_id') then update scans set status = ...`를 그대로 옮긴 것
+        (003_dashboard_support.sql 신규) — fn_job_claim/fn_job_complete는 precheck의
+        scans.status를 건드리지 않는다.
+        """
+        if job["type"] != "precheck" or "scan_id" not in job["payload"]:
+            return
+        scan_id = job["payload"]["scan_id"]
+        if scan_id in self.scans:
+            self.scans[scan_id]["status"] = status
 
     # -- 잡 큐 -----------------------------------------------------------
     def reap_stuck_jobs(self, timeout_minutes=30):
@@ -139,10 +160,12 @@ class FakeDB(DBClient):
             job["status"] = "failed"
             job["finished_at"] = _now()
             self._sync_linked_analysis_status(job, "failed")
+            self._sync_linked_scan_status_on_fail(job, "failed")
         else:
             job["status"] = "queued"
             job["run_after"] = _now() + timedelta(seconds=10 * job["attempts"])
             self._sync_linked_analysis_status(job, "queued")
+            self._sync_linked_scan_status_on_fail(job, "uploaded")
         job["locked_at"] = None
         job["locked_by"] = None
 

@@ -3,8 +3,14 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { AnalysisProgress } from '@/components/analysis-progress';
+import { ScanStatusWatcher } from '@/components/scan-status-watcher';
 import { GRADE_COLOR, GRADE_LABEL, LINEAGE_LABEL, SCAN_STATUS_LABEL, SURFACE_LABEL } from '@/lib/domain/labels';
 import type { AnalysisRow, LocationRow, ScanRow } from '@/lib/domain/types';
+
+// Realtime 감시가 필요한 진행 중 상태(리뷰 Important 2) — ready/archived/failed는
+// 이미 종결됐거나(ready는 이 화면 자체에서 동기적으로 전이시킨 값) 더 이상 워커가
+// 바꾸지 않는 상태라 구독 대상에서 제외한다.
+const WATCHED_SCAN_STATUSES = new Set(['uploaded', 'awaiting_unit_confirm']);
 
 export const dynamic = 'force-dynamic';
 
@@ -36,6 +42,9 @@ export default async function ScanPage({ params }: { params: Promise<{ id: strin
         <dt className="text-slate-500">상태</dt><dd>{SCAN_STATUS_LABEL[s.status]}</dd>
         <dt className="text-slate-500">단위 배율</dt><dd>{s.unit_scale ?? '미확정'}</dd>
       </dl>
+      {WATCHED_SCAN_STATUSES.has(s.status) && (
+        <ScanStatusWatcher scanId={id} initialStatus={s.status} />
+      )}
       {s.status === 'awaiting_unit_confirm' && (
         <Link href={`/scans/${id}/confirm-unit`}
           className="inline-block rounded bg-blue-700 px-3 py-1.5 text-sm text-white">
@@ -47,6 +56,16 @@ export default async function ScanPage({ params }: { params: Promise<{ id: strin
           사전 검사 대기 중입니다. 워커가 실행 중인지 확인하세요(python -m flatworker).
           이 화면을 새로고침하면 상태가 갱신됩니다.
         </p>
+      )}
+      {s.status === 'failed' && (
+        <div className="rounded border border-red-300 bg-red-50 p-3 text-sm">
+          <p className="font-medium text-red-700">사전 검사에 실패했습니다.</p>
+          <p className="mt-1 text-xs text-slate-600">
+            가장 흔한 원인은 지원하지 않는 파일 포맷이나 손상·불완전한 파일입니다.
+            파일을 확인한 뒤 업로드 화면에서 새 스캔으로 다시 시도하세요. 상세 원인은
+            워커 실행 창의 로그에 남습니다(3회 자동 재시도 후에도 실패한 상태입니다).
+          </p>
+        </div>
       )}
       {latest && (
         <section className="space-y-2">
