@@ -37,9 +37,10 @@ export function UploadForm({ sites, locations, userId, initialSiteId, initialLoc
   // 적용 기준 후보: fn_resolve_criteria는 대체(override) 시맨틱 - 현장 기준이 있으면
   // 전역 기준은 목록에 아예 나오지 않는다. 반환 목록을 그대로 후보로 쓴다.
   useEffect(() => {
-    if (!siteId) { setCriteria([]); setCriteriaId(''); return; }
     let cancelled = false;
     (async () => {
+      // 이펙트 본문 최상단 동기 setState는 린트 경고 대상이라 IIFE 내부로 통일한다
+      if (!siteId) { setCriteria([]); setCriteriaId(''); return; }
       const { data, error: err } = await createClient().rpc('fn_resolve_criteria', {
         p_site_id: siteId, p_surface: effectiveSurface,
       });
