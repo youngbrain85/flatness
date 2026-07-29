@@ -29,8 +29,12 @@ export function LocationTree({ tree, scansByLocation, siteId }: {
                       <li key={l.id} className="rounded border bg-white p-2 text-sm">
                         <div className="flex items-center justify-between">
                           <span className="font-medium">{l.name}</span>
-                          <Link href={`/upload?site=${siteId}&location=${l.id}`}
-                            className="text-xs text-blue-700 hover:underline">스캔 업로드</Link>
+                          <span className="flex gap-3">
+                            <Link href={`/upload?site=${siteId}&location=${l.id}`}
+                              className="text-xs text-blue-700 hover:underline">스캔 업로드</Link>
+                            <Link href={`/reports?location=${l.id}`}
+                              className="text-xs text-blue-700 hover:underline">보고서</Link>
+                          </span>
                         </div>
                         <ul className="mt-1 space-y-0.5">
                           {(scansByLocation.get(l.id) ?? []).map((s) => (

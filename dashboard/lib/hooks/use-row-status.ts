@@ -1,43 +1,46 @@
 // 진행 상태 추적 (P2 확정: jobs 불가시,
-// analyses.status/scans.status를 Realtime 구독. 구독 유실 대비 5초 보조 폴링 병행)
+// analyses.status/scans.status/reports.gen_status를 Realtime 구독. 구독 유실 대비 5초 보조 폴링 병행)
 'use client';
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 
 // 저비용 개선 m2: 종결 상태에 도달한 뒤에도 5초 폴링이 계속되면 Supabase Free
-// 요청 한도를 무의미하게 소진한다 - scans(ready/archived/failed)·analyses(done/failed)
-// 양쪽의 종결 상태를 합쳐 감지되는 즉시 폴링 타이머를 멈춘다.
+// 요청 한도를 무의미하게 소진한다 - scans(ready/archived/failed)·analyses(done/failed)·
+// reports(done/failed) 종결 상태를 합쳐 감지되는 즉시 폴링 타이머를 멈춘다.
 const TERMINAL_STATUSES = new Set(['ready', 'archived', 'failed', 'done']);
 
 export function useRowStatus<T extends string>(
-  table: 'scans' | 'analyses',
+  table: 'scans' | 'analyses' | 'reports',
   id: string,
   initial: T,
+  // reports는 업무 상태(status)와 생성 상태(gen_status)가 분리돼 있어 컬럼을 지정받는다
+  column: 'status' | 'gen_status' = 'status',
 ): T {
   const [status, setStatus] = useState<T>(initial);
 
   useEffect(() => {
     const supabase = createClient();
     const channel = supabase
-      .channel(`${table}-${id}`)
+      .channel(`${table}-${column}-${id}`)
       .on(
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table, filter: `id=eq.${id}` },
-        (payload) => setStatus((payload.new as { status: T }).status),
+        (payload) => setStatus((payload.new as Record<string, T>)[column]),
       )
       .subscribe();
     const timer = setInterval(async () => {
-      const { data } = await supabase.from(table).select('status').eq('id', id).maybeSingle();
+      const { data } = await supabase.from(table).select(column).eq('id', id).maybeSingle();
       if (data) {
-        setStatus(data.status as T);
-        if (TERMINAL_STATUSES.has(data.status)) clearInterval(timer);
+        const next = (data as Record<string, string>)[column];
+        setStatus(next as T);
+        if (TERMINAL_STATUSES.has(next)) clearInterval(timer);
       }
     }, 5000);
     return () => {
       supabase.removeChannel(channel);
       clearInterval(timer);
     };
-  }, [table, id]);
+  }, [table, id, column]);
 
   return status;
 }

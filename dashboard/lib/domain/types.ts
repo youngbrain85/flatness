@@ -103,3 +103,18 @@ export interface CellRow {
   value_mm: number | null; span_used_m: number; occupancy: number; grade: Grade;
   worst_x: number | null; worst_y: number | null; zone_id: number | null;
 }
+
+// ---- 보고서 (001_schema.sql reports + 004_report_support.sql) ----
+export type ReportStatus = 'draft' | 'finalized';
+export type ReportGenStatus = 'queued' | 'processing' | 'done' | 'failed';
+
+export interface ReportRow {
+  id: string; location_id: string; title: string; status: ReportStatus;
+  snapshot: Record<string, unknown> | null; opinion_text: string | null;
+  pdf_path: string | null; gen_status: ReportGenStatus; gen_error: string | null;
+  created_by: string | null; created_at: string;
+}
+
+export interface ReportAnalysisRow {
+  report_id: string; analysis_id: string; sort_order: number;
+}

@@ -1,5 +1,7 @@
 // 표시 매핑 정본 (stats-schema.md 부록 A, 스펙 §9)
-import type { AnalysisStatus, Grade, Lineage, ScanStatus, Surface } from './types';
+import type {
+  AnalysisStatus, Grade, Lineage, ReportGenStatus, ReportStatus, ScanStatus, Surface,
+} from './types';
 
 export const GRADE_LABEL: Record<Grade, string> = {
   pass: '적합', borderline: '경계', repair: '보수', rework: '재시공', na: '판정 불가',
@@ -48,6 +50,14 @@ export function warningLabel(code: string): string {
   if (m) return `${m[1]}번 벽 후보가 유효 데이터 부족 또는 처리 오류로 판정에서 제외되었습니다.`;
   return code; // 미지 코드는 원문 노출(숨기는 것보다 안전)
 }
+
+export const REPORT_STATUS_LABEL: Record<ReportStatus, string> = {
+  draft: '작성 중', finalized: '발행됨',
+};
+
+export const REPORT_GEN_STATUS_LABEL: Record<ReportGenStatus, string> = {
+  queued: 'PDF 생성 대기 중', processing: 'PDF 생성 중', done: '생성 완료', failed: '생성 실패',
+};
 
 export function fmtMm(v: number | null): string {
   return v === null ? '-' : v.toFixed(2);
