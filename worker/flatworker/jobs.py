@@ -63,6 +63,19 @@ def _load_context(db, analysis_id):
     return analysis, scan, crit, u_mm
 
 
+def _resolve_raw_path(cfg, scan):
+    """scan.raw_file_path를 실제 파일 경로로 해석한다.
+
+    코드리뷰 Important(I1): DB(scans.raw_file_path)에는 스펙 §6.3 규약대로
+    **버킷-상대 경로 문자열만** 저장된다(예: `raw-scans/{site_id}/{scan_id}/raw.ply`)
+    — `data/` 접두나 OS 절대경로가 아니다. 이 값을 실제로 열 수 있는 경로로 바꾸는
+    책임은 소비자(이 워커)에게 있고, 소비자는 자신의 `DATA_DIR`에 결합한다. 이미
+    절대경로로 들어온 값(과거 데이터 등)은 그대로 존중해 이중 결합을 피한다.
+    """
+    p = Path(scan["raw_file_path"])
+    return cfg.data_dir / p if not p.is_absolute() else p
+
+
 def _finalize(db, analysis_id, scan_id, stats, out_dir):
     """엔진 stats를 analyses 행에 반영하고 해당 스캔의 현재 분석으로 지정."""
     db.update_analysis(analysis_id, {
@@ -71,7 +84,10 @@ def _finalize(db, analysis_id, scan_id, stats, out_dir):
         "coverage_pct": stats.get("coverage_pct"),
         "overall_verdict": overall_verdict(stats),
         "warnings": stats.get("warnings", []),
-        "artifacts_dir": str(out_dir),
+        # 코드리뷰 Important(I1): out_dir(워커 CWD 상대·OS 종속 절대경로)이 아니라
+        # 스펙 §6.3 규약의 버킷-상대 문자열만 저장한다 — 실제 파일 위치는 소비자가
+        # 자신의 data 루트(DATA_DIR)에 이 문자열을 결합해 얻는다.
+        "artifacts_dir": f"artifacts/{analysis_id}",
         "engine_version": stats.get("meta", {}).get("engine_version"),
         "applied_criteria": stats.get("applied_criteria"),
         "auto_summary": stats.get("auto_summary"),
@@ -83,7 +99,7 @@ def handle_analyze(db, cfg, payload):
     analysis_id = payload["analysis_id"]
     analysis, scan, crit, u_mm = _load_context(db, analysis_id)
     out_dir = artifacts_dir(cfg.data_dir, analysis_id)
-    path = Path(scan["raw_file_path"])
+    path = _resolve_raw_path(cfg, scan)
     scale_to_m = scan["unit_scale"]
     if scan["surface"] == "wall":
         stats = analyze_wall(path, scale_to_m, crit, u_mm, out_dir)
@@ -95,7 +111,15 @@ def handle_analyze(db, cfg, payload):
 def handle_import(db, cfg, payload):
     analysis_id = payload["analysis_id"]
     analysis, scan, crit, u_mm = _load_context(db, analysis_id)
+    if scan["surface"] != "floor":
+        # 코드리뷰 Minor(M2): 임포트 계약(스펙 §5.4, docs/contracts/stats-schema.md
+        # §7)은 바닥 전용이다 — 엔진 import_colab_csv 자체도 meta.surface를 항상
+        # "floor"로 고정해 찍어내므로, 벽 스캔을 이 경로로 흘려보내면 scan.surface와
+        # 모순되는 stats(surface=floor로 찍힌 벽 데이터)가 만들어진다. CLI(cli.py의
+        # "바닥(flatness) 기준을 지정하세요" 안내)와 동일한 취지로 여기서 조기 차단한다.
+        raise ValueError(
+            f"임포트는 바닥(floor) 스캔만 지원합니다: scan.surface='{scan['surface']}'")
     out_dir = artifacts_dir(cfg.data_dir, analysis_id)
-    path = Path(scan["raw_file_path"])
+    path = _resolve_raw_path(cfg, scan)
     stats = import_colab_csv(path, crit, u_mm, out_dir)
     _finalize(db, analysis_id, analysis["scan_id"], stats, out_dir)

@@ -115,7 +115,7 @@ create table scans (
   operator_id uuid references profiles(id),
   operator_name_manual text,
   selected_criteria_id uuid references criteria(id) on delete restrict,
-  raw_file_path text,            -- 데모: data/raw-scans/{site_id}/{scan_id}/raw.{ext} (§6.3)
+  raw_file_path text,            -- 버킷-상대 경로: raw-scans/{site_id}/{scan_id}/raw.{ext} (§6.3)
   original_filename text,
   file_format text,
   point_count bigint,
@@ -163,7 +163,7 @@ create table analyses (
   coverage_pct double precision,
   overall_verdict verdict,
   warnings jsonb not null default '[]',
-  artifacts_dir text,            -- 데모: data/artifacts/{analysis_id}/ (§6.3, 위 조정 사유 참조)
+  artifacts_dir text,            -- 버킷-상대 경로: artifacts/{analysis_id}/ (§6.3, 위 조정 사유 참조)
   auto_summary text,
   user_summary text,
   is_current boolean not null default false,

@@ -30,7 +30,8 @@ def _seed_floor_scan(db, cfg):
     sd = raw_scan_dir(cfg.data_dir, "site1", "scan1")
     write_binary_ply(pts, sd / "raw.ply")
     db.scans["scan1"] = {"id": "scan1", "site_id": "site1", "surface": "floor",
-                         "raw_file_path": str(sd / "raw.ply"), "unit_scale": 1.0,
+                         # 스펙 §6.3 규약대로 버킷-상대 문자열만 저장(data_dir 접두 없음)
+                         "raw_file_path": "raw-scans/site1/scan1/raw.ply", "unit_scale": 1.0,
                          "status": "ready", "selected_criteria_id": "c1"}
     db.criteria["c1"] = {"id": "c1", "surface": "floor", "name": "floor-kcs-exposed",
                          "source_text": "KCS 14 20 10 표 3.7-1 (제물치장·얇은 마감)",

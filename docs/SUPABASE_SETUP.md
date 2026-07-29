@@ -80,6 +80,14 @@ select * from fn_job_claim('test');
 select * from fn_job_claim('test') where id is not null;
 ```
 
+검증이 끝나면 방금 클레임한 테스트 잡을 정리한다(방치하면 이 잡이 영영 `processing`에
+머물다 `fn_reap_stuck_jobs`가 재큐잉해 `locked_by='test'`인 워커가 없으니 3회 실패
+소음만 쌓인다) — 위에서 `fn_enqueue_job`이 돌려준 uuid를 그대로 넣는다:
+
+```sql
+select fn_job_complete('<반환된 uuid>');
+```
+
 **(3) 기준 조회 함수 확인** — 전역(site 미지정) 바닥 기준 목록:
 
 ```sql
@@ -147,6 +155,27 @@ select * from fn_resolve_criteria(null, 'floor');
    `[flatworker] 설정 오류: ...`가 출력되면 `.env`의 필수값(`SUPABASE_URL`/
    `SUPABASE_SERVICE_ROLE_KEY`) 누락을 의미한다. 네트워크/인증 오류(401 등)가 나면
    4단계에서 복사한 키·URL을 다시 확인한다.
+
+## 6. 경로 규약 (raw_file_path·artifacts_dir)
+
+`scans.raw_file_path`·`analyses.artifacts_dir`는 DB에 **버킷-상대 경로 문자열만**
+저장한다 — 예: `raw-scans/{site_id}/{scan_id}/raw.ply`, `artifacts/{analysis_id}/`.
+`data/` 접두나 OS 절대경로, 워커를 실행한 디렉터리 기준 상대경로는 **저장하지
+않는다**(스펙 §6.3).
+
+데모 단계(로컬 워커, Storage 버킷 아직 미사용)에서는 이 값을 소비자가 각자의 저장소
+루트에 결합해 실제 위치를 얻는다:
+
+- **워커**는 자신의 `DATA_DIR`(`.env`)에 결합한다 — 예:
+  `DATA_DIR=../data` + `raw-scans/site1/scan1/raw.ply` →
+  `../data/raw-scans/site1/scan1/raw.ply`. 이 결합은 `worker/flatworker/jobs.py`의
+  `_resolve_raw_path`(읽기)와 `artifacts.artifacts_dir()`(쓰기)가 담당한다.
+- **P3 대시보드**(정식 구현 시)도 동일 문자열을 자신의 정적 파일 서빙 루트에 결합해
+  읽는다.
+
+정식 배포(Storage 버킷 전환) 시에도 이 문자열이 그대로 버킷 키가 되므로, DB에 특정
+소비자의 로컬 경로 관례를 섞어 저장하면 두 소비자 중 하나가 항상 깨진다 — 이 규약을
+어기지 않는 것이 버킷 전환의 전제 조건이다.
 
 ## 참고
 
