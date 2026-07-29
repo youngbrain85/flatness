@@ -1,0 +1,304 @@
+{# worker/flatworker/report/templates/report.html.j2
+   스펙 §8 5부 구성: ①표지·기본정보 ②분석 개요 ③구간별 결과표 ④시각자료 ⑤종합의견.
+   입력은 snapshot(report-snapshot-v1) 하나뿐이며 라벨·색상도 snapshot에서 온다. #}
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<title>{{ snap.report.title }}</title>
+<style>
+@page { size: A4; margin: 14mm 12mm 16mm 12mm; }
+* { box-sizing: border-box; }
+body {
+  /* 한글 폰트 폴백: 개발 PC(Windows)에는 Noto Sans KR·맑은 고딕이 모두 설치돼 있다.
+     컨테이너 배포 시에는 폰트 내장이 필요하다(README·백로그 참고). */
+  font-family: 'Noto Sans KR', 'Malgun Gothic', sans-serif;
+  font-size: 10pt; color: #1f2937; margin: 0; line-height: 1.45;
+}
+h1 { font-size: 20pt; margin: 0 0 6mm; }
+h2 { font-size: 13pt; margin: 0 0 3mm; border-bottom: 1.2pt solid #1f2937; padding-bottom: 1.5mm; }
+h3 { font-size: 11pt; margin: 5mm 0 2mm; }
+h4 { font-size: 10pt; margin: 4mm 0 1.5mm; color: #334155; }
+.part { page-break-before: always; }
+.part.first { page-break-before: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 9pt; margin-bottom: 3mm; }
+th, td { border: 0.4pt solid #cbd5e1; padding: 1.3mm 2mm; text-align: left; vertical-align: top; }
+th { background: #f1f5f9; }
+td.num, th.num { text-align: right; }
+table.kv th { width: 26%; background: #f8fafc; }
+.badge { display: inline-block; padding: 0.4mm 2.2mm; border-radius: 1.5mm; color: #fff; font-weight: 700; font-size: 9pt; }
+.swatch { display: inline-block; width: 3mm; height: 3mm; border-radius: 0.6mm; vertical-align: middle; margin-right: 1.2mm; }
+.warn { border: 0.5pt solid #f59e0b; background: #fffbeb; padding: 2mm; margin: 1.5mm 0; font-size: 9pt; }
+.note { color: #64748b; font-size: 8.5pt; }
+.disclaimer { border: 1pt solid #1f2937; background: #f8fafc; padding: 3mm; font-weight: 700; margin-top: 4mm; }
+figure { margin: 0 0 4mm; page-break-inside: avoid; }
+figure img { width: 100%; max-height: 105mm; object-fit: contain; border: 0.4pt solid #e2e8f0; }
+figcaption { font-size: 8.5pt; color: #475569; margin-top: 1mm; }
+.photos figure { display: inline-block; width: 48%; vertical-align: top; margin-right: 2%; }
+.photos img { max-height: 62mm; }
+.cover { margin-top: 32mm; }
+.cover .title { font-size: 24pt; font-weight: 800; line-height: 1.25; }
+.cover .sub { margin-top: 3mm; font-size: 11pt; color: #475569; }
+pre.summary { white-space: pre-wrap; font-family: inherit; font-size: 10pt; margin: 0; }
+</style>
+</head>
+<body>
+
+{# ---------------- ① 표지 · 기본정보 ---------------- #}
+<section class="part first">
+  <div class="cover">
+    <div class="title">{{ snap.report.title }}</div>
+    <div class="sub">{{ snap.site.name }} / {{ location_path }}</div>
+    <div class="sub">보고서 생성 {{ snap.generated_at }}</div>
+  </div>
+
+  <h2 style="margin-top:24mm">1. 기본 정보</h2>
+  <table class="kv">
+    <tr><th>현장</th><td>{{ snap.site.name }}{% if snap.site.address %} ({{ snap.site.address }}){% endif %}</td></tr>
+    <tr><th>동</th><td>{{ snap.location.building or '-' }}</td></tr>
+    <tr><th>층</th><td>{{ snap.location.floor or '-' }}</td></tr>
+    <tr><th>공간</th><td>{{ snap.location.room or '-' }}</td></tr>
+    <tr><th>측정위치</th><td>{{ snap.location.name }}</td></tr>
+  </table>
+
+  <h3>측정 개요</h3>
+  <table>
+    <thead>
+      <tr><th>구분</th><th>측정일자</th><th>담당자</th><th>장비</th><th>적용 기준</th><th>종합 판정</th></tr>
+    </thead>
+    <tbody>
+      {% for a in snap.analyses %}
+      <tr>
+        <td>{{ a.surface_label }}{% if a.is_external %} <span class="note">(외부 결과)</span>{% endif %}</td>
+        <td>{{ a.scan.scanned_at or '-' }}</td>
+        <td>{{ a.scan.operator_name or '-' }}</td>
+        <td>{{ a.scan.device or '-' }}</td>
+        <td>{{ a.criteria.name }}<br /><span class="note">{{ a.criteria.source }}</span></td>
+        <td>
+          <span class="badge" style="background:{{ snap.palette.grade_colors[a.summary.overall_verdict or 'na'] }}">
+            {{ a.summary.overall_verdict_label }}
+          </span>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <div class="disclaimer">{{ snap.disclaimer }}</div>
+</section>
+
+{# ---------------- ② 분석 개요 ---------------- #}
+<section class="part">
+  <h2>2. 분석 개요</h2>
+  {% for a in snap.analyses %}
+  <h3>{{ loop.index }}) {{ a.surface_label }} 분석</h3>
+  <table class="kv">
+    <tr><th>입력 파일</th><td>{{ a.scan.original_filename or a.overview.file or '-' }} ({{ a.scan.file_format or '-' }})</td></tr>
+    <tr><th>점 수</th><td>{{ a.overview.n_points | num }}</td></tr>
+    <tr><th>단위 배율</th><td>{{ a.scan.unit_scale if a.scan.unit_scale is not none else '-' }} (m 기준)</td></tr>
+    <tr><th>데이터 계보</th><td>{{ a.scan.lineage_label }}</td></tr>
+    <tr><th>분석 파라미터</th><td>서브셀 {{ a.overview.subcell_m }}m · 판정 셀 {{ a.overview.cell_m }}m · 직선자 스팬 {{ a.criteria.span_m if a.criteria.span_m is not none else '해당 없음' }}m</td></tr>
+    <tr><th>{{ a.overview.coverage_label }}</th><td>{{ a.overview.coverage_pct }}%</td></tr>
+    <tr><th>축소 스팬 적용 셀</th><td>{{ a.overview.reduced_span_cells }}개</td></tr>
+    <tr><th>엔진 버전</th><td>{{ a.engine_version or '-' }}</td></tr>
+    <tr><th>적용 기준</th>
+      <td>
+        {{ a.criteria.name }} ({{ a.criteria.source }})<br />
+        {% if a.criteria.span_m is not none %}
+        {{ a.criteria.span_m }}m당 허용 {{ a.criteria.pass_mm }}mm / 재시공 {{ a.criteria.rework_mm }}mm
+        {% else %}
+        수직도 허용 {{ a.criteria.pass_mm }}mm / 재시공 {{ a.criteria.rework_mm }}mm
+        {% endif %}
+        · 측정 불확도 U={{ a.criteria.u_mm }}mm
+      </td>
+    </tr>
+  </table>
+
+  <h4>판정 요약</h4>
+  <table>
+    <thead>
+      <tr>
+        <th>판정 셀(유효/전체)</th><th class="num">최대(mm)</th><th class="num">최소(mm)</th>
+        <th class="num">평균(mm)</th><th class="num">95퍼센타일(mm)</th><th>최대 편차 위치</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>{{ a.summary.n_valid }} / {{ a.summary.n_cells }}</td>
+        <td class="num">{{ a.summary.value_max_mm | mm }}</td>
+        <td class="num">{{ a.summary.value_min_mm | mm }}</td>
+        <td class="num">{{ a.summary.value_mean_mm | mm }}</td>
+        <td class="num">{{ a.summary.value_p95_mm | mm }}</td>
+        <td>
+          {% if a.summary.worst %}
+          ({{ '%.2f' | format(a.summary.worst.point_x) }}, {{ '%.2f' | format(a.summary.worst.point_y) }})
+          {% else %}-{% endif %}
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h4>등급 분포</h4>
+  <table>
+    <thead>
+      <tr>{% for g in snap.palette.grade_order %}<th>{{ snap.palette.grade_labels[g] }}</th>{% endfor %}</tr>
+    </thead>
+    <tbody>
+      <tr>
+        {% for g in snap.palette.grade_order %}
+        <td>
+          <span class="swatch" style="background:{{ snap.palette.grade_colors[g] }}"></span>
+          {{ a.summary.grade_counts[g] }}개 ({{ a.summary.grade_pct[g] }}%)
+        </td>
+        {% endfor %}
+      </tr>
+    </tbody>
+  </table>
+
+  {% if a.warnings %}
+  <h4>경고</h4>
+  {% for w in a.warnings %}
+  <div class="warn">{{ w.text }}</div>
+  {% endfor %}
+  {% endif %}
+  {% endfor %}
+
+  <div class="disclaimer">{{ snap.uncertainty_note }}</div>
+</section>
+
+{# ---------------- ③ 구간별 결과표 (수평·수직 섹션) ---------------- #}
+<section class="part">
+  <h2>3. 구간별 결과</h2>
+
+  {% if floor_analyses %}
+  <h3>3.1 수평면(바닥)</h3>
+  {% for a in floor_analyses %}
+  <h4>{{ a.scan.scanned_at or '-' }} 측정 · {{ a.criteria.name }}</h4>
+  <table>
+    <thead>
+      <tr>
+        <th>구간</th><th>상태</th><th class="num">레벨(m)</th><th class="num">면적(m²)</th>
+        <th>셀(유효/전체)</th><th class="num">최대(mm)</th><th class="num">최소(mm)</th>
+        <th class="num">평균(mm)</th><th>기준 초과 셀(비율)</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for s in a.sections %}
+      <tr>
+        <td>{{ s.label }}</td>
+        <td>{{ s.status_label or '-' }}</td>
+        <td class="num">{{ s.level_m if s.level_m is not none else '-' }}</td>
+        <td class="num">{{ s.area_m2 if s.area_m2 is not none else '-' }}</td>
+        <td>{{ s.n_valid }} / {{ s.n_cells }}</td>
+        <td class="num">{{ s.max_mm | mm }}</td>
+        <td class="num">{{ s.min_mm | mm }}</td>
+        <td class="num">{{ s.mean_mm | mm }}</td>
+        <td>{{ s.over_cells }} ({{ s.over_pct }}%)</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p class="note">기준 초과 = 보수 + 재시공 셀(경계는 현장 재확인 대상이며 초과 확정이 아닙니다).</p>
+  {% endfor %}
+  {% endif %}
+
+  {% if wall_analyses %}
+  <h3>3.2 수직면(벽면)</h3>
+  {% for a in wall_analyses %}
+  <h4>{{ a.scan.scanned_at or '-' }} 측정 · {{ a.criteria.name }}</h4>
+  <table>
+    <thead>
+      <tr>
+        <th>구간</th><th class="num">길이 x 높이(m)</th><th class="num">수직도(mm)</th><th>수직도 판정</th>
+        <th>셀(유효/전체)</th><th class="num">최대(mm)</th><th class="num">최소(mm)</th>
+        <th class="num">평균(mm)</th><th>기준 초과 셀(비율)</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for s in a.sections %}
+      <tr>
+        <td>{{ s.label }}</td>
+        <td class="num">
+          {% if s.length_m is not none %}{{ s.length_m }} x {{ s.height_m }}{% else %}-{% endif %}
+        </td>
+        <td class="num">{{ s.plumbness_mm | mm }}</td>
+        <td>
+          {% if s.plumb_grade %}
+          <span class="badge" style="background:{{ snap.palette.grade_colors[s.plumb_grade] }}">{{ s.plumb_grade_label }}</span>
+          {% else %}-{% endif %}
+        </td>
+        <td>{{ s.n_valid }} / {{ s.n_cells }}</td>
+        <td class="num">{{ s.max_mm | mm }}</td>
+        <td class="num">{{ s.min_mm | mm }}</td>
+        <td class="num">{{ s.mean_mm | mm }}</td>
+        <td>{{ s.over_cells }} ({{ s.over_pct }}%)</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endfor %}
+  {% endif %}
+</section>
+
+{# ---------------- ④ 시각자료 ---------------- #}
+<section class="part">
+  <h2>4. 시각자료</h2>
+  {% for a in snap.analyses %}
+  <h3>{{ loop.index }}) {{ a.surface_label }} · {{ a.scan.scanned_at or '-' }}</h3>
+  {% for h in a.assets.heatmaps %}
+  <figure>
+    <img src="{{ h.path | asset(report_id) }}" alt="{{ h.label }}" />
+    <figcaption>{{ h.label }} (녹색 적합 / 노랑 경계 / 주황 보수 / 빨강 재시공 / 회색 판정 불가)</figcaption>
+  </figure>
+  {% endfor %}
+  {% for p in a.assets.preview3d %}
+  <figure>
+    <img src="{{ p.path | asset(report_id) }}" alt="{{ p.label }}" />
+    <figcaption>{{ p.label }}</figcaption>
+  </figure>
+  {% endfor %}
+  {% if a.assets.histogram %}
+  <figure>
+    <img src="{{ a.assets.histogram | asset(report_id) }}" alt="셀 편차 분포" />
+    <figcaption>셀 편차 분포(점선은 허용치·재시공 임계)</figcaption>
+  </figure>
+  {% endif %}
+  {% endfor %}
+
+  <h3>현장 사진</h3>
+  {% if snap.photos %}
+  <div class="photos">
+    {% for photo in snap.photos %}
+    <figure>
+      <img src="{{ photo.path | asset(report_id) }}" alt="{{ photo.caption or '현장 사진' }}" />
+      <figcaption>{{ photo.caption or '현장 사진' }}{% if photo.taken_at %} ({{ photo.taken_at }}){% endif %}</figcaption>
+    </figure>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="note">등록된 현장 사진이 없습니다.</p>
+  {% endif %}
+</section>
+
+{# ---------------- ⑤ 종합의견 ---------------- #}
+<section class="part">
+  <h2>5. 종합의견</h2>
+  <p class="note">
+    {% if snap.opinion.source == 'user' %}작성자 검토 의견입니다.{% else %}분석 자동 의견을 그대로 실었습니다(작성자 수정 없음).{% endif %}
+  </p>
+  <pre class="summary">{{ snap.opinion.text }}</pre>
+
+  {% if snap.notes %}
+  <h3>생성 참고 사항</h3>
+  <ul class="note">
+    {% for note in snap.notes %}
+    <li>{{ note }}</li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+
+  <div class="disclaimer">{{ snap.disclaimer }}</div>
+  <p class="note">본 보고서는 발행 시점의 분석 결과 스냅샷({{ snap.schema }})으로 생성되었습니다. 생성 {{ snap.generated_at }}.</p>
+</section>
+
+</body>
+</html>
