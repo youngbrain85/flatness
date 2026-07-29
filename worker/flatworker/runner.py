@@ -35,24 +35,32 @@ def run_loop(db, cfg, handlers=None, max_iterations=None):
 
     prev_handler = signal.signal(signal.SIGINT, _on_sigint)
     try:
+        # 시작 시 1회: 이전 워커가 비정상 종료해 processing에 고착된 잡을 재큐잉
+        # (fn_reap_stuck_jobs, 002_functions_seed.sql) — 방치하면 jobs_dedup 부분
+        # 유니크(queued/processing 포함)가 동일 analysis_id 재enqueue를 영구 차단한다.
+        db.reap_stuck_jobs()
         i = 0
         while max_iterations is None or i < max_iterations:
             if stop["flag"]:
                 break
             job = db.claim_job()
-            if job is None:
+            # 코드리뷰 Critical(C1) 방어 2중화: SupabaseRest.claim_job은 이제 빈
+            # 큐에서 None을 반환하도록 가드됐지만(db.py), 다른 DBClient 구현체가
+            # 같은 가드를 빠뜨릴 가능성에 대비해 여기서도 id가 없는 잡은 "클레임
+            # 없음"과 동일하게 유휴 처리한다 — 어떤 백엔드든 크래시 없이 안전.
+            if not job or job.get("id") is None:
                 time.sleep(cfg.poll_interval_s)
                 i += 1
                 continue
-            handler = handlers.get(job["type"])
-            if handler is None:
-                db.fail_job(job["id"], f"핸들러 없음: 알 수 없는 잡 타입 '{job['type']}'")
-            else:
-                try:
+            try:
+                handler = handlers.get(job["type"])
+                if handler is None:
+                    db.fail_job(job["id"], f"핸들러 없음: 알 수 없는 잡 타입 '{job['type']}'")
+                else:
                     handler(db, cfg, job["payload"])
                     db.complete_job(job["id"])
-                except Exception as e:
-                    db.fail_job(job["id"], str(e)[:500])
+            except Exception as e:
+                db.fail_job(job["id"], str(e)[:500])
             i += 1
     finally:
         signal.signal(signal.SIGINT, prev_handler)

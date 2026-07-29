@@ -43,6 +43,16 @@ class DBClient(ABC):
         """새 잡을 등록하고 생성된 잡 id(str)를 반환."""
         raise NotImplementedError
 
+    def reap_stuck_jobs(self, timeout_minutes=30):
+        """고착(processing으로 timeout_minutes 이상 방치된) 잡을 queued로 되돌리고
+        재큐잉된 개수를 반환한다. 연결된 analyze 잡의 analyses.status가 'processing'
+        이면 'queued'로 함께 되돌린다 (`fn_reap_stuck_jobs`,
+        supabase/migrations/002_functions_seed.sql). 워커 비정상 종료로 잡이
+        processing에 영구 고착되면 jobs_dedup 부분 유니크가 재enqueue를 막아버리므로
+        run_loop 시작 시 1회 호출한다.
+        """
+        raise NotImplementedError
+
     def get_scan(self, scan_id):
         raise NotImplementedError
 
@@ -129,7 +139,16 @@ class SupabaseRest(DBClient):
 
     # -- 잡 큐 -----------------------------------------------------------
     def claim_job(self):
-        return self._rpc("fn_job_claim", {"p_worker": self._worker_id})
+        job = self._rpc("fn_job_claim", {"p_worker": self._worker_id})
+        # 코드리뷰 Critical(C1): fn_job_claim은 `returns jobs`(setof가 아닌 단일
+        # 컴포지트)라, 대기 중인 잡이 없으면 SQL이 `return null;`을 실행해도
+        # PostgREST는 0행이 아니라 **id 등 전 컬럼이 null인 1행**을 내려준다
+        # (docs/SUPABASE_SETUP.md §3(2)에서 실측 확인). 이 가드가 없으면 그 dict가
+        # 그대로 runner까지 흘러가 `job is None` 검사를 통과해버리고, 이후
+        # `fail_job(None, ...)`이 uuid 캐스트 400으로 워커 프로세스를 죽인다.
+        if not job or job.get("id") is None:
+            return None
+        return job
 
     def complete_job(self, job_id):
         self._rpc("fn_job_complete", {"p_job_id": str(job_id)})
@@ -139,6 +158,9 @@ class SupabaseRest(DBClient):
 
     def enqueue_job(self, type_, payload):
         return self._rpc("fn_enqueue_job", {"p_type": type_, "p_payload": payload})
+
+    def reap_stuck_jobs(self, timeout_minutes=30):
+        return self._rpc("fn_reap_stuck_jobs", {"p_timeout_minutes": timeout_minutes})
 
     # -- 조회 -----------------------------------------------------------
     def get_scan(self, scan_id):

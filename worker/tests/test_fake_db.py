@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta, timezone
+
 from tests.fake_db import FakeDB
 
 
@@ -62,3 +64,36 @@ def test_complete_job_does_not_touch_linked_analysis_status():
     db.complete_job(jid)
     assert db.jobs[jid]["status"] == "done"
     assert db.analyses["a1"]["status"] == "processing"  # complete_job은 손대지 않음(그대로)
+
+
+def test_reap_stuck_jobs_requeues_timed_out_processing_job_and_syncs_analysis():
+    """fn_reap_stuck_jobs(002_functions_seed.sql 119-135행대) 시맨틱 확인:
+    locked_at이 timeout(기본 30분)을 넘긴 processing 잡은 queued로 되돌리고,
+    연결된 analyses가 processing이면 함께 queued로 되돌린다.
+    """
+    db = FakeDB()
+    db.analyses["a1"] = {"id": "a1", "status": "processing"}
+    jid = db.enqueue_job("analyze", {"analysis_id": "a1"})
+    db.claim_job()  # status=processing, locked_at=지금, analyses도 processing으로 전이
+    db.jobs[jid]["locked_at"] = datetime.now(timezone.utc) - timedelta(minutes=31)  # 고착 재현
+
+    n = db.reap_stuck_jobs()  # 기본 timeout_minutes=30
+
+    assert n == 1
+    assert db.jobs[jid]["status"] == "queued"
+    assert db.jobs[jid]["locked_at"] is None
+    assert db.jobs[jid]["locked_by"] is None
+    assert db.analyses["a1"]["status"] == "queued"
+
+
+def test_reap_stuck_jobs_leaves_recent_processing_job_untouched():
+    db = FakeDB()
+    db.analyses["a1"] = {"id": "a1", "status": "processing"}
+    jid = db.enqueue_job("analyze", {"analysis_id": "a1"})
+    db.claim_job()  # locked_at = 방금 -> 타임아웃 미도달
+
+    n = db.reap_stuck_jobs()
+
+    assert n == 0
+    assert db.jobs[jid]["status"] == "processing"
+    assert db.analyses["a1"]["status"] == "processing"

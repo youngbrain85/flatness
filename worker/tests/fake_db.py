@@ -52,6 +52,42 @@ class FakeDB(DBClient):
             self.analyses[analysis_id]["status"] = status
 
     # -- 잡 큐 -----------------------------------------------------------
+    def reap_stuck_jobs(self, timeout_minutes=30):
+        """fn_reap_stuck_jobs(002_functions_seed.sql 119-135행대) 시맨틱을 그대로
+        옮긴 것 — SQL 2단계 UPDATE를 순서대로 재현한다:
+
+        1) status='processing'이고 locked_at이 timeout_minutes 이전인 잡을 전부
+           'queued'로 되돌리고(locked_at/locked_by 해제, run_after=now) 개수를 센다.
+           attempts는 건드리지 않는다(SQL도 attempts를 갱신하지 않음).
+        2) (1과 무관하게 그 시점 전체 잡 기준으로) status='queued'·type='analyze'인
+           잡 중 연결된 analyses.status가 'processing'인 것만 'queued'로 되돌린다
+           (SQL의 `update analyses ... from jobs j where j.status='queued' and
+           j.type='analyze' and ... and a.status='processing'` 조인 조건 그대로 —
+           1단계에서 막 재큐잉된 잡뿐 아니라 이미 queued였던 analyze 잡도 대상이 될
+           수 있다는 점까지 SQL과 동일하게 재현).
+        """
+        now = _now()
+        threshold = now - timedelta(minutes=timeout_minutes)
+        reaped_count = 0
+        for job in self.jobs.values():
+            if (job["status"] == "processing" and job["locked_at"] is not None
+                    and job["locked_at"] < threshold):
+                job["status"] = "queued"
+                job["locked_at"] = None
+                job["locked_by"] = None
+                job["run_after"] = now
+                reaped_count += 1
+        for job in self.jobs.values():
+            if job["status"] != "queued" or job["type"] != "analyze":
+                continue
+            if "analysis_id" not in job["payload"]:
+                continue
+            analysis_id = job["payload"]["analysis_id"]
+            analysis = self.analyses.get(analysis_id)
+            if analysis is not None and analysis["status"] == "processing":
+                analysis["status"] = "queued"
+        return reaped_count
+
     def enqueue_job(self, type_, payload):
         job_id = str(uuid4())
         self.jobs[job_id] = {
