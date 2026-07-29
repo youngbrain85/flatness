@@ -14,6 +14,9 @@ export function UncertaintyForm({ initial }: { initial: { floor: number; wall: n
     if (!Number.isFinite(value.floor) || !Number.isFinite(value.wall) || value.floor <= 0 || value.wall <= 0) {
       setMsg('U는 0보다 큰 수치여야 합니다'); return;
     }
+    if (value.floor > 100 || value.wall > 100) {
+      setMsg('U는 100mm 이하여야 합니다'); return;
+    }
     // RLS 무음 거부 주의(criteria와 동일): 0행 갱신을 실패로 판정
     const { data, error } = await createClient().from('app_settings')
       .update({ value }).eq('key', 'uncertainty_mm').select('key');

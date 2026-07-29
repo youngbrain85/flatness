@@ -8,9 +8,13 @@ export function ProfileForm({ userId, initialName }: { userId: string; initialNa
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    const trimmed = name.trim();
+    // HTML5 required는 공백만 입력해도 통과시키므로 별도로 막는다(빈 표시 이름 저장 방지)
+    if (!trimmed) { setMsg('표시 이름을 입력하세요'); return; }
     // grant: authenticated는 display_name 컬럼만 update 가능 (001)
     const { error } = await createClient().from('profiles')
-      .update({ display_name: name.trim() }).eq('id', userId);
+      .update({ display_name: trimmed }).eq('id', userId);
+    if (!error) setName(trimmed); // 입력창도 저장된 값(trim됨)과 동기화
     setMsg(error ? `저장 실패: ${error.message}` : '저장되었습니다');
   }
 
