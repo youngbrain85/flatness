@@ -6,7 +6,7 @@ import { buildSiteSummaries } from '@/lib/domain/summary';
 import { dirSizeBytes, fmtBytes } from '@/lib/server/disk-usage';
 import { SiteCard } from '@/components/site-card';
 import { SupabaseErrorNotice } from '@/components/supabase-error';
-import type { SiteRow, Verdict } from '@/lib/domain/types';
+import type { AnalysisStatus, SiteRow, Verdict } from '@/lib/domain/types';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,7 +16,8 @@ export default async function HomePage() {
     supabase.from('sites').select('*').order('name'),
     supabase.from('locations').select('id, site_id'),
     supabase.from('scans').select('id, scanned_at, location_id').is('deleted_at', null),
-    supabase.from('analyses').select('scan_id, overall_verdict')
+    // 리뷰 Important 3: "판정 불가"(done인데 overall_verdict null) 집계를 위해 status도 함께 조회
+    supabase.from('analyses').select('scan_id, status, overall_verdict')
       .eq('is_current', true).is('deleted_at', null),
   ]);
   const firstError = sitesRes.error ?? locationsRes.error ?? scansRes.error ?? analysesRes.error;
@@ -27,7 +28,7 @@ export default async function HomePage() {
     (sitesRes.data ?? []) as SiteRow[],
     locationsRes.data ?? [],
     scansRes.data ?? [],
-    (analysesRes.data ?? []) as { scan_id: string; overall_verdict: Verdict | null }[],
+    (analysesRes.data ?? []) as { scan_id: string; status: AnalysisStatus; overall_verdict: Verdict | null }[],
   );
   const dataDir = path.resolve(process.env.DATA_DIR ?? '../data');
   const usage = await dirSizeBytes(dataDir);

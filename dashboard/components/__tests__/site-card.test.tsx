@@ -10,6 +10,7 @@ describe('SiteCard', () => {
         locationCount: 3,
         lastScannedAt: '2026-07-20',
         verdictCounts: { pass: 2, borderline: 1, repair: 0, rework: 0 },
+        naCount: 1,
       }} />,
     );
     expect(screen.getByText('테스트 현장')).toBeInTheDocument();
@@ -17,5 +18,18 @@ describe('SiteCard', () => {
     expect(screen.getByText(/2026-07-20/)).toBeInTheDocument();
     expect(screen.getByText(/적합 2/)).toBeInTheDocument();
     expect(screen.getByText(/경계 1/)).toBeInTheDocument();
+  });
+
+  it('판정 불가(naCount) 배지를 표시한다(리뷰 Important 3)', () => {
+    render(
+      <SiteCard summary={{
+        site: { id: 's1', name: '테스트 현장', address: null, memo: null, created_at: '', updated_at: '' },
+        locationCount: 1,
+        lastScannedAt: '2026-07-20',
+        verdictCounts: { pass: 0, borderline: 0, repair: 0, rework: 0 },
+        naCount: 2,
+      }} />,
+    );
+    expect(screen.getByText(/판정 불가 2/)).toBeInTheDocument();
   });
 });

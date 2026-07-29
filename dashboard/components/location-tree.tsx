@@ -37,11 +37,22 @@ export function LocationTree({ tree, scansByLocation, siteId }: {
                             <li key={s.id}>
                               <Link href={`/scans/${s.id}`} className="flex items-center gap-2 hover:underline">
                                 <span>{s.scanned_at} · {SURFACE_LABEL[s.surface]}</span>
+                                {/* 리뷰 Important 3: verdict가 falsy(null)라고 바로 스캔 상태
+                                    라벨로 떨어지면 판정 불가·분석 실패 분석이 "분석 준비됨"
+                                    등 미분석 스캔과 구분되지 않는다 - 현재 분석의 status를
+                                    먼저 분기한다 */}
                                 {s.current?.overall_verdict ? (
                                   <span className="rounded px-1.5 text-xs text-white"
                                     style={{ backgroundColor: GRADE_COLOR[s.current.overall_verdict] }}>
                                     {GRADE_LABEL[s.current.overall_verdict]}
                                   </span>
+                                ) : s.current?.status === 'done' ? (
+                                  <span className="rounded px-1.5 text-xs text-white"
+                                    style={{ backgroundColor: GRADE_COLOR.na }}>
+                                    {GRADE_LABEL.na}
+                                  </span>
+                                ) : s.current?.status === 'failed' ? (
+                                  <span className="rounded bg-red-600 px-1.5 text-xs text-white">분석 실패</span>
                                 ) : (
                                   <span className="text-xs text-slate-500">{SCAN_STATUS_LABEL[s.status]}</span>
                                 )}
