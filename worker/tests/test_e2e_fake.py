@@ -73,10 +73,18 @@ def test_e2e_enqueue_to_artifacts_via_runner(tmp_path):
 
 
 def test_e2e_unknown_job_type_fails_without_touching_analyses(tmp_path):
-    """참고 대조군: 잡 타입이 핸들러 없이도(예: P4 전 'report') run_loop이 죽지 않고
-    fail_job으로 정상 종결하는지 — analyze가 아니므로 analyses 부수효과가 없다.
+    """대조군: 잡 타입이 핸들러 없이도(예: P4 전 'report') run_loop이 죽지 않고
+    fail_job으로 정상 종결하는지 확인한다. 또한 payload에 analysis_id가 들어있어도
+    (report 잡이 analyses를 참조할 일은 실제로는 없지만, 게이트 자체를 시험하기
+    위해 일부러 넣는다) analyze 타입이 아니면 FakeDB의 analyses.status 부수효과
+    (fake_db.py `_sync_linked_analysis_status`의 `job["type"] != "analyze"` 게이트)
+    가 발동하지 않아야 한다 — test_runner.py::test_runner_unknown_type_fails_terminally
+    는 analyses를 아예 시드하지 않으므로(부수효과 유무를 검증할 대상 자체가 없음)
+    이 테스트가 실질적으로 다른 커버리지를 갖는다.
     """
     db, cfg = FakeDB(), _cfg(tmp_path)
-    jid = db.enqueue_job("report", {"report_id": "r1"})
+    db.analyses["a1"] = {"id": "a1", "status": "queued"}
+    jid = db.enqueue_job("report", {"report_id": "r1", "analysis_id": "a1"})
     run_loop(db, cfg, max_iterations=1)
     assert "핸들러 없음" in db.jobs[jid]["error"]
+    assert db.analyses["a1"]["status"] == "queued"  # type != 'analyze' -> 부수효과 미발동

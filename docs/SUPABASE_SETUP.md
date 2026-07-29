@@ -68,8 +68,17 @@ select fn_enqueue_job('analyze', '{}'::jsonb);
 select * from fn_job_claim('test');
 ```
 
-방금 등록한 잡이 `status = 'processing'`, `locked_by = 'test'`로 반환되면 정상이다(두 번째
-호출부터는 대기 중인 잡이 없으면 빈 결과가 나오는 것도 정상 — SKIP LOCKED 큐 시맨틱).
+방금 등록한 잡이 `status = 'processing'`, `locked_by = 'test'`로 반환되면 정상이다.
+
+`fn_job_claim`은 컴포지트(단일 행) 반환 함수이지 `setof`가 아니라서(대기 중인 잡이
+없을 때 SQL이 `return null;`을 실행해도) `select *`로 호출하면 SQL Editor 결과창에
+**"빈 결과(0행)"가 아니라 id 등 전 컬럼이 null인 1행**이 표시된다 — 두 번째 호출부터
+(대기 중인 잡이 이미 소진된 뒤) 이 형태가 나오면 정상이다(SKIP LOCKED 큐가 비어있다는
+뜻). 0행짜리 결과를 보고 싶으면 바깥에 필터를 씌운다:
+
+```sql
+select * from fn_job_claim('test') where id is not null;
+```
 
 **(3) 기준 조회 함수 확인** — 전역(site 미지정) 바닥 기준 목록:
 
