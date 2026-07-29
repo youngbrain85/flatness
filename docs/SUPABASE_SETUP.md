@@ -181,7 +181,7 @@ select * from fn_resolve_criteria(null, 'floor');
 소비자의 로컬 경로 관례를 섞어 저장하면 두 소비자 중 하나가 항상 깨진다 — 이 규약을
 어기지 않는 것이 버킷 전환의 전제 조건이다.
 
-## 6. 대시보드(P3) 연결
+## 7. 대시보드(P3) 연결
 
 `dashboard/.env.example`을 `dashboard/.env.local`로 복사하고 4단계의 **Project URL**과
 **anon(public) key**를 채운다(service_role 키는 절대 넣지 않는다). `DATA_DIR`은 워커의
