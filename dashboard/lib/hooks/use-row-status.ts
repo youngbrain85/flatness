@@ -33,7 +33,13 @@ export function useRowStatus<T extends string>(
       if (data) {
         const next = (data as Record<string, string>)[column];
         setStatus(next as T);
-        if (TERMINAL_STATUSES.has(next)) clearInterval(timer);
+        // 저비용 개선 m1: reports는 재생성이 종결 상태(done/failed)를 다시
+        // 비종결(queued/processing)로 되돌릴 수 있는데, useEffect 의존성이
+        // [table,id,column]이라 컴포넌트가 재마운트되지 않는 한 이 타이머는
+        // 재무장되지 않는다 - 한번 멈추면 보조 폴링이 영구 정지한다. scans·
+        // analyses는 종결 상태에서 되돌아가지 않으므로 기존처럼 정지하고,
+        // reports만 정지 대상에서 제외한다.
+        if (table !== 'reports' && TERMINAL_STATUSES.has(next)) clearInterval(timer);
       }
     }, 5000);
     return () => {

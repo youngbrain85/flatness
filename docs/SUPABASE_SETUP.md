@@ -38,17 +38,21 @@
 2. 에디터를 비우고(또는 새 쿼리 탭) `supabase/migrations/002_functions_seed.sql` 전체
    내용을 붙여넣고 **Run**. 마찬가지로 성공 메시지 확인.
 
-**반드시 001을 먼저, 002를 그 다음에 실행한다** — 002가 001에서 만든 `jobs`/`criteria`
-등 테이블·enum을 전제한다.
+**반드시 001 → 002 → 003 → 004 순서로 실행한다** — 뒤 마이그레이션이 앞 마이그레이션이
+만든 테이블·enum·함수를 전제하며, 특히 003과 004는 순서를 건너뛰거나 뒤집으면 오류 없이
+조용히 기능이 사라질 수 있다(아래 4단계 경고 참고). 이 프로젝트를 워커만 쓰고 대시보드나
+보고서 기능을 쓰지 않을 계획이라도 003·004까지 실행해 두는 것을 권장한다 — 나중에 P3/P4를
+켤 때 순서를 다시 챙기지 않아도 된다.
 
-실행 중 오류가 나면 대부분 001을 건너뛰었거나 이미 한 번 실행한 마이그레이션을 다시
+실행 중 오류가 나면 대부분 앞 단계를 건너뛰었거나 이미 한 번 실행한 마이그레이션을 다시
 실행한 경우(테이블/함수 이미 존재)다. 새 프로젝트에서 순서대로 한 번씩만 실행하면 정상.
 
-3. (P3 대시보드 사용 시) `supabase/migrations/003_dashboard_support.sql` 전체 내용을
-   붙여넣고 **Run**. 사진용 `photos` 버킷과 Realtime 구독 설정이 만들어진다.
+3. `supabase/migrations/003_dashboard_support.sql` 전체 내용을 붙여넣고 **Run**.
+   사진용 `photos` 버킷과 Realtime 구독 설정이 만들어진다(P4 보고서의 현장 사진
+   자산도 이 버킷을 전제하므로, P4를 쓸 계획이면 003은 선택이 아니라 필수다).
    검증: 좌측 메뉴 **Storage**에 `photos` 버킷이 보이면 정상.
-4. (P4 보고서 사용 시) `supabase/migrations/004_report_support.sql` 전체 내용을 붙여
-   넣고 **Run**. 적용되는 내용:
+4. `supabase/migrations/004_report_support.sql` 전체 내용을 붙여넣고 **Run**. 적용되는
+   내용:
    - `reports.gen_status`(queued|processing|done|failed)·`reports.gen_error` 컬럼 신설
      (PDF 생성 진행 상태 채널. 발행 여부인 `reports.status`와는 별개다)
    - Realtime publication에 `reports` 추가 (보고서 화면의 진행 상태 자동 갱신)
@@ -57,6 +61,15 @@
    - 발행(finalized) 보고서 수정 차단 트리거
    재실행해도 안전하다(멱등). 검증: `select gen_status from reports limit 1;`이 오류
    없이 실행되면 성공.
+
+   > **경고 — 004 다음에 003을 다시 실행하지 않는다.** 004는 003이 정의한
+   > `fn_job_claim`·`fn_job_fail`·`fn_reap_stuck_jobs`를 report 잡 분기를 추가해
+   > **확장 재정의(create or replace)**한 것이라, 003의 정의를 포함하는 상위집합이다.
+   > 004를 실행한 뒤 003을 다시 실행하면 `create or replace`가 004의 정의를 003의
+   > (report 분기가 없는) 이전 정의로 덮어써, **오류 메시지 없이** report 잡의
+   > `gen_status` 상태 전이가 사라진다(잡은 계속 처리되는 것처럼 보이지만 대시보드의
+   > 진행 상태 화면이 더 이상 갱신되지 않는다). 재실행이 필요한 상황(스키마 확인,
+   > 함수 재적용 등)이라면 반드시 003 → 004 순서로 **다시** 실행한다.
 
 ## 3. 검증 쿼리
 
@@ -150,6 +163,16 @@ select * from fn_resolve_criteria(null, 'floor');
    pip install -e ../engine
    pip install -e .
    ```
+
+   P4 보고서(PDF 생성) 잡을 처리하려면 Playwright의 Chromium 브라우저 바이너리를
+   한 번 더 내려받아야 한다(`pip install`만으로는 패키지만 설치되고 브라우저 본체는
+   따로 받아야 한다) — 생략하면 첫 보고서 생성 시도에서 워커가 영문 오류로 실패한다:
+
+   ```
+   python -m playwright install chromium
+   ```
+
+   자세한 내용은 `worker/README.md`의 "PDF 보고서 잡 (P4)" 절 참고.
 
 3. 워커 실행:
 

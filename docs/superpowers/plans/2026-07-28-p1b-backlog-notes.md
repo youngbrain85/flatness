@@ -81,3 +81,27 @@
     여전히 수동 체크리스트다
 40. **보고서 HTML 미리보기** — 스펙 §3.2.⑥의 "HTML 미리보기"는 PDF 미리보기(iframe)로 대체했다.
     PDF 생성 전 단계에서 HTML을 먼저 보여주려면 워커가 HTML만 만드는 중간 상태가 필요하다
+
+## P4 최종 픽스웨이브 이연 티켓 (2026-07-29)
+
+41. **reap 30분 창** — 워커가 크래시한 뒤 30분 이내에 재기동하면 fn_reap_stuck_jobs가
+    아직 고착 잡을 회수하지 않아 report 잡이 processing에 머무른다. analyze/import는
+    재클레임·완료 시 자가치유되지만, report는 이 상태가 대시보드에 "생성 중"으로 영구
+    표시되는 UI 데드엔드로 가시화된다(재기동 후 30분을 기다리거나 수동 개입 필요)
+42. **003 storage 정책이 프로젝트별로 42501 실패 가능** — supabase/migrations/
+    003_dashboard_support.sql의 photos 버킷 정책 생성문이 프로젝트 설정(Storage RLS
+    강제 등)에 따라 SQL Editor에서 42501로 실패할 수 있다. 실패 시 Storage > Policies
+    UI로 동일 정책을 만드는 대체 절차를 docs/SUPABASE_SETUP.md에 추가해야 한다
+43. **히스토그램 한글 폰트가 엔진 heatmap import 부수효과에 의존** —
+    worker/flatworker/report/assets.py의 render_histogram은 matplotlib 한글 폰트
+    설정을 직접 하지 않고 `from flatness.outputs import heatmap as _engine_heatmap`
+    import의 부수효과에 얹혀 간다. 엔진 쪽 import 순서나 폰트 설정 구현이 바뀌면
+    보고서 히스토그램만 조용히 한글이 네모 상자로 깨질 수 있어, 보고서 모듈이 폰트
+    설정을 직접 소유하도록 정리 필요
+44. **히트맵 범례 문구가 snapshot palette 대신 하드코딩** — reports.snapshot의
+    palette(grade_order/grade_labels/grade_colors, worker/flatworker/report/labels.py)는
+    발행 시점 등급 라벨·색상을 박제해 HTML/PDF 표의 재현성을 보장하지만, 히트맵
+    이미지 자체(engine/flatness/outputs/heatmap.py의 GRADE_COLORS/_LABELS, 엔진 산출물을
+    자산으로 그대로 복사)의 범례 문구는 렌더 시점 값이 이미지에 박혀 있다. 향후 등급
+    라벨이 바뀌면 이미 발행된 보고서의 PDF 안에서 히트맵 이미지 범례와 표 문구가
+    서로 어긋날 수 있다

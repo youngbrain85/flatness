@@ -21,8 +21,11 @@ const { supabaseStub, removeChannelMock, channelStub } = vi.hoisted(() => {
 
 vi.mock('@/lib/supabase/client', () => ({ createClient: () => supabaseStub }));
 
-function Harness({ table, id, initial }: { table: 'scans' | 'analyses'; id: string; initial: string }) {
-  useRowStatus(table, id, initial);
+function Harness({ table, id, initial, column }: {
+  table: 'scans' | 'analyses' | 'reports'; id: string; initial: string;
+  column?: 'status' | 'gen_status';
+}) {
+  useRowStatus(table, id, initial, column);
   return null;
 }
 
@@ -56,6 +59,29 @@ describe('useRowStatus 폴링 정지 (저비용 개선 m2)', () => {
 
     await vi.advanceTimersByTimeAsync(15000); // 정지됐다면 이후 틱에서 추가 폴링 요청이 없어야 함
     expect(supabaseStub.from).toHaveBeenCalledTimes(1);
+
+    unmount();
+    vi.useRealTimers();
+  });
+});
+
+describe('useRowStatus reports 폴링 유지 (저비용 개선 m1)', () => {
+  it('reports는 종결 상태(done)를 감지해도 폴링을 멈추지 않는다(재생성이 되돌릴 수 있어서)', async () => {
+    supabaseStub.from.mockClear();
+    supabaseStub.from.mockImplementation(() => ({
+      select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { gen_status: 'done' } }) }) }),
+    }));
+    vi.useFakeTimers();
+
+    const { unmount } = render(
+      createElement(Harness, { table: 'reports', id: 'r1', initial: 'processing', column: 'gen_status' }),
+    );
+
+    await vi.advanceTimersByTimeAsync(5000); // 1차 폴링: gen_status='done' 확인
+    expect(supabaseStub.from).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(15000); // scans·analyses였다면 멈췄을 구간 - reports는 계속 폴링해야 함
+    expect(supabaseStub.from).toHaveBeenCalledTimes(4);
 
     unmount();
     vi.useRealTimers();
