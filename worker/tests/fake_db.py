@@ -236,3 +236,35 @@ class FakeDB(DBClient):
 
     def set_current_analysis(self, scan_id, analysis_id):
         self.current_analysis[scan_id] = analysis_id
+
+    # -- 보고서 (P4) -----------------------------------------------------
+    def get_report(self, report_id):
+        return self.reports[report_id]
+
+    def update_report(self, report_id, fields):
+        self.reports[report_id].update(fields)
+
+    def get_report_analyses(self, report_id):
+        rows = [r for r in self.report_analyses if r["report_id"] == report_id]
+        return sorted(rows, key=lambda r: r.get("sort_order", 0))
+
+    def get_analyses_by_ids(self, analysis_ids):
+        return [self.analyses[a] for a in analysis_ids if a in self.analyses]
+
+    def get_location(self, location_id):
+        return self.locations[location_id]
+
+    def get_site(self, site_id):
+        return self.sites[site_id]
+
+    def get_profile(self, profile_id):
+        return self.profiles.get(profile_id)
+
+    def get_photos_by_scan_ids(self, scan_ids):
+        rows = [p for p in self.photos.values() if p.get("scan_id") in set(scan_ids)]
+        return sorted(rows, key=lambda p: p.get("created_at") or "")
+
+    def download_photo(self, file_path):
+        if file_path not in self.photo_blobs:
+            raise KeyError(f"사진 객체가 없습니다: {file_path}")
+        return self.photo_blobs[file_path]

@@ -85,6 +85,47 @@ class DBClient(ABC):
         """scan_id의 is_current 분석을 analysis_id로 전환(기존 현재 분석은 해제)."""
         raise NotImplementedError
 
+    # -- 보고서 (P4) -----------------------------------------------------
+    def get_report(self, report_id):
+        raise NotImplementedError
+
+    def update_report(self, report_id, fields):
+        raise NotImplementedError
+
+    def get_report_analyses(self, report_id):
+        """report_analyses 행 목록(sort_order 오름차순)."""
+        raise NotImplementedError
+
+    def get_analyses_by_ids(self, analysis_ids):
+        """analyses 행 목록. 반환 순서는 보장하지 않는다(호출자가 id로 매핑)."""
+        raise NotImplementedError
+
+    def get_location(self, location_id):
+        raise NotImplementedError
+
+    def get_site(self, site_id):
+        raise NotImplementedError
+
+    def get_profile(self, profile_id):
+        """profiles 행 1개(담당자 표시명 해석용). 없으면 None."""
+        raise NotImplementedError
+
+    def get_photos_by_scan_ids(self, scan_ids):
+        """scan_id가 목록에 속한 photos 행(created_at 오름차순).
+
+        보고서 사진 스코프(설계 결정 4): report_analyses에 포함된 분석들의 스캔에
+        달린 사진의 합집합을 쓴다.
+        """
+        raise NotImplementedError
+
+    def download_photo(self, file_path):
+        """photos 버킷 객체를 bytes로 내려받는다.
+
+        file_path는 스펙 §6.3 규약 문자열('photos/{photo_id}.{ext}')이며 버킷 접두를
+        떼어낸 나머지가 Storage 객체 키다(대시보드 lib/photos/paths.ts와 동일 규칙).
+        """
+        raise NotImplementedError
+
 
 class SupabaseRest(DBClient):
     """PostgREST(`/rest/v1/...`)·RPC(`/rest/v1/rpc/<fn>`) 호출 구현.
@@ -208,3 +249,62 @@ class SupabaseRest(DBClient):
         )
         self._raise_for_status(resp)
         self._patch("analyses", analysis_id, {"is_current": True})
+
+    # -- 보고서 (P4) -----------------------------------------------------
+    def get_report(self, report_id):
+        return self._select_one("reports", report_id)
+
+    def update_report(self, report_id, fields):
+        self._patch("reports", report_id, fields)
+
+    def get_report_analyses(self, report_id):
+        resp = self._client.get(
+            "/rest/v1/report_analyses",
+            params={"report_id": f"eq.{report_id}", "select": "*", "order": "sort_order.asc"},
+        )
+        self._raise_for_status(resp)
+        return resp.json()
+
+    def get_analyses_by_ids(self, analysis_ids):
+        ids = [str(a) for a in analysis_ids]
+        if not ids:
+            return []
+        resp = self._client.get(
+            "/rest/v1/analyses",
+            params={"id": f"in.({','.join(ids)})", "select": "*"},
+        )
+        self._raise_for_status(resp)
+        return resp.json()
+
+    def get_location(self, location_id):
+        return self._select_one("locations", location_id)
+
+    def get_site(self, site_id):
+        return self._select_one("sites", site_id)
+
+    def get_profile(self, profile_id):
+        resp = self._client.get(
+            "/rest/v1/profiles",
+            params={"id": f"eq.{profile_id}", "select": "*"},
+        )
+        self._raise_for_status(resp)
+        rows = resp.json()
+        return rows[0] if rows else None
+
+    def get_photos_by_scan_ids(self, scan_ids):
+        ids = [str(s) for s in scan_ids]
+        if not ids:
+            return []
+        resp = self._client.get(
+            "/rest/v1/photos",
+            params={"scan_id": f"in.({','.join(ids)})", "select": "*",
+                    "order": "created_at.asc"},
+        )
+        self._raise_for_status(resp)
+        return resp.json()
+
+    def download_photo(self, file_path):
+        key = file_path[len("photos/"):] if file_path.startswith("photos/") else file_path
+        resp = self._client.get(f"/storage/v1/object/photos/{key}")
+        self._raise_for_status(resp)
+        return resp.content
