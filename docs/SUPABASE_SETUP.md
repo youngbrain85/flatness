@@ -46,6 +46,16 @@
 3. (P3 대시보드 사용 시) `supabase/migrations/003_dashboard_support.sql` 전체 내용을
    붙여넣고 **Run**. 사진용 `photos` 버킷과 Realtime 구독 설정이 만들어진다.
    검증: 좌측 메뉴 **Storage**에 `photos` 버킷이 보이면 정상.
+4. (P4 보고서 사용 시) `supabase/migrations/004_report_support.sql` 전체 내용을 붙여
+   넣고 **Run**. 적용되는 내용:
+   - `reports.gen_status`(queued|processing|done|failed)·`reports.gen_error` 컬럼 신설
+     (PDF 생성 진행 상태 채널. 발행 여부인 `reports.status`와는 별개다)
+   - Realtime publication에 `reports` 추가 (보고서 화면의 진행 상태 자동 갱신)
+   - `fn_job_claim`·`fn_job_fail`·`fn_reap_stuck_jobs` 확장 재정의 (report 잡 상태 전이 +
+     고착 잡 회수의 잡 타입 확장)
+   - 발행(finalized) 보고서 수정 차단 트리거
+   재실행해도 안전하다(멱등). 검증: `select gen_status from reports limit 1;`이 오류
+   없이 실행되면 성공.
 
 ## 3. 검증 쿼리
 

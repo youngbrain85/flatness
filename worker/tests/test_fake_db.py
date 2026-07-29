@@ -151,3 +151,60 @@ def test_reap_stuck_jobs_leaves_recent_processing_job_untouched():
     assert n == 0
     assert db.jobs[jid]["status"] == "processing"
     assert db.analyses["a1"]["status"] == "processing"
+
+
+def test_report_job_status_propagates_to_linked_report():
+    """004_report_support.sql의 fn_job_claim/fn_job_fail은 type='report'이고
+    payload.report_id가 있으면 reports.gen_status를 전이시킨다: 클레임 -> processing
+    (gen_error 초기화), 재시도 여지 있는 실패 -> queued, max_attempts 소진 -> failed.
+    FakeDB도 같은 시맨틱이어야 워커 테스트가 실 DB 동작을 대변한다.
+    """
+    db = FakeDB()
+    db.reports["r1"] = {"id": "r1", "gen_status": "queued", "gen_error": "이전 오류"}
+    jid = db.enqueue_job("report", {"report_id": "r1"})
+
+    job = db.claim_job(ignore_backoff=True)
+    assert job is not None
+    assert db.reports["r1"]["gen_status"] == "processing"
+    assert db.reports["r1"]["gen_error"] is None
+
+    db.fail_job(jid, "렌더 실패")
+    assert db.reports["r1"]["gen_status"] == "queued"
+    assert db.reports["r1"]["gen_error"] == "렌더 실패"
+
+    for _ in range(2):
+        assert db.claim_job(ignore_backoff=True) is not None
+        db.fail_job(jid, "렌더 실패")
+    assert db.jobs[jid]["status"] == "failed"
+    assert db.reports["r1"]["gen_status"] == "failed"
+    assert db.reports["r1"]["gen_error"] == "렌더 실패"
+
+
+def test_report_job_complete_does_not_touch_report_status():
+    """fn_job_complete는 jobs만 종결한다 — reports.gen_status='done'은 워커가
+    결과 저장(update_report) 시 직접 쓴다(analyses와 동일한 책임 분담)."""
+    db = FakeDB()
+    db.reports["r1"] = {"id": "r1", "gen_status": "queued", "gen_error": None}
+    jid = db.enqueue_job("report", {"report_id": "r1"})
+    db.claim_job(ignore_backoff=True)
+    db.complete_job(jid)
+    assert db.reports["r1"]["gen_status"] == "processing"
+
+
+def test_reap_stuck_jobs_covers_import_and_report():
+    """백로그 티켓 30: fn_reap_stuck_jobs 2단계가 analyze만 검사해 import 잡의
+    analyses.status가 'processing'에 고착됐다. 004에서 analyze·import로 넓히고
+    report용 단계를 추가한다."""
+    db = FakeDB()
+    db.analyses["a1"] = {"id": "a1", "status": "processing"}
+    db.reports["r1"] = {"id": "r1", "gen_status": "processing", "gen_error": None}
+    import_job = db.enqueue_job("import", {"analysis_id": "a1"})
+    report_job = db.enqueue_job("report", {"report_id": "r1"})
+    for jid in (import_job, report_job):
+        db.claim_job(ignore_backoff=True)
+        # 워커 크래시 모사: locked_at을 타임아웃 이전으로 되돌린다
+        db.jobs[jid]["locked_at"] = datetime.now(timezone.utc) - timedelta(minutes=60)
+
+    assert db.reap_stuck_jobs(timeout_minutes=30) == 2
+    assert db.analyses["a1"]["status"] == "queued"
+    assert db.reports["r1"]["gen_status"] == "queued"

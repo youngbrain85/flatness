@@ -19,6 +19,11 @@ max_attempts에 도달하면 'failed'로 종결, 그렇지 않으면
   'failed', 재큐(재시도) 시 'uploaded'로 되돌린다.
 대상 행이 self.analyses/self.scans에 없으면(실 Postgres의 UPDATE가 매칭 행 0건이어도
 에러 없이 지나가는 것과 동일하게) 조용히 건너뛴다.
+- type이 'report'이고 payload.report_id가 있으면 연결된 reports.gen_status를 전이한다
+  (004_report_support.sql 신규) - fn_job_claim은 'processing'(+gen_error 초기화),
+  fn_job_fail은 재시도 여지가 있으면 'queued'/소진이면 'failed'로 하고 양쪽 모두
+  gen_error에 오류 메시지를 남긴다. fn_job_complete는 reports를 건드리지 않는다
+  (gen_status='done'은 워커가 update_report로 직접 쓴다).
 """
 from datetime import datetime, timedelta, timezone
 from itertools import count
@@ -41,6 +46,13 @@ class FakeDB(DBClient):
         self.app_settings = {}
         self.analyses = {}
         self.current_analysis = {}  # scan_id -> analysis_id (is_current 대체)
+        self.reports = {}
+        self.report_analyses = []   # {"report_id","analysis_id","sort_order"} 행 목록
+        self.locations = {}
+        self.sites = {}
+        self.profiles = {}
+        self.photos = {}            # photo_id -> photos 행
+        self.photo_blobs = {}       # photos.file_path -> bytes (Storage 대체)
 
     # -- 내부 헬퍼 -----------------------------------------------------------
     def _sync_linked_analysis_status(self, job, status):
@@ -72,20 +84,38 @@ class FakeDB(DBClient):
         if scan_id in self.scans:
             self.scans[scan_id]["status"] = status
 
+    def _sync_linked_report_status(self, job, status, error=None):
+        """type='report' + payload.report_id 잡의 reports.gen_status 부수효과.
+
+        fn_job_claim/fn_job_fail SQL의 `elsif v_job.type = 'report' and
+        (v_job.payload ? 'report_id') then update reports set gen_status = ...`를
+        그대로 옮긴 것(004_report_support.sql) - fn_job_complete는 호출하지 않는다.
+        """
+        if job["type"] != "report" or "report_id" not in job["payload"]:
+            return
+        report = self.reports.get(job["payload"]["report_id"])
+        if report is None:
+            return
+        report["gen_status"] = status
+        report["gen_error"] = error
+
     # -- 잡 큐 -----------------------------------------------------------
     def reap_stuck_jobs(self, timeout_minutes=30):
-        """fn_reap_stuck_jobs(002_functions_seed.sql 119-135행대) 시맨틱을 그대로
-        옮긴 것 — SQL 2단계 UPDATE를 순서대로 재현한다:
+        """fn_reap_stuck_jobs(004_report_support.sql, 002_functions_seed.sql을 티켓
+        30으로 확장한 최종본) 시맨틱을 그대로 옮긴 것 — SQL 3단계 UPDATE를 순서대로
+        재현한다:
 
         1) status='processing'이고 locked_at이 timeout_minutes 이전인 잡을 전부
            'queued'로 되돌리고(locked_at/locked_by 해제, run_after=now) 개수를 센다.
            attempts는 건드리지 않는다(SQL도 attempts를 갱신하지 않음).
-        2) (1과 무관하게 그 시점 전체 잡 기준으로) status='queued'·type='analyze'인
-           잡 중 연결된 analyses.status가 'processing'인 것만 'queued'로 되돌린다
-           (SQL의 `update analyses ... from jobs j where j.status='queued' and
-           j.type='analyze' and ... and a.status='processing'` 조인 조건 그대로 —
-           1단계에서 막 재큐잉된 잡뿐 아니라 이미 queued였던 analyze 잡도 대상이 될
-           수 있다는 점까지 SQL과 동일하게 재현).
+        2) (1과 무관하게 그 시점 전체 잡 기준으로) status='queued'·type in ('analyze',
+           'import')인 잡 중 연결된 analyses.status가 'processing'인 것만 'queued'로
+           되돌린다(SQL의 `update analyses ... from jobs j where j.status='queued' and
+           j.type in ('analyze','import') and ... and a.status='processing'` 조인
+           조건 그대로 — 1단계에서 막 재큐잉된 잡뿐 아니라 이미 queued였던 analyze·
+           import 잡도 대상이 될 수 있다는 점까지 SQL과 동일하게 재현).
+        3) 동일한 방식으로 status='queued'·type='report'인 잡 중 연결된
+           reports.gen_status가 'processing'인 것만 'queued'로 되돌린다(티켓 30 해소).
         """
         now = _now()
         threshold = now - timedelta(minutes=timeout_minutes)
@@ -99,14 +129,21 @@ class FakeDB(DBClient):
                 job["run_after"] = now
                 reaped_count += 1
         for job in self.jobs.values():
-            if job["status"] != "queued" or job["type"] != "analyze":
+            if job["status"] != "queued" or job["type"] not in ("analyze", "import"):
                 continue
             if "analysis_id" not in job["payload"]:
                 continue
-            analysis_id = job["payload"]["analysis_id"]
-            analysis = self.analyses.get(analysis_id)
+            analysis = self.analyses.get(job["payload"]["analysis_id"])
             if analysis is not None and analysis["status"] == "processing":
                 analysis["status"] = "queued"
+        for job in self.jobs.values():
+            if job["status"] != "queued" or job["type"] != "report":
+                continue
+            if "report_id" not in job["payload"]:
+                continue
+            report = self.reports.get(job["payload"]["report_id"])
+            if report is not None and report["gen_status"] == "processing":
+                report["gen_status"] = "queued"
         return reaped_count
 
     def enqueue_job(self, type_, payload):
@@ -144,6 +181,7 @@ class FakeDB(DBClient):
         job["attempts"] += 1
         job["started_at"] = job["started_at"] or now
         self._sync_linked_analysis_status(job, "processing")
+        self._sync_linked_report_status(job, "processing", None)
         return dict(job)
 
     def complete_job(self, job_id):
@@ -161,11 +199,13 @@ class FakeDB(DBClient):
             job["finished_at"] = _now()
             self._sync_linked_analysis_status(job, "failed")
             self._sync_linked_scan_status_on_fail(job, "failed")
+            self._sync_linked_report_status(job, "failed", error)
         else:
             job["status"] = "queued"
             job["run_after"] = _now() + timedelta(seconds=10 * job["attempts"])
             self._sync_linked_analysis_status(job, "queued")
             self._sync_linked_scan_status_on_fail(job, "uploaded")
+            self._sync_linked_report_status(job, "queued", error)
         job["locked_at"] = None
         job["locked_by"] = None
 
