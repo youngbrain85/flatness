@@ -8,6 +8,7 @@ import json
 import pytest
 
 from flatworker.config import Config
+from flatworker.db import DBError
 from flatworker.jobs import handle_analyze, handle_report
 from flatworker.runner import run_loop
 from tests.fake_db import FakeDB
@@ -127,3 +128,122 @@ def test_report_html_written_next_to_pdf_for_debugging(tmp_path):
     html = (cfg.data_dir / "reports" / "r1" / "report.html").read_text(encoding="utf-8")
     assert "작성자 종합의견" in html
     assert json.loads(json.dumps(db.reports["r1"]["snapshot"]))["opinion"]["source"] == "user"
+
+
+class _FinalizeDuringRenderRenderer(FakeRenderer):
+    """render_pdf 호출 시점에 발행이 확정되는 경합을 재현하는 테스트 전용 렌더러.
+
+    실제로는 Playwright 렌더링이 수 초 걸리는 동안 사용자가 발행 버튼을 눌러
+    reports.status가 draft -> finalized로 바뀌는 상황과 같다. render_pdf 자체는
+    FakeRenderer와 동일하게 tmp 파일을 정상적으로 다 쓴 "뒤"에 상태를 바꾼다."""
+
+    def __init__(self, db, report_id):
+        super().__init__()
+        self._db = db
+        self._report_id = report_id
+
+    def render_pdf(self, html, base_dir, out_path):
+        super().render_pdf(html, base_dir, out_path)
+        self._db.reports[self._report_id]["status"] = "finalized"
+
+
+def test_report_job_preserves_published_pdf_when_finalized_mid_render(tmp_path):
+    """코드리뷰 Important(I1) 회귀 - 리뷰어가 FakeDB에 004 트리거를 모사해 재현한
+    시나리오: 렌더 도중(자산 복사~PDF 생성 사이) 발행이 확정되면, DB 갱신은 004
+    트리거(FakeDB.update_report의 재현)가 42501로 거부해야 하고, 이때 디스크의
+    발행본 report.pdf는 재생성분으로 덮어써지지 않고 그대로 보존돼야 한다
+    (os.replace를 db.update_report 성공 이후에만 실행하는 원자적 쓰기).
+    """
+    db, cfg = FakeDB(), _cfg(tmp_path)
+    _seed_analyzed_floor(db, cfg)
+    _seed_report(db)
+
+    # 1) 정상 생성 -> 발행 확정(004 트리거 통과 조건: pdf_path·snapshot 존재)
+    handle_report(db, cfg, {"report_id": "r1"}, renderer=FakeRenderer())
+    pdf_path = cfg.data_dir / db.reports["r1"]["pdf_path"]
+    published_bytes = pdf_path.read_bytes()
+    db.reports["r1"]["status"] = "finalized"
+
+    # 2) 재생성 잡이 발행 확정 이전에 이미 클레임돼 진행 중이었다고 가정하고
+    #    (load_report_context와 rmtree 직전 재확인 두 관문을 통과시키기 위해)
+    #    잠시 draft로 되돌린 뒤, 렌더링 도중(=Playwright가 오래 걸리는 사이) 발행이
+    #    확정되는 경합을 재현한다. opinion_text를 바꿔 두 번째 snapshot이 첫 번째와
+    #    (generated_at의 초 단위 타임스탬프가 우연히 같은 초에 찍히더라도) 반드시
+    #    달라지도록 한다 - 그래야 FakeDB의 트리거 재현이 "snapshot 필드 변경"을
+    #    타이밍에 기대지 않고 결정적으로 감지한다.
+    db.reports["r1"]["status"] = "draft"
+    db.reports["r1"]["opinion_text"] = "재생성 시도 중 다른 의견으로 덮어씀"
+    renderer = _FinalizeDuringRenderRenderer(db, "r1")
+
+    with pytest.raises(DBError, match="발행된 보고서는 수정할 수 없습니다"):
+        handle_report(db, cfg, {"report_id": "r1"}, renderer=renderer)
+
+    # 발행본 PDF는 재생성분으로 덮어써지지 않고 그대로 보존된다
+    assert pdf_path.read_bytes() == published_bytes
+    # tmp 파일은 정리된다(잔재 방지)
+    assert not (cfg.data_dir / "reports" / "r1" / "report.pdf.tmp").exists()
+
+
+class _FinalizeOnSecondGetReportDB:
+    """load_report_context 통과 직후 발행이 확정되는 경합(자산 rmtree 직전 재확인
+    관문)을 재현하기 위한 래퍼 - get_report를 2번째 호출부터 finalized로 바꿔
+    돌려준다(1번째 호출은 load_report_context 안, 2번째는 handle_report의 재확인)."""
+
+    def __init__(self, db):
+        self._db = db
+        self._get_report_calls = 0
+
+    def get_report(self, report_id):
+        report = dict(self._db.get_report(report_id))
+        self._get_report_calls += 1
+        if self._get_report_calls >= 2:
+            report["status"] = "finalized"
+        return report
+
+    def __getattr__(self, name):
+        return getattr(self._db, name)
+
+
+def test_handle_report_aborts_before_asset_rmtree_when_finalized_race_detected(tmp_path):
+    """코드리뷰 Important(I1) 수정 2 회귀 - load_report_context의 1회 검사와
+    build_assets(자산 디렉터리 rmtree) 사이의 경합은 rmtree 직전 재확인으로 막아야
+    한다. rmtree가 실행되면 기존 발행본 자산이 지워진 뒤라 되돌릴 수 없으므로,
+    "지우기 전에 막는다"는 사실 자체를 assert한다(재확인 없이는 sentinel 파일이
+    사라진다).
+    """
+    db, cfg = FakeDB(), _cfg(tmp_path)
+    _seed_analyzed_floor(db, cfg)
+    _seed_report(db)
+    assets_dir = cfg.data_dir / "reports" / "r1" / "assets"
+    assets_dir.mkdir(parents=True)
+    sentinel = assets_dir / "sentinel.txt"
+    sentinel.write_text("이전 발행본 자산", encoding="utf-8")
+
+    wrapped = _FinalizeOnSecondGetReportDB(db)
+    with pytest.raises(ValueError, match="발행된 보고서는 다시 생성할 수 없습니다"):
+        handle_report(wrapped, cfg, {"report_id": "r1"}, renderer=FakeRenderer())
+
+    assert sentinel.exists()  # rmtree가 실행되지 않아 기존 발행본 자산이 보존됨
+
+
+def test_run_loop_default_handlers_wire_report_job_through_playwright_renderer_seam(tmp_path, monkeypatch):
+    """코드리뷰 Important(I5) 회귀 - 이 파일의 다른 report E2E 테스트는 모두
+    handlers={"report": ...FakeRenderer...}를 주입해 runner._DEFAULT_HANDLERS의
+    'report' 키를 실제로 거치지 않는다. 그 키를 지워도 전 스위트가 green이었다.
+    PlaywrightRenderer 클래스 자체를 FakeRenderer로 몽키패치하고(handle_report의
+    지연 import가 호출 시점에 이 속성을 다시 조회하므로 유효하다) handlers 인자
+    없이 run_loop을 돌려 report 잡이 기본 배선(_DEFAULT_HANDLERS)으로 처리되는지
+    검증한다.
+    """
+    import flatworker.report.renderer as renderer_module
+
+    db, cfg = FakeDB(), _cfg(tmp_path)
+    _seed_analyzed_floor(db, cfg)
+    _seed_report(db)
+    monkeypatch.setattr(renderer_module, "PlaywrightRenderer", FakeRenderer)
+    job_id = db.enqueue_job("report", {"report_id": "r1"})
+
+    run_loop(db, cfg, max_iterations=1)  # handlers= 생략 -> _DEFAULT_HANDLERS 사용
+
+    assert db.jobs[job_id]["status"] == "done"
+    assert db.reports["r1"]["gen_status"] == "done"

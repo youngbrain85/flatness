@@ -29,9 +29,13 @@ from datetime import datetime, timedelta, timezone
 from itertools import count
 from uuid import uuid4
 
-from flatworker.db import DBClient
+from flatworker.db import DBClient, DBError
 
 _seq_counter = count()
+
+# fn_reports_finalized_guard(004_report_support.sql)가 잠그는 컬럼 - 발행본(finalized)의
+# 내용 전부. gen_status/gen_error는 잡 기계장치 소유라 잠그지 않는다(주석 원문 그대로).
+_REPORT_LOCKED_FIELDS = ("status", "title", "location_id", "opinion_text", "snapshot", "pdf_path")
 
 
 def _now():
@@ -242,7 +246,29 @@ class FakeDB(DBClient):
         return self.reports[report_id]
 
     def update_report(self, report_id, fields):
-        self.reports[report_id].update(fields)
+        """P4 최종 픽스웨이브 Important(I1) 회귀 대비: fn_reports_finalized_guard
+        (004_report_support.sql) 트리거 시맨틱을 그대로 옮긴 것 —
+
+        - old.status가 'finalized'면 status·title·location_id·opinion_text·snapshot·
+          pdf_path 중 하나라도 새 값이 기존값과 다르면 42501로 거부한다(Postgres
+          에러코드 그대로 재현 — worker/flatworker/db.py의 DBError(status, body)를
+          PostgREST가 403으로 매핑하는 형태로 흉내낸다). 트리거는 UPDATE 문 전체를
+          거부하므로(단일 컬럼만이 아니라) 이 메서드도 거부 시 필드를 하나도
+          반영하지 않는다.
+        - new.status가 'finalized'로 바뀌는 전이(발행 확정)는 pdf_path·snapshot이
+          모두 있어야 허용한다.
+        """
+        report = self.reports[report_id]
+        if report.get("status") == "finalized":
+            for key in _REPORT_LOCKED_FIELDS:
+                if key in fields and fields[key] != report.get(key):
+                    raise DBError(403, f"발행된 보고서는 수정할 수 없습니다 (report_id={report_id})")
+        elif fields.get("status") == "finalized":
+            pdf_path = fields.get("pdf_path", report.get("pdf_path"))
+            snapshot = fields.get("snapshot", report.get("snapshot"))
+            if pdf_path is None or snapshot is None:
+                raise DBError(403, f"PDF가 생성되지 않은 보고서는 발행할 수 없습니다 (report_id={report_id})")
+        report.update(fields)
 
     def get_report_analyses(self, report_id):
         rows = [r for r in self.report_analyses if r["report_id"] == report_id]
