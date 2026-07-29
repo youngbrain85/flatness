@@ -23,11 +23,12 @@ describe('canFinalize (004 트리거 조건과 동일)', () => {
 });
 
 describe('canRegenerate', () => {
-  it('대기·진행 중이면 재생성 요청을 막는다(중복 엔큐 방지)', () => {
-    expect(canRegenerate({ status: 'draft', gen_status: 'queued' })).toBe(false);
+  it('진행 중(processing)이면 재생성 요청을 막는다(중복 엔큐 방지)', () => {
     expect(canRegenerate({ status: 'draft', gen_status: 'processing' })).toBe(false);
   });
-  it('실패·완료 상태의 draft는 재생성할 수 있다', () => {
+  it('queued·실패·완료 상태의 draft는 재생성할 수 있다(코드리뷰 Important I3: 링크·엔큐 실패로 '
+    + 'queued에 갇힌 보고서도 재시도 가능해야 한다 - 중복 엔큐는 23505로 이미 방어됨)', () => {
+    expect(canRegenerate({ status: 'draft', gen_status: 'queued' })).toBe(true);
     expect(canRegenerate({ status: 'draft', gen_status: 'failed' })).toBe(true);
     expect(canRegenerate({ status: 'draft', gen_status: 'done' })).toBe(true);
   });

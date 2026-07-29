@@ -5,6 +5,7 @@ const { supabaseStub, state } = vi.hoisted(() => {
   const state = {
     inserted: null as Record<string, unknown> | null,
     links: [] as Record<string, unknown>[],
+    linkError: null as { message: string } | null,
     rpcCalls: [] as { fn: string; params: unknown }[],
     rpcError: null as { code?: string; message: string } | null,
   };
@@ -20,7 +21,10 @@ const { supabaseStub, state } = vi.hoisted(() => {
         };
       }
       return {
-        async insert(rows: Record<string, unknown>[]) { state.links = rows; return { error: null }; },
+        async insert(rows: Record<string, unknown>[]) {
+          state.links = rows;
+          return { error: state.linkError };
+        },
       };
     },
     async rpc(fn: string, params: unknown) {
@@ -55,6 +59,7 @@ describe('ReportCreateForm', () => {
   beforeEach(() => {
     state.inserted = null;
     state.links = [];
+    state.linkError = null;
     state.rpcCalls = [];
     state.rpcError = null;
     pushMock.mockClear();
@@ -91,11 +96,19 @@ describe('ReportCreateForm', () => {
     expect(state.inserted).toBeNull();
   });
 
-  it('중복 엔큐(23505)는 안내 문구로 바꾼다', async () => {
+  it('중복 엔큐(23505)는 안내 문구로 바꾸되, 보고서 상세로 이동해 재시도 경로를 찾게 한다(I3)', async () => {
     state.rpcError = { code: '23505', message: 'duplicate key' };
     renderForm();
     fireEvent.click(screen.getByRole('button', { name: '보고서 생성' }));
     expect(await screen.findByText(/이미 같은 대상의 작업이/)).toBeInTheDocument();
-    expect(pushMock).not.toHaveBeenCalled();
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith('/reports/r1'));
+  });
+
+  it('포함 분석 링크 저장에 실패해도 이미 생성된 보고서 상세로 이동한다(I3)', async () => {
+    state.linkError = { message: '링크 저장 실패' };
+    renderForm();
+    fireEvent.click(screen.getByRole('button', { name: '보고서 생성' }));
+    expect(await screen.findByText(/포함 분석 저장에 실패했습니다/)).toBeInTheDocument();
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith('/reports/r1'));
   });
 });

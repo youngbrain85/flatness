@@ -53,7 +53,7 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
         </p>
       </div>
 
-      <ReportProgress reportId={r.id} initialStatus={r.gen_status} genError={r.gen_error} />
+      <ReportProgress reportId={r.id} initialStatus={r.gen_status} genError={r.gen_error} reportStatus={r.status} />
       <ReportActions report={{ id: r.id, status: r.status, gen_status: r.gen_status, pdf_path: r.pdf_path }} />
 
       <section>

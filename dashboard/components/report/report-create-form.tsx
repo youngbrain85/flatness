@@ -72,12 +72,20 @@ export function ReportCreateForm({ locationId, locationLabel, candidates }: {
     if (linkError) {
       setBusy(false);
       setError(`포함 분석 저장에 실패했습니다: ${linkError.message}`);
+      // 코드리뷰 Important(I3): 이 시점엔 이미 reports 행이 만들어졌다 - 폼에
+      // 머무르게 하면 사용자가 재시도할 방법을 찾지 못한다(뒤로 가면 방금 만든
+      // 보고서가 유실된 것처럼 보인다). 상세 화면으로 보내면 보고서가 존재한다는
+      // 사실과 재생성 경로(I3 canRegenerate 수정)를 확인할 수 있다.
+      router.push(`/reports/${reportId}`);
       return;
     }
     const enqueued = await enqueueJob(supabase, 'report', { report_id: reportId });
     if (!enqueued.ok) {
       setBusy(false);
       setError(enqueued.message);
+      // 동일한 이유(I3): gen_status='queued'인 채로 잡 등록만 실패해도 상세
+      // 화면의 재생성 버튼으로 복구할 수 있다.
+      router.push(`/reports/${reportId}`);
       return;
     }
     router.push(`/reports/${reportId}`);
