@@ -12,13 +12,25 @@ build-backend = "setuptools.build_meta"
 name = "flatworker"
 version = "0.1.0"
 requires-python = ">=3.11"
-dependencies = ["httpx>=0.27", "python-dotenv>=1.0", "numpy>=1.26"]
+dependencies = [
+  "httpx>=0.27",
+  "python-dotenv>=1.0",
+  "numpy>=1.26",
+  # P4 보고서: 히스토그램(matplotlib은 엔진에도 있으나 이 패키지가 직접 import하므로 명시),
+  # HTML 템플릿(jinja2), PDF 렌더(playwright - 브라우저 바이너리는 별도 설치)
+  "matplotlib>=3.8",
+  "jinja2>=3.1",
+  "playwright>=1.40",
+]
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]
 
 [tool.setuptools.packages.find]
 include = ["flatworker*"]
+
+[tool.setuptools.package-data]
+flatworker = ["report/templates/*.j2"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
