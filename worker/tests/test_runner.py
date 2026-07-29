@@ -32,7 +32,10 @@ def test_runner_handler_exception_fails_job(tmp_path):
 
 def test_runner_unknown_type_fails_terminally(tmp_path):
     db = FakeDB()
-    jid = db.enqueue_job("report", {"report_id": "r1"})  # P4 전이라 핸들러 없음
+    # handlers={}로 기본 핸들러 맵을 우회하므로 실제 등록 여부와 무관하게 "핸들러
+    # 없음" 경로를 시험한다('report'는 P4 완료 후 _DEFAULT_HANDLERS에 있지만 여기선
+    # 빈 맵을 넘겨 무관하게 만든다).
+    jid = db.enqueue_job("report", {"report_id": "r1"})
     run_loop(db, _cfg(tmp_path), handlers={}, max_iterations=1)
     assert "핸들러 없음" in db.jobs[jid]["error"]
 

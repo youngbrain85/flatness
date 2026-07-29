@@ -34,3 +34,5 @@ flatworker = ["report/templates/*.j2"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "-m 'not browser'"
+markers = ["browser: 실제 Chromium 실행이 필요한 PDF 렌더 스모크 (기본 제외, -m browser 로 실행)"]

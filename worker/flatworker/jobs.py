@@ -1,7 +1,7 @@
-"""잡 핸들러 3종 (precheck/analyze/import) — 스펙 §5.1.7, §5.4.
+"""잡 핸들러 4종 (precheck/analyze/import/report) — 스펙 §5.1.7, §5.4, §8.
 
-analyze/import는 실패 시 예외를 그대로 전파한다: 잡 상태 전이(재시도/최종 실패)는
-runner(Task 6)가 `fail_job`으로 처리하는 책임이라 이 모듈에서 잡지 않는다.
+analyze/import/report는 실패 시 예외를 그대로 전파한다: 잡 상태 전이(재시도/최종
+실패)는 runner가 `fail_job`으로 처리하는 책임이라 이 모듈에서 잡지 않는다.
 """
 from pathlib import Path
 
@@ -10,6 +10,10 @@ from flatness.core.pipeline import analyze_floor, analyze_wall
 from flatness.importer.colab_csv import import_colab_csv
 
 from flatworker.artifacts import artifacts_dir
+from flatworker.report.assets import build_assets, report_dir
+from flatworker.report.context import load_report_context
+from flatworker.report.html import render_html
+from flatworker.report.snapshot import build_snapshot
 
 
 def _to_criterion(row):
@@ -123,3 +127,32 @@ def handle_import(db, cfg, payload):
     path = _resolve_raw_path(cfg, scan)
     stats = import_colab_csv(path, crit, u_mm, out_dir)
     _finalize(db, analysis_id, analysis["scan_id"], stats, out_dir)
+
+
+def handle_report(db, cfg, payload, renderer=None):
+    """보고서 잡 (스펙 §8): 컨텍스트 로드 -> 자산 복사 -> snapshot -> HTML -> PDF -> 갱신.
+
+    `renderer`는 테스트가 FakeRenderer를 넣기 위한 이음매다. 기본값은 Playwright
+    렌더러이며, playwright 패키지가 없는 환경에서도 이 모듈을 import할 수 있도록
+    함수 안에서 지연 import한다.
+
+    실패는 예외를 그대로 올린다 — 잡 상태 전이(재시도/최종 실패)와 reports.gen_status
+    반영은 runner의 fail_job(=fn_job_fail) 책임이다(analyze/import와 동일 규약).
+    """
+    report_id = payload["report_id"]
+    ctx = load_report_context(db, cfg, report_id)
+    out_dir = report_dir(cfg.data_dir, report_id)
+    assets = build_assets(db, cfg, report_id, ctx)
+    snapshot = build_snapshot(ctx, assets)
+    html = render_html(snapshot)
+    if renderer is None:
+        from flatworker.report.renderer import PlaywrightRenderer
+        renderer = PlaywrightRenderer()
+    renderer.render_pdf(html, out_dir, out_dir / "report.pdf")
+    db.update_report(report_id, {
+        "snapshot": snapshot,
+        # 경로 계약: DB에는 버킷-상대 문자열만 (스펙 §6.3)
+        "pdf_path": f"reports/{report_id}/report.pdf",
+        "gen_status": "done",
+        "gen_error": None,
+    })

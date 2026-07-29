@@ -7,12 +7,13 @@ SIGINT는 플래그 방식으로 처리한다: 신호가 와도 즉시 멈추지
 import signal
 import time
 
-from flatworker.jobs import handle_precheck, handle_analyze, handle_import
+from flatworker.jobs import handle_precheck, handle_analyze, handle_import, handle_report
 
 _DEFAULT_HANDLERS = {
     "precheck": handle_precheck,
     "analyze": handle_analyze,
     "import": handle_import,
+    "report": handle_report,
 }
 
 
@@ -20,10 +21,10 @@ def run_loop(db, cfg, handlers=None, max_iterations=None):
     """claim -> dispatch -> complete/fail 반복.
 
     `max_iterations`는 테스트 편의용 — None이면 SIGINT(또는 프로세스 종료)까지
-    무한 반복한다. 알 수 없는 잡 타입(예: P4 전 'report')은 재시도해도 의미가
-    없지만, 즉시 최종 실패로 강제 전이시키지 않고 `fail_job`을 그대로 호출한다
-    (attempts가 max_attempts에 이르면 fn_job_fail 시맨틱상 자연스럽게 종결되므로
-    재시도가 되어도 무해하다 — error 메시지에 원인만 명시).
+    무한 반복한다. 알 수 없는 잡 타입은 재시도해도 의미가 없지만, 즉시 최종 실패로
+    강제 전이시키지 않고 `fail_job`을 그대로 호출한다 (attempts가 max_attempts에
+    이르면 fn_job_fail 시맨틱상 자연스럽게 종결되므로 재시도가 되어도 무해하다 —
+    error 메시지에 원인만 명시).
     """
     if handlers is None:
         handlers = _DEFAULT_HANDLERS
