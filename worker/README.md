@@ -77,3 +77,38 @@ tests/
   test_runner.py        폴링 루프(디스패치/예외 처리)
   test_e2e_fake.py       엔큐 -> 러너 -> 완료 -> 산출물까지 이어지는 통합 스모크
 ```
+
+## PDF 보고서 잡 (P4)
+
+`report` 타입 잡은 대시보드가 `fn_enqueue_job('report', {"report_id": "..."})`로 등록하며,
+워커가 다음 순서로 처리한다:
+
+1. `reports` + `report_analyses` + `analyses` + `scans` + `locations` + `sites` + `photos` 로드
+2. 히트맵·3D 프리뷰·현장 사진을 `data/reports/{report_id}/assets/`로 복사하고 히스토그램 생성
+3. `reports.snapshot`(jsonb, `report-snapshot-v1`) 구성 - 발행 후 원본이 바뀌거나 삭제돼도
+   이 스냅샷과 복사된 자산만으로 동일 PDF가 재현된다
+4. Jinja2 HTML -> Playwright Chromium -> `data/reports/{report_id}/report.pdf`
+5. `reports`를 `pdf_path`·`snapshot`·`gen_status='done'`으로 갱신
+
+### 추가 설치
+
+```bash
+pip install -e ../engine && pip install -e .   # jinja2·matplotlib·playwright 포함
+python -m playwright install chromium           # 브라우저 바이너리가 없을 때만
+```
+
+Windows 개발 PC에는 Chromium 캐시(`~/AppData/Local/ms-playwright/`)가 이미 있는 경우가 많다.
+`pip install playwright` 후 렌더가 버전 불일치로 실패할 때만 위 `playwright install`을 실행한다.
+
+### 한글 폰트
+
+보고서 템플릿은 `'Noto Sans KR', 'Malgun Gothic', sans-serif` 폴백 체인을 쓴다. Windows에는
+두 폰트가 모두 있어 그대로 렌더된다. **정식 배포(리눅스 컨테이너)에서는 컨테이너 이미지에
+Noto Sans KR을 설치해야 한다** - 폰트가 없으면 한글이 네모 상자로 출력된다.
+
+### 테스트
+
+```bash
+PYTHONPATH=../engine python -m pytest            # 기본(실제 브라우저 실행 제외)
+PYTHONPATH=../engine python -m pytest -m browser # 실제 Chromium 렌더 스모크 1건
+```

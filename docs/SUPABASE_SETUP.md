@@ -7,8 +7,9 @@
 ## 0. 준비물
 
 - Supabase 계정(없으면 1단계에서 가입)
-- 이 저장소 클론본(마이그레이션 SQL 파일 2개: `supabase/migrations/001_schema.sql`,
-  `supabase/migrations/002_functions_seed.sql`)
+- 이 저장소 클론본(마이그레이션 SQL 파일 4개: `supabase/migrations/001_schema.sql`,
+  `supabase/migrations/002_functions_seed.sql`, `supabase/migrations/003_dashboard_support.sql`,
+  `supabase/migrations/004_report_support.sql`)
 - Python 3.11+ (워커 실행용, 5단계에서 사용)
 
 ## 1. Supabase 프로젝트 생성 — 사용자가 직접 수행

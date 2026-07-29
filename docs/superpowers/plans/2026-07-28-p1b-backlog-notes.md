@@ -52,7 +52,7 @@
 
 ## P3 최종 리뷰 이연 티켓 (2026-07-28)
 
-30. **fn_reap_stuck_jobs 잡 타입 확장**: 003이 fn_job_claim·fn_job_fail을 `in ('analyze','import')`로 확장했으나 fn_reap_stuck_jobs(002)의 2단계는 여전히 `j.type = 'analyze'`만 검사. import 잡이 워커 크래시로 리핑되면 연결 analyses.status가 'processing'에 일시 고착(재클레임·완료 시 자가치유되므로 비차단). worker/tests/fake_db.py의 대응 로직도 함께 확장할 것
+[해결: P4] 30. **fn_reap_stuck_jobs 잡 타입 확장**: 003이 fn_job_claim·fn_job_fail을 `in ('analyze','import')`로 확장했으나 fn_reap_stuck_jobs(002)의 2단계는 여전히 `j.type = 'analyze'`만 검사. import 잡이 워커 크래시로 리핑되면 연결 analyses.status가 'processing'에 일시 고착(재클레임·완료 시 자가치유되므로 비차단). worker/tests/fake_db.py의 대응 로직도 함께 확장할 것
 31. 대시보드 테스트 스텁이 Supabase 체인 형태에 결합(공유 스텁 헬퍼로 추출 권고), login-form onSubmit 커버리지 0
 32. 사진 Storage 업로드 후 photos insert 실패 시 고아 객체 정리 없음(정식 단계에서 정리 잡과 함께)
 33. 업로드가 파일 전체를 메모리에 적재(현재는 1 GiB 상한·content-length 선검사로 방어) - 정식 단계에서 스트리밍 저장으로 전환
@@ -65,3 +65,19 @@
 ## 기록용 이연 minor (비차단)
 
 - test_ply_roundtrip 이름 과장(파일 생성 확인 수준), severity 동률 타이브레이크 주석 부재, load_criteria 커스텀 경로 with 미사용, test_criteria 일부 주석 기호 위주, iter_chunks 지연 검증 특성, _ORDER 밖 등급 일반 ValueError, CLI 스크리닝 문구가 스펙 리터럴과 괄호만큼 상이(의미 동일)
+
+## P4 이연 티켓 (2026-07-29)
+
+36. **측정위치 단위 사진 업로더** — 스펙 §8 ④의 "현장 사진"은 측정위치 스코프지만 현재 UI는
+    site·scan 사진만 등록할 수 있어, 보고서는 포함 분석의 스캔 사진 합집합을 사용한다.
+    location 타깃 업로더를 추가하면 스펙 문구와 완전히 일치한다
+37. **컨테이너 한글 폰트 내장** — 보고서 템플릿의 폰트 폴백은 Windows 개발 PC에 설치된
+    Noto Sans KR·맑은 고딕에 의존한다. 리눅스 컨테이너 배포 시 이미지에 Noto Sans KR을
+    설치하지 않으면 한글이 네모 상자로 출력된다(스펙 §8 "한글 폰트 컨테이너 내장")
+38. **보고서 자산 정리 잡** — 스펙 §6.2는 scans/analyses soft delete 시 Storage 정리 잡을
+    예정했고 finalized 보고서 자산은 정리 대상에서 제외해야 한다. draft 보고서를 삭제하는 UI와
+    `reports/{id}/` 정리 잡은 미구현
+39. **E2E(Playwright) 자동화** — 업로드부터 보고서 PDF까지의 무인 통과 검증(스펙 §10.3·§12)은
+    여전히 수동 체크리스트다
+40. **보고서 HTML 미리보기** — 스펙 §3.2.⑥의 "HTML 미리보기"는 PDF 미리보기(iframe)로 대체했다.
+    PDF 생성 전 단계에서 HTML을 먼저 보여주려면 워커가 HTML만 만드는 중간 상태가 필요하다
