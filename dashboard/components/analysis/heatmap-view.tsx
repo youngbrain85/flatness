@@ -37,8 +37,16 @@ export function HeatmapView({ surface, cells, walls, zones }: {
 
   function onClick(e: React.MouseEvent<HTMLCanvasElement>) {
     if (!geom) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    setSelected(cellAt(geom, shown, cellPx, e.clientX - rect.left, e.clientY - rect.top));
+    const canvas = e.currentTarget;
+    const rect = canvas.getBoundingClientRect();
+    // 리뷰 Important #2: className="max-w-full"로 캔버스가 CSS상 축소되면
+    // canvas.width(실 픽셀)와 rect.width(화면 픽셀)가 달라져 클릭 좌표가 어긋난다.
+    // 화면 좌표를 실 픽셀 좌표로 환산해 히트테스트한다(rect가 0이면 보정하지 않는다).
+    const sx = rect.width ? canvas.width / rect.width : 1;
+    const sy = rect.height ? canvas.height / rect.height : 1;
+    const px = (e.clientX - rect.left) * sx;
+    const py = (e.clientY - rect.top) * sy;
+    setSelected(cellAt(geom, shown, cellPx, px, py));
   }
 
   const zoneOf = (zoneId: number | null) => zones.find((z) => z.zone_id === zoneId);

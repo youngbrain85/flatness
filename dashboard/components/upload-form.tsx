@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/client';
 import { enqueueJob } from '@/lib/domain/jobs';
 import { LINEAGE_LABEL, SURFACE_LABEL } from '@/lib/domain/labels';
 import type { CriteriaRow, Lineage, LocationRow, SiteRow, Surface } from '@/lib/domain/types';
-import { validateScanFile } from '@/lib/upload/validate';
+import { MAX_UPLOAD_BYTES, validateScanFile } from '@/lib/upload/validate';
 
 interface Props {
   sites: SiteRow[];
@@ -62,6 +62,11 @@ export function UploadForm({ sites, locations, userId, initialSiteId, initialLoc
     const v = validateScanFile(file.name);
     if (!v) { setError('지원 포맷: ply, las, laz, xyz, txt, csv, pts'); return; }
     if (mode === 'import' && v.ext !== 'csv') { setError('기존 결과 가져오기는 CSV 파일만 지원합니다.'); return; }
+    if (file.size > MAX_UPLOAD_BYTES) {
+      // 리뷰 Important #3: 서버 왕복 전에 미리 걸러 대용량 파일 전송 대기를 없앤다(서버도 동일 상한을 재검증)
+      setError(`파일이 너무 큽니다(최대 ${MAX_UPLOAD_BYTES / (1024 * 1024 * 1024)}GiB). 더 작은 파일로 나눠서 시도하세요.`);
+      return;
+    }
     setBusy(true);
     const supabase = createClient();
     try {
@@ -97,7 +102,9 @@ export function UploadForm({ sites, locations, userId, initialSiteId, initialLoc
         .eq('id', scan.id);
       if (updErr) throw new Error(updErr.message);
 
-      // 4) 잡 등록
+      // 4) 잡 등록 (리뷰 Important #1: 실패 시 화면에 오류를 남기고 이동하지 않는다 -
+      // unit-confirm-form.tsx와 동일 패턴. 이전에는 setError 직후 무조건 router.push가
+      // 실행돼 컴포넌트가 언마운트되며 오류 메시지가 사용자 눈에 보이기 전에 사라졌다)
       if (mode === 'import') {
         const { data: analysis, error: aErr } = await supabase.from('analyses').insert({
           scan_id: scan.id, surface: 'floor', criteria_id: criteriaId,
@@ -105,10 +112,10 @@ export function UploadForm({ sites, locations, userId, initialSiteId, initialLoc
         }).select('id').single();
         if (aErr || !analysis) throw new Error(aErr?.message ?? '분석 등록 실패');
         const r = await enqueueJob(supabase, 'import', { analysis_id: analysis.id });
-        if (!r.ok) { setError(r.message); }
+        if (!r.ok) { setError(r.message); setBusy(false); return; }
       } else {
         const r = await enqueueJob(supabase, 'precheck', { scan_id: scan.id });
-        if (!r.ok) { setError(r.message); }
+        if (!r.ok) { setError(r.message); setBusy(false); return; }
       }
       router.push(`/scans/${scan.id}`);
     } catch (err) {

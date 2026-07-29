@@ -13,3 +13,12 @@ export const UNIT_OPTIONS = [
   { value: 0.01, label: 'cm(센티미터)' },
   { value: 0.001, label: 'mm(밀리미터)' },
 ];
+
+// 업로드 크기 상한(리뷰 Important #3): 라이다 원본은 수백 MB~GB급이지만, 현재
+// app/api/upload/route.ts가 파일 전체를 메모리에 버퍼링하므로 데모 서버 보호를 위해
+// 1GiB로 제한한다. 스트리밍 저장으로 상한 자체를 없애는 건 이번 범위 밖(백로그).
+export const MAX_UPLOAD_BYTES = 1024 * 1024 * 1024; // 1 GiB
+
+export function isUploadSizeAllowed(size: number): boolean {
+  return size <= MAX_UPLOAD_BYTES;
+}
