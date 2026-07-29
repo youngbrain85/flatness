@@ -12,15 +12,9 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
-}
+/* 리뷰 Important 4: 아래에 있던 @media (prefers-color-scheme: dark)와 body 규칙은
+   레이어 밖(unlayered)이라 캐스케이드상 Tailwind v4 @layer utilities 안의
+   .bg-slate-50/.text-slate-900보다 항상 우선했다 - OS가 다크 테마면 bg-white
+   카드 위에 밝은 회색 글자가 상속돼 판독 불가가 됐다. 앱은 이미 Tailwind
+   클래스로 라이트 팔레트를 확정했으므로 제거한다(폰트 지정은
+   app/layout.tsx의 body className으로 이관). */

@@ -40,3 +40,24 @@ describe('useRowStatus 언마운트 정리 (리뷰 Minor)', () => {
     clearIntervalSpy.mockRestore();
   });
 });
+
+describe('useRowStatus 폴링 정지 (저비용 개선 m2)', () => {
+  it('폴링으로 종결 상태(done/failed 등)를 감지하면 이후 폴링 요청을 멈춘다', async () => {
+    supabaseStub.from.mockClear();
+    supabaseStub.from.mockImplementationOnce(() => ({
+      select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { status: 'done' } }) }) }),
+    }));
+    vi.useFakeTimers();
+
+    const { unmount } = render(createElement(Harness, { table: 'analyses', id: 'a1', initial: 'processing' }));
+
+    await vi.advanceTimersByTimeAsync(5000); // 1차 폴링: status='done' 확인 -> clearInterval
+    expect(supabaseStub.from).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(15000); // 정지됐다면 이후 틱에서 추가 폴링 요청이 없어야 함
+    expect(supabaseStub.from).toHaveBeenCalledTimes(1);
+
+    unmount();
+    vi.useRealTimers();
+  });
+});

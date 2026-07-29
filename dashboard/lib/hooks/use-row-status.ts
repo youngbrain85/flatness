@@ -4,6 +4,11 @@
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 
+// 저비용 개선 m2: 종결 상태에 도달한 뒤에도 5초 폴링이 계속되면 Supabase Free
+// 요청 한도를 무의미하게 소진한다 - scans(ready/archived/failed)·analyses(done/failed)
+// 양쪽의 종결 상태를 합쳐 감지되는 즉시 폴링 타이머를 멈춘다.
+const TERMINAL_STATUSES = new Set(['ready', 'archived', 'failed', 'done']);
+
 export function useRowStatus<T extends string>(
   table: 'scans' | 'analyses',
   id: string,
@@ -23,7 +28,10 @@ export function useRowStatus<T extends string>(
       .subscribe();
     const timer = setInterval(async () => {
       const { data } = await supabase.from(table).select('status').eq('id', id).maybeSingle();
-      if (data) setStatus(data.status as T);
+      if (data) {
+        setStatus(data.status as T);
+        if (TERMINAL_STATUSES.has(data.status)) clearInterval(timer);
+      }
     }, 5000);
     return () => {
       supabase.removeChannel(channel);

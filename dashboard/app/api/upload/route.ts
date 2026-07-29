@@ -14,6 +14,18 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: '로그인이 필요합니다' }, { status: 401 });
 
+  // 저비용 개선 m1: req.formData()는 바디 전체를 메모리에 적재한다 - 그 전에
+  // Content-Length 헤더로 먼저 걸러내면 상한을 넘는 요청은 바디를 읽지도 않고 차단할 수
+  // 있다(아래 file.size 검사는 헤더가 없거나 신뢰할 수 없는 경우의 안전망으로 유지).
+  const contentLength = Number(req.headers.get('content-length'));
+  if (Number.isFinite(contentLength) && contentLength > 0 && !isUploadSizeAllowed(contentLength)) {
+    const maxGiB = MAX_UPLOAD_BYTES / (1024 * 1024 * 1024);
+    return NextResponse.json(
+      { error: `파일이 너무 큽니다(최대 ${maxGiB}GiB). 더 작은 파일로 나눠서 시도하세요.` },
+      { status: 413 },
+    );
+  }
+
   const form = await req.formData();
   const file = form.get('file');
   const siteId = form.get('site_id');

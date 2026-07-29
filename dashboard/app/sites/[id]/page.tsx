@@ -6,6 +6,7 @@ import { LocationTree, type ScanWithCurrent } from '@/components/location-tree';
 import { NewLocationForm } from '@/components/new-location-form';
 import { PhotoGallery } from '@/components/photo-gallery';
 import { RefreshOnUpload } from '@/components/refresh-on-upload';
+import { SupabaseErrorNotice } from '@/components/supabase-error';
 import type { AnalysisStatus, LocationRow, PhotoRow, ScanRow, SiteRow, Verdict } from '@/lib/domain/types';
 
 export const dynamic = 'force-dynamic';
@@ -13,23 +14,42 @@ export const dynamic = 'force-dynamic';
 export default async function SitePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = await createClient();
-  const { data: site } = await supabase.from('sites').select('*').eq('id', id).maybeSingle();
+  const { data: site, error: siteError } = await supabase.from('sites').select('*').eq('id', id).maybeSingle();
+  // 저비용 개선(현장 상세 무음 에러): siteError를 확인하지 않으면 연결 실패도
+  // "현장 없음"(notFound)으로 오인된다 - 홈(app/page.tsx)의 SupabaseErrorNotice 패턴을 적용
+  if (siteError) {
+    return <main className="mx-auto max-w-6xl p-6"><SupabaseErrorNotice message={siteError.message} /></main>;
+  }
   if (!site) notFound();
   const [locationsRes, photosRes] = await Promise.all([
     supabase.from('locations').select('*').eq('site_id', id),
     supabase.from('photos').select('*').eq('site_id', id).order('created_at', { ascending: false }),
   ]);
+  // 아래 `?? []`가 쿼리 실패를 조용히 흡수해 "측정위치가 없습니다"로 오인시키지
+  // 않도록, 데이터를 비우기 전에 에러부터 확인한다.
+  const parallelError = locationsRes.error ?? photosRes.error;
+  if (parallelError) {
+    return <main className="mx-auto max-w-6xl p-6"><SupabaseErrorNotice message={parallelError.message} /></main>;
+  }
   const locations = (locationsRes.data ?? []) as LocationRow[];
   const locationIds = locations.map((l) => l.id);
-  const { data: scans } = locationIds.length
+  const scansRes = locationIds.length
     ? await supabase.from('scans').select('*').in('location_id', locationIds)
         .is('deleted_at', null).order('scanned_at', { ascending: false })
-    : { data: [] as ScanRow[] };
+    : { data: [] as ScanRow[], error: null };
+  if (scansRes.error) {
+    return <main className="mx-auto max-w-6xl p-6"><SupabaseErrorNotice message={scansRes.error.message} /></main>;
+  }
+  const scans = scansRes.data;
   const scanIds = (scans ?? []).map((s) => s.id);
-  const { data: currents } = scanIds.length
+  const currentsRes = scanIds.length
     ? await supabase.from('analyses').select('id, scan_id, status, overall_verdict')
         .in('scan_id', scanIds).eq('is_current', true).is('deleted_at', null)
-    : { data: [] };
+    : { data: [], error: null };
+  if (currentsRes.error) {
+    return <main className="mx-auto max-w-6xl p-6"><SupabaseErrorNotice message={currentsRes.error.message} /></main>;
+  }
+  const currents = currentsRes.data;
   const currentByScan = new Map(
     (currents ?? []).map((a) => [a.scan_id as string, {
       id: a.id as string, status: a.status as AnalysisStatus,
