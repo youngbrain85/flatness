@@ -18,6 +18,16 @@ describe('resolveDataPath (경로 탈출 차단)', () => {
     expect(resolveDataPath(DATA, ['artifacts', 'a\\b', 'x.png'])).toBeNull();
     expect(resolveDataPath(DATA, ['artifacts', '', 'x.png'])).toBeNull();
   });
+  it('세그먼트에 임베드된 트래버설(인코딩 슬래시 우회)을 거부한다', () => {
+    // Next.js는 %2f를 세그먼트 경계로 취급하지 않고 디코딩만 하므로
+    // params.path에 '../secret.txt' 같은 단일 세그먼트가 들어올 수 있다(리뷰 Critical)
+    expect(resolveDataPath(DATA, ['artifacts', '../secret.txt'])).toBeNull();
+    expect(resolveDataPath(DATA, ['artifacts', 'a/b.txt'])).toBeNull(); // 슬래시 포함 세그먼트
+    expect(resolveDataPath(DATA, ['artifacts', 'a\0b.txt'])).toBeNull(); // NUL 포함
+    expect(resolveDataPath(DATA, ['artifacts', 'abc', 'stats.json'])).toBe(
+      path.join(DATA, 'artifacts', 'abc', 'stats.json'),
+    ); // 정상 케이스는 그대로 통과
+  });
 });
 
 describe('contentTypeFor', () => {
