@@ -1,36 +1,92 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# P3 대시보드 (평활도 분석 시스템)
 
-## Getting Started
+## 1. 개요
 
-First, run the development server:
+현장 바닥·벽면 평활도 스캔(모바일 LiDAR 점군)을 업로드하고, 로컬 파이썬 워커(`worker/`)가
+처리한 분석 결과(히트맵·판정·통계)를 조회·확인하는 Next.js 대시보드다. 로그인한 사용자가
+현장·측정위치를 등록하고, 스캔 파일을 올리고, 진행 상태를 지켜보고, 결과 화면에서 등급
+분포·최악 지점·경고를 확인하고, 판정 기준(criteria)과 측정 불확도(U) 설정을 볼 수 있다.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+**포지셔닝**: 본 시스템은 합격/불합격을 확정하는 공식 검측 도구가 아니라 "스크리닝
+도구"다. 모바일 LiDAR의 측정 오차가 시방서 허용오차와 같은 자릿수이거나 이를 초과할 수
+있어, 모든 분석 결과에는 측정 불확도(U)와 "본 결과는 스크리닝이며 공식 검측(실물
+직선자·레벨 측량)을 대체하지 않습니다" 문구가 포함된다. 실 시공 판정에는 반드시 공식
+검측을 병행해야 한다.
+
+## 2. 사전 준비
+
+1. **Supabase 프로젝트 생성 + 마이그레이션 001/002/003 실행** — 절차는
+   [`../docs/SUPABASE_SETUP.md`](../docs/SUPABASE_SETUP.md)를 그대로 따른다(가입부터
+   API 키 발급까지 약 15분, Free 티어 범위 내 0원).
+2. **테스트 계정 생성** — Supabase 대시보드 > **Authentication** > **Add user**에서
+   이메일·비밀번호를 입력하고 **Auto Confirm User**를 체크한다(이메일 인증 절차를 건너뛰고
+   바로 로그인 가능한 계정이 만들어진다). 이 대시보드는 자체 회원가입 화면이 없다 — 로그인
+   화면만 제공하므로 계정은 Supabase 쪽에서 미리 만들어 둔다.
+3. **워커 실행** — 스캔을 실제로 분석하려면 로컬 파이썬 워커가 떠 있어야 한다. 설치·실행
+   방법은 [`../worker/README.md`](../worker/README.md) 참고. 워커 없이도 로그인·현장
+   등록·업로드까지는 가능하지만 분석은 `대기 중`에서 멈춘다.
+
+## 3. 환경변수
+
+`.env.example`을 복사해 `.env.local`을 만든다(`.env.local`은 `.gitignore`에 등록되어
+있어 커밋되지 않는다).
+
+```
+cp .env.example .env.local
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+| 변수 | 설명 |
+|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase 프로젝트 URL(`https://<project-ref>.supabase.co`). Settings > API에서 확인 |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | anon(public) key. 같은 화면에서 확인. **service_role 키는 절대 넣지 않는다**(RLS 우회) |
+| `DATA_DIR` | 워커 산출물(원본 스캔·분석 결과물)이 쌓이는 로컬 디렉터리. **워커 `.env`의 `DATA_DIR`과 동일한 디렉터리를 가리켜야 한다**(다르면 대시보드가 워커가 쓴 파일을 찾지 못한다). 기본값 `../data` |
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 4. 실행
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```
+npm install
+npm run dev     # http://localhost:3000
+npm run test    # vitest
+npm run build   # 프로덕션 빌드
+```
 
-## Learn More
+## 5. 데모 시나리오 (수동 검증 절차)
 
-To learn more about Next.js, take a look at the following resources:
+1. **로그인** — `/login`에서 2번에서 만든 테스트 계정으로 로그인한다. 첫 로그인 시
+   `profiles` 행이 자동 생성된다.
+2. **새 현장** — 홈에서 "새 현장" 생성(이름·주소·메모).
+3. **측정위치 추가** — 현장 상세에서 동/층/실 정보로 측정위치를 추가한다.
+4. **스캔 업로드** — 아래 6번 명령으로 합성 PLY 파일을 만든 뒤 업로드 화면에서 해당
+   측정위치에 업로드한다. 업로드 폼에 기준 후보 목록이 뜨고 `is_default=true` 기준이
+   기본 선택되어 있는지 확인한다.
+5. **단위 확인** — 업로드 직후 상태가 `단위 확인 대기`면 스캔 상세에서 단위(m/cm/mm)를
+   선택해 확정한다. m을 선택해야 6번 합성 파일(미터 단위 좌표)이 올바르게 분석된다.
+6. **분석 진행 표시** — 워커가 실행 중이면 상태가 `분석 대기 중` -> `분석 중` -> `완료`로
+   자동 갱신되는지 지켜본다(Realtime 구독).
+7. **결과 화면** — 분석 완료 후 결과 화면(히트맵 캔버스 · 판정 패널 · 결과표 3분할)을
+   확인하고, 히트맵 셀을 클릭해 상세 정보가 뜨는지 확인한다.
+8. **사진 업로드** — 현장 또는 측정위치에 사진을 올리고 갤러리에 표시되는지 확인한다.
+9. **설정 확인** — `/settings`에서 프로필 이름 저장, 판정 기준 목록·활성 토글, 측정
+   불확도 U 값을 확인한다.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### 6. 합성 테스트 파일 생성
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+엔진 테스트 픽스처(`engine/tests/fixtures/synthetic.py`)를 재사용해 6x6m 바닥에 10mm
+함몰이 있는 합성 PLY를 만든다. **저장소 루트**에서 실행한다.
 
-## Deploy on Vercel
+```bash
+python -c "import importlib.util, pathlib; p = pathlib.Path('engine/tests/fixtures/synthetic.py'); spec = importlib.util.spec_from_file_location('syn', p); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m); pts = m.add_bump(m.flat_floor(size=(6.0, 6.0), spacing=0.02), (2.0, 2.0), 0.3, -0.010); m.write_binary_ply(pts, pathlib.Path('demo_floor.ply')); print('demo_floor.ply 생성(6x6m, 함몰 10mm)')"
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+생성된 `demo_floor.ply`를 위 5번 업로드 단계에서 사용한다.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## 7. 알려진 데모 제약
+
+다음은 이 데모 범위에서 의도적으로 제외되었다(P4/P5 또는 정식 단계에서 다룬다).
+
+- 보고서 생성 화면·PDF 산출(P4)
+- 인터랙티브 3D 뷰어(엔진이 아직 `viewer.bin`을 산출하지 않음)
+- 수평도(레벨) 섹션 (`stats.json` 계약에 아직 관련 지표가 없음)
+- 히트맵 셀 클릭 시 단면 프로파일 상세(엔진이 프로파일을 산출하지 않음)
+- 판정 기준 신설·버전 개정·현장별 재정의 생성 UI, 사용자 관리, E2E(Playwright) 자동화
+- 분석 실패 시 상세 사유는 화면에 노출되지 않는다 - 워커 로그를 확인한다.
