@@ -50,6 +50,14 @@
 28. 벽 루프 render_heatmap이 try 밖(비-ValueError 렌더 실패 시 전체 중단 가능), import-colab의 벽 기준 거부 문구가 "알 수 없는 기준"으로 부정확
 29. **P2 이연**: SupabaseRest.set_current_analysis 2단계 PATCH 비원자성(데모 단일 워커라 수용, 정식 배포 시 단일 RPC로 원자화)
 
+## P3 최종 리뷰 이연 티켓 (2026-07-28)
+
+30. **fn_reap_stuck_jobs 잡 타입 확장**: 003이 fn_job_claim·fn_job_fail을 `in ('analyze','import')`로 확장했으나 fn_reap_stuck_jobs(002)의 2단계는 여전히 `j.type = 'analyze'`만 검사. import 잡이 워커 크래시로 리핑되면 연결 analyses.status가 'processing'에 일시 고착(재클레임·완료 시 자가치유되므로 비차단). worker/tests/fake_db.py의 대응 로직도 함께 확장할 것
+31. 대시보드 테스트 스텁이 Supabase 체인 형태에 결합(공유 스텁 헬퍼로 추출 권고), login-form onSubmit 커버리지 0
+32. 사진 Storage 업로드 후 photos insert 실패 시 고아 객체 정리 없음(정식 단계에서 정리 잡과 함께)
+33. 업로드가 파일 전체를 메모리에 적재(현재는 1 GiB 상한·content-length 선검사로 방어) - 정식 단계에서 스트리밍 저장으로 전환
+34. app/error.tsx·loading.tsx·not-found.tsx 부재(서버 컴포넌트 예외 시 Next 기본 화면), 로그인 화면에도 전역 Nav 렌더, verdict-panel이 stats.worst 좌표 미표시
+
 ## 기록용 이연 minor (비차단)
 
 - test_ply_roundtrip 이름 과장(파일 생성 확인 수준), severity 동률 타이브레이크 주석 부재, load_criteria 커스텀 경로 with 미사용, test_criteria 일부 주석 기호 위주, iter_chunks 지연 검증 특성, _ORDER 밖 등급 일반 ValueError, CLI 스크리닝 문구가 스펙 리터럴과 괄호만큼 상이(의미 동일)
