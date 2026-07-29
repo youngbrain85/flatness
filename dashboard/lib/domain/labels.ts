@@ -1,0 +1,54 @@
+// 표시 매핑 정본 (stats-schema.md 부록 A, 스펙 §9)
+import type { AnalysisStatus, Grade, Lineage, ScanStatus, Surface } from './types';
+
+export const GRADE_LABEL: Record<Grade, string> = {
+  pass: '적합', borderline: '경계', repair: '보수', rework: '재시공', na: '판정 불가',
+};
+
+export const GRADE_COLOR: Record<Grade, string> = {
+  pass: '#2e7d32', borderline: '#f9ab00', repair: '#e8710a', rework: '#c5221f', na: '#9e9e9e',
+};
+
+export const SCAN_STATUS_LABEL: Record<ScanStatus, string> = {
+  uploaded: '업로드됨', awaiting_unit_confirm: '단위 확인 대기',
+  ready: '분석 준비됨', archived: '보관됨', failed: '실패',
+};
+
+export const ANALYSIS_STATUS_LABEL: Record<AnalysisStatus, string> = {
+  queued: '분석 대기 중', processing: '분석 중', done: '완료', failed: '실패',
+};
+
+export const SURFACE_LABEL: Record<Surface, string> = { floor: '바닥', wall: '벽면' };
+
+export const LINEAGE_LABEL: Record<Lineage, string> = {
+  raw: '원시 점군', fused_mesh: '융합 메시', unknown: '모름',
+};
+
+export const ZONE_STATUS_LABEL: Record<'ok' | 'ghost' | 'furniture', string> = {
+  ok: '정상', ghost: '유령층(제외)', furniture: '가구 추정(제외)',
+};
+
+// warnings 코드 사전 (stats-schema.md §5)
+const WARNING_LABEL: Record<string, string> = {
+  ghost_layer_rescan:
+    '이중 표면(유령층) 서브셀이 감지되어 일부가 판정에서 제외되었습니다. 재스캔을 권장합니다.',
+  ghost_zone_excluded: '이중 표면 비율이 높은 구역 전체가 판정에서 제외되었습니다.',
+  furniture_excluded: '가구 상판으로 추정되는 구역이 판정에서 제외되었습니다.',
+  low_coverage: '바닥 인식률이 70% 미만입니다. 스캔 범위·가림을 확인하세요.',
+  reduced_span:
+    '공간 제약으로 기준 스팬보다 짧은 직선자 길이를 사용해 허용치와 불확도를 선형 환산했습니다.',
+  uncertainty_swallows_repair:
+    '측정 불확도가 보수 구간을 잠식합니다(경계 구간이 보수 구간을 흡수). 보수 판정이 나오지 않을 수 있습니다.',
+  plumbness_relative_to_z: '수직도는 스캔 좌표계 z축 기준 상대 지표입니다(중력 보정 아님).',
+};
+
+export function warningLabel(code: string): string {
+  if (WARNING_LABEL[code]) return WARNING_LABEL[code];
+  const m = code.match(/^wall_(\d+)_skipped$/); // 개방 패턴 (stats-schema.md §5)
+  if (m) return `${m[1]}번 벽 후보가 유효 데이터 부족 또는 처리 오류로 판정에서 제외되었습니다.`;
+  return code; // 미지 코드는 원문 노출(숨기는 것보다 안전)
+}
+
+export function fmtMm(v: number | null): string {
+  return v === null ? '-' : v.toFixed(2);
+}
