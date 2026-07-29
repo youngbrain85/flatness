@@ -43,6 +43,10 @@
 실행 중 오류가 나면 대부분 001을 건너뛰었거나 이미 한 번 실행한 마이그레이션을 다시
 실행한 경우(테이블/함수 이미 존재)다. 새 프로젝트에서 순서대로 한 번씩만 실행하면 정상.
 
+3. (P3 대시보드 사용 시) `supabase/migrations/003_dashboard_support.sql` 전체 내용을
+   붙여넣고 **Run**. 사진용 `photos` 버킷과 Realtime 구독 설정이 만들어진다.
+   검증: 좌측 메뉴 **Storage**에 `photos` 버킷이 보이면 정상.
+
 ## 3. 검증 쿼리
 
 SQL Editor에서 새 쿼리로 아래 3개를 순서대로 실행해 스키마·함수·시드 데이터가 제대로
@@ -176,6 +180,13 @@ select * from fn_resolve_criteria(null, 'floor');
 정식 배포(Storage 버킷 전환) 시에도 이 문자열이 그대로 버킷 키가 되므로, DB에 특정
 소비자의 로컬 경로 관례를 섞어 저장하면 두 소비자 중 하나가 항상 깨진다 — 이 규약을
 어기지 않는 것이 버킷 전환의 전제 조건이다.
+
+## 6. 대시보드(P3) 연결
+
+`dashboard/.env.example`을 `dashboard/.env.local`로 복사하고 4단계의 **Project URL**과
+**anon(public) key**를 채운다(service_role 키는 절대 넣지 않는다). `DATA_DIR`은 워커의
+`DATA_DIR`과 같은 디렉터리(기본 `../data`)를 가리켜야 대시보드가 워커 산출물을 읽는다.
+실행: `cd dashboard && npm install && npm run dev` 후 http://localhost:3000
 
 ## 참고
 
