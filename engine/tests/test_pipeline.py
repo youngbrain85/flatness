@@ -124,3 +124,58 @@ def test_meta_version_and_surface(tmp_path):
     assert stats["meta"]["engine_version"] == ENGINE_VERSION
     assert stats["meta"]["surface"] == "floor"
     assert len(stats["meta"]["bbox_min"]) == 3  # 좌표 프레임 앵커 (P2 계약)
+
+
+def test_floor_deviation_map_generated(tmp_path):
+    # 정밀 편차맵은 판정과 무관한 추가 산출물이다 — 파일과 stats 목록이 함께 나와야 한다
+    pts = add_bump(flat_floor(size=(6.0, 6.0), spacing=0.02), (2.0, 2.0), 0.3, -0.010)
+    write_binary_ply(pts, tmp_path / "scan.ply")
+
+    stats = analyze_floor(tmp_path / "scan.ply", 1.0, CRIT, 5.0, tmp_path / "out")
+
+    assert stats["deviation_paths"] == ["deviation.png"]
+    assert (tmp_path / "out" / "deviation.png").stat().st_size > 5000
+    # 판정 결과는 편차맵과 무관하게 종전 그대로다
+    assert 9.0 <= stats["worst"]["value_mm"] <= 11.0
+    import json
+    saved = json.loads((tmp_path / "out" / "stats.json").read_text("utf-8"))
+    assert saved["deviation_paths"] == ["deviation.png"]   # write_outputs 이전에 기록돼야 함
+
+
+def test_wall_deviation_maps_generated_per_wall(tmp_path):
+    pts = np.vstack([flat_floor(size=(4.0, 3.0), spacing=0.02),
+                     flat_wall(length=4.0, height=2.4, spacing=0.02, y0=0.0),
+                     flat_wall(length=3.0, height=2.4, spacing=0.02, axis='y', y0=0.0)])
+    write_binary_ply(pts, tmp_path / "room.ply")
+    crit = load_criteria()["wall-kcs-tilt-other"]
+
+    stats = analyze_wall(tmp_path / "room.ply", 1.0, crit, 8.0, tmp_path / "out")
+
+    assert stats["deviation_paths"] == ["deviation_wall1.png", "deviation_wall2.png"]
+    for name in stats["deviation_paths"]:
+        assert (tmp_path / "out" / name).stat().st_size > 5000
+
+
+def test_wall_deviation_keeps_gap_numbering(tmp_path, monkeypatch):
+    # 스킵된 벽은 히트맵과 마찬가지로 편차맵도 결번이다(파일 존재를 가정하면 안 된다)
+    from flatness.core import pipeline as pl
+    calls = {"n": 0}
+    real = pl.evaluate_wall
+
+    def flaky(grid, criterion, u_mm, cell_m=1.0):
+        calls["n"] += 1
+        if calls["n"] == 2:
+            raise ValueError("주입된 벽 평가 실패")
+        return real(grid, criterion, u_mm, cell_m=cell_m)
+
+    monkeypatch.setattr(pl, "evaluate_wall", flaky)
+    pts = np.vstack([flat_floor(size=(4.0, 3.0), spacing=0.02),
+                     flat_wall(length=4.0, height=2.4, spacing=0.02, y0=0.0),
+                     flat_wall(length=3.0, height=2.4, spacing=0.02, axis='y', y0=0.0)])
+    write_binary_ply(pts, tmp_path / "room.ply")
+    crit = load_criteria()["wall-kcs-tilt-other"]
+
+    stats = pl.analyze_wall(tmp_path / "room.ply", 1.0, crit, 8.0, tmp_path / "out")
+
+    assert stats["deviation_paths"] == ["deviation_wall1.png"]
+    assert not (tmp_path / "out" / "deviation_wall2.png").exists()

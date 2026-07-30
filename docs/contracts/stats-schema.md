@@ -12,7 +12,7 @@
 > `engine/flatness/outputs/stats.py`, `engine/flatness/core/pipeline.py`, `engine/flatness/core/cells.py`,
 > `engine/flatness/core/walls.py`, `engine/flatness/core/zones.py`, `engine/flatness/criteria.py`,
 > `engine/flatness/importer/colab_csv.py`, `engine/flatness/outputs/summary.py`, `engine/flatness/outputs/heatmap.py`,
-> `engine/flatness/outputs/preview3d.py`.
+> `engine/flatness/outputs/preview3d.py`, `engine/flatness/outputs/deviation.py`.
 
 ## 0. 산출 경로 3가지
 
@@ -82,6 +82,7 @@
 | 키 | floor | wall | import | 비고 |
 |---|---|---|---|---|
 | `preview3d_paths` | O | — | — | `analyze_floor`에서만 추가(`core/pipeline.py:60-62`). `string[]`, 0~2개: 잔차가 전부 NaN이면 `[]`, 아니면 `["preview3d.png"]`, 최댓값 지점 1.5m 반경 내 점이 있으면 `["preview3d.png","preview3d_zoom.png"]`(`outputs/preview3d.py:19-49`) |
+| `deviation_paths` | O | O | — | 정밀 편차맵 파일명 목록(`string[]`). floor는 `[]` 또는 `["deviation.png"]`, wall은 `wall_id` 오름차순 `["deviation_wall1.png", ...]`이며 **스킵된 벽은 목록에 없다(결번)**. 잔차 유효값이 하나도 없으면 파일을 만들지 않아 목록에서 빠진다(`core/pipeline.py`·`outputs/deviation.py`). import 경로는 이 키 자체가 없으므로 소비자는 항상 "없으면 빈 목록"으로 다룬다. **판정과 무관한 보조 시각화**이며 등급·수치 필드에 영향을 주지 않는다 |
 | `walls` | — | O | — | `analyze_wall`에서만 추가(`core/pipeline.py:111`). §2.1 참고 |
 | `zones` (내용) | 구역 목록 채움 | 항상 `[]` | 항상 `[]` | 키 자체는 §1의 공통 키. wall/import는 `build_stats(..., zones=None)` 호출이라 `zones or []` → `[]`(`outputs/stats.py:47`) |
 | `meta.scale_to_m` | O | O | — | 사용자가 `--units`로 지정한 배율(예: mm=0.001). import는 CSV 값을 이미 m로 변환해 읽으므로 키 자체가 없음(`importer/colab_csv.py:35,48-49`) |
@@ -212,6 +213,13 @@ w_fit = a * center_x + b * center_y + c   # a,b,c = walls[i].plane_abc
 | `heatmap_wall{n}.png` | wall | 벽별 히트맵. `n`은 `wall_id`와 동일 채번 — **스킵된 벽은 파일 자체가 생성되지 않음(결번)** |
 | `preview3d.png` | floor | 3D 편차 프리뷰(전체) |
 | `preview3d_zoom.png` | floor(조건부) | 최댓값 지점 반경 1.5m 확대. 반경 내 점이 없으면 생성 안 됨 |
+| `deviation.png` | floor | 정밀 편차맵(10cm 해상도, 0mm 중심 대칭 연속 색상). 판정 히트맵과 별개의 보조 시각화 |
+| `deviation_wall{n}.png` | wall | 벽별 정밀 편차맵. `n`은 `wall_id`와 동일 채번 — **스킵된 벽은 파일 자체가 생성되지 않음(결번)** |
+
+> **정밀 편차맵 읽는 법**: 1m 판정 셀·5등급 이산색인 히트맵과 달리 10cm 격자의 원시 편차(mm)를 연속 색상으로 칠한다.
+> 0mm가 중앙(연노랑), 붉을수록 융기(벽은 돌출), 초록일수록 침하(벽은 함몰)이며 스케일은 ±최대 절대편차로 대칭이다.
+> 데이터가 없는 셀은 회색(`#e8e8e8`)이다. **등급 산출에는 관여하지 않는다** — 이 파일이 없어도 stats의 판정 결과는 동일하다.
+> 생성 여부는 §2의 `deviation_paths`로 판별한다(파일 존재를 가정하지 않는다).
 
 `cells.json` / `results.csv` 행 스키마(`outputs/stats.py:6,51-59`):
 

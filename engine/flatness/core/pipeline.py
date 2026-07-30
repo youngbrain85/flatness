@@ -9,9 +9,11 @@ from flatness.core.zones import build_zones
 from flatness.core.cells import evaluate_cells
 from flatness.core.walls import (build_column_grid, detect_wall_lines,
                                  project_wall_points, wall_grid, evaluate_wall)
+from flatness.core.plane import residual_grid
 from flatness.criteria import grade_cells
 from flatness.outputs.stats import build_stats, write_outputs
 from flatness.outputs.heatmap import render_heatmap
+from flatness.outputs.deviation import render_deviation_map
 from flatness.outputs.preview3d import render_preview3d
 from flatness.outputs.summary import generate_summary
 
@@ -60,6 +62,9 @@ def analyze_floor(path, scale_to_m, criterion, u_mm, out_dir,
     stats["preview3d_paths"] = render_preview3d(
         residuals, grid, out_dir,
         worst_xy=None if worst is None else (worst["point_x"], worst["point_y"]))
+    # 정밀 편차맵(판정 무관 보조 시각화): 판정에 쓴 잔차를 10cm로 접어 다시 그린다
+    dev = render_deviation_map(residuals, grid, out_dir / "deviation.png")
+    stats["deviation_paths"] = [dev] if dev else []
     write_outputs(out_dir, stats, cells, grades)
     render_heatmap(cells, grades, out_dir / "heatmap.png", cell_m=cell_m)
     return stats
@@ -75,7 +80,7 @@ def analyze_wall(path, scale_to_m, criterion, u_mm, out_dir,
     if not walls:
         raise ValueError("벽면 미검출: 스캔 범위 또는 파라미터 확인")
     out_dir.mkdir(parents=True, exist_ok=True)
-    all_cells, all_grades, walls_out = [], [], []
+    all_cells, all_grades, walls_out, deviation_names = [], [], [], []
     warns = {"plumbness_relative_to_z"}  # z-up 기준 상대 수직도 고지(스펙 §5.1.8)
     for i, wall in enumerate(walls, 1):
         try:
@@ -91,6 +96,16 @@ def analyze_wall(path, scale_to_m, criterion, u_mm, out_dir,
             continue
         cells = [_dc_replace(c, zone_id=i) for c in cells]
         render_heatmap(cells, grades, out_dir / f"heatmap_wall{i}.png", cell_m=cell_m)
+        # 판정에 쓴 벽 평면 계수(stats에 실리는 6자리 반올림값)로 잔차를 다시 만들어 그린다.
+        # evaluate_wall의 반환 시그니처를 바꾸지 않기 위한 선택 — 반올림 오차는 0.01mm 미만이다.
+        dev = render_deviation_map(
+            residual_grid(grid, tuple(wm["plane_abc"])), grid,
+            out_dir / f"deviation_wall{i}.png",
+            title=f"벽 {i} 정밀 편차맵 (10cm 해상도)",
+            xlabel="벽 길이 u (m)", ylabel="높이 v (m)",
+            cbar_label="편차 (mm), + 돌출 / - 함몰")
+        if dev:
+            deviation_names.append(dev)
         all_cells.extend(cells)
         all_grades.extend(grades)
         warns.update(w)
@@ -109,6 +124,7 @@ def analyze_wall(path, scale_to_m, criterion, u_mm, out_dir,
             "bbox_min": [round(float(v), 4) for v in (info.bbox_min * scale_to_m)]}
     stats = build_stats(all_cells, all_grades, criterion, u_mm, sorted(warns), meta)
     stats["walls"] = walls_out
+    stats["deviation_paths"] = deviation_names
     stats["auto_summary"] = generate_summary(stats)
     write_outputs(out_dir, stats, all_cells, all_grades)
     return stats
