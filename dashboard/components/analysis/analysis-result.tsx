@@ -4,12 +4,13 @@ import { useEffect, useState } from 'react';
 import { artifactUrl } from '@/lib/domain/paths';
 import type { AnalysisRow, CellRow, PhotoRow, ScanRow, Stats } from '@/lib/domain/types';
 import { HeatmapView } from './heatmap-view';
+import { DeviationView } from './deviation-view';
 import { VerdictPanel } from './verdict-panel';
 import { ResultTable } from './result-table';
 import { PhotoGallery } from '@/components/photo-gallery';
 import { RefreshOnUpload } from '@/components/refresh-on-upload';
 
-type Tab = 'heatmap' | 'preview3d' | 'photos';
+type Tab = 'heatmap' | 'deviation' | 'preview3d' | 'photos';
 
 export function AnalysisResult({ analysis, scan, photos }: {
   analysis: AnalysisRow;
@@ -38,13 +39,15 @@ export function AnalysisResult({ analysis, scan, photos }: {
   }, [analysis.artifacts_dir]);
 
   const preview3d = (stats.preview3d_paths ?? []).filter(Boolean);
+  const deviation = (stats.deviation_paths ?? []).filter(Boolean);
 
   return (
     <div className="space-y-4">
       <div className="grid gap-4 lg:grid-cols-3">
         <section className="lg:col-span-2">
           <div className="mb-2 flex gap-2 text-sm">
-            {([['heatmap', '히트맵'], ['preview3d', '3D 프리뷰'], ['photos', '현장 사진']] as const)
+            {([['heatmap', '히트맵'], ['deviation', '정밀 편차맵'],
+               ['preview3d', '3D 프리뷰'], ['photos', '현장 사진']] as const)
               .map(([key, label]) => (
                 <button key={key} onClick={() => setTab(key)}
                   className={`rounded border px-3 py-1 ${tab === key ? 'bg-slate-800 text-white' : 'bg-white'}`}>
@@ -58,6 +61,9 @@ export function AnalysisResult({ analysis, scan, photos }: {
             ) : (
               <p className="text-sm text-slate-500">{cellsError ?? '셀 데이터 로딩 중...'}</p>
             )
+          )}
+          {tab === 'deviation' && (
+            <DeviationView artifactsDir={analysis.artifacts_dir} paths={deviation} />
           )}
           {tab === 'preview3d' && (
             preview3d.length > 0 ? (

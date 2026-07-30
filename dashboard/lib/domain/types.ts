@@ -94,6 +94,7 @@ export interface Stats {
   applied_criteria: AppliedCriteria; warnings: string[]; zones: ZoneInfo[];
   meta: StatsMeta; auto_summary: string;
   preview3d_paths?: string[]; // floor만
+  deviation_paths?: string[]; // floor·벽 공통(정밀 편차맵 파일명, 임포트 결과에는 없음)
   walls?: WallInfo[];         // wall만
 }
 
