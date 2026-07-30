@@ -187,7 +187,7 @@ def _analysis_entry(bundle, assets):
     }
 
 
-_EMPTY_ANALYSIS_ASSETS = {"heatmaps": [], "preview3d": [], "histogram": None}
+_EMPTY_ANALYSIS_ASSETS = {"heatmaps": [], "deviation": [], "preview3d": [], "histogram": None}
 
 
 def build_snapshot(ctx, assets, generated_at=None):

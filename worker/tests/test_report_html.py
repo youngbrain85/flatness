@@ -62,3 +62,34 @@ def test_render_html_has_no_em_dash_and_escapes_title(tmp_path):
     assert "—" not in html            # 사용자 대면 문자열 U+2014 금지
     assert "<script>alert(1)</script>" not in html   # autoescape 동작 확인
     assert "&lt;script&gt;" in html
+
+
+def _snapshot_with_deviation(tmp_path):
+    db, cfg = FakeDB(), _cfg(tmp_path)
+    _seed(db, cfg)
+    db.analyses["an1"]["stats"]["deviation_paths"] = ["deviation.png"]
+    artifacts = cfg.data_dir / "artifacts" / "an1"
+    for name in ("heatmap.png", "preview3d.png", "deviation.png"):
+        (artifacts / name).write_bytes(b"\x89PNG-fake")
+    ctx = load_report_context(db, cfg, "r1")
+    return build_snapshot(ctx, build_assets(db, cfg, "r1", ctx))
+
+
+def test_render_html_includes_deviation_figure(tmp_path):
+    html = render_html(_snapshot_with_deviation(tmp_path))
+    assert "src=\"assets/an1/deviation.png\"" in html
+    assert "정밀 편차맵(10cm)" in html
+    assert "판정 등급 산출에는 사용되지 않습니다" in html   # 판정 무관 고지
+    assert "—" not in html                                  # 사용자 대면 문자열 U+2014 금지
+
+
+def test_render_html_tolerates_snapshot_without_deviation_key(tmp_path):
+    """이미 발행된 보고서의 snapshot에는 assets.deviation 키가 없다 - 템플릿이 견뎌야 한다."""
+    snap = _snapshot(tmp_path)
+    for a in snap["analyses"]:
+        a["assets"].pop("deviation", None)
+
+    html = render_html(snap)
+
+    assert "4. 시각자료" in html
+    assert "src=\"assets/an1/heatmap.png\"" in html

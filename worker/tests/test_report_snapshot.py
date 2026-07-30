@@ -156,7 +156,7 @@ def test_build_snapshot_contract_keys(tmp_path):
     assert a["warnings"][0]["text"].startswith("공간 제약")
     assert a["sections"][0]["label"] == "구역 1"
     # 렌더러가 읽는 유일한 자산 통로: Task 3이 채우기 전에는 비어 있다
-    assert a["assets"] == {"heatmaps": [], "preview3d": [], "histogram": None}
+    assert a["assets"] == {"heatmaps": [], "deviation": [], "preview3d": [], "histogram": None}
 
 
 def test_build_opinion_prefers_report_text_then_analysis_summaries(tmp_path):

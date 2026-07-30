@@ -250,6 +250,13 @@ pre.summary { white-space: pre-wrap; font-family: inherit; font-size: 10pt; marg
     <figcaption>{{ h.label }} (녹색 적합 / 노랑 경계 / 주황 보수 / 빨강 재시공 / 회색 판정 불가)</figcaption>
   </figure>
   {% endfor %}
+  {% for d in a.assets.deviation | default([], true) %}
+  <figure>
+    <img src="{{ d.path | asset(report_id) }}" alt="{{ d.label }}" />
+    <figcaption>{{ d.label }}: 10cm 해상도 원시 편차 분포입니다. 붉을수록 융기(벽은 돌출),
+      초록일수록 침하(벽은 함몰)이며 판정 등급 산출에는 사용되지 않습니다.</figcaption>
+  </figure>
+  {% endfor %}
   {% for p in a.assets.preview3d %}
   <figure>
     <img src="{{ p.path | asset(report_id) }}" alt="{{ p.label }}" />

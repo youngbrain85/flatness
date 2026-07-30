@@ -3,7 +3,7 @@ reports/{id}/assets/ 아래로 복사돼야 한다(스펙 §6.1 reports)."""
 import json
 
 from flatworker.config import Config
-from flatworker.report.assets import build_assets, render_histogram
+from flatworker.report.assets import build_assets, deviation_label, render_histogram
 from flatworker.report.context import load_report_context
 from tests.fake_db import FakeDB
 from tests.test_report_snapshot import _cells, _seed
@@ -115,3 +115,46 @@ def test_build_assets_notes_when_no_valid_cells(tmp_path):
 
     assert assets["analyses"]["an1"]["histogram"] is None
     assert any("히스토그램" in n for n in assets["notes"])
+
+
+def test_deviation_label_distinguishes_floor_and_wall():
+    assert deviation_label("deviation.png") == "정밀 편차맵(10cm)"
+    assert deviation_label("deviation_wall3.png") == "벽 3 정밀 편차맵(10cm)"
+
+
+def test_build_assets_copies_deviation_maps(tmp_path):
+    db, cfg = FakeDB(), _cfg(tmp_path)
+    _seed(db, cfg)
+    db.analyses["an1"]["stats"]["deviation_paths"] = ["deviation.png"]
+    _write_artifacts(cfg, ["heatmap.png", "preview3d.png", "deviation.png"])
+    ctx = load_report_context(db, cfg, "r1")
+
+    assets = build_assets(db, cfg, "r1", ctx)
+
+    assert assets["analyses"]["an1"]["deviation"] == [
+        {"label": "정밀 편차맵(10cm)", "path": "reports/r1/assets/an1/deviation.png"}]
+    assert (cfg.data_dir / "reports/r1/assets/an1/deviation.png").exists()
+    assert assets["notes"] == []
+
+
+def test_build_assets_skips_missing_deviation_with_note(tmp_path):
+    """벽 편차맵은 히트맵과 같은 결번 규약이다 - 파일 존재를 가정하지 않는다."""
+    db, cfg = FakeDB(), _cfg(tmp_path)
+    _seed(db, cfg)
+    stats = db.analyses["an1"]["stats"]
+    stats["meta"]["surface"] = "wall"
+    stats["zones"] = []
+    stats["preview3d_paths"] = []
+    stats["walls"] = [{"wall_id": 1, "n_cells": 2, "height_m": 2.4, "length_m": 5.0,
+                       "plumbness_mm": 12.0, "plumb_grade": "pass",
+                       "plane_abc": [0, 0, 0], "frame": {}}]
+    stats["deviation_paths"] = ["deviation_wall1.png", "deviation_wall3.png"]
+    db.scans["scan1"]["surface"] = "wall"
+    _write_artifacts(cfg, ["heatmap_wall1.png", "deviation_wall1.png"])  # wall3 편차맵 없음
+    ctx = load_report_context(db, cfg, "r1")
+
+    assets = build_assets(db, cfg, "r1", ctx)
+
+    labels = [d["label"] for d in assets["analyses"]["an1"]["deviation"]]
+    assert labels == ["벽 1 정밀 편차맵(10cm)"]
+    assert any("deviation_wall3.png" in n for n in assets["notes"])

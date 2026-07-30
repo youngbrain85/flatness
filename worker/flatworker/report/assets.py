@@ -7,6 +7,7 @@
 경로 계약: 반환하는 모든 경로는 버킷-상대 문자열(`reports/{id}/assets/...`)이며,
 실제 파일은 cfg.data_dir 아래에 쓴다.
 """
+import re
 import shutil
 from pathlib import Path
 
@@ -54,6 +55,18 @@ def render_histogram(values_mm, criteria, out_path):
     plt.close(fig)
 
 
+_DEVIATION_WALL = re.compile(r"^deviation_wall(\d+)\.png$")
+
+
+def deviation_label(name):
+    """편차맵 파일명 -> 캡션. 벽은 결번이 있으므로 파일명의 번호를 그대로 쓴다.
+
+    같은 문구를 대시보드 deviation-view.tsx도 쓴다(화면과 PDF의 캡션이 갈리면 안 된다).
+    """
+    m = _DEVIATION_WALL.match(name)
+    return f"벽 {m.group(1)} 정밀 편차맵(10cm)" if m else "정밀 편차맵(10cm)"
+
+
 def _copy_if_exists(src, dst):
     if not src.exists():
         return False
@@ -87,6 +100,15 @@ def _copy_analysis_assets(cfg, report_id, bundle, assets_root, notes):
         else:
             notes.append(f"분석 {analysis_id}: 히트맵 파일이 없어 보고서에서 제외했습니다.")
 
+    deviation = []
+    for name in (stats.get("deviation_paths") or []):
+        if _copy_if_exists(src_dir / name, dst_dir / name):
+            deviation.append({"label": deviation_label(name),
+                              "path": assets_rel(report_id, analysis_id, name)})
+        else:
+            notes.append(f"분석 {analysis_id}: 정밀 편차맵 {name} 파일이 없어 "
+                         "보고서에서 제외했습니다.")
+
     preview3d = []
     for name in (stats.get("preview3d_paths") or []):
         label = "3D 프리뷰(전체)" if name == "preview3d.png" else "3D 프리뷰(최대 결함 확대)"
@@ -105,7 +127,8 @@ def _copy_analysis_assets(cfg, report_id, bundle, assets_root, notes):
     else:
         notes.append(f"분석 {analysis_id}: 유효 판정 셀이 없어 히스토그램을 생성하지 않았습니다.")
 
-    return {"heatmaps": heatmaps, "preview3d": preview3d, "histogram": histogram}
+    return {"heatmaps": heatmaps, "deviation": deviation, "preview3d": preview3d,
+            "histogram": histogram}
 
 
 def _copy_photos(db, report_id, photos, assets_root, notes):
