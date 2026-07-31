@@ -79,7 +79,11 @@ def test_render_html_includes_deviation_figure(tmp_path):
     html = render_html(_snapshot_with_deviation(tmp_path))
     assert "src=\"assets/an1/deviation.png\"" in html
     assert "정밀 편차맵(10cm)" in html
-    assert "판정 등급 산출에는 사용되지 않습니다" in html   # 판정 무관 고지
+    # 판정 무관 고지: 스펙이 요구한 문구 두 절을 모두 담아야 한다(대시보드 탭과 동일 취지).
+    # 편차맵의 초록은 "침하", 판정 히트맵의 초록은 "적합"이라 색 의미가 반대다 - 등급 기준이
+    # 1m 판정 셀임을 함께 알려야 오독을 막는다.
+    assert "판정 등급 산출에는 사용되지 않으며" in html
+    assert "1m 판정 셀" in html
     assert "—" not in html                                  # 사용자 대면 문자열 U+2014 금지
 
 
