@@ -207,7 +207,8 @@ w_fit = a * center_x + b * center_y + c   # a,b,c = walls[i].plane_abc
 
 렌더 실패 경고(`heatmap_render_failed`·`preview3d_render_failed`·`deviation_render_failed`)는 벽 여러 개에서 동시에
 발생해도 코드 하나로만 남는다(어느 벽인지는 구분하지 않음) — `warnings`는 `set`이므로 중복 없이 한 번만 기록된다.
-해당 렌더 산출물의 PNG 파일이 없거나 `*_paths` 목록에서 빠졌다면 판정이 아니라 렌더링 인프라 문제다.
+파일이 없거나 `*_paths`에서 빠진 이유가 렌더링 인프라 문제인지는 **대응하는 `*_render_failed` 경고의 유무로만** 판별한다
+- 경고가 없다면 스킵된 벽·유효 잔차 없음·확대 반경 내 점 없음 같은 정상적인 미생성 사유다.
 
 ## 6. 산출물 파일 규약
 
@@ -217,7 +218,7 @@ w_fit = a * center_x + b * center_y + c   # a,b,c = walls[i].plane_abc
 | `cells.json` | floor·wall·import | 셀별 행 배열(zone_id 포함, 아래 표) |
 | `results.csv` | floor·wall·import | `cells.json`과 동일한 행을 CSV로(헤더 순서 아래 표와 동일) |
 | `heatmap.png` | floor·import | 단일 등급 히트맵 |
-| `heatmap_wall{n}.png` | wall | 벽별 히트맵. `n`은 `wall_id`와 동일 채번 — **스킵된 벽은 파일 자체가 생성되지 않음(결번)** |
+| `heatmap_wall{n}.png` | wall | 벽별 히트맵. `n`은 `wall_id`와 동일 채번 — **결번 원인 2가지**: (a) 스킵된 벽(`wall_{n}_skipped` 경고 동반, `walls[]`에도 없음), (b) 판정은 성공했으나 렌더만 실패(`heatmap_render_failed` 경고 동반, `walls[]`에는 있음). 파일 존재로 스킵 여부를 추론하지 말고 `walls[]`와 `warnings`로 판별한다 |
 | `preview3d.png` | floor | 3D 편차 프리뷰(전체) |
 | `preview3d_zoom.png` | floor(조건부) | 최댓값 지점 반경 1.5m 확대. 반경 내 점이 없으면 생성 안 됨 |
 | `deviation.png` | floor | 정밀 편차맵(10cm 해상도, 0mm 중심 대칭 연속 색상). 판정 히트맵과 별개의 보조 시각화 |

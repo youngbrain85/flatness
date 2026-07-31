@@ -63,4 +63,21 @@ describe('AnalysisResult 정밀 편차맵 탭', () => {
       expect(screen.getByText(/정밀 편차맵이 없습니다/)).toBeInTheDocument();
     });
   });
+
+  it('임포트(Colab) 결과에서는 편차맵 재분석을 권하지 않는다 (스펙 §8/계약 §2: 임포트 경로는 편차맵 미생성)', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => [] } as unknown as Response)));
+    const imported: AnalysisRow = {
+      ...analysis, engine_version: 'external-colab-v1',
+      stats: { ...stats, deviation_paths: undefined,
+                meta: { ...stats.meta, engine_version: 'external-colab-v1', source: 'colab-import' } },
+    };
+
+    render(<AnalysisResult analysis={imported} scan={scan} photos={[]} />);
+    fireEvent.click(screen.getByRole('button', { name: '정밀 편차맵' }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/외부\(Colab\) 임포트 결과에는 정밀 편차맵을 생성하지 않습니다/)).toBeInTheDocument();
+    });
+    expect(screen.queryByText(/재분석하면 생성됩니다/)).not.toBeInTheDocument();
+  });
 });

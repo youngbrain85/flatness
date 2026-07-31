@@ -10,15 +10,27 @@ export function deviationLabel(name: string): string {
   return m ? `벽 ${m[1]} 정밀 편차맵(10cm)` : '정밀 편차맵(10cm)';
 }
 
-export function DeviationView({ artifactsDir, paths }: {
+export function DeviationView({ artifactsDir, paths, isImport }: {
   artifactsDir: string | null;
   paths: string[];
+  // 외부(Colab) 임포트 결과 여부 — 스펙 §8/계약 §2: 임포트 경로는 편차맵을 아예 생성하지
+  // 않으므로 재분석을 권해선 안 된다(무한 재시도 유도 방지). 판별은 호출부가
+  // lib/domain/stats.ts의 isExternalImport로 넘긴다(3D 프리뷰 탭과 동일한 분기 선례)
+  isImport: boolean;
 }) {
   if (!artifactsDir || paths.length === 0) {
+    if (isImport) {
+      return (
+        <p className="text-sm text-slate-500">
+          외부(Colab) 임포트 결과에는 정밀 편차맵을 생성하지 않습니다.
+        </p>
+      );
+    }
     return (
       <p className="text-sm text-slate-500">
         정밀 편차맵이 없습니다. 이 기능이 추가되기 전 엔진으로 분석한 결과이거나,
-        유효 편차 데이터가 없는 경우입니다. 재분석하면 생성됩니다.
+        유효 편차 데이터가 없는 경우이거나, 이미지 생성에 실패한 경우입니다(경고 목록 확인).
+        재분석하면 생성됩니다.
       </p>
     );
   }

@@ -2,6 +2,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { artifactUrl } from '@/lib/domain/paths';
+import { isExternalImport } from '@/lib/domain/stats';
 import type { AnalysisRow, CellRow, PhotoRow, ScanRow, Stats } from '@/lib/domain/types';
 import { HeatmapView } from './heatmap-view';
 import { DeviationView } from './deviation-view';
@@ -40,6 +41,7 @@ export function AnalysisResult({ analysis, scan, photos }: {
 
   const preview3d = (stats.preview3d_paths ?? []).filter(Boolean);
   const deviation = (stats.deviation_paths ?? []).filter(Boolean);
+  const isImport = isExternalImport(analysis.engine_version, stats.meta);
 
   return (
     <div className="space-y-4">
@@ -63,7 +65,7 @@ export function AnalysisResult({ analysis, scan, photos }: {
             )
           )}
           {tab === 'deviation' && (
-            <DeviationView artifactsDir={analysis.artifacts_dir} paths={deviation} />
+            <DeviationView artifactsDir={analysis.artifacts_dir} paths={deviation} isImport={isImport} />
           )}
           {tab === 'preview3d' && (
             preview3d.length > 0 ? (
