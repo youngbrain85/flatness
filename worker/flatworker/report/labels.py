@@ -35,6 +35,12 @@ WARNING_LABEL = {
     "uncertainty_swallows_repair":
         "측정 불확도가 보수 구간을 잠식합니다(경계 구간이 보수 구간을 흡수). 보수 판정이 나오지 않을 수 있습니다.",
     "plumbness_relative_to_z": "수직도는 스캔 좌표계 z축 기준 상대 지표입니다(중력 보정 아님).",
+    "heatmap_render_failed":
+        "판정 히트맵 이미지 생성에 실패했습니다. 판정 수치·등급에는 영향이 없습니다.",
+    "preview3d_render_failed":
+        "3D 프리뷰 이미지 생성에 실패했습니다. 판정 수치·등급에는 영향이 없습니다.",
+    "deviation_render_failed":
+        "정밀 편차맵 이미지 생성에 실패했습니다. 판정 수치·등급에는 영향이 없습니다.",
 }
 
 _WALL_SKIPPED = re.compile(r"^wall_(\d+)_skipped$")

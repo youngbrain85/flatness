@@ -81,8 +81,8 @@
 
 | 키 | floor | wall | import | 비고 |
 |---|---|---|---|---|
-| `preview3d_paths` | O | — | — | `analyze_floor`에서만 추가(`core/pipeline.py:60-62`). `string[]`, 0~2개: 잔차가 전부 NaN이면 `[]`, 아니면 `["preview3d.png"]`, 최댓값 지점 1.5m 반경 내 점이 있으면 `["preview3d.png","preview3d_zoom.png"]`(`outputs/preview3d.py:19-49`) |
-| `deviation_paths` | O | O | — | 정밀 편차맵 파일명 목록(`string[]`). floor는 `[]` 또는 `["deviation.png"]`, wall은 `wall_id` 오름차순 `["deviation_wall1.png", ...]`이며 **스킵된 벽은 목록에 없다(결번)**. 잔차 유효값이 하나도 없으면 파일을 만들지 않아 목록에서 빠진다(`core/pipeline.py`·`outputs/deviation.py`). import 경로는 이 키 자체가 없으므로 소비자는 항상 "없으면 빈 목록"으로 다룬다. **판정과 무관한 보조 시각화**이며 등급·수치 필드에 영향을 주지 않는다 |
+| `preview3d_paths` | O | — | — | `analyze_floor`에서만 추가(`core/pipeline.py:60-62`). `string[]`, 0~2개: 잔차가 전부 NaN이면 `[]`, 아니면 `["preview3d.png"]`, 최댓값 지점 1.5m 반경 내 점이 있으면 `["preview3d.png","preview3d_zoom.png"]`(`outputs/preview3d.py:19-49`). 렌더 자체가 예외로 실패해도 `[]`이며, 이때는 `preview3d_render_failed` 경고가 동반된다(§5) |
+| `deviation_paths` | O | O | — | 정밀 편차맵 파일명 목록(`string[]`). floor는 `[]` 또는 `["deviation.png"]`, wall은 `wall_id` 오름차순 `["deviation_wall1.png", ...]`이며 **스킵된 벽은 목록에 없다(결번)**. 잔차 유효값이 하나도 없으면 파일을 만들지 않아 목록에서 빠진다(`core/pipeline.py`·`outputs/deviation.py`). 렌더가 예외로 실패한 경우도 마찬가지로 해당 파일명이 목록에서 빠지며 `deviation_render_failed` 경고가 동반된다(§5). import 경로는 이 키 자체가 없으므로 소비자는 항상 "없으면 빈 목록"으로 다룬다. **판정과 무관한 보조 시각화**이며 등급·수치 필드에 영향을 주지 않는다 |
 | `walls` | — | O | — | `analyze_wall`에서만 추가(`core/pipeline.py:111`). §2.1 참고 |
 | `zones` (내용) | 구역 목록 채움 | 항상 `[]` | 항상 `[]` | 키 자체는 §1의 공통 키. wall/import는 `build_stats(..., zones=None)` 호출이라 `zones or []` → `[]`(`outputs/stats.py:47`) |
 | `meta.scale_to_m` | O | O | — | 사용자가 `--units`로 지정한 배율(예: mm=0.001). import는 CSV 값을 이미 m로 변환해 읽으므로 키 자체가 없음(`importer/colab_csv.py:35,48-49`) |
@@ -198,9 +198,16 @@ w_fit = a * center_x + b * center_y + c   # a,b,c = walls[i].plane_abc
 | `uncertainty_swallows_repair` | 기준의 `pass_mm + u_mm >= rework_mm`이라 경계 판정 구간이 사실상 보수 구간을 흡수함(기준/불확도 조합 자체의 경고, 특정 셀과 무관) | floor·wall·import 공통 | `criteria.py:39-40` |
 | `plumbness_relative_to_z` | 수직도는 스캔 좌표계 z축 기준 상대 지표(중력 보정 아님) | wall(항상 포함) | `core/pipeline.py:79` |
 | `wall_{i}_skipped` | i번째(1부터) 벽 후보가 유효 서브셀 부족 또는 처리 오류로 판정에서 제외됨 — **개방 패턴**(문자열 접두 매칭 필요, 고정 목록 아님) | wall | `core/pipeline.py:86,90` |
+| `heatmap_render_failed` | 판정 히트맵(`heatmap.png`/`heatmap_wall{n}.png`) 렌더가 예외(디스크·폰트 등 인프라 사유)로 실패함. 판정 수치는 영향 없음 | floor·wall | `core/pipeline.py`(`render_heatmap` 호출부) |
+| `preview3d_render_failed` | 3D 프리뷰(`preview3d.png`) 렌더가 실패해 `preview3d_paths`가 `[]`로 저장됨. 판정 수치는 영향 없음 | floor | `core/pipeline.py`(`render_preview3d` 호출부) |
+| `deviation_render_failed` | 정밀 편차맵(`deviation.png`/`deviation_wall{n}.png`) 렌더가 실패해 해당 파일명이 `deviation_paths`에서 빠짐. 판정 수치는 영향 없음 | floor·wall | `core/pipeline.py`(`render_deviation_map` 호출부) |
 
 소비자 구현 참고: `wall_{i}_skipped`는 정규식 `^wall_\d+_skipped$`(또는 `startswith("wall_") and endswith("_skipped")`)로 매칭해야 한다
 — CLI/요약 생성기도 이 방식을 쓴다(`outputs/summary.py:51-52`).
+
+렌더 실패 경고(`heatmap_render_failed`·`preview3d_render_failed`·`deviation_render_failed`)는 벽 여러 개에서 동시에
+발생해도 코드 하나로만 남는다(어느 벽인지는 구분하지 않음) — `warnings`는 `set`이므로 중복 없이 한 번만 기록된다.
+해당 렌더 산출물의 PNG 파일이 없거나 `*_paths` 목록에서 빠졌다면 판정이 아니라 렌더링 인프라 문제다.
 
 ## 6. 산출물 파일 규약
 

@@ -59,14 +59,31 @@ def analyze_floor(path, scale_to_m, criterion, u_mm, out_dir,
     stats["auto_summary"] = generate_summary(stats)
     out_dir.mkdir(parents=True, exist_ok=True)
     worst = stats.get("worst")
-    stats["preview3d_paths"] = render_preview3d(
-        residuals, grid, out_dir,
-        worst_xy=None if worst is None else (worst["point_x"], worst["point_y"]))
-    # 정밀 편차맵(판정 무관 보조 시각화): 판정에 쓴 잔차를 10cm로 접어 다시 그린다
-    dev = render_deviation_map(residuals, grid, out_dir / "deviation.png")
-    stats["deviation_paths"] = [dev] if dev else []
+    # 렌더 산출물(프리뷰/편차맵/히트맵)은 판정 결과와 무관한 보조 시각화다. 렌더가
+    # 디스크·폰트 등 인프라 사유로 실패해도 이미 완성된 판정(stats)은 반드시 저장돼야
+    # 하므로, 렌더 호출을 예외로부터 격리하고 실패는 warnings로만 남긴다.
+    render_warns = set()
+    try:
+        stats["preview3d_paths"] = render_preview3d(
+            residuals, grid, out_dir,
+            worst_xy=None if worst is None else (worst["point_x"], worst["point_y"]))
+    except Exception:
+        stats["preview3d_paths"] = []
+        render_warns.add("preview3d_render_failed")
+    try:
+        # 정밀 편차맵(판정 무관 보조 시각화): 판정에 쓴 잔차를 10cm로 접어 다시 그린다
+        dev = render_deviation_map(residuals, grid, out_dir / "deviation.png")
+        stats["deviation_paths"] = [dev] if dev else []
+    except Exception:
+        stats["deviation_paths"] = []
+        render_warns.add("deviation_render_failed")
+    try:
+        render_heatmap(cells, grades, out_dir / "heatmap.png", cell_m=cell_m)
+    except Exception:
+        render_warns.add("heatmap_render_failed")
+    if render_warns:
+        stats["warnings"] = sorted(set(stats["warnings"]) | render_warns)
     write_outputs(out_dir, stats, cells, grades)
-    render_heatmap(cells, grades, out_dir / "heatmap.png", cell_m=cell_m)
     return stats
 
 
@@ -95,17 +112,27 @@ def analyze_wall(path, scale_to_m, criterion, u_mm, out_dir,
             warns.add(f"wall_{i}_skipped")  # 벽별 실패 격리(티켓 17): 성한 벽 결과는 보존
             continue
         cells = [_dc_replace(c, zone_id=i) for c in cells]
-        render_heatmap(cells, grades, out_dir / f"heatmap_wall{i}.png", cell_m=cell_m)
-        # 판정에 쓴 벽 평면 계수(stats에 실리는 6자리 반올림값)로 잔차를 다시 만들어 그린다.
-        # evaluate_wall의 반환 시그니처를 바꾸지 않기 위한 선택 — 반올림 오차는 0.01mm 미만이다.
-        dev = render_deviation_map(
-            residual_grid(grid, tuple(wm["plane_abc"])), grid,
-            out_dir / f"deviation_wall{i}.png",
-            title=f"벽 {i} 정밀 편차맵 (10cm 해상도)",
-            xlabel="벽 길이 u (m)", ylabel="높이 v (m)",
-            cbar_label="편차 (mm), + 돌출 / - 함몰")
-        if dev:
-            deviation_names.append(dev)
+        # 렌더 호출은 벽별 격리 블록(위 try/except ValueError) 밖으로 옮기고 별도로
+        # 감싼다: 렌더 실패는 인프라 사유(디스크·폰트 등)이지 이 벽의 판정과 무관하므로
+        # 이미 산출된 이 벽의 cells/grades까지 날려서는 안 되고(티켓 17 원칙), 다음
+        # 벽 처리에도 전파돼선 안 된다.
+        try:
+            render_heatmap(cells, grades, out_dir / f"heatmap_wall{i}.png", cell_m=cell_m)
+        except Exception:
+            warns.add("heatmap_render_failed")
+        try:
+            # 판정에 쓴 벽 평면 계수(stats에 실리는 6자리 반올림값)로 잔차를 다시 만들어 그린다.
+            # evaluate_wall의 반환 시그니처를 바꾸지 않기 위한 선택 — 반올림 오차는 0.01mm 미만이다.
+            dev = render_deviation_map(
+                residual_grid(grid, tuple(wm["plane_abc"])), grid,
+                out_dir / f"deviation_wall{i}.png",
+                title=f"벽 {i} 정밀 편차맵 (10cm 해상도)",
+                xlabel="벽 길이 u (m)", ylabel="높이 v (m)",
+                cbar_label="편차 (mm), + 돌출 / - 함몰")
+            if dev:
+                deviation_names.append(dev)
+        except Exception:
+            warns.add("deviation_render_failed")
         all_cells.extend(cells)
         all_grades.extend(grades)
         warns.update(w)

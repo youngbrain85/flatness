@@ -179,3 +179,64 @@ def test_wall_deviation_keeps_gap_numbering(tmp_path, monkeypatch):
 
     assert stats["deviation_paths"] == ["deviation_wall1.png"]
     assert not (tmp_path / "out" / "deviation_wall2.png").exists()
+
+
+def test_floor_render_failure_does_not_lose_judged_result(tmp_path, monkeypatch):
+    # 하드닝(Task 1·2 리뷰 Important): 렌더(히트맵/프리뷰/편차맵) 호출이 예외를 던져도
+    # 이미 완성된 판정 결과(stats)는 반드시 저장돼야 하고, 실패는 warnings로만 남는다.
+    import json
+    from flatness.core import pipeline as pl
+
+    def boom(*a, **kw):
+        raise RuntimeError("주입된 렌더 실패(디스크/폰트 등 인프라 사유 모사)")
+
+    monkeypatch.setattr(pl, "render_heatmap", boom)
+    monkeypatch.setattr(pl, "render_preview3d", boom)
+    monkeypatch.setattr(pl, "render_deviation_map", boom)
+    pts = add_bump(flat_floor(size=(6.0, 6.0), spacing=0.02), (2.0, 2.0), 0.3, -0.010)
+    write_binary_ply(pts, tmp_path / "scan.ply")
+
+    stats = pl.analyze_floor(tmp_path / "scan.ply", 1.0, CRIT, 5.0, tmp_path / "out")
+
+    # 판정 수치는 렌더 실패와 무관하게 종전 그대로(기존 e2e 테스트와 동일 허용치)
+    assert 9.0 <= stats["worst"]["value_mm"] <= 11.0
+    assert stats["preview3d_paths"] == []
+    assert stats["deviation_paths"] == []
+    for code in ("heatmap_render_failed", "preview3d_render_failed", "deviation_render_failed"):
+        assert code in stats["warnings"]
+    # stats.json이 실제로 디스크에 저장됐고 경고가 그대로 기록됨(write_outputs가 렌더
+    # 실패에 막히지 않음 — 렌더 실패로 판정 "가용성"이 사라지지 않는지 검증)
+    assert (tmp_path / "out" / "stats.json").exists()
+    saved = json.loads((tmp_path / "out" / "stats.json").read_text("utf-8"))
+    assert saved["warnings"] == stats["warnings"]
+    assert not (tmp_path / "out" / "heatmap.png").exists()  # 렌더가 실패해 파일 자체가 없음
+
+
+def test_wall_render_failure_isolated_per_wall(tmp_path, monkeypatch):
+    # 하드닝: 벽 1의 렌더 실패가 (1) 벽 1의 이미 성공한 판정과 (2) 벽 2 처리 모두에
+    # 전파돼선 안 된다 — 티켓 17("벽별 실패 격리")의 의도를 렌더 호출에도 재정합.
+    from flatness.core import pipeline as pl
+    calls = {"n": 0}
+    real = pl.render_heatmap
+
+    def flaky(cells, grades, out_path, cell_m=1.0):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise RuntimeError("주입된 렌더 실패(벽 1)")
+        return real(cells, grades, out_path, cell_m=cell_m)
+
+    monkeypatch.setattr(pl, "render_heatmap", flaky)
+    pts = np.vstack([flat_floor(size=(4.0, 3.0), spacing=0.02),
+                     flat_wall(length=4.0, height=2.4, spacing=0.02, y0=0.0),
+                     flat_wall(length=3.0, height=2.4, spacing=0.02, axis='y', y0=0.0)])
+    write_binary_ply(pts, tmp_path / "room.ply")
+    crit = load_criteria()["wall-kcs-tilt-other"]
+
+    stats = pl.analyze_wall(tmp_path / "room.ply", 1.0, crit, 8.0, tmp_path / "out")
+
+    # 벽 1은 렌더만 실패했을 뿐 판정 자체는 성공했으므로 두 벽 모두 결과에 남는다
+    assert len(stats["walls"]) == 2
+    assert not any(w.startswith("wall_") and w.endswith("_skipped") for w in stats["warnings"])
+    assert "heatmap_render_failed" in stats["warnings"]
+    assert not (tmp_path / "out" / "heatmap_wall1.png").exists()  # 벽 1 렌더 실패 → 결번
+    assert (tmp_path / "out" / "heatmap_wall2.png").exists()      # 벽 2는 정상 렌더
