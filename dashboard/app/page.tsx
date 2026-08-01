@@ -42,7 +42,29 @@ export default async function HomePage() {
         </div>
       </div>
       {summaries.length === 0 ? (
-        <p className="text-slate-500">현장이 없습니다. 새 현장을 등록하세요.</p>
+        // C2: "현장이 없습니다"만으로는 처음 온 사용자가 다음에 뭘 해야 할지 알 수
+        // 없다 — 전체 흐름 3단계와 시작 버튼을 함께 보여준다.
+        <div className="rounded border border-dashed bg-slate-50 p-8 text-center">
+          <p className="text-slate-600">아직 등록된 현장이 없습니다. 아래 순서로 시작하세요.</p>
+          <ol className="mx-auto mt-4 flex max-w-2xl flex-col gap-2 text-left text-sm sm:flex-row sm:gap-4">
+            <li className="flex-1 rounded border bg-white p-3">
+              <span className="font-semibold text-blue-700">1. 현장 등록</span>
+              <p className="mt-1 text-slate-500">공사 현장(건물)을 하나 만듭니다.</p>
+            </li>
+            <li className="flex-1 rounded border bg-white p-3">
+              <span className="font-semibold text-blue-700">2. 측정위치 추가</span>
+              <p className="mt-1 text-slate-500">동/층/공간 등 스캔할 위치를 등록합니다.</p>
+            </li>
+            <li className="flex-1 rounded border bg-white p-3">
+              <span className="font-semibold text-blue-700">3. 스캔 업로드</span>
+              <p className="mt-1 text-slate-500">현장에서 촬영한 스캔 파일을 올려 분석을 시작합니다.</p>
+            </li>
+          </ol>
+          <Link href="/sites/new"
+            className="mt-5 inline-block rounded bg-blue-700 px-4 py-2 text-sm font-medium text-white hover:bg-blue-800">
+            첫 현장 등록하기
+          </Link>
+        </div>
       ) : (
         <div className="grid gap-4 md:grid-cols-3">
           {summaries.map((s) => <SiteCard key={s.site.id} summary={s} />)}

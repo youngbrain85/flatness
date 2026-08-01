@@ -31,8 +31,14 @@ describe('isExternalImport', () => {
   it('engine_version external-colab-v1 이면 외부 결과', () => {
     expect(isExternalImport('external-colab-v1')).toBe(true);
   });
+  it('engine_version external-json-v1 이면 외부 결과(M2: JSON 임포트도 인식)', () => {
+    expect(isExternalImport('external-json-v1')).toBe(true);
+  });
   it('meta.source가 있으면 외부 결과', () => {
     expect(isExternalImport('p1d-0.4.0', { file: 'f', n_points: 1, source: 'colab-import' })).toBe(true);
+  });
+  it('meta가 비어도 engine_version external-json-v1이면 외부 결과로 판별(meta 미채움 방어)', () => {
+    expect(isExternalImport('external-json-v1', undefined)).toBe(true);
   });
   it('LiDAR 원본은 외부 결과 아님', () => {
     expect(isExternalImport('p1d-0.4.0', { file: 'f', n_points: 1 })).toBe(false);

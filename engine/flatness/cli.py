@@ -24,6 +24,11 @@ def main(argv=None):
     ic.add_argument("--out", type=Path, required=True)
     ic.add_argument("--criteria", default="floor-kcs-exposed")
     ic.add_argument("--uncertainty-mm", type=float, default=5.0)
+    ij = sub.add_parser("import-json", help="범용 프로그램 결과 JSON 임포트 (flatness-import-v1)")
+    ij.add_argument("file", type=Path)
+    ij.add_argument("--out", type=Path, required=True)
+    ij.add_argument("--criteria", default="floor-kcs-exposed")
+    ij.add_argument("--uncertainty-mm", type=float, default=5.0)
     args = p.parse_args(argv)
 
     crits = load_criteria()
@@ -41,6 +46,24 @@ def main(argv=None):
         from flatness.importer.colab_csv import import_colab_csv
         try:
             stats = import_colab_csv(args.file, crit, args.uncertainty_mm, args.out)
+        except (ValueError, OSError) as e:
+            print(f"임포트 실패: {e}")
+            return 1
+        gc = stats["grade_counts"]
+        print(f"외부 결과 임포트 완료: 셀 {stats['n_cells']}개 (유효 {stats['n_valid']})")
+        print(f"  적합 {gc['pass']} / 경계 {gc['borderline']} / 보수 {gc['repair']}"
+              f" / 재시공 {gc['rework']} / 판정불가 {gc['na']}")
+        print(f"  산출물: {args.out}")
+        return 0
+
+    if args.cmd == "import-json":
+        crit = crits.get(args.criteria)
+        if crit is None or crit.metric != "flatness" or crit.surface != "floor":
+            print(f"오류: 알 수 없는 기준 '{args.criteria}': 바닥(flatness) 기준을 지정하세요 (flatness list-criteria)")
+            return 1
+        from flatness.importer.json_import import import_json
+        try:
+            stats = import_json(args.file, crit, args.uncertainty_mm, args.out)
         except (ValueError, OSError) as e:
             print(f"임포트 실패: {e}")
             return 1

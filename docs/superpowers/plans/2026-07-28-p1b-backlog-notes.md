@@ -110,3 +110,56 @@
     사용자에게 보이지 않는다(복구 경로 자체는 열려 있다: 상세에서 "PDF 다시 생성" 노출,
     재시도 실패는 즉시 표시). 토스트 또는 쿼리 파라미터로 사유를 상세 화면까지 전달하면
     완결된다. P3에서 같은 패턴(업로드 폼)을 한 번 수정한 이력이 있다
+
+## 판정식 경고 사각지대 대응 중 발견한 이연 티켓 (2026-07-31)
+
+46. **수직도 "노출 모서리" 기준 변형 미구현** — 정본 스펙
+    (docs/superpowers/specs/2026-07-27-flatness-dashboard-design.md §4.1 표, 114행·119행)이
+    wall-kcs-plumb에 대해 "25mm (노출 모서리 13)"과 "노출 모서리는 별도 행으로 분리해
+    시드한다"를 명시하는데, engine/flatness/data/seed_criteria.json·
+    supabase/migrations/002_functions_seed.sql 어디에도 13mm 행이 없어 노출 모서리 부위가
+    완화된 25mm로 판정된다. 단순히 시드 행만 추가하면 되는 문제가 아니다:
+    engine/flatness/core/walls.py의 evaluate_wall이 load_criteria()["wall-kcs-plumb"]로
+    수직도 기준을 코드에 고정해 조회하므로, 변형을 쓰려면 (a) 스캔 업로드 시 평활도 기준과
+    별도로 수직도 기준도 선택하게 하거나 (b) 벽별로 노출 모서리 여부를 지정하는 UI가
+    필요하다. 설계 변경 규모라 별도 티켓으로 분리한다
+47. **벽면 기준과 잠정 U(8mm)의 부정합** — uncertainty_swallows_pass/
+    uncertainty_swallows_repair 경고(criteria.py의 grade_value)로 가시화는 되지만 근본
+    해소는 아니다. 벽면 평활도 기준 4종 중 3종이 U=8mm에서 적합 판정 불가
+    (wall-kcs-tilt-exposed 6-8=-2, wall-plaster-base 6-8=-2, wall-plaster-surface 3-8=-5),
+    정상인 1종(wall-kcs-tilt-other)도 여유가 1mm뿐이다. U는 실측 재현성으로 갱신되어야 하는
+    잠정치(스펙 §4.2)이므로, 실측 대조 수행 시 벽면 U를 우선 재설정해야 벽면 판정이 실질적
+    의미를 갖는다. 그 전까지 벽면 결과는 "경계 이상" 위주로 나오는 것이 정상 동작임을
+    문서·화면에서 안내할 필요
+
+## task1-finish 코드 리뷰(C1/I1-3/M1-3) 이연 티켓 (2026-07-31)
+
+- 출처: task1-finish 브랜치 코드 리뷰(재분석 잡 타입 오분기 C1 등) 대응 중 발견, 수정 대신
+  기록만 남기기로 한 항목들
+
+48. **[M5] 업로드 API 확장자 검증이 스캔/임포트 모드를 구분하지 못함** —
+    `app/api/upload/route.ts`의 `_ALLOWED_EXTS`가 스캔용·임포트용 확장자의 합집합이라
+    서버가 두 목적을 구분해 검증하지 못한다(`upload-form.tsx`의 폼이 `mode`를 서버로
+    전달하지 않음). `.json`을 스캔 모드로 올려도 서버는 통과시키고, 이후 precheck
+    단계에서 실패로만 드러난다 — mode를 폼데이터에 실어 보내 서버에서도 모드별로
+    분리 검증해야 한다
+49. **[M6] 영구 설정 오류가 무한 재시도로 오인될 수 있음(I2 도입에 따른 새 이연)** —
+    `httpx.UnsupportedProtocol`/`ConnectError`도 `TransportError` 계열이라,
+    `SUPABASE_URL` 오타 같은 영구 설정 오류가 워커 기동 후 60초 간격(runner.py의
+    `_MAX_BACKOFF_S`) 무한 재시도로 이어질 수 있다(이전에는 즉시 크래시로 원인이 바로
+    드러났음). 연속 실패 N회 이후 경고 수준을 격상(예: 로그 강조·알림)하는 방안 검토 필요
+50. **[M4] 업로드 화면 "측정위치 추가하러 가기" 링크가 site 컨텍스트를 무시** —
+    `app/upload/page.tsx`의 해당 링크가 항상 `sites[0]`으로 이동한다.
+    `searchParams.site`가 있으면 그 현장을 우선해야 사용자가 방금 선택한 현장 맥락이
+    유지된다
+51. **[M8] 재분석의 409(중복 엔큐) 처리 경로는 실제로는 도달 불가** —
+    `jobs_dedup`은 `payload->>'analysis_id'` 기준 부분 유니크인데, 재분석
+    (`reanalyze-button.tsx`)은 매번 새 UUID로 analyses 행을 만들므로 동일
+    analysis_id가 중복 enqueue될 상황 자체가 생기지 않는다. 방어 코드 자체는 무해하나,
+    관련 회귀 테스트("중복 엔큐(409)면...")가 실제로는 도달하지 않는 경로를 검증하고
+    있다는 점을 기록해 둔다(코드/테스트 정리는 우선순위 낮음)
+52. **tsc 오류 2건(BASE부터 존재, 비차단)** —
+    `dashboard/lib/hooks/__tests__/use-row-status.test.ts`에 BASE 커밋 시점부터 있던
+    타입 오류 2건이 남아 있다. `npm run lint`·`npm run build`·`npm run test`는 모두
+    통과하므로(타입 체크가 별도 단계로 빠져 있어 이 오류들을 가리지 않음) 지금까지
+    가시화되지 않았을 뿐이다 — 별도 정리 대상으로 남긴다

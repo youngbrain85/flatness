@@ -24,6 +24,20 @@ def test_uncertainty_swallows_repair_warning():
     assert "uncertainty_swallows_repair" in warns
     assert grade == "borderline"  # b2=min(11,9)=9 → 5 ≤ 9
 
+def test_uncertainty_swallows_pass_warning():
+    # wall-kcs-tilt-exposed: pass 6, rework 18, U=8 → b1=6-8=-2 ≤ 0 → 적합이 원리적으로 불가
+    c = load_criteria()["wall-kcs-tilt-exposed"]
+    grade, warns = grade_value(0.0, c, 8.0, 3.0)  # 편차 0.0mm(완벽한 표면)조차
+    assert "uncertainty_swallows_pass" in warns
+    assert grade == "borderline"  # b1<0이므로 pass는 못 나오고 b2=min(14,18)=14 → borderline
+
+def test_uncertainty_swallows_pass_absent_when_b1_positive():
+    # wall-kcs-tilt-other: pass 9, rework 27, U=8 → b1=9-8=1 > 0 → 경고 없어야 함
+    c = load_criteria()["wall-kcs-tilt-other"]
+    grade, warns = grade_value(0.5, c, 8.0, 3.0)
+    assert "uncertainty_swallows_pass" not in warns
+    assert grade == "pass"
+
 def test_reduced_span_flat_cell_still_passes():
     # 2차 개정 근거: U를 고정하면 pe(4.95) < U(5)로 b1<0 — 평탄한 가장자리 셀이 적합 불가.
     # U_eff=U×s 환산으로 b1=(7−5)×0.707=1.41 > 0 → 평탄 셀 적합 유지

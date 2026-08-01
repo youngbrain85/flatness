@@ -3,8 +3,10 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { AnalysisProgress } from '@/components/analysis-progress';
+import { ReanalyzeButton } from '@/components/reanalyze-button';
 import { ScanStatusWatcher } from '@/components/scan-status-watcher';
 import { GRADE_COLOR, GRADE_LABEL, LINEAGE_LABEL, SCAN_STATUS_LABEL, SURFACE_LABEL } from '@/lib/domain/labels';
+import { isExternalImport } from '@/lib/domain/stats';
 import type { AnalysisRow, LocationRow, ScanRow } from '@/lib/domain/types';
 
 // Realtime 감시가 필요한 진행 중 상태(리뷰 Important 2) — ready/archived/failed는
@@ -17,6 +19,7 @@ export const dynamic = 'force-dynamic';
 export default async function ScanPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
   const { data: scan } = await supabase.from('scans').select('*').eq('id', id).maybeSingle();
   if (!scan) notFound();
   const s = scan as ScanRow;
@@ -69,7 +72,26 @@ export default async function ScanPage({ params }: { params: Promise<{ id: strin
       )}
       {latest && (
         <section className="space-y-2">
-          <h2 className="font-semibold">분석</h2>
+          <div className="flex items-center justify-between">
+            <h2 className="font-semibold">분석</h2>
+            {user && (
+              // 코드리뷰 Critical(C1): latest.engine_version/meta로 임포트 결과 여부를
+              // 판별해 재분석 잡 타입 분기 근거로 전달한다(isExternalImport, 정의는
+              // lib/domain/stats.ts — 배지 표시와 동일 기준 재사용).
+              //
+              // 코드리뷰 Minor(M3): 판정 기준은 스캔에 현재 적용된
+              // scan.selected_criteria_id를 우선한다. latest.criteria_id(직전
+              // 분석이 만들어질 때 스냅샷된 기준)로만 쓰면 사용자가 이후에 스캔의
+              // 적용 기준을 바꿔도 재분석이 옛 기준을 그대로 따라가 버려, 버튼이
+              // 내건 "판정 기준 변경 후 다시 돌리기" 취지와 어긋난다.
+              // selected_criteria_id가 비어 있는 드문 레거시 데이터에서만
+              // latest.criteria_id로 폴백한다.
+              <ReanalyzeButton scanId={id} userId={user.id} surface={s.surface}
+                criteriaId={s.selected_criteria_id ?? latest.criteria_id}
+                latestStatus={latest.status}
+                isImport={isExternalImport(latest.engine_version, latest.stats?.meta)} />
+            )}
+          </div>
           <AnalysisProgress analysisId={latest.id} initialStatus={latest.status} />
           {analyses.length > 1 && (
             <ul className="text-sm text-slate-600">

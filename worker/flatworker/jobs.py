@@ -9,6 +9,7 @@ from pathlib import Path
 from flatness.criteria import Criterion
 from flatness.core.pipeline import analyze_floor, analyze_wall
 from flatness.importer.colab_csv import import_colab_csv
+from flatness.importer.json_import import import_json
 
 from flatworker.artifacts import artifacts_dir
 from flatworker.report.assets import build_assets, report_dir
@@ -113,6 +114,12 @@ def handle_analyze(db, cfg, payload):
     _finalize(db, analysis_id, analysis["scan_id"], stats, out_dir)
 
 
+# 확장자 -> 임포터 함수. 두 임포터 모두 (path, criterion, u_mm, out_dir) 시그니처와
+# stats dict 반환 계약을 공유한다(flatness.importer.common.run_import_pipeline로 내부
+# 통합돼 있어 결과가 일관됨 — docs/contracts/stats-schema.md §7).
+_IMPORT_HANDLERS = {".csv": import_colab_csv, ".json": import_json}
+
+
 def handle_import(db, cfg, payload):
     analysis_id = payload["analysis_id"]
     analysis, scan, crit, u_mm = _load_context(db, analysis_id)
@@ -126,7 +133,11 @@ def handle_import(db, cfg, payload):
             f"임포트는 바닥(floor) 스캔만 지원합니다: scan.surface='{scan['surface']}'")
     out_dir = artifacts_dir(cfg.data_dir, analysis_id)
     path = _resolve_raw_path(cfg, scan)
-    stats = import_colab_csv(path, crit, u_mm, out_dir)
+    importer = _IMPORT_HANDLERS.get(path.suffix.lower())
+    if importer is None:
+        raise ValueError(
+            f"지원하지 않는 임포트 파일 형식입니다: '{path.suffix}' (지원 형식: .csv, .json)")
+    stats = importer(path, crit, u_mm, out_dir)
     _finalize(db, analysis_id, analysis["scan_id"], stats, out_dir)
 
 

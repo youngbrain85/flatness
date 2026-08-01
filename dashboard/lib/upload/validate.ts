@@ -1,10 +1,24 @@
 export const SCAN_EXTS = ['ply', 'las', 'laz', 'xyz', 'txt', 'csv', 'pts'] as const;
 
-export function validateScanFile(filename: string): { ext: string } | null {
+// 기존 결과 가져오기(임포트) 전용 확장자 — 엔진 계약(docs/contracts/stats-schema.md
+// §7 "flatness-import-v1")이 CSV(colab)에 이어 JSON을 지원하면서 추가됨.
+// csv는 SCAN_EXTS와 겹친다(스캔 원본 포맷이기도 하므로).
+export const IMPORT_EXTS = ['csv', 'json'] as const;
+
+/** filename의 확장자가 allowed 목록에 있으면 { ext }, 아니면 null. */
+export function validateFile(
+  filename: string,
+  allowed: readonly string[] = SCAN_EXTS,
+): { ext: string } | null {
   const parts = filename.split('.');
   if (parts.length < 2) return null;
   const ext = parts.pop()!.toLowerCase();
-  return (SCAN_EXTS as readonly string[]).includes(ext) ? { ext } : null;
+  return allowed.includes(ext) ? { ext } : null;
+}
+
+/** 스캔 원본 업로드 검증(기본 동작 그대로 — SCAN_EXTS 7종). */
+export function validateScanFile(filename: string): { ext: string } | null {
+  return validateFile(filename, SCAN_EXTS);
 }
 
 // 단위 확정 배율(스펙 §5.1.1): 파일 좌표 -> m 변환 계수 (scans.unit_scale)
