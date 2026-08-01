@@ -5,7 +5,11 @@ import path from 'path';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { rawScanRelPath } from '@/lib/domain/paths';
-import { MAX_UPLOAD_BYTES, isUploadSizeAllowed, validateScanFile } from '@/lib/upload/validate';
+import { IMPORT_EXTS, MAX_UPLOAD_BYTES, SCAN_EXTS, isUploadSizeAllowed, validateFile } from '@/lib/upload/validate';
+
+// 이 라우트는 스캔 원본 업로드와 임포트(기존 결과 CSV/JSON) 업로드를 모두
+// 받는다(폼이 mode를 서버로 넘기지 않음) — 두 목적의 허용 확장자 합집합으로 검증.
+const _ALLOWED_EXTS = [...SCAN_EXTS, ...IMPORT_EXTS];
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -46,9 +50,9 @@ export async function POST(req: NextRequest) {
   if (!UUID_RE.test(siteId) || !UUID_RE.test(scanId)) {
     return NextResponse.json({ error: 'site_id/scan_id는 UUID여야 합니다' }, { status: 400 });
   }
-  const v = validateScanFile(file.name);
+  const v = validateFile(file.name, _ALLOWED_EXTS);
   if (!v) {
-    return NextResponse.json({ error: '지원 포맷: ply, las, laz, xyz, txt, csv, pts' }, { status: 400 });
+    return NextResponse.json({ error: '지원 포맷: ply, las, laz, xyz, txt, csv, pts, json' }, { status: 400 });
   }
   const rel = rawScanRelPath(siteId, scanId, v.ext);
   const abs = path.join(path.resolve(process.env.DATA_DIR ?? '../data'), rel);

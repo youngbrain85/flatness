@@ -82,13 +82,40 @@ describe('UploadForm 엔큐 실패 처리 (리뷰 Important #1)', () => {
   it('임포트 모드: import 엔큐 실패 시 오류를 화면에 남기고 이동하지 않는다', async () => {
     vi.mocked(createClient).mockReturnValue(stubSupabase({ code: '23505', message: 'dup' }) as never);
     const { container } = render(<UploadForm sites={[site]} locations={[location]} userId="u1" />);
-    fireEvent.click(screen.getByLabelText('기존 결과 가져오기(Colab CSV)'));
+    fireEvent.click(screen.getByLabelText('기존 결과 가져오기(CSV/JSON)'));
     await selectSiteAndLocation();
     const file = new File(['x'], 'result.csv');
-    fireEvent.change(screen.getByLabelText(/결과 CSV 파일/), { target: { files: [file] } });
+    fireEvent.change(screen.getByLabelText(/결과 파일 \(csv\/json\)/), { target: { files: [file] } });
     fireEvent.submit(container.querySelector('form')!);
 
     expect(await screen.findByText(DUPLICATE_JOB_MESSAGE)).toBeInTheDocument();
+    expect(pushMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('UploadForm 임포트 모드 파일 형식(B4: CSV/JSON 지원)', () => {
+  it('JSON 파일도 정상 제출된다(엔큐 성공 시 결과 화면으로 이동)', async () => {
+    vi.mocked(createClient).mockReturnValue(stubSupabase(null) as never);
+    const { container } = render(<UploadForm sites={[site]} locations={[location]} userId="u1" />);
+    fireEvent.click(screen.getByLabelText('기존 결과 가져오기(CSV/JSON)'));
+    await selectSiteAndLocation();
+    const file = new File(['{}'], 'result.json', { type: 'application/json' });
+    fireEvent.change(screen.getByLabelText(/결과 파일 \(csv\/json\)/), { target: { files: [file] } });
+    fireEvent.submit(container.querySelector('form')!);
+
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith('/scans/scan1'));
+  });
+
+  it('임포트 모드에서 csv/json이 아닌 파일은 화면에서 바로 거부한다', async () => {
+    vi.mocked(createClient).mockReturnValue(stubSupabase(null) as never);
+    const { container } = render(<UploadForm sites={[site]} locations={[location]} userId="u1" />);
+    fireEvent.click(screen.getByLabelText('기존 결과 가져오기(CSV/JSON)'));
+    await selectSiteAndLocation();
+    const file = new File(['x'], 'scan.ply');
+    fireEvent.change(screen.getByLabelText(/결과 파일 \(csv\/json\)/), { target: { files: [file] } });
+    fireEvent.submit(container.querySelector('form')!);
+
+    expect(await screen.findByText('지원 포맷: csv, json')).toBeInTheDocument();
     expect(pushMock).not.toHaveBeenCalled();
   });
 });

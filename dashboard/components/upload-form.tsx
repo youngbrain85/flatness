@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/client';
 import { enqueueJob } from '@/lib/domain/jobs';
 import { LINEAGE_LABEL, SURFACE_LABEL } from '@/lib/domain/labels';
 import type { CriteriaRow, Lineage, LocationRow, SiteRow, Surface } from '@/lib/domain/types';
-import { MAX_UPLOAD_BYTES, validateScanFile } from '@/lib/upload/validate';
+import { IMPORT_EXTS, MAX_UPLOAD_BYTES, SCAN_EXTS, validateFile } from '@/lib/upload/validate';
 
 interface Props {
   sites: SiteRow[];
@@ -59,9 +59,12 @@ export function UploadForm({ sites, locations, userId, initialSiteId, initialLoc
     if (!file) { setError('파일을 선택하세요.'); return; }
     if (!locationId) { setError('측정위치를 선택하세요.'); return; }
     if (!criteriaId) { setError('적용 기준을 선택하세요.'); return; }
-    const v = validateScanFile(file.name);
-    if (!v) { setError('지원 포맷: ply, las, laz, xyz, txt, csv, pts'); return; }
-    if (mode === 'import' && v.ext !== 'csv') { setError('기존 결과 가져오기는 CSV 파일만 지원합니다.'); return; }
+    const allowedExts = mode === 'import' ? IMPORT_EXTS : SCAN_EXTS;
+    const v = validateFile(file.name, allowedExts);
+    if (!v) {
+      setError(mode === 'import' ? '지원 포맷: csv, json' : '지원 포맷: ply, las, laz, xyz, txt, csv, pts');
+      return;
+    }
     if (file.size > MAX_UPLOAD_BYTES) {
       // 리뷰 Important #3: 서버 왕복 전에 미리 걸러 대용량 파일 전송 대기를 없앤다(서버도 동일 상한을 재검증)
       setError(`파일이 너무 큽니다(최대 ${MAX_UPLOAD_BYTES / (1024 * 1024 * 1024)}GiB). 더 작은 파일로 나눠서 시도하세요.`);
@@ -133,13 +136,15 @@ export function UploadForm({ sites, locations, userId, initialSiteId, initialLoc
         </label>
         <label className="flex items-center gap-1">
           <input type="radio" checked={mode === 'import'} onChange={() => setMode('import')} />
-          기존 결과 가져오기(Colab CSV)
+          기존 결과 가져오기(CSV/JSON)
         </label>
       </div>
       {mode === 'import' && (
         <p className="rounded bg-slate-100 p-2 text-xs text-slate-600">
-          기존 Colab 노트북 결과 CSV(X, Y, Signed_Distance_mm 컬럼 필수)를 등록합니다.
-          바닥 결과만 지원하며, 결과 화면에 &quot;외부 결과&quot; 배지가 표시됩니다.
+          기존 Colab 노트북 결과 CSV(X, Y, Signed_Distance_mm 컬럼 필수) 또는 범용
+          연계 JSON(format: &quot;flatness-import-v1&quot;, points[].x/y/deviation_mm)을
+          등록합니다. 바닥 결과만 지원하며, 결과 화면에 &quot;외부 결과&quot; 배지가
+          표시됩니다.
         </p>
       )}
       <div>
@@ -227,7 +232,7 @@ export function UploadForm({ sites, locations, userId, initialSiteId, initialLoc
       )}
       <div>
         <label htmlFor="file" className="block text-sm font-medium">
-          {mode === 'import' ? '결과 CSV 파일' : '스캔 파일 (ply/las/laz/xyz/txt/csv/pts)'}
+          {mode === 'import' ? '결과 파일 (csv/json)' : '스캔 파일 (ply/las/laz/xyz/txt/csv/pts)'}
         </label>
         <input id="file" type="file" required onChange={(e) => setFile(e.target.files?.[0] ?? null)}
           className="mt-1 w-full text-sm" />
