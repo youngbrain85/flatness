@@ -18,6 +18,7 @@ describe('warningLabel', () => {
   it('고정 코드는 한국어 문구로 변환한다', () => {
     expect(warningLabel('low_coverage')).toContain('70%');
     expect(warningLabel('uncertainty_swallows_repair')).toContain('보수 구간');
+    expect(warningLabel('uncertainty_swallows_pass')).toContain('적합 판정');
     expect(warningLabel('plumbness_relative_to_z')).toContain('z축');
   });
   it('wall_{i}_skipped 개방 패턴을 매칭한다', () => {

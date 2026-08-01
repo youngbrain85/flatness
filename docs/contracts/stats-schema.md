@@ -196,6 +196,7 @@ w_fit = a * center_x + b * center_y + c   # a,b,c = walls[i].plane_abc
 | `low_coverage` | 바닥 인식률(`coverage_pct`) < 70% | floor | `core/pipeline.py:45-46` |
 | `reduced_span` | 공간 제약으로 셀의 유효 스팬이 기준 스팬보다 짧아 허용치·불확도를 선형 환산해 적용함 | floor·wall·import(셀 단위 공통) | `criteria.py:33-35` |
 | `uncertainty_swallows_repair` | 기준의 `pass_mm + u_mm >= rework_mm`이라 경계 판정 구간이 사실상 보수 구간을 흡수함(기준/불확도 조합 자체의 경고, 특정 셀과 무관) | floor·wall·import 공통 | `criteria.py:39-40` |
+| `uncertainty_swallows_pass` | `b1(=pe-U_eff) <= 0`이라 편차 0.0mm인 완벽한 표면조차 "적합"이 원리적으로 나올 수 없음(기준/불확도 조합 자체의 경고, 특정 셀과 무관 — `uncertainty_swallows_repair`와 별개 현상이며 동시에 뜰 수 있음) | floor·wall·import 공통 | `criteria.py:41-42` |
 | `plumbness_relative_to_z` | 수직도는 스캔 좌표계 z축 기준 상대 지표(중력 보정 아님) | wall(항상 포함) | `core/pipeline.py:79` |
 | `wall_{i}_skipped` | i번째(1부터) 벽 후보가 유효 서브셀 부족 또는 처리 오류로 판정에서 제외됨 — **개방 패턴**(문자열 접두 매칭 필요, 고정 목록 아님) | wall | `core/pipeline.py:86,90` |
 | `heatmap_render_failed` | 판정 히트맵(`heatmap.png`/`heatmap_wall{n}.png`) 렌더가 예외(디스크·폰트 등 인프라 사유)로 실패함. 판정 수치는 영향 없음 | floor·wall | `core/pipeline.py`(`render_heatmap` 호출부) |
