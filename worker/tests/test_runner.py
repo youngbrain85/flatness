@@ -1,5 +1,9 @@
 from datetime import datetime, timedelta, timezone
 
+import httpx
+import pytest
+
+from flatworker.db import DBError
 from flatworker.runner import run_loop
 from tests.fake_db import FakeDB
 
@@ -97,3 +101,70 @@ def test_runner_reaps_stuck_jobs_at_start(tmp_path):
     assert db.jobs[jid]["status"] == "queued"
     assert db.jobs[jid]["locked_at"] is None
     assert db.analyses["a1"]["status"] == "queued"
+
+
+class _FlakyThenIdleDB:
+    """claim_job이 처음 N회는 httpx 전송 계층 오류를 던지고, 그 뒤로는 빈 큐(None)로
+    응답하는 스텁 — 실측 버그(유휴 keep-alive 연결이 끊긴 뒤 재사용 시
+    RemoteProtocolError)를 재현한다.
+    """
+
+    def __init__(self, fail_times):
+        self.fail_times = fail_times
+        self.claim_calls = 0
+        self.reap_called = False
+
+    def reap_stuck_jobs(self, timeout_minutes=30):
+        self.reap_called = True
+        return 0
+
+    def claim_job(self):
+        self.claim_calls += 1
+        if self.claim_calls <= self.fail_times:
+            raise httpx.RemoteProtocolError("Server disconnected without sending a response")
+        return None
+
+
+def test_runner_survives_transient_transport_errors_with_backoff(tmp_path, capsys):
+    """전송 계층 오류가 연속으로 나도 run_loop가 죽지 않고, 지수 백오프(2배씩,
+    poll_interval_s에서 시작)로 재시도한 뒤 성공하면 원래 간격으로 복귀해야 한다.
+    실제 sleep은 하지 않고 sleep_fn에 기록만 남겨 검증한다.
+    """
+    db = _FlakyThenIdleDB(fail_times=3)
+    sleeps = []
+    run_loop(db, _cfg(tmp_path), handlers={}, max_iterations=5, sleep_fn=sleeps.append)
+
+    assert db.reap_called is True
+    assert db.claim_calls == 5
+    # 실패 3회: poll_interval_s(0.01) -> 0.02 -> 0.04 로 배가
+    assert sleeps[:3] == pytest.approx([0.01, 0.02, 0.04])
+    # 4번째 호출부터 성공(None) -> 원래 poll_interval_s로 복귀
+    assert sleeps[3] == pytest.approx(0.01)
+    assert sleeps[4] == pytest.approx(0.01)
+
+    out = capsys.readouterr().out
+    assert "연결 오류로 재시도합니다" in out
+    assert "1회째" in out
+    assert "연결 복구됨" in out
+
+
+class _AuthFailDB:
+    """claim_job 호출 시 항상 인증 실패(DBError)를 던지는 스텁 — 영구 오류는
+    재시도하지 않고 그대로 종료해야 함을 검증한다.
+    """
+
+    def reap_stuck_jobs(self, timeout_minutes=30):
+        return 0
+
+    def claim_job(self):
+        raise DBError(401, "invalid api key")
+
+
+def test_runner_terminates_on_permanent_db_error(tmp_path, capsys):
+    db = _AuthFailDB()
+    with pytest.raises(DBError):
+        run_loop(db, _cfg(tmp_path), handlers={}, max_iterations=5, sleep_fn=lambda s: None)
+
+    out = capsys.readouterr().out
+    assert "복구 불가능한 DB 오류" in out
+    assert "401" in out
