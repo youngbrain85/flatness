@@ -29,9 +29,14 @@ export function LocationTree({ tree, scansByLocation, siteId }: {
                       <li key={l.id} className="rounded border bg-white p-2 text-sm">
                         <div className="flex items-center justify-between">
                           <span className="font-medium">{l.name}</span>
-                          <span className="flex gap-3">
+                          <span className="flex items-center gap-3">
+                            {/* C4: 측정위치별 업로드 진입점 강조 - 텍스트 링크에서
+                                눈에 띄는 버튼으로(이 화면에서 가장 자주 하는 다음
+                                동작이므로 "보고서"보다 시각적 우선순위를 둔다) */}
                             <Link href={`/upload?site=${siteId}&location=${l.id}`}
-                              className="text-xs text-blue-700 hover:underline">스캔 업로드</Link>
+                              className="rounded bg-blue-700 px-2 py-1 text-xs font-medium text-white hover:bg-blue-800">
+                              스캔 업로드
+                            </Link>
                             <Link href={`/reports?location=${l.id}`}
                               className="text-xs text-blue-700 hover:underline">보고서</Link>
                           </span>

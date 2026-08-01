@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { AnalysisProgress } from '@/components/analysis-progress';
+import { ReanalyzeButton } from '@/components/reanalyze-button';
 import { ScanStatusWatcher } from '@/components/scan-status-watcher';
 import { GRADE_COLOR, GRADE_LABEL, LINEAGE_LABEL, SCAN_STATUS_LABEL, SURFACE_LABEL } from '@/lib/domain/labels';
 import type { AnalysisRow, LocationRow, ScanRow } from '@/lib/domain/types';
@@ -17,6 +18,7 @@ export const dynamic = 'force-dynamic';
 export default async function ScanPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
   const { data: scan } = await supabase.from('scans').select('*').eq('id', id).maybeSingle();
   if (!scan) notFound();
   const s = scan as ScanRow;
@@ -69,7 +71,13 @@ export default async function ScanPage({ params }: { params: Promise<{ id: strin
       )}
       {latest && (
         <section className="space-y-2">
-          <h2 className="font-semibold">분석</h2>
+          <div className="flex items-center justify-between">
+            <h2 className="font-semibold">분석</h2>
+            {user && (
+              <ReanalyzeButton scanId={id} userId={user.id} surface={s.surface}
+                criteriaId={latest.criteria_id} latestStatus={latest.status} />
+            )}
+          </div>
           <AnalysisProgress analysisId={latest.id} initialStatus={latest.status} />
           {analyses.length > 1 && (
             <ul className="text-sm text-slate-600">
