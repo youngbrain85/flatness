@@ -110,3 +110,24 @@
     사용자에게 보이지 않는다(복구 경로 자체는 열려 있다: 상세에서 "PDF 다시 생성" 노출,
     재시도 실패는 즉시 표시). 토스트 또는 쿼리 파라미터로 사유를 상세 화면까지 전달하면
     완결된다. P3에서 같은 패턴(업로드 폼)을 한 번 수정한 이력이 있다
+
+## 판정식 경고 사각지대 대응 중 발견한 이연 티켓 (2026-07-31)
+
+46. **수직도 "노출 모서리" 기준 변형 미구현** — 정본 스펙
+    (docs/superpowers/specs/2026-07-27-flatness-dashboard-design.md §4.1 표, 114행·119행)이
+    wall-kcs-plumb에 대해 "25mm (노출 모서리 13)"과 "노출 모서리는 별도 행으로 분리해
+    시드한다"를 명시하는데, engine/flatness/data/seed_criteria.json·
+    supabase/migrations/002_functions_seed.sql 어디에도 13mm 행이 없어 노출 모서리 부위가
+    완화된 25mm로 판정된다. 단순히 시드 행만 추가하면 되는 문제가 아니다:
+    engine/flatness/core/walls.py의 evaluate_wall이 load_criteria()["wall-kcs-plumb"]로
+    수직도 기준을 코드에 고정해 조회하므로, 변형을 쓰려면 (a) 스캔 업로드 시 평활도 기준과
+    별도로 수직도 기준도 선택하게 하거나 (b) 벽별로 노출 모서리 여부를 지정하는 UI가
+    필요하다. 설계 변경 규모라 별도 티켓으로 분리한다
+47. **벽면 기준과 잠정 U(8mm)의 부정합** — uncertainty_swallows_pass/
+    uncertainty_swallows_repair 경고(criteria.py의 grade_value)로 가시화는 되지만 근본
+    해소는 아니다. 벽면 평활도 기준 4종 중 3종이 U=8mm에서 적합 판정 불가
+    (wall-kcs-tilt-exposed 6-8=-2, wall-plaster-base 6-8=-2, wall-plaster-surface 3-8=-5),
+    정상인 1종(wall-kcs-tilt-other)도 여유가 1mm뿐이다. U는 실측 재현성으로 갱신되어야 하는
+    잠정치(스펙 §4.2)이므로, 실측 대조 수행 시 벽면 U를 우선 재설정해야 벽면 판정이 실질적
+    의미를 갖는다. 그 전까지 벽면 결과는 "경계 이상" 위주로 나오는 것이 정상 동작임을
+    문서·화면에서 안내할 필요
