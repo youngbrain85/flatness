@@ -245,9 +245,12 @@ w_fit = a * center_x + b * center_y + c   # a,b,c = walls[i].plane_abc
 
 ## 7. §5.4 JSON 연계 입력 스키마 (임포트 계약, 티켓 25 해소)
 
-**구현 상태: 미구현.** 현재 엔진에 있는 임포트 경로는 `import_colab_csv`(CSV 전용, §7.1) 뿐이다. 아래는 "범용 프로그램
-결과 JSON 임포트"의 **계약 정의**이며, 실제 파서 구현은 P4/P5 백로그다. 구현 시점에도 **이 문서가 계약 정본**이며, 스키마를
-바꾸려면 먼저 이 문서를 갱신해야 한다.
+> **구현 상태 갱신(코드리뷰 Important I3, 이전 버전은 "미구현·P4/P5 백로그"라고 적었으나 실제로는 구현 완료됨)**:
+> "범용 프로그램 결과 JSON 임포트"는 **구현이 끝났다** — `engine/flatness/importer/json_import.py`의 `import_json()`이
+> 아래 계약을 그대로 소비한다(워커 배선은 `worker/flatworker/jobs.py`의 `_IMPORT_HANDLERS = {".csv": import_colab_csv,
+> ".json": import_json}`, `handle_import`가 확장자로 분기). 실제 산출 `stats.meta`는 `engine_version="external-json-v1"`,
+> `source="json-import"`를 쓴다(§7.2에 상세). 아래는 여전히 이 임포트의 **계약 정본**이며, 스키마를 바꾸려면 먼저 이
+> 문서를 갱신해야 한다.
 
 ```json
 {
@@ -266,7 +269,7 @@ w_fit = a * center_x + b * center_y + c   # a,b,c = walls[i].plane_abc
 | 필드 | 타입 | 단위 | 필수 | 의미 |
 |---|---|---|---|---|
 | `format` | string | — | 필수 | 고정값 `"flatness-import-v1"`(향후 스키마 개정 시 버전 문자열로 분기) |
-| `surface` | `"floor"` | — | 필수 | 현재 계획된 구현은 CSV 임포트와 동일하게 **바닥 전용**(`importer/colab_csv.py`의 `import_colab_csv`가 바닥 기준만 허용하는 것과 동일 제약, `cli.py:37-39`). `"wall"`은 스키마상 예약만 해두고, 실제 지원 여부는 구현 시점에 재확인 |
+| `surface` | `"floor"` | — | 필수 | CSV 임포트와 동일하게 **바닥 전용**으로 구현됨(`importer/json_import.py`의 `_SUPPORTED_SURFACE = "floor"` — 다른 값이면 스키마 오류로 거부). `"wall"`은 스키마상 예약만 해둔 값이며 실제로는 아직 지원하지 않는다 |
 | `points` | array | — | 필수 | 최소 1개 이상 |
 | `points[].x` | number | m(미터) | 필수 | 평면 X 좌표 |
 | `points[].y` | number | m(미터) | 필수 | 평면 Y 좌표 |
@@ -276,17 +279,39 @@ w_fit = a * center_x + b * center_y + c   # a,b,c = walls[i].plane_abc
 
 **CSV(colab) vs JSON(범용) 두 임포트 경로**: CSV 경로(`importer/colab_csv.py`)는 기존 Colab 노트북이 뱉는 고정 컬럼
 (`X,Y,Z,Distance_mm,Signed_Distance_mm,R,G,B,Is_Uneven` 중 `X,Y,Signed_Distance_mm`만 사용)을 그대로 소비하는 레거시 호환
-경로다. JSON 경로는 CSV 컬럼 규약에 매이지 않는 외부 프로그램 전반을 위한 범용 계약으로 신설한다. 두 경로 모두 최종적으로
-동일한 `import_colab_csv` 내부 파이프라인(서브셀 중앙값 → `evaluate_cells` → `grade_cells`)에 합류할 것으로 예상되며,
-`stats.meta`에는 §2의 import 경로 규약(`scale_to_m`/`bbox_min` 없음, `source` 키 존재, `engine_version="external-colab-v1"`
-또는 JSON 전용 태그)을 그대로 따라야 한다.
+경로다. JSON 경로(`importer/json_import.py`)는 CSV 컬럼 규약에 매이지 않는 외부 프로그램 전반을 위한 범용 계약이다.
+**(구현 완료, I3 갱신)** 두 경로 모두 포맷별 파서(`colab_csv._load`/`json_import._load`)만 다르고, 판정 로직은
+`importer/common.py`의 공용 함수 `run_import_pipeline`(서브셀 중앙값 → `evaluate_cells` → `grade_cells`)으로 완전히
+합류한다 — 같은 편차 데이터를 CSV/JSON 두 경로로 각각 임포트하면 메타(포맷별 `engine_version`/`source` 표기 차이)를
+제외하고 동등한 `stats`가 나온다는 계약이 코드 구조로 보장된다. `stats.meta`는 §2의 import 경로 규약
+(`scale_to_m`/`bbox_min` 없음, `source` 키 존재)을 그대로 따르되, `engine_version`/`source` 값 자체는 경로별로 다르다
+(CSV: `"external-colab-v1"`/`"colab-import"`, JSON: `"external-json-v1"`/`"json-import"` — §7.1·§7.2 참고).
 
 ### 7.1 참고: 현재 구현된 CSV(colab) 임포트 계약
 
 - 필수 컬럼(대소문자 구분): `X`, `Y`, `Signed_Distance_mm`. 그 외 컬럼은 무시(`importer/colab_csv.py:21-23`)
 - 인코딩 `utf-8-sig`, 헤더 필수. 파싱 불가 행은 건너뜀(`importer/colab_csv.py:26-31`)
 - `Signed_Distance_mm`는 이미 평면 제거된 편차(mm) → 내부적으로 `/1000`해 m로 변환 후 서브셀 z값으로 사용(`importer/colab_csv.py:35`)
-- 유효 행 0개 또는 유효 서브셀 10개 미만이면 `ValueError`(`importer/colab_csv.py:33-34,42-43`)
+- 유효 행 0개 또는 유효 서브셀 10개 미만이면 `ValueError`(`importer/colab_csv.py:33-34,42-43`, 후자는 공용
+  `run_import_pipeline`의 검사)
+- `stats.meta.engine_version = "external-colab-v1"`, `stats.meta.source = "colab-import"`(`importer/colab_csv.py:34`)
+
+### 7.2 참고: 현재 구현된 JSON(범용) 임포트 계약 (I3 신설 — 구현 파일: `engine/flatness/importer/json_import.py`)
+
+- 최상위 필수 키: `format`(정확히 `"flatness-import-v1"`이어야 함) · `surface`(정확히 `"floor"`) · `points`(배열, 최소
+  1개) — 하나라도 어긋나면 스키마 불일치 `ValueError`로 즉시 거부(`json_import.py:32-46`, `_validate_top_level`)
+- 인코딩 `utf-8-sig`. JSON 파싱 자체가 실패해도 같은 스키마 불일치 오류로 감싸 보고(`json_import.py:49-54`)
+- `points[]` 원소별 필수 키: `x`/`y`/`deviation_mm`. 키 누락, 숫자로 변환 불가, 또는 `NaN`/`Inf`인 원소는 조용히
+  건너뛴다(예외를 던지지 않음 — CSV 경로의 "파싱 불가 행 skip"과 동일 관용, `json_import.py:58-70`)
+- 위 필터를 통과한 유효 포인트가 0개, 또는 유효 서브셀이 10개 미만이면 `ValueError`(전자는
+  `json_import.py:71-72`, 후자는 CSV와 공유하는 `importer/common.py`의 `run_import_pipeline` 검사)
+- `deviation_mm`은 CSV의 `Signed_Distance_mm`과 동일 역할(이미 평면 제거된 편차) → 내부적으로 `/1000`해 m로 변환 후
+  서브셀 z값으로 사용(`json_import.py:73`)
+- `meta.source_program`/`meta.measured_at`은 입력 JSON에 있으면 그대로 통과시키고, 없으면 `null`(`json_import.py:83-84`)
+  — 판정 로직에는 관여하지 않는 참고용 메타데이터
+- `stats.meta.engine_version = "external-json-v1"`, `stats.meta.source = "json-import"`(`json_import.py:81-82`) —
+  대시보드는 이 두 값(또는 CSV 쪽 동급 값)으로 "외부 결과" 배지를 판별한다(`dashboard/lib/domain/stats.ts`의
+  `isExternalImport`)
 
 ## 부록 A. 등급 라벨 매핑 (프론트엔드 참고)
 
