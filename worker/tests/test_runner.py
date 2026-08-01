@@ -148,6 +148,36 @@ def test_runner_survives_transient_transport_errors_with_backoff(tmp_path, capsy
     assert "연결 복구됨" in out
 
 
+class _ReapTransportErrorDB:
+    """기동 시 reap_stuck_jobs()가 전송 오류를 내는 스텁.
+
+    코드리뷰 Important(M7): 실 SupabaseRest라면 db.py의 _with_transport_retry가
+    이미 짧게 재시도한 뒤에도 실패하면 그대로 예외를 올린다(worker/tests/test_db.py
+    에서 그 재시도 자체를 검증). 여기서는 그 "재시도 소진 후 예외"를 곧바로
+    재현해, runner.py가 이를 치명적으로 취급해 워커 전체를 죽이지 않고 폴링
+    루프로 넘어가야 함을 검증한다.
+    """
+
+    def __init__(self):
+        self.claim_calls = 0
+
+    def reap_stuck_jobs(self, timeout_minutes=30):
+        raise httpx.ConnectError("연결 끊김")
+
+    def claim_job(self):
+        self.claim_calls += 1
+        return None
+
+
+def test_runner_survives_reap_transport_error_at_startup(tmp_path, capsys):
+    db = _ReapTransportErrorDB()
+    run_loop(db, _cfg(tmp_path), handlers={}, max_iterations=1, sleep_fn=lambda s: None)
+    assert db.claim_calls == 1  # 죽지 않고 폴링 루프까지 도달했음을 증명
+
+    out = capsys.readouterr().out
+    assert "기동 시 고착 잡 회수" in out
+
+
 class _AuthFailDB:
     """claim_job 호출 시 항상 인증 실패(DBError)를 던지는 스텁 — 영구 오류는
     재시도하지 않고 그대로 종료해야 함을 검증한다.

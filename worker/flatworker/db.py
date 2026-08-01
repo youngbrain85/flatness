@@ -10,11 +10,50 @@ RPC 함수 시그니처는 `supabase/migrations/002_functions_seed.sql`(실제 �
 정본 SQL)을 그대로 따른다: `fn_job_claim(p_worker text)`,
 `fn_resolve_criteria(p_site_id uuid, p_surface surface_type)`.
 """
+import time
 from abc import ABC
 
 import httpx
 
 _TIMEOUT_S = 30.0
+
+# 코드리뷰 Important(I2): 짧은 재시도 파라미터 — 총 대기시간은 0.5+1.0=1.5초 정도로,
+# 유휴 keep-alive 연결이 끊긴 직후의 순간적 재연결 실패를 흡수하는 정도를 노린다
+# (러너의 claim_job 백오프처럼 분 단위로 길게 기다리지 않는다 — 그 백오프는
+# "빈 큐라서 다음 폴링까지 기다리는" 성격이라 여기와 목적이 다르다).
+_JOB_QUEUE_RETRY_ATTEMPTS = 3
+_JOB_QUEUE_RETRY_BASE_BACKOFF_S = 0.5
+
+
+def _with_transport_retry(fn, sleep_fn, attempts=_JOB_QUEUE_RETRY_ATTEMPTS,
+                           base_backoff_s=_JOB_QUEUE_RETRY_BASE_BACKOFF_S):
+    """`fn()`을 호출하고, httpx.TransportError(연결 끊김·타임아웃 등 전송 계층
+    오류)만 한정해 지수 백오프로 최대 `attempts`회 재시도한다.
+
+    코드리뷰 Important(I2): runner.py의 폴링 루프는 3초 간격 claim_job 호출로
+    연결을 자주 덥혀 전송 오류를 스스로 드물게 만들지만, 수 분씩 걸리는
+    analyze/import 처리 동안에는 그 사이 요청이 전혀 없어 오히려 연결이 유휴
+    상태로 끊길 여지가 크다. 그 시점에 실행되는 `complete_job`이 전송 오류로
+    실패하면 "성공한 분석이 실패로 기록"되고, 뒤이어 호출되는 `fail_job`마저
+    전송 오류를 내면 그건 runner.py가 claim 실패만 감싸고 있어 잡지 못해
+    프로세스가 그대로 죽는다 — 이 브랜치가 원래 고치려던 크래시와 같은 종류다.
+    이 헬퍼를 claim_job/complete_job/fail_job/reap_stuck_jobs(잡 큐 4종)에 공통
+    적용해 그 노출 구간을 좁힌다.
+
+    `DBError`(HTTP 4xx/5xx, 예: 인증 실패)는 재시도해도 의미가 없는 영구 오류이므로
+    여기서 잡지 않고 즉시 그대로 전파한다 — 호출자(runner.py)가 지금처럼 종료
+    처리한다.
+
+    `sleep_fn`은 테스트가 실제 sleep 없이 백오프를 결정론적으로 검증하기 위한
+    이음매다(runner.py의 동일 패턴 참고).
+    """
+    for attempt in range(attempts):
+        try:
+            return fn()
+        except httpx.TransportError:
+            if attempt == attempts - 1:
+                raise
+            sleep_fn(base_backoff_s * (2 ** attempt))
 
 
 class DBError(Exception):
@@ -136,15 +175,20 @@ class SupabaseRest(DBClient):
     검증한다. 각 메서드는 정확히 PostgREST/RPC 엔드포인트 1개만 호출한다.
     """
 
-    def __init__(self, config):
+    def __init__(self, config, sleep_fn=None, transport=None):
+        """`sleep_fn`/`transport`는 테스트 이음매다(기본값은 각각 `time.sleep`과 httpx의
+        실제 전송 계층). `transport`에 `httpx.MockTransport`를 주입하면 실 네트워크
+        없이 재시도 배선(I2)까지 결정론적으로 검증할 수 있다(worker/tests/test_db.py)."""
         self._base_url = config.supabase_url.rstrip("/")
         self._worker_id = config.worker_id
+        self._sleep_fn = sleep_fn or time.sleep
         headers = {
             "apikey": config.service_role_key,
             "Authorization": f"Bearer {config.service_role_key}",
             "Content-Type": "application/json",
         }
-        self._client = httpx.Client(base_url=self._base_url, headers=headers, timeout=_TIMEOUT_S)
+        self._client = httpx.Client(base_url=self._base_url, headers=headers, timeout=_TIMEOUT_S,
+                                     transport=transport)
 
     def close(self):
         self._client.close()
@@ -179,29 +223,38 @@ class SupabaseRest(DBClient):
         self._raise_for_status(resp)
 
     # -- 잡 큐 -----------------------------------------------------------
+    # 코드리뷰 Important(I2): claim_job/complete_job/fail_job/reap_stuck_jobs
+    # 4종에만 _with_transport_retry를 적용한다. enqueue_job은 대시보드가 아니라
+    # 이 워커 자신이 호출하는 경로가 실제로 없어(대시보드는 supabase-js로 직접
+    # fn_enqueue_job을 호출) 재시도 대상에서 제외했다(리뷰 지시 범위와 일치).
     def claim_job(self):
-        job = self._rpc("fn_job_claim", {"p_worker": self._worker_id})
-        # 코드리뷰 Critical(C1): fn_job_claim은 `returns jobs`(setof가 아닌 단일
-        # 컴포지트)라, 대기 중인 잡이 없으면 SQL이 `return null;`을 실행해도
-        # PostgREST는 0행이 아니라 **id 등 전 컬럼이 null인 1행**을 내려준다
-        # (docs/SUPABASE_SETUP.md §3(2)에서 실측 확인). 이 가드가 없으면 그 dict가
-        # 그대로 runner까지 흘러가 `job is None` 검사를 통과해버리고, 이후
-        # `fail_job(None, ...)`이 uuid 캐스트 400으로 워커 프로세스를 죽인다.
-        if not job or job.get("id") is None:
-            return None
-        return job
+        def _do():
+            job = self._rpc("fn_job_claim", {"p_worker": self._worker_id})
+            # 코드리뷰 Critical(C1): fn_job_claim은 `returns jobs`(setof가 아닌 단일
+            # 컴포지트)라, 대기 중인 잡이 없으면 SQL이 `return null;`을 실행해도
+            # PostgREST는 0행이 아니라 **id 등 전 컬럼이 null인 1행**을 내려준다
+            # (docs/SUPABASE_SETUP.md §3(2)에서 실측 확인). 이 가드가 없으면 그 dict가
+            # 그대로 runner까지 흘러가 `job is None` 검사를 통과해버리고, 이후
+            # `fail_job(None, ...)`이 uuid 캐스트 400으로 워커 프로세스를 죽인다.
+            if not job or job.get("id") is None:
+                return None
+            return job
+        return _with_transport_retry(_do, self._sleep_fn)
 
     def complete_job(self, job_id):
-        self._rpc("fn_job_complete", {"p_job_id": str(job_id)})
+        _with_transport_retry(
+            lambda: self._rpc("fn_job_complete", {"p_job_id": str(job_id)}), self._sleep_fn)
 
     def fail_job(self, job_id, error):
-        self._rpc("fn_job_fail", {"p_job_id": str(job_id), "p_error": error})
+        _with_transport_retry(
+            lambda: self._rpc("fn_job_fail", {"p_job_id": str(job_id), "p_error": error}), self._sleep_fn)
 
     def enqueue_job(self, type_, payload):
         return self._rpc("fn_enqueue_job", {"p_type": type_, "p_payload": payload})
 
     def reap_stuck_jobs(self, timeout_minutes=30):
-        return self._rpc("fn_reap_stuck_jobs", {"p_timeout_minutes": timeout_minutes})
+        return _with_transport_retry(
+            lambda: self._rpc("fn_reap_stuck_jobs", {"p_timeout_minutes": timeout_minutes}), self._sleep_fn)
 
     # -- 조회 -----------------------------------------------------------
     def get_scan(self, scan_id):

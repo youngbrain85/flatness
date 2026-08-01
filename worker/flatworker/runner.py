@@ -58,7 +58,20 @@ def run_loop(db, cfg, handlers=None, max_iterations=None, sleep_fn=None):
         # 시작 시 1회: 이전 워커가 비정상 종료해 processing에 고착된 잡을 재큐잉
         # (fn_reap_stuck_jobs, 002_functions_seed.sql) — 방치하면 jobs_dedup 부분
         # 유니크(queued/processing 포함)가 동일 analysis_id 재enqueue를 영구 차단한다.
-        db.reap_stuck_jobs()
+        #
+        # 코드리뷰 Important(I2)/M7: db.reap_stuck_jobs()는 이제 내부적으로 전송
+        # 오류(httpx.TransportError)를 짧게 재시도한다(db.py의 _with_transport_retry).
+        # 그래도 재시도를 다 소진할 만큼 연결이 끊겨 있다면, 워커가 폴링 루프를
+        # 시작해보기도 전에 이 1회성 하우스키핑 때문에 프로세스 전체가 죽는 것은
+        # 과하다 — 곧바로 이어지는 폴링 루프의 claim_job이 자체 백오프로 연결
+        # 복구를 계속 시도하고, 고착 잡 회수는 다음 재기동이나 재클레임 시
+        # 자가치유(processing -> 재클레임으로 자연 회복)로 미뤄도 무방하다. 반면
+        # DBError(인증 실패 등 영구 오류)는 지금처럼 그대로 전파해 종료한다.
+        try:
+            db.reap_stuck_jobs()
+        except httpx.TransportError as e:
+            print(f"[flatworker] 기동 시 고착 잡 회수가 연결 오류로 실패했습니다"
+                  f"(재시도 소진) - 계속 진행합니다: {e}")
         i = 0
         backoff_s = cfg.poll_interval_s
         consecutive_failures = 0
