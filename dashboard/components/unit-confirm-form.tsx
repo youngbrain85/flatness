@@ -36,13 +36,23 @@ export function UnitConfirmForm({ scan, userId }: { scan: ScanRow; userId: strin
     if (aErr || !analysis) { setError(aErr?.message ?? '분석 등록 실패'); setBusy(false); return; }
     const r = await enqueueJob(supabase, 'analyze', { analysis_id: analysis.id });
     if (!r.ok) {
+      // reanalyze-button.tsx의 I1과 같은 처방: 엔큐가 실패했으면 방금 만든 analyses
+      // 행을 되돌린다. 그대로 두면 status='queued'인 고아 행이 남아 scans/[id]의
+      // latest가 이 행이 되고 inProgress가 영구 true로 고정된다. 워커의
+      // reap_stuck_jobs는 jobs 테이블만 보는데 여기선 잡 자체가 없으므로 자동 복구도
+      // 안 된다. soft delete면 상세 조회가 이미 .is('deleted_at', null)로 거른다.
+      await supabase.from('analyses')
+        .update({ deleted_at: new Date().toISOString() }).eq('id', analysis.id);
       // 409(중복 엔큐) 등 실패 안내를 사용자가 읽을 수 있게 화면에 남는다
       setError(r.message);
       setBusy(false);
       return;
     }
+    // push만 한다. 뒤에 router.refresh()를 붙이면 refresh가 "현재 라우트"를 다시
+    // 렌더하면서 진행 중이던 이동을 취소한다(로그인 화면에서 실제로 재현된 결함).
+    // scans/[id]는 force-dynamic이고 동적 페이지의 클라이언트 캐시 staleTime
+    // 기본값은 0초(캐시 안 함)라, push만으로도 항상 서버에서 새로 받아온다.
     router.push(`/scans/${scan.id}`);
-    router.refresh();
   }
 
   return (

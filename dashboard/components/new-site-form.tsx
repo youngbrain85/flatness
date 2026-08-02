@@ -17,8 +17,11 @@ export function NewSiteForm() {
       .insert({ name: name.trim(), address: address.trim() || null, memo: memo.trim() || null })
       .select('id').single();
     if (err || !data) { setError(err?.message ?? '저장 실패'); return; }
+    // push만 한다. 뒤에 router.refresh()를 붙이면 refresh가 "현재 라우트"를 다시
+    // 렌더하면서 진행 중이던 이동을 취소한다(로그인 화면에서 실제로 재현된 결함).
+    // sites/[id]는 force-dynamic이고 동적 페이지의 클라이언트 캐시 staleTime
+    // 기본값은 0초(캐시 안 함)라, push만으로도 항상 서버에서 새로 받아온다.
     router.push(`/sites/${data.id}`);
-    router.refresh();
   }
 
   return (
