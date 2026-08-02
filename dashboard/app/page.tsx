@@ -1,9 +1,7 @@
 // 홈(현장 목록)
 import Link from 'next/link';
-import path from 'path';
 import { createClient } from '@/lib/supabase/server';
 import { buildSiteSummaries } from '@/lib/domain/summary';
-import { dirSizeBytes, fmtBytes } from '@/lib/server/disk-usage';
 import { SiteCard } from '@/components/site-card';
 import { SupabaseErrorNotice } from '@/components/supabase-error';
 import type { AnalysisStatus, SiteRow, Verdict } from '@/lib/domain/types';
@@ -30,14 +28,11 @@ export default async function HomePage() {
     scansRes.data ?? [],
     (analysesRes.data ?? []) as { scan_id: string; status: AnalysisStatus; overall_verdict: Verdict | null }[],
   );
-  const dataDir = path.resolve(process.env.DATA_DIR ?? '../data');
-  const usage = await dirSizeBytes(dataDir);
   return (
     <main className="mx-auto max-w-6xl p-6">
       <div className="mb-4 flex items-center justify-between">
         <h1 className="text-xl font-bold">현장 목록</h1>
         <div className="flex items-center gap-4 text-sm text-slate-500">
-          <span>로컬 저장 용량: {fmtBytes(usage)}</span>
           <Link href="/sites/new" className="rounded bg-slate-800 px-3 py-1.5 text-white">새 현장</Link>
         </div>
       </div>

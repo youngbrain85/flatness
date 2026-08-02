@@ -16,6 +16,12 @@ export function storageErrorMessage(err: unknown): string {
   return `파일 업로드에 실패했습니다: ${msg}`;
 }
 
+// 보안 참고: 서버 코드를 거치지 않고 브라우저가 Storage로 직접 올리므로 서버 측 검증이
+// 전혀 없다 - 접근 통제는 전적으로 Storage 버킷 정책(RLS)에 달려 있다. 현재 유일한
+// 방어선은 supabase/migrations/005_storage_buckets.sql의 raw_scans_all_auth 정책
+// (to authenticated 전원에게 raw-scans 버킷 전체 읽기·쓰기 허용)이다. 이 정책을 바꿀 때는
+// (1) 회원가입이 여전히 차단돼 있는지(docs/DEPLOY.md §1), (2) 경로 스코프 제한이 필요한지
+// (다중 기관 사용 시 - 백로그 티켓 55·57)를 함께 확인한다.
 export async function uploadRawScan(
   supabase: SupabaseClient, file: File, siteId: string, scanId: string, ext: string,
 ): Promise<string> {

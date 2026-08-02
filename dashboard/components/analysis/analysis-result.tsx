@@ -30,7 +30,7 @@ export function AnalysisResult({ analysis, scan, photos }: {
       if (!analysis.artifacts_dir) { setCellsError('산출물 경로가 없습니다'); return; }
       const res = await fetch(artifactUrl(analysis.artifacts_dir, 'cells.json'));
       if (!res.ok) {
-        if (!cancelled) setCellsError('셀 데이터를 불러오지 못했습니다. 워커 PC의 data/ 디렉터리와 DATA_DIR 설정을 확인하세요.');
+        if (!cancelled) setCellsError('셀 데이터를 저장소에서 찾을 수 없습니다. 파일이 삭제되었거나 아직 업로드되지 않았을 수 있습니다. 스캔 상세에서 재분석을 시도하세요.');
         return;
       }
       const data = (await res.json()) as CellRow[];

@@ -39,7 +39,11 @@ cp .env.example .env.local
 |---|---|
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase 프로젝트 URL(`https://<project-ref>.supabase.co`). Settings > API에서 확인 |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | anon(public) key. 같은 화면에서 확인. **service_role 키는 절대 넣지 않는다**(RLS 우회) |
-| `DATA_DIR` | 워커 산출물(원본 스캔·분석 결과물)이 쌓이는 로컬 디렉터리. **워커 `.env`의 `DATA_DIR`과 동일한 디렉터리를 가리켜야 한다**(다르면 대시보드가 워커가 쓴 파일을 찾지 못한다). 기본값 `../data` |
+| `NEXT_PUBLIC_MAX_UPLOAD_BYTES` | 업로드 크기 상한(바이트). 기본 `52428800`(50MB) — Supabase Free 티어 파일당 한도. `005_storage_buckets.sql` 버킷의 `file_size_limit`과 같은 값을 유지해야 한다. Pro 승급 시 둘 다 함께 올린다 |
+
+대시보드는 로컬 파일시스템을 쓰지 않는다 — 원본 스캔·산출물·보고서 PDF는 모두 Supabase
+Storage 서명 URL로 내려받는다(`DATA_DIR` 설정 불필요). 클라우드(Vercel) 배포 절차는
+[`../docs/DEPLOY.md`](../docs/DEPLOY.md) 참고.
 
 ## 4. 실행
 
