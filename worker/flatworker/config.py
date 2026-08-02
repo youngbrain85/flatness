@@ -11,12 +11,15 @@ _KEY_SERVICE_ROLE_KEY = "SUPABASE_SERVICE_ROLE_KEY"
 _KEY_DATA_DIR = "DATA_DIR"
 _KEY_POLL_INTERVAL_S = "POLL_INTERVAL_S"
 _KEY_WORKER_ID = "WORKER_ID"
+_KEY_STORAGE_BACKEND = "STORAGE_BACKEND"
 
 _REQUIRED = (_KEY_URL, _KEY_SERVICE_ROLE_KEY)
 
 _DEFAULT_DATA_DIR = "../data"
 _DEFAULT_POLL_INTERVAL_S = 3.0
 _DEFAULT_WORKER_ID = "local-1"
+_DEFAULT_STORAGE_BACKEND = "local"   # 배포(Railway)에서만 supabase로 올린다
+_VALID_BACKENDS = ("local", "supabase")
 
 
 class ConfigError(Exception):
@@ -30,6 +33,10 @@ class Config:
     data_dir: Path
     poll_interval_s: float
     worker_id: str
+    # 기본값 "local"을 둔 이유: 이미 곳곳에 흩어진 기존 테스트가 Config(...)를 이
+    # 필드 없이 직접 구성한다 - 필수 필드로 만들면 그 생성부를 전부 고쳐야 하는데,
+    # 클라우드 배포와 무관한 회귀 위험만 늘어난다.
+    storage_backend: str = _DEFAULT_STORAGE_BACKEND
 
 
 def load_config(env_path=None) -> Config:
@@ -59,10 +66,17 @@ def load_config(env_path=None) -> Config:
     except (TypeError, ValueError) as e:
         raise ConfigError(f"{_KEY_POLL_INTERVAL_S} 값이 숫자가 아닙니다: {poll_raw!r}") from e
 
+    storage_backend_raw = _get(_KEY_STORAGE_BACKEND, _DEFAULT_STORAGE_BACKEND)
+    storage_backend = storage_backend_raw.strip().lower()
+    if storage_backend not in _VALID_BACKENDS:
+        raise ConfigError(
+            f"{_KEY_STORAGE_BACKEND}는 local 또는 supabase여야 합니다: {storage_backend_raw!r}")
+
     return Config(
         supabase_url=_get(_KEY_URL),
         service_role_key=_get(_KEY_SERVICE_ROLE_KEY),
         data_dir=Path(_get(_KEY_DATA_DIR, _DEFAULT_DATA_DIR)),
         poll_interval_s=poll_interval_s,
         worker_id=_get(_KEY_WORKER_ID, _DEFAULT_WORKER_ID),
+        storage_backend=storage_backend,
     )
