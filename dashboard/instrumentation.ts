@@ -1,7 +1,7 @@
 // 서버 기동 시 1회 실행되는 초기화 훅 (Next.js instrumentation 규약).
 //
 // 목적: Supabase로 나가는 HTTP 연결을 오래 유지해 TLS 핸드셰이크 비용을 없앤다.
-// 실측 근거(2026-07-29, 프로젝트 ehmhrdbgaeinrpsrebxt):
+// 실측 근거(2026-07-29, Supabase Free 프로젝트 1건 기준):
 //   - 새 연결마다 TLS 핸드셰이크에 3.1초 소요(같은 PC에서 google/github은 0.3초)
 //   - 같은 연결 재사용 시 26~31ms (약 100배 차이)
 //   - Node 기본 커넥션 풀은 유휴 연결을 수 초 만에 닫아, 페이지를 옮길 때마다
