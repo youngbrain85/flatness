@@ -1,4 +1,6 @@
 import json
+import tempfile
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -8,6 +10,7 @@ flat_floor, add_bump, write_binary_ply = synthetic.flat_floor, synthetic.add_bum
 from flatworker.config import Config
 from flatworker.jobs import handle_analyze, handle_import, overall_verdict
 from flatworker.artifacts import raw_scan_dir, artifacts_dir
+from flatworker.storage import get_storage
 from tests.fake_db import FakeDB
 
 
@@ -49,6 +52,47 @@ def test_handle_analyze_floor(tmp_path):
     # 코드리뷰 Important(I1): DB에는 버킷-상대 규약 문자열만 저장(워커 CWD 상대·OS
     # 종속 절대경로가 아님) — 실제 파일 위치는 소비자가 DATA_DIR에 결합해 얻는다.
     assert a["artifacts_dir"] == f"artifacts/{aid}"
+
+
+def _seed_scan_via_storage(db, storage):
+    """원본이 로컬 data_dir가 아니라 Storage에만 있는 상황을 시드한다.
+
+    스캔 파일을 별도 임시 디렉터리(cfg.data_dir가 아닌 곳)에 써서 bytes로 읽은 뒤
+    storage.upload로만 올린다 - cfg.data_dir 아래에는 이 원본이 전혀 존재하지 않아,
+    handle_analyze가 Storage를 거치지 않고 cfg.data_dir에 직접 결합해 열면(과거
+    _resolve_raw_path 방식) 반드시 실패한다.
+    """
+    pts = add_bump(flat_floor(size=(6.0, 6.0), spacing=0.02), (2.0, 2.0), 0.3, -0.010)
+    with tempfile.TemporaryDirectory() as d:
+        tmp_ply = Path(d) / "raw.ply"
+        write_binary_ply(pts, tmp_ply)
+        storage.upload("raw-scans/site1/scan1/raw.ply", tmp_ply.read_bytes())
+    db.scans["scan1"] = {"id": "scan1", "site_id": "site1", "surface": "floor",
+                         "raw_file_path": "raw-scans/site1/scan1/raw.ply", "unit_scale": 1.0,
+                         "status": "ready", "selected_criteria_id": "c1"}
+    db.criteria["c1"] = {"id": "c1", "surface": "floor", "name": "floor-kcs-exposed",
+                         "source_text": "KCS 14 20 10 표 3.7-1 (제물치장·얇은 마감)",
+                         "thresholds": [{"span_m": 3, "metric": "flatness", "pass_mm": 7, "rework_mm": 21}]}
+    db.app_settings["uncertainty_mm"] = {"floor": 5.0, "wall": 8.0}
+
+
+def _seed_analysis(db):
+    db.analyses["a1"] = {"id": "a1", "scan_id": "scan1", "surface": "floor",
+                         "criteria_id": "c1", "status": "queued"}
+    return "a1"
+
+
+def test_handle_analyze_reads_and_writes_through_storage(tmp_path):
+    """원본이 data_dir에 파일로 없고 Storage에만 있어도 분석이 되고,
+    산출물이 Storage 키(artifacts/{id}/...)로 올라간다."""
+    db, cfg = FakeDB(), _cfg(tmp_path)
+    storage = get_storage(cfg, db)
+    _seed_scan_via_storage(db, storage)
+    aid = _seed_analysis(db)
+    handle_analyze(db, cfg, {"analysis_id": aid})
+    assert storage.download(f"artifacts/{aid}/stats.json") is not None
+    assert storage.download(f"artifacts/{aid}/heatmap.png") is not None
+    assert db.analyses[aid]["artifacts_dir"] == f"artifacts/{aid}"
 
 
 def test_overall_verdict_priority():

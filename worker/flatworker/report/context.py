@@ -5,7 +5,6 @@
 """
 import json
 from dataclasses import dataclass
-from pathlib import Path
 
 
 @dataclass
@@ -28,17 +27,16 @@ class ReportContext:
     photos: list
 
 
-def _load_cells(cfg, analysis):
+def _load_cells(storage, analysis):
     artifacts_dir = analysis.get("artifacts_dir")
     if not artifacts_dir:
         raise ValueError(f"분석 {analysis['id']}의 산출물 경로가 없습니다. 분석을 다시 실행하세요.")
-    # 경로 계약: DB에는 버킷-상대 문자열만 있으므로 소비자가 자신의 DATA_DIR에 결합한다
-    path = Path(cfg.data_dir) / artifacts_dir / "cells.json"
-    if not path.exists():
+    blob = storage.download(f"{artifacts_dir}/cells.json")
+    if blob is None:
         raise ValueError(
-            f"분석 {analysis['id']}의 셀 데이터(cells.json)를 찾을 수 없습니다: {artifacts_dir}. "
-            "워커 PC의 data/ 디렉터리와 DATA_DIR 설정을 확인하세요.")
-    return json.loads(path.read_text(encoding="utf-8"))
+            f"분석 {analysis['id']}의 셀 데이터(cells.json)를 저장소에서 찾을 수 없습니다: "
+            f"{artifacts_dir}. 분석을 다시 실행하세요.")
+    return json.loads(blob.decode("utf-8"))
 
 
 def _operator_name(db, scan):
@@ -53,7 +51,7 @@ def _operator_name(db, scan):
     return (profile or {}).get("display_name")
 
 
-def load_report_context(db, cfg, report_id):
+def load_report_context(db, storage, report_id):
     report = db.get_report(report_id)
     if report.get("status") == "finalized":
         # 004의 불변 트리거와 2중 방어: 발행본은 재생성 대상이 아니다
@@ -84,7 +82,7 @@ def load_report_context(db, cfg, report_id):
                 "보고서는 같은 측정위치의 분석만 묶을 수 있습니다.")
         bundles.append(AnalysisBundle(
             analysis=analysis, scan=scan, stats=analysis["stats"],
-            cells=_load_cells(cfg, analysis), sort_order=link.get("sort_order", 0),
+            cells=_load_cells(storage, analysis), sort_order=link.get("sort_order", 0),
             operator_name=_operator_name(db, scan)))
 
     photos = db.get_photos_by_scan_ids([b.scan["id"] for b in bundles])

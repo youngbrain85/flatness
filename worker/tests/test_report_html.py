@@ -4,6 +4,7 @@ from flatworker.report.assets import build_assets
 from flatworker.report.context import load_report_context
 from flatworker.report.html import asset_src, fmt_mm, render_html
 from flatworker.report.snapshot import build_snapshot
+from flatworker.storage import LocalStorage
 from tests.fake_db import FakeDB
 from tests.test_report_snapshot import _seed
 
@@ -13,14 +14,19 @@ def _cfg(tmp_path):
                   data_dir=tmp_path / "data", poll_interval_s=0.01, worker_id="w1")
 
 
+def _storage(tmp_path):
+    return LocalStorage(tmp_path / "data")
+
+
 def _snapshot(tmp_path):
     db, cfg = FakeDB(), _cfg(tmp_path)
     _seed(db, cfg)
     artifacts = cfg.data_dir / "artifacts" / "an1"
     for name in ("heatmap.png", "preview3d.png"):
         (artifacts / name).write_bytes(b"\x89PNG-fake")
-    ctx = load_report_context(db, cfg, "r1")
-    return build_snapshot(ctx, build_assets(db, cfg, "r1", ctx))
+    storage = _storage(tmp_path)
+    ctx = load_report_context(db, storage, "r1")
+    return build_snapshot(ctx, build_assets(db, storage, "r1", ctx))
 
 
 def test_fmt_mm_matches_dashboard_fmt():
@@ -71,8 +77,9 @@ def _snapshot_with_deviation(tmp_path):
     artifacts = cfg.data_dir / "artifacts" / "an1"
     for name in ("heatmap.png", "preview3d.png", "deviation.png"):
         (artifacts / name).write_bytes(b"\x89PNG-fake")
-    ctx = load_report_context(db, cfg, "r1")
-    return build_snapshot(ctx, build_assets(db, cfg, "r1", ctx))
+    storage = _storage(tmp_path)
+    ctx = load_report_context(db, storage, "r1")
+    return build_snapshot(ctx, build_assets(db, storage, "r1", ctx))
 
 
 def test_render_html_includes_deviation_figure(tmp_path):

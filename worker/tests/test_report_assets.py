@@ -5,6 +5,7 @@ import json
 from flatworker.config import Config
 from flatworker.report.assets import build_assets, deviation_label, render_histogram
 from flatworker.report.context import load_report_context
+from flatworker.storage import LocalStorage
 from tests.fake_db import FakeDB
 from tests.test_report_snapshot import _cells, _seed
 
@@ -12,6 +13,10 @@ from tests.test_report_snapshot import _cells, _seed
 def _cfg(tmp_path):
     return Config(supabase_url="http://fake", service_role_key="k",
                   data_dir=tmp_path / "data", poll_interval_s=0.01, worker_id="w1")
+
+
+def _storage(tmp_path):
+    return LocalStorage(tmp_path / "data")
 
 
 def _write_artifacts(cfg, names):
@@ -25,9 +30,10 @@ def test_build_assets_copies_floor_heatmap_preview_and_photo(tmp_path):
     db, cfg = FakeDB(), _cfg(tmp_path)
     _seed(db, cfg)
     _write_artifacts(cfg, ["heatmap.png", "preview3d.png"])
-    ctx = load_report_context(db, cfg, "r1")
+    storage = _storage(tmp_path)
+    ctx = load_report_context(db, storage, "r1")
 
-    assets = build_assets(db, cfg, "r1", ctx)
+    assets = build_assets(db, storage, "r1", ctx)
 
     a = assets["analyses"]["an1"]
     assert a["heatmaps"] == [{"label": "판정 히트맵",
@@ -59,9 +65,10 @@ def test_build_assets_skips_missing_wall_heatmap_with_note(tmp_path):
     ]
     db.scans["scan1"]["surface"] = "wall"
     _write_artifacts(cfg, ["heatmap_wall1.png"])   # wall 3 히트맵은 없음
-    ctx = load_report_context(db, cfg, "r1")
+    storage = _storage(tmp_path)
+    ctx = load_report_context(db, storage, "r1")
 
-    assets = build_assets(db, cfg, "r1", ctx)
+    assets = build_assets(db, storage, "r1", ctx)
 
     labels = [h["label"] for h in assets["analyses"]["an1"]["heatmaps"]]
     assert labels == ["벽 1 판정 히트맵"]
@@ -73,9 +80,10 @@ def test_build_assets_records_note_when_photo_download_fails(tmp_path):
     _seed(db, cfg)
     _write_artifacts(cfg, ["heatmap.png", "preview3d.png"])
     del db.photo_blobs["photos/p1.jpg"]     # Storage에서 사라진 상황 모사
-    ctx = load_report_context(db, cfg, "r1")
+    storage = _storage(tmp_path)
+    ctx = load_report_context(db, storage, "r1")
 
-    assets = build_assets(db, cfg, "r1", ctx)
+    assets = build_assets(db, storage, "r1", ctx)
 
     assert assets["photos"] == []
     assert any("사진" in n for n in assets["notes"])
@@ -88,9 +96,10 @@ def test_build_assets_clears_stale_files_on_regeneration(tmp_path):
     stale = cfg.data_dir / "reports" / "r1" / "assets" / "an1" / "heatmap_wall9.png"
     stale.parent.mkdir(parents=True, exist_ok=True)
     stale.write_bytes(b"stale")
-    ctx = load_report_context(db, cfg, "r1")
+    storage = _storage(tmp_path)
+    ctx = load_report_context(db, storage, "r1")
 
-    build_assets(db, cfg, "r1", ctx)
+    build_assets(db, storage, "r1", ctx)
 
     assert not stale.exists()
 
@@ -109,9 +118,10 @@ def test_build_assets_notes_when_no_valid_cells(tmp_path):
     na_cells = [dict(c, value_mm=None, grade="na") for c in _cells()]
     (cfg.data_dir / "artifacts" / "an1" / "cells.json").write_text(
         json.dumps(na_cells), encoding="utf-8")
-    ctx = load_report_context(db, cfg, "r1")
+    storage = _storage(tmp_path)
+    ctx = load_report_context(db, storage, "r1")
 
-    assets = build_assets(db, cfg, "r1", ctx)
+    assets = build_assets(db, storage, "r1", ctx)
 
     assert assets["analyses"]["an1"]["histogram"] is None
     assert any("히스토그램" in n for n in assets["notes"])
@@ -127,9 +137,10 @@ def test_build_assets_copies_deviation_maps(tmp_path):
     _seed(db, cfg)
     db.analyses["an1"]["stats"]["deviation_paths"] = ["deviation.png"]
     _write_artifacts(cfg, ["heatmap.png", "preview3d.png", "deviation.png"])
-    ctx = load_report_context(db, cfg, "r1")
+    storage = _storage(tmp_path)
+    ctx = load_report_context(db, storage, "r1")
 
-    assets = build_assets(db, cfg, "r1", ctx)
+    assets = build_assets(db, storage, "r1", ctx)
 
     assert assets["analyses"]["an1"]["deviation"] == [
         {"label": "정밀 편차맵(10cm)", "path": "reports/r1/assets/an1/deviation.png"}]
@@ -151,9 +162,10 @@ def test_build_assets_skips_missing_deviation_with_note(tmp_path):
     stats["deviation_paths"] = ["deviation_wall1.png", "deviation_wall3.png"]
     db.scans["scan1"]["surface"] = "wall"
     _write_artifacts(cfg, ["heatmap_wall1.png", "deviation_wall1.png"])  # wall3 편차맵 없음
-    ctx = load_report_context(db, cfg, "r1")
+    storage = _storage(tmp_path)
+    ctx = load_report_context(db, storage, "r1")
 
-    assets = build_assets(db, cfg, "r1", ctx)
+    assets = build_assets(db, storage, "r1", ctx)
 
     labels = [d["label"] for d in assets["analyses"]["an1"]["deviation"]]
     assert labels == ["벽 1 정밀 편차맵(10cm)"]

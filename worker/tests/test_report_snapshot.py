@@ -10,12 +10,17 @@ from flatworker.config import Config
 from flatworker.report.context import load_report_context
 from flatworker.report.snapshot import (SNAPSHOT_SCHEMA, build_sections, build_snapshot,
                                         coverage_label)
+from flatworker.storage import LocalStorage
 from tests.fake_db import FakeDB
 
 
 def _cfg(tmp_path):
     return Config(supabase_url="http://fake", service_role_key="k",
                   data_dir=tmp_path / "data", poll_interval_s=0.01, worker_id="w1")
+
+
+def _storage(tmp_path):
+    return LocalStorage(tmp_path / "data")
 
 
 def _floor_stats():
@@ -133,7 +138,7 @@ def test_coverage_label_follows_stats_contract():
 def test_build_snapshot_contract_keys(tmp_path):
     db, cfg = FakeDB(), _cfg(tmp_path)
     _seed(db, cfg)
-    ctx = load_report_context(db, cfg, "r1")
+    ctx = load_report_context(db, _storage(tmp_path), "r1")
     snap = build_snapshot(ctx, _EMPTY_ASSETS)
 
     assert snap["schema"] == SNAPSHOT_SCHEMA
@@ -162,42 +167,44 @@ def test_build_snapshot_contract_keys(tmp_path):
 def test_build_opinion_prefers_report_text_then_analysis_summaries(tmp_path):
     db, cfg = FakeDB(), _cfg(tmp_path)
     _seed(db, cfg)
-    ctx = load_report_context(db, cfg, "r1")
+    storage = _storage(tmp_path)
+    ctx = load_report_context(db, storage, "r1")
     auto = build_snapshot(ctx, _EMPTY_ASSETS)["opinion"]
     assert auto["source"] == "auto" and auto["text"].startswith("[바닥] ")
 
     db.analyses["an1"]["user_summary"] = "현장 재확인 결과 이상 없음"
-    ctx = load_report_context(db, cfg, "r1")
+    ctx = load_report_context(db, storage, "r1")
     assert build_snapshot(ctx, _EMPTY_ASSETS)["opinion"]["text"] == "[바닥] 현장 재확인 결과 이상 없음"
 
     db.reports["r1"]["opinion_text"] = "작성자 종합의견"
-    ctx = load_report_context(db, cfg, "r1")
+    ctx = load_report_context(db, storage, "r1")
     user = build_snapshot(ctx, _EMPTY_ASSETS)["opinion"]
     assert user == {"text": "작성자 종합의견", "source": "user"}
 
 
 def test_load_report_context_rejects_invalid_inputs(tmp_path):
     db, cfg = FakeDB(), _cfg(tmp_path)
+    storage = _storage(tmp_path)
     _seed(db, cfg, status="processing")
     with pytest.raises(ValueError, match="완료되지 않은 분석"):
-        load_report_context(db, cfg, "r1")
+        load_report_context(db, storage, "r1")
 
     db.analyses["an1"]["status"] = "done"
     db.locations["loc2"] = {"id": "loc2", "site_id": "site1", "building": "", "floor": "",
                             "room": "", "name": "P2", "memo": None}
     db.scans["scan1"]["location_id"] = "loc2"
     with pytest.raises(ValueError, match="다른 측정위치"):
-        load_report_context(db, cfg, "r1")
+        load_report_context(db, storage, "r1")
 
     db.scans["scan1"]["location_id"] = "loc1"
     db.reports["r1"]["status"] = "finalized"
     with pytest.raises(ValueError, match="발행된 보고서"):
-        load_report_context(db, cfg, "r1")
+        load_report_context(db, storage, "r1")
 
     db.reports["r1"]["status"] = "draft"
     db.report_analyses.clear()
     with pytest.raises(ValueError, match="포함된 분석이 없습니다"):
-        load_report_context(db, cfg, "r1")
+        load_report_context(db, storage, "r1")
 
 
 def test_load_report_context_reports_missing_cells_file(tmp_path):
@@ -205,4 +212,4 @@ def test_load_report_context_reports_missing_cells_file(tmp_path):
     _seed(db, cfg)
     (cfg.data_dir / "artifacts" / "an1" / "cells.json").unlink()
     with pytest.raises(ValueError, match="cells.json"):
-        load_report_context(db, cfg, "r1")
+        load_report_context(db, _storage(tmp_path), "r1")

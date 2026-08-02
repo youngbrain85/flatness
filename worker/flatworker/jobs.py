@@ -3,7 +3,6 @@
 analyze/import/report는 실패 시 예외를 그대로 전파한다: 잡 상태 전이(재시도/최종
 실패)는 runner가 `fail_job`으로 처리하는 책임이라 이 모듈에서 잡지 않는다.
 """
-import os
 from pathlib import Path
 
 from flatness.criteria import Criterion
@@ -11,11 +10,12 @@ from flatness.core.pipeline import analyze_floor, analyze_wall
 from flatness.importer.colab_csv import import_colab_csv
 from flatness.importer.json_import import import_json
 
-from flatworker.artifacts import artifacts_dir
-from flatworker.report.assets import build_assets, report_dir
+from flatworker.artifacts import staging_dir
+from flatworker.report.assets import build_assets
 from flatworker.report.context import load_report_context
 from flatworker.report.html import render_html
 from flatworker.report.snapshot import build_snapshot
+from flatworker.storage import get_storage
 
 
 def _to_criterion(row):
@@ -69,20 +69,27 @@ def _load_context(db, analysis_id):
     return analysis, scan, crit, u_mm
 
 
-def _resolve_raw_path(cfg, scan):
-    """scan.raw_file_path를 실제 파일 경로로 해석한다.
+def _fetch_raw(storage, scan, work):
+    """scans.raw_file_path(버킷-상대 규약 문자열)를 스테이징에 내려받아 경로를 준다.
 
-    코드리뷰 Important(I1): DB(scans.raw_file_path)에는 스펙 §6.3 규약대로
+    코드리뷰 Important(I1) 계승: DB(scans.raw_file_path)에는 스펙 §6.3 규약대로
     **버킷-상대 경로 문자열만** 저장된다(예: `raw-scans/{site_id}/{scan_id}/raw.ply`)
-    — `data/` 접두나 OS 절대경로가 아니다. 이 값을 실제로 열 수 있는 경로로 바꾸는
-    책임은 소비자(이 워커)에게 있고, 소비자는 자신의 `DATA_DIR`에 결합한다. 이미
-    절대경로로 들어온 값(과거 데이터 등)은 그대로 존중해 이중 결합을 피한다.
+    — `data/` 접두나 OS 절대경로가 아니다. 엔진은 로컬 `Path`만 읽을 수 있으므로
+    Storage에서 스테이징으로 내려받아 그 경로를 돌려준다. 이미 절대경로로 들어온
+    값(과거 데이터 등)은 그대로 존중해 이중 결합을 피한다.
     """
-    p = Path(scan["raw_file_path"])
-    return cfg.data_dir / p if not p.is_absolute() else p
+    key = scan["raw_file_path"]
+    p = Path(key)
+    if p.is_absolute():           # 과거 데이터 호환: 절대경로가 저장돼 있으면 그대로 연다
+        return p
+    dst = work / p.name
+    if not storage.download_to(key, dst):
+        raise ValueError(
+            f"원본 파일을 저장소에서 찾을 수 없습니다: {key}. 파일을 다시 업로드하세요.")
+    return dst
 
 
-def _finalize(db, analysis_id, scan_id, stats, out_dir):
+def _finalize(db, analysis_id, scan_id, stats):
     """엔진 stats를 analyses 행에 반영하고 해당 스캔의 현재 분석으로 지정."""
     db.update_analysis(analysis_id, {
         "status": "done",
@@ -90,9 +97,9 @@ def _finalize(db, analysis_id, scan_id, stats, out_dir):
         "coverage_pct": stats.get("coverage_pct"),
         "overall_verdict": overall_verdict(stats),
         "warnings": stats.get("warnings", []),
-        # 코드리뷰 Important(I1): out_dir(워커 CWD 상대·OS 종속 절대경로)이 아니라
-        # 스펙 §6.3 규약의 버킷-상대 문자열만 저장한다 — 실제 파일 위치는 소비자가
-        # 자신의 data 루트(DATA_DIR)에 이 문자열을 결합해 얻는다.
+        # 코드리뷰 Important(I1) 계승: 워커 CWD 상대·OS 종속 절대경로가 아니라
+        # 스펙 §6.3 규약의 버킷-상대 문자열만 저장한다 — 실제 파일은 storage.upload_dir
+        # 로 이미 이 접두 아래 올라가 있다.
         "artifacts_dir": f"artifacts/{analysis_id}",
         "engine_version": stats.get("meta", {}).get("engine_version"),
         "applied_criteria": stats.get("applied_criteria"),
@@ -104,14 +111,18 @@ def _finalize(db, analysis_id, scan_id, stats, out_dir):
 def handle_analyze(db, cfg, payload):
     analysis_id = payload["analysis_id"]
     analysis, scan, crit, u_mm = _load_context(db, analysis_id)
-    out_dir = artifacts_dir(cfg.data_dir, analysis_id)
-    path = _resolve_raw_path(cfg, scan)
-    scale_to_m = scan["unit_scale"]
-    if scan["surface"] == "wall":
-        stats = analyze_wall(path, scale_to_m, crit, u_mm, out_dir)
-    else:
-        stats = analyze_floor(path, scale_to_m, crit, u_mm, out_dir)
-    _finalize(db, analysis_id, analysis["scan_id"], stats, out_dir)
+    storage = get_storage(cfg, db)
+    with staging_dir() as work:
+        path = _fetch_raw(storage, scan, work)
+        out_dir = work / "out"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        scale_to_m = scan["unit_scale"]
+        if scan["surface"] == "wall":
+            stats = analyze_wall(path, scale_to_m, crit, u_mm, out_dir)
+        else:
+            stats = analyze_floor(path, scale_to_m, crit, u_mm, out_dir)
+        storage.upload_dir(f"artifacts/{analysis_id}", out_dir)
+    _finalize(db, analysis_id, analysis["scan_id"], stats)
 
 
 # 확장자 -> 임포터 함수. 두 임포터 모두 (path, criterion, u_mm, out_dir) 시그니처와
@@ -131,14 +142,18 @@ def handle_import(db, cfg, payload):
         # "바닥(flatness) 기준을 지정하세요" 안내)와 동일한 취지로 여기서 조기 차단한다.
         raise ValueError(
             f"임포트는 바닥(floor) 스캔만 지원합니다: scan.surface='{scan['surface']}'")
-    out_dir = artifacts_dir(cfg.data_dir, analysis_id)
-    path = _resolve_raw_path(cfg, scan)
-    importer = _IMPORT_HANDLERS.get(path.suffix.lower())
-    if importer is None:
-        raise ValueError(
-            f"지원하지 않는 임포트 파일 형식입니다: '{path.suffix}' (지원 형식: .csv, .json)")
-    stats = importer(path, crit, u_mm, out_dir)
-    _finalize(db, analysis_id, analysis["scan_id"], stats, out_dir)
+    storage = get_storage(cfg, db)
+    with staging_dir() as work:
+        path = _fetch_raw(storage, scan, work)
+        importer = _IMPORT_HANDLERS.get(path.suffix.lower())
+        if importer is None:
+            raise ValueError(
+                f"지원하지 않는 임포트 파일 형식입니다: '{path.suffix}' (지원 형식: .csv, .json)")
+        out_dir = work / "out"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        stats = importer(path, crit, u_mm, out_dir)
+        storage.upload_dir(f"artifacts/{analysis_id}", out_dir)
+    _finalize(db, analysis_id, analysis["scan_id"], stats)
 
 
 def handle_report(db, cfg, payload, renderer=None):
@@ -151,46 +166,45 @@ def handle_report(db, cfg, payload, renderer=None):
     실패는 예외를 그대로 올린다 — 잡 상태 전이(재시도/최종 실패)와 reports.gen_status
     반영은 runner의 fail_job(=fn_job_fail) 책임이다(analyze/import와 동일 규약).
 
-    코드리뷰 Important(I1) — 발행본 보호(2중 방어, 완전한 원자성은 DB 트랜잭션 없이는
-    불가능하므로 아래 두 방어로 경합 창을 최대한 좁힌다):
+    발행본 보호(2중 방어, 완전한 원자성은 DB 트랜잭션 없이는 불가능하므로 아래 두
+    방어로 경합 창을 최대한 좁힌다):
     1. `load_report_context`가 컨텍스트 로드 시점에 finalized를 1회 거부하지만, 그
-       뒤 `build_assets`(assets 디렉터리를 rmtree 후 재생성)까지 가는 사이에 발행이
-       확정될 수 있다. rmtree 직전에 `db.get_report`로 상태를 다시 확인해 그 경합을
-       막는다(자산이 지워지기 "전"에 막는 것이 핵심 — 지운 뒤 되돌릴 방법은 없다).
-    2. PDF는 `report.pdf.tmp`로 렌더한 뒤 `db.update_report`가 성공한 "뒤"에만
-       `os.replace`로 `report.pdf`를 교체한다. 렌더링 도중(자산 복사~PDF 생성 사이,
-       수 초가 걸리는 Playwright 렌더 구간) 발행이 확정되면 004의
-       `fn_reports_finalized_guard` 트리거가 `db.update_report`를 42501로 거부하고,
-       이 함수는 tmp만 정리한 뒤 예외를 그대로 올린다 — 디스크의 report.pdf(발행본)는
-       손대지 않은 채 보존된다.
-       잔여 위험: `db.update_report` 성공 "직후" `os.replace` 자체가 실패하면(디스크
-       풀·권한 등) DB는 gen_status='done'인데 디스크 파일은 이전 버전으로 남는 아주
-       좁은 창이 남는다 — 은폐하지 않고 여기 명시한다. 이 창을 완전히 없애려면
-       파일시스템 갱신과 DB 갱신을 하나의 트랜잭션으로 묶어야 하는데, 이 둘은 서로
-       다른 시스템(로컬 파일시스템 vs PostgREST)이라 데모 아키텍처로는 달성 불가하다.
+       뒤 `build_assets`(원격 assets 접두를 지우고 재생성)까지 가는 사이에 발행이
+       확정될 수 있다. 스테이징 진입 직전에 `db.get_report`로 상태를 다시 확인해 그
+       경합을 막는다(자산이 지워지기 "전"에 막는 것이 핵심 — 지운 뒤 되돌릴 방법은
+       없다).
+    2. 원격 객체는 `db.update_report`가 성공한 **뒤에만** 건드린다. 렌더링 도중
+       (자산 복사~PDF 생성 사이, 수 초가 걸리는 Playwright 렌더 구간) 발행이
+       확정되면 004의 `fn_reports_finalized_guard` 트리거가 `db.update_report`를
+       42501로 거부하고, 이 함수는 스테이징만 버린 채 예외를 그대로 올린다 —
+       저장소의 발행본 report.pdf·assets는 한 바이트도 바뀌지 않는다(로컬
+       os.replace 방어보다 강하다: 실패해도 애초에 원격에 아무것도 쓰지 않았다).
+       남는 창: `db.update_report` 성공 직후 업로드가 실패하면 DB는 done인데
+       저장소 파일이 이전 버전으로 남는다. 파일시스템(Storage)과 DB를 한
+       트랜잭션으로 묶을 수 없어 생기는 구조적 한계이며 은폐하지 않고 여기 명시한다.
     """
     report_id = payload["report_id"]
-    ctx = load_report_context(db, cfg, report_id)
+    storage = get_storage(cfg, db)
+    ctx = load_report_context(db, storage, report_id)
 
-    # 방어 1: rmtree(자산 디렉터리) 직전 재확인 — load_report_context의 검사 이후
-    # 발행이 확정됐다면 자산을 지우기 전에 여기서 멈춘다.
+    # 방어 1: 스테이징(자산 재생성) 진입 직전 재확인 — load_report_context의 검사
+    # 이후 발행이 확정됐다면 원격 자산을 지우기 전에 여기서 멈춘다.
     report_now = db.get_report(report_id)
     if report_now.get("status") == "finalized":
         raise ValueError("발행된 보고서는 다시 생성할 수 없습니다. 새 보고서를 만드세요.")
 
-    out_dir = report_dir(cfg.data_dir, report_id)
-    assets = build_assets(db, cfg, report_id, ctx)
-    snapshot = build_snapshot(ctx, assets)
-    html = render_html(snapshot)
-    if renderer is None:
-        from flatworker.report.renderer import PlaywrightRenderer
-        renderer = PlaywrightRenderer()
+    with staging_dir() as work:
+        assets = build_assets(db, storage, report_id, ctx, work_dir=work)
+        snapshot = build_snapshot(ctx, assets)
+        html = render_html(snapshot)
+        if renderer is None:
+            from flatworker.report.renderer import PlaywrightRenderer
+            renderer = PlaywrightRenderer()
+        pdf_path = work / "report.pdf"
+        renderer.render_pdf(html, work, pdf_path)
 
-    # 방어 2: tmp에 렌더 후 DB 갱신 성공 시에만 원자적으로 교체(os.replace)한다.
-    final_path = out_dir / "report.pdf"
-    tmp_path = out_dir / "report.pdf.tmp"
-    renderer.render_pdf(html, out_dir, tmp_path)
-    try:
+        # 방어 2: DB 갱신 성공 시에만 원격 report.pdf를 업로드한다 — 실패하면
+        # 스테이징(work)이 with 블록 종료 시 통째로 지워질 뿐, 발행본은 그대로다.
         db.update_report(report_id, {
             "snapshot": snapshot,
             # 경로 계약: DB에는 버킷-상대 문자열만 (스펙 §6.3)
@@ -198,12 +212,5 @@ def handle_report(db, cfg, payload, renderer=None):
             "gen_status": "done",
             "gen_error": None,
         })
-    except Exception:
-        # DB 갱신이 거부되면(예: 렌더링 도중 발행 확정 -> 004 트리거 42501) tmp만
-        # 정리하고 기존 발행본 report.pdf는 그대로 둔다 — 원자적 교체의 핵심.
-        try:
-            tmp_path.unlink(missing_ok=True)
-        except OSError:
-            pass
-        raise
-    os.replace(tmp_path, final_path)
+        storage.upload(f"reports/{report_id}/report.pdf", pdf_path.read_bytes(),
+                       "application/pdf")
