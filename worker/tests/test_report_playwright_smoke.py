@@ -13,7 +13,7 @@ def test_playwright_renderer_produces_real_pdf(tmp_path):
     from flatworker.report.renderer import PlaywrightRenderer
 
     html = ("<html><head><meta charset='utf-8'>"
-            "<style>body{font-family:'Noto Sans KR','Malgun Gothic',sans-serif}</style>"
+            "<style>body{font-family:'Noto Sans CJK KR','Noto Sans KR','Malgun Gothic',sans-serif}</style>"
             "</head><body><h1>평활도 분석 보고서 렌더 스모크</h1>"
             "<p>한글 폰트와 인쇄 레이아웃이 적용되는지 확인합니다.</p></body></html>")
     out = tmp_path / "smoke.pdf"

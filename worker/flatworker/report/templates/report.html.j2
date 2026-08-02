@@ -10,9 +10,10 @@
 @page { size: A4; margin: 14mm 12mm 16mm 12mm; }
 * { box-sizing: border-box; }
 body {
-  /* 한글 폰트 폴백: 개발 PC(Windows)에는 Noto Sans KR·맑은 고딕이 모두 설치돼 있다.
-     컨테이너 배포 시에는 폰트 내장이 필요하다(README·백로그 참고). */
-  font-family: 'Noto Sans KR', 'Malgun Gothic', sans-serif;
+  /* 한글 폰트 폴백: 리눅스 컨테이너에서 fonts-noto-cjk가 등록하는 실제 패밀리명은
+     'Noto Sans CJK KR'이다. Windows 개발 PC에는 'Noto Sans KR'·맑은 고딕도 설치돼 있어
+     나머지 후보도 매칭되므로 호환성을 유지할 수 있다. */
+  font-family: 'Noto Sans CJK KR', 'Noto Sans KR', 'Malgun Gothic', sans-serif;
   font-size: 10pt; color: #1f2937; margin: 0; line-height: 1.45;
 }
 h1 { font-size: 20pt; margin: 0 0 6mm; }

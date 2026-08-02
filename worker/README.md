@@ -102,9 +102,10 @@ Windows 개발 PC에는 Chromium 캐시(`~/AppData/Local/ms-playwright/`)가 이
 
 ### 한글 폰트
 
-보고서 템플릿은 `'Noto Sans KR', 'Malgun Gothic', sans-serif` 폴백 체인을 쓴다. Windows에는
-두 폰트가 모두 있어 그대로 렌더된다. **정식 배포(리눅스 컨테이너)에서는 컨테이너 이미지에
-Noto Sans KR을 설치해야 한다** - 폰트가 없으면 한글이 네모 상자로 출력된다.
+보고서 템플릿은 `'Noto Sans CJK KR', 'Noto Sans KR', 'Malgun Gothic', sans-serif` 폴백 체인을 쓴다.
+리눅스 컨테이너의 `fonts-noto-cjk` 패키지가 등록하는 실제 폰트 패밀리명은 `Noto Sans CJK KR`이므로
+첫 번째 후보로 배치했다. Windows 개발 PC에는 `Noto Sans KR`과 맑은 고딕도 설치돼 있어 호환성을 유지한다.
+컨테이너 이미지에 `fonts-noto-cjk`가 없으면 한글이 네모 상자로 출력되므로 빌드 검증이 필수다.
 
 ### 테스트
 
@@ -127,27 +128,20 @@ docker build -t flatworker:local .
 
 ### 컨테이너 실행
 
-이미지 실행 시 다음 환경변수가 필수다:
+이미지 실행 시 필수 환경변수는 다음 두 개다:
 
 ```bash
 docker run --rm \
   -e SUPABASE_URL="https://yourproject.supabase.co" \
   -e SUPABASE_SERVICE_ROLE_KEY="your-key-here" \
-  -e STORAGE_BACKEND="supabase" \
   flatworker:local
 ```
 
-작업 디렉터리는 `/app/worker`이며, 엔트리포인트는 `python -m flatworker`다.
+작업 디렉터리는 `/app/worker`이며, 엔트리포인트는 `python -m flatworker`다. `STORAGE_BACKEND=supabase`는
+이미 이미지에 베이크돼 있으므로 재지정할 필요 없다.
 
-선택사항: 산출물을 호스트에 복사하려면 `-v` 마운트를 추가한다.
-
-```bash
-docker run --rm -v "$PWD/tmp-output:/app/worker/data" \
-  -e SUPABASE_URL="https://yourproject.supabase.co" \
-  -e SUPABASE_SERVICE_ROLE_KEY="your-key-here" \
-  -e STORAGE_BACKEND="supabase" \
-  flatworker:local
-```
+산출물은 컨테이너 내부 임시 디렉터리에서 처리되며 Supabase Storage로 직접 업로드된다. 로컬 디스크에는
+산출물이 남지 않는다. 결과물은 대시보드 또는 Supabase Storage 콘솔에서 확인한다.
 
 ### 한글 폰트 검증
 
