@@ -2,7 +2,8 @@
 FROM python:3.11-slim
 
 # fonts-noto-cjk: 백로그 티켓 37 - 이 패키지가 없으면 보고서 PDF와 matplotlib 히스토그램의
-# 한글이 네모 상자로 렌더된다. 템플릿 폴백 체인의 첫 후보('Noto Sans KR')가 여기서 걸린다.
+# 한글이 네모 상자로 렌더된다. 이 패키지가 등록하는 패밀리명은 'Noto Sans KR'이 아니라
+# 'Noto Sans CJK KR'이며, 그것이 템플릿 폴백 체인의 첫 후보다(report.html.j2, heatmap.py).
 RUN apt-get update && apt-get install -y --no-install-recommends \
       fonts-noto-cjk fonts-noto-color-emoji ca-certificates \
     && rm -rf /var/lib/apt/lists/*

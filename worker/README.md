@@ -151,7 +151,7 @@ docker run --rm \
 docker run --rm -v "$PWD/tmp-pdf:/out" flatworker:local python -c "
 from flatworker.report.renderer import PlaywrightRenderer
 PlaywrightRenderer().render_pdf(
-    \"<html><head><meta charset='utf-8'><style>body{font-family:'Noto Sans KR',sans-serif}</style></head>\"
+    \"<html><head><meta charset='utf-8'><style>body{font-family:'Noto Sans CJK KR','Noto Sans KR','Malgun Gothic',sans-serif}</style></head>\"
     \"<body><h1>평활도 분석 보고서</h1><p>한글 폰트 확인: 재시공·보수·경계·적합</p></body></html>\",
     '/out', '/out/font-check.pdf')"
 ```
