@@ -28,12 +28,27 @@ export function UnitConfirmForm({ scan, userId }: { scan: ScanRow; userId: strin
     const { error: updErr } = await supabase.from('scans')
       .update({ unit_scale: unitScale, status: 'ready' }).eq('id', scan.id);
     if (updErr) { setError(updErr.message); setBusy(false); return; }
+
+    // 이 지점 이후로 실패하면 위 1)을 반드시 되돌려야 한다. status='ready'인데 분석 행이
+    // 없는 스캔은 scans/[id] 화면의 어느 분기에도 걸리지 않는다 - awaiting_unit_confirm도
+    // uploaded도 failed도 아니고, latest가 없어 분석 섹션이 통째로 사라진다. 목록에도
+    // "분석 준비됨"이라는 정상 뱃지로만 보여서 재시도 링크도 오류 표시도 없이 조용히
+    // 죽는다. status를 되돌리면 단위 확인 링크가 다시 나타나 사용자가 재시도할 수 있다.
+    async function failAndRevert(message: string) {
+      const { error: revErr } = await supabase.from('scans')
+        .update({ unit_scale: null, status: 'awaiting_unit_confirm' }).eq('id', scan.id);
+      setError(revErr
+        ? `${message} 스캔 상태를 되돌리지 못했습니다. 이 스캔은 분석이 등록되지 않은 채 "분석 준비됨"으로 남아 있으니 관리자에게 알리세요.`
+        : message);
+      setBusy(false);
+    }
+
     // 2) 분석 행 생성 -> 분석 잡 등록 (스펙 §3.2.③: 단위 확정 시 분석 잡 자동 등록)
     const { data: analysis, error: aErr } = await supabase.from('analyses').insert({
       scan_id: scan.id, surface: scan.surface, criteria_id: scan.selected_criteria_id,
       status: 'queued', created_by: userId,
     }).select('id').single();
-    if (aErr || !analysis) { setError(aErr?.message ?? '분석 등록 실패'); setBusy(false); return; }
+    if (aErr || !analysis) { await failAndRevert(aErr?.message ?? '분석 등록 실패'); return; }
     const r = await enqueueJob(supabase, 'analyze', { analysis_id: analysis.id });
     if (!r.ok) {
       // reanalyze-button.tsx의 I1과 같은 처방: 엔큐가 실패했으면 방금 만든 analyses
@@ -44,8 +59,7 @@ export function UnitConfirmForm({ scan, userId }: { scan: ScanRow; userId: strin
       await supabase.from('analyses')
         .update({ deleted_at: new Date().toISOString() }).eq('id', analysis.id);
       // 409(중복 엔큐) 등 실패 안내를 사용자가 읽을 수 있게 화면에 남는다
-      setError(r.message);
-      setBusy(false);
+      await failAndRevert(r.message);
       return;
     }
     // push만 한다. 뒤에 router.refresh()를 붙이면 refresh가 "현재 라우트"를 다시

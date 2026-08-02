@@ -100,20 +100,38 @@ export function UploadForm({ sites, locations, userId, initialSiteId, initialLoc
         .eq('id', scan.id);
       if (updErr) throw new Error(updErr.message);
 
+      // 잡 등록에 실패하면 이번 제출로 만든 것을 되돌린다. 그대로 두면 잡이 없는데
+      // status가 'uploaded'(사전 검사 대기) 또는 'ready'(분석 준비됨)인 스캔이 남아,
+      // 화면상 정상처럼 보이면서 영원히 진행되지 않는다. 재시도 버튼은 분석 행이 있어야
+      // 뜨므로(scans/[id]의 latest 분기) 사용자가 UI로 복구할 방법도 없다. 흔적을 지우고
+      // 재업로드를 안내하는 편이 정직하다. 이미 올라간 Storage 객체는 남는다(티켓 58).
+      const scanId = scan.id;
+      async function discardScan(message: string) {
+        await supabase.from('scans')
+          .update({ deleted_at: new Date().toISOString() }).eq('id', scanId);
+        setError(`${message} 업로드한 스캔은 등록되지 않았습니다. 다시 시도하세요.`);
+        setBusy(false);
+      }
+
       // 4) 잡 등록 (리뷰 Important #1: 실패 시 화면에 오류를 남기고 이동하지 않는다 -
       // unit-confirm-form.tsx와 동일 패턴. 이전에는 setError 직후 무조건 router.push가
       // 실행돼 컴포넌트가 언마운트되며 오류 메시지가 사용자 눈에 보이기 전에 사라졌다)
       if (mode === 'import') {
         const { data: analysis, error: aErr } = await supabase.from('analyses').insert({
-          scan_id: scan.id, surface: 'floor', criteria_id: criteriaId,
+          scan_id: scanId, surface: 'floor', criteria_id: criteriaId,
           status: 'queued', created_by: userId,
         }).select('id').single();
-        if (aErr || !analysis) throw new Error(aErr?.message ?? '분석 등록 실패');
+        if (aErr || !analysis) { await discardScan(aErr?.message ?? '분석 등록 실패'); return; }
         const r = await enqueueJob(supabase, 'import', { analysis_id: analysis.id });
-        if (!r.ok) { setError(r.message); setBusy(false); return; }
+        if (!r.ok) {
+          await supabase.from('analyses')
+            .update({ deleted_at: new Date().toISOString() }).eq('id', analysis.id);
+          await discardScan(r.message);
+          return;
+        }
       } else {
-        const r = await enqueueJob(supabase, 'precheck', { scan_id: scan.id });
-        if (!r.ok) { setError(r.message); setBusy(false); return; }
+        const r = await enqueueJob(supabase, 'precheck', { scan_id: scanId });
+        if (!r.ok) { await discardScan(r.message); return; }
       }
       router.push(`/scans/${scan.id}`);
     } catch (err) {

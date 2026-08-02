@@ -21,20 +21,40 @@ const scan = {
 
 // scans 갱신 -> analyses insert -> fn_enqueue_job 순서를 흉내 내는 최소 스텁.
 // analyses.update는 고아 행 롤백(soft delete) 여부를 관찰하려고 스파이를 건다.
-function stubSupabase(
-  enqueueError: { code?: string; message: string } | null,
-  analysesUpdateSpy: (fields: unknown) => void = () => {},
-) {
+type Opts = {
+  enqueueError?: { code?: string; message: string } | null;
+  insertError?: { message: string } | null;
+  scansRevertError?: { message: string } | null;
+  scansUpdateSpy?: (fields: unknown) => void;
+  analysesUpdateSpy?: (fields: unknown) => void;
+};
+
+function stubSupabase(o: Opts = {}) {
+  let scansUpdateCount = 0;
   return {
     from: (table: string) => {
       if (table === 'scans') {
-        return { update: () => ({ eq: async () => ({ error: null }) }) };
+        return {
+          update: (fields: unknown) => {
+            scansUpdateCount += 1;
+            o.scansUpdateSpy?.(fields);
+            // 1회차는 ready 승격, 2회차부터가 롤백이다
+            const err = scansUpdateCount > 1 ? (o.scansRevertError ?? null) : null;
+            return { eq: async () => ({ error: err }) };
+          },
+        };
       }
       if (table === 'analyses') {
         return {
-          insert: () => ({ select: () => ({ single: async () => ({ data: { id: 'a1' }, error: null }) }) }),
+          insert: () => ({
+            select: () => ({
+              single: async () => (o.insertError
+                ? { data: null, error: o.insertError }
+                : { data: { id: 'a1' }, error: null }),
+            }),
+          }),
           update: (fields: unknown) => {
-            analysesUpdateSpy(fields);
+            o.analysesUpdateSpy?.(fields);
             return { eq: async () => ({ error: null }) };
           },
         };
@@ -42,7 +62,7 @@ function stubSupabase(
       throw new Error(`예상치 못한 테이블: ${table}`);
     },
     rpc: async (fn: string) => {
-      if (fn === 'fn_enqueue_job') return { error: enqueueError };
+      if (fn === 'fn_enqueue_job') return { error: o.enqueueError ?? null };
       throw new Error(`예상치 못한 rpc: ${fn}`);
     },
   };
@@ -68,19 +88,53 @@ describe('UnitConfirmForm', () => {
   // 고정된다. 워커의 reap_stuck_jobs는 jobs 테이블만 보는데 이 경우 잡 자체가 없으므로
   // 자동 복구도 안 된다 - 그 스캔은 영영 "분석 중"에 갇힌다.
   it('엔큐 실패 시 방금 만든 analyses 행을 soft delete로 되돌린다(고아 행 방지)', async () => {
-    const updateSpy = vi.fn();
+    const analysesUpdateSpy = vi.fn();
     vi.mocked(createClient).mockReturnValue(
-      stubSupabase({ message: '전송 오류로 등록 실패' }, updateSpy) as never,
+      stubSupabase({ enqueueError: { message: '전송 오류로 등록 실패' }, analysesUpdateSpy }) as never,
     );
     render(<UnitConfirmForm scan={scan} userId="u1" />);
     fireEvent.click(screen.getByRole('button', { name: '단위 확정 후 분석 시작' }));
 
     await screen.findByText(/전송 오류로 등록 실패/);
-    expect(updateSpy).toHaveBeenCalledTimes(1);
-    expect(updateSpy).toHaveBeenCalledWith(expect.objectContaining({ deleted_at: expect.any(String) }));
+    expect(analysesUpdateSpy).toHaveBeenCalledTimes(1);
+    expect(analysesUpdateSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ deleted_at: expect.any(String) }));
     expect(pushMock).not.toHaveBeenCalled();
     // 재시도할 수 있어야 하므로 버튼이 다시 활성화된다
     expect(screen.getByRole('button', { name: '단위 확정 후 분석 시작' })).toBeEnabled();
+  });
+
+  // 코드리뷰 Critical: analyses 행만 지우고 scans.status='ready'를 그대로 두면 그 스캔은
+  // scans/[id] 화면의 어느 분기에도 걸리지 않는다(awaiting_unit_confirm/uploaded/failed
+  // 모두 아니고, latest도 없어 분석 섹션이 통째로 사라진다). 목록에도 "분석 준비됨"이라는
+  // 정상 뱃지로만 보여서, 재시도 링크도 오류 표시도 없이 조용히 죽는다. 롤백 전보다 오히려
+  // 발견하기 어려워지므로 status도 함께 되돌려 단위 확인 링크가 다시 나타나게 해야 한다.
+  it.each([
+    ['엔큐', { enqueueError: { message: '전송 오류로 등록 실패' } }, /전송 오류로 등록 실패/],
+    ['분석 행 생성', { insertError: { message: '권한이 없습니다' } }, /권한이 없습니다/],
+  ] as const)('%s 실패 시 스캔 상태를 awaiting_unit_confirm으로 되돌린다', async (_l, opts, msg) => {
+    const scansUpdateSpy = vi.fn();
+    vi.mocked(createClient).mockReturnValue(stubSupabase({ ...opts, scansUpdateSpy }) as never);
+    render(<UnitConfirmForm scan={scan} userId="u1" />);
+    fireEvent.click(screen.getByRole('button', { name: '단위 확정 후 분석 시작' }));
+
+    await screen.findByText(msg);
+    expect(scansUpdateSpy).toHaveBeenCalledTimes(2);
+    expect(scansUpdateSpy).toHaveBeenLastCalledWith(
+      expect.objectContaining({ status: 'awaiting_unit_confirm' }));
+  });
+
+  it('롤백까지 실패하면 스캔이 남았다는 사실을 사용자에게 알린다', async () => {
+    vi.mocked(createClient).mockReturnValue(stubSupabase({
+      enqueueError: { message: '전송 오류로 등록 실패' },
+      scansRevertError: { message: 'revert failed' },
+    }) as never);
+    render(<UnitConfirmForm scan={scan} userId="u1" />);
+    fireEvent.click(screen.getByRole('button', { name: '단위 확정 후 분석 시작' }));
+
+    // 원인과 후속 조치가 모두 화면에 남아야 한다
+    await screen.findByText(/전송 오류로 등록 실패/);
+    expect(screen.getByText(/되돌리지 못했습니다/)).toBeInTheDocument();
   });
 
   // 회귀 방지: push 직후 refresh를 부르면 refresh가 "현재 라우트"를 다시 렌더하면서
@@ -88,7 +142,7 @@ describe('UnitConfirmForm', () => {
   // scans/[id]는 force-dynamic이고 동적 페이지의 클라이언트 캐시 staleTime 기본값은
   // 0초(캐시 안 함)라, push만으로도 항상 서버에서 새로 받아온다. refresh는 불필요하다.
   it('성공하면 스캔 상세로 push만 하고 refresh는 부르지 않는다', async () => {
-    vi.mocked(createClient).mockReturnValue(stubSupabase(null) as never);
+    vi.mocked(createClient).mockReturnValue(stubSupabase() as never);
     render(<UnitConfirmForm scan={scan} userId="u1" />);
     fireEvent.click(screen.getByRole('button', { name: '단위 확정 후 분석 시작' }));
 
