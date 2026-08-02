@@ -38,11 +38,12 @@
 2. 에디터를 비우고(또는 새 쿼리 탭) `supabase/migrations/002_functions_seed.sql` 전체
    내용을 붙여넣고 **Run**. 마찬가지로 성공 메시지 확인.
 
-**반드시 001 → 002 → 003 → 004 순서로 실행한다** — 뒤 마이그레이션이 앞 마이그레이션이
+**반드시 001 → 002 → 003 → 004 → 005 순서로 실행한다** — 뒤 마이그레이션이 앞 마이그레이션이
 만든 테이블·enum·함수를 전제하며, 특히 003과 004는 순서를 건너뛰거나 뒤집으면 오류 없이
-조용히 기능이 사라질 수 있다(아래 4단계 경고 참고). 이 프로젝트를 워커만 쓰고 대시보드나
-보고서 기능을 쓰지 않을 계획이라도 003·004까지 실행해 두는 것을 권장한다 — 나중에 P3/P4를
-켤 때 순서를 다시 챙기지 않아도 된다.
+조용히 기능이 사라질 수 있다(아래 4단계 경고 참고). 005도 순서를 지켜야 하며, 클라우드
+배포 전에 누락되면 Storage 버킷이 없어 업로드가 전부 실패한다(아래 5번 참고). 이 프로젝트를
+워커만 쓰고 대시보드나 보고서 기능을 쓰지 않을 계획이라도 003·004까지 실행해 두는 것을
+권장한다 — 나중에 P3/P4를 켤 때 순서를 다시 챙기지 않아도 된다.
 
 실행 중 오류가 나면 대부분 앞 단계를 건너뛰었거나 이미 한 번 실행한 마이그레이션을 다시
 실행한 경우(테이블/함수 이미 존재)다. 새 프로젝트에서 순서대로 한 번씩만 실행하면 정상.
@@ -132,15 +133,16 @@ select * from fn_resolve_criteria(null, 'floor');
 `floor-kcs-finish7plus`, `floor-kcs-finish7minus`, `floor-kcs-exposed`(is_default=true),
 `floor-molit-cushion`, `floor-lh-exposed`, `floor-lh-thick` 6행이 반환되면 정상이다.
 
-**(4) Storage 버킷 확인**(2단계에서 005를 실행했을 때만 해당) — 버킷 3개와 파일당 상한이
-제대로 만들어졌는지:
+**(4) Storage 버킷 확인**(2단계에서 005를 실행했을 때만 해당) — 버킷이 제대로 만들어졌는지:
 
 ```sql
 select id, file_size_limit from storage.buckets;
 ```
 
-`raw-scans`·`artifacts`·`reports` 3행이 각각 `file_size_limit = 52428800`(50MB)로
-반환되면 정상이다.
+**4행**이 반환되면 정상이다: `raw-scans`·`artifacts`·`reports`는 각각
+`file_size_limit = 52428800`(50MB, 005가 생성), `photos`는 `file_size_limit = 10485760`
+(10MB, 2단계 3번의 003이 만든 별도 버킷 — 스캔 원본이 아니라 사진 첨부 전용이다). 3행만
+나오면 005 실행을 건너뛴 것이니 2단계 5번을 다시 확인한다.
 
 ## 4. API 키 확인
 
@@ -200,7 +202,7 @@ select id, file_size_limit from storage.buckets;
 4. 시작 로그 확인:
 
    ```
-   [flatworker] 시작: worker_id=local-1, data_dir=..\data, poll_interval=3.0s
+   [flatworker] 시작: worker_id=local-1, storage_backend=local, data_dir=..\data, poll_interval=3.0s
    ```
 
    이 로그가 찍히고 프로세스가 종료되지 않은 채 대기 중이면 설정·연결이 정상이다(잡

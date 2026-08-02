@@ -1,7 +1,7 @@
 # flatworker
 
 평활도 분석 시스템 P2(로컬 파이썬 워커)의 잡 처리 프로세스다. Supabase(Postgres + PostgREST)의
-`jobs` 큐를 폴링하며 `precheck`/`analyze`/`import` 3종 잡을 처리하고, `flatness` 엔진(`../engine`)을
+`jobs` 큐를 폴링하며 `precheck`/`analyze`/`import`/`report` 4종 잡을 처리하고, `flatness` 엔진(`../engine`)을
 호출해 산출물을 쓴다. 쓰는 위치는 `STORAGE_BACKEND`에 따라 갈린다 — `local`(기본값, 개발·테스트)
 이면 로컬 `DATA_DIR`(기본 `../data`)에, `supabase`(운영)이면 Supabase Storage 버킷 3종에 쓴다.
 클라우드(Railway) 배포 절차는 [`../docs/DEPLOY.md`](../docs/DEPLOY.md) 참고.
@@ -44,9 +44,10 @@ cd worker
 python -m flatworker
 ```
 
-정상 기동 시 `[flatworker] 시작: worker_id=..., data_dir=..., poll_interval=...s` 로그가 찍히고,
-이후 잡 큐를 폴링한다. 종료는 Ctrl+C(SIGINT) — 처리 중인 잡을 끝까지 마친 뒤 다음 클레임 직전에
-멈춘다(잡을 반쯤 처리한 상태로 죽지 않는다).
+정상 기동 시 `[flatworker] 시작: worker_id=..., storage_backend=..., poll_interval=...s` 로그가
+찍히고, 이후 잡 큐를 폴링한다. `data_dir=...`는 `STORAGE_BACKEND=local`일 때만 함께 찍힌다
+(supabase 백엔드는 이 경로를 쓰지 않는다). 종료는 Ctrl+C(SIGINT) — 처리 중인 잡을 끝까지 마친
+뒤 다음 클레임 직전에 멈춘다(잡을 반쯤 처리한 상태로 죽지 않는다).
 
 ## 테스트
 
@@ -65,7 +66,7 @@ python -m pytest
 flatworker/
   config.py    설정 로드(.env -> 환경변수 순, 필수값 검증)
   db.py        DBClient 추상 인터페이스 + SupabaseRest(PostgREST/RPC) 구현
-  jobs.py      잡 핸들러 3종: handle_precheck/handle_analyze/handle_import
+  jobs.py      잡 핸들러 4종: handle_precheck/handle_analyze/handle_import/handle_report
   runner.py    폴링 루프: claim -> dispatch -> complete/fail
   artifacts.py 로컬 산출물 경로 규약(raw-scans/, artifacts/)
   __main__.py  진입점(python -m flatworker)

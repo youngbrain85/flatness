@@ -6,7 +6,7 @@ matplotlib.use("Agg")  # 헤드리스 렌더
 if platform.system() == "Windows":
     matplotlib.rc("font", family="Malgun Gothic")
 else:
-    matplotlib.rc("font", family=["NanumGothic", "Noto Sans CJK KR", "sans-serif"])
+    matplotlib.rc("font", family=["Noto Sans CJK KR", "NanumGothic", "sans-serif"])
 matplotlib.rc("axes", unicode_minus=False)  # 마이너스 기호 깨짐 방지
 import matplotlib.pyplot as plt
 import numpy as np

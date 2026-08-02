@@ -39,10 +39,14 @@ Vercel(대시보드) + Railway(워커, Docker) + Supabase(DB·Auth·Storage) 구
    누르는 순간 이 전체 권한을 갖게 된다. "보안상 권장"이 아니라 이 저장소가 공개로
    전환되는 순간 뚫리는 실제 구멍이므로 배포 전 필수 조치다(백로그 티켓 57 참고).
 
-   계정이 더 필요할 때는 회원가입 화면 대신 Supabase 대시보드 > **Authentication** >
-   **Add user**에서 관리자가 직접 만든다(**Auto Confirm User** 체크로 이메일 인증 절차
-   생략 - 이 대시보드 자체에는 회원가입 화면이 없다).
-4. 참고 - 원본 스캔 업로드(`raw-scans`)는 브라우저가 서버를 거치지 않고 Storage에 직접
+   계정을 추가로 더 만들 때도 회원가입 화면 대신 같은 방법(아래 4번)을 쓴다.
+4. **[필수] 로그인 계정 생성** - 회원가입을 껐으므로 계정을 미리 만들어 두지 않으면
+   아무도 로그인할 수 없다. Supabase 대시보드 > **Authentication** > **Add user**에서
+   이메일·비밀번호를 입력하고 **Auto Confirm User**를 체크한다(이메일 인증 절차를
+   건너뛰고 바로 로그인 가능한 계정이 만들어진다). 이 대시보드는 로그인 화면만 제공하고
+   자체 회원가입 화면은 없다(`dashboard/app/login/login-form.tsx`). 이 단계를 건너뛰면
+   배포 후 스모크(§4)의 "로그인"에서 계정이 0개인 채로 막힌다.
+5. 참고 - 원본 스캔 업로드(`raw-scans`)는 브라우저가 서버를 거치지 않고 Storage에 직접
    올린다(`dashboard/lib/scans/upload.ts`). 서버 측 검증이 전혀 없으므로 위
    `raw_scans_all_auth` 정책이 접근 통제의 유일한 방어선이다 - 이 정책을 바꿀 때는
    3번의 회원가입 차단 상태가 여전히 유효한지 함께 재확인한다.
@@ -60,7 +64,9 @@ Vercel(대시보드) + Railway(워커, Docker) + Supabase(DB·Auth·Storage) 구
    | `STORAGE_BACKEND` | `supabase` |
    | `WORKER_ID` | `railway-1` |
    | `POLL_INTERVAL_S` | `3` |
-4. Deploy 후 Logs에서 `[flatworker] 시작: worker_id=railway-1` 확인
+4. Deploy 후 Logs에서 `[flatworker] 시작: worker_id=railway-1, storage_backend=supabase,
+   poll_interval=3.0s` 확인(`storage_backend=supabase`가 찍혀야 정상이다. 로컬 실행 시 보이는
+   `data_dir=...`는 `storage_backend=local`에서만 출력되므로 여기서는 나타나지 않는다)
 
 ## 3. Vercel - 대시보드 (사용자 수행)
 
@@ -100,11 +106,14 @@ Vercel(대시보드) + Railway(워커, Docker) + Supabase(DB·Auth·Storage) 구
    실패 시 UI 수동 생성)
 2. **[필수]** Supabase Authentication > Providers > Email에서 회원가입(Sign Ups) 차단 -
    이유는 위 §1의 3번 참고
-3. Railway: GitHub 저장소 연결, 환경변수 5개 입력, Deploy
-4. Vercel: 저장소 Import, **Root Directory를 `dashboard`로 지정**, 환경변수 3개 입력, Deploy
-5. Supabase Authentication > URL Configuration에 Vercel 도메인 추가
-6. 배포 후 스모크: 업로드 -> 분석 -> 보고서 PDF 한글 육안 확인, 50MB 초과 안내 확인
-7. 저장소 공개 전환 전 `git log -p`로 키 노출 여부 최종 확인
+3. **[필수]** Supabase Authentication > **Add user**로 로그인 계정 생성(**Auto Confirm
+   User** 체크) - 이 대시보드는 회원가입 화면이 없어 이 단계 없이는 아무도 로그인할 수
+   없다. 위 §1의 4번 참고
+4. Railway: GitHub 저장소 연결, 환경변수 5개 입력, Deploy
+5. Vercel: 저장소 Import, **Root Directory를 `dashboard`로 지정**, 환경변수 3개 입력, Deploy
+6. Supabase Authentication > URL Configuration에 Vercel 도메인 추가
+7. 배포 후 스모크: 업로드 -> 분석 -> 보고서 PDF 한글 육안 확인, 50MB 초과 안내 확인
+8. 저장소 공개 전환 전 `git log -p`로 키 노출 여부 최종 확인
 
 ## 참고
 

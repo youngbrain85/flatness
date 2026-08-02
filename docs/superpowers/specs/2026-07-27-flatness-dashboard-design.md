@@ -84,6 +84,8 @@
 
 **데모 단계(현재)**: 총 비용 **0원**. 대용량 파일(raw 원본·대형 산출물)은 Supabase를 거치지 않고 로컬 디스크에 저장하므로 Free 티어의 파일당 50MB·총 1GB 제한이 문제되지 않는다.
 
+이후 클라우드 배포로 대체됨([`docs/DEPLOY.md`](../../DEPLOY.md) 참고).
+
 | 항목 | 데모 구성 | 비용 |
 |---|---|---|
 | Supabase | Free (DB 500MB·Auth·Realtime·사진 Storage) | $0 |
