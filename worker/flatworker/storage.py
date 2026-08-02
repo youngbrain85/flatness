@@ -133,7 +133,13 @@ class SupabaseStorage:
 
     def _list_recursive(self, bucket, prefix):
         """POST /storage/v1/object/list/{bucket}은 비재귀다 - 폴더 항목(id=null)을
-        만나면 그 하위를 다시 조회해 파일 객체키만 모은다."""
+        만나면 그 하위를 다시 조회해 파일 객체키만 모은다.
+
+        문서화(백로그 I-2): `limit:1000, offset:0`으로 고정돼 있어 페이지네이션이
+        없다 - 한 폴더의 객체 수가 1000개를 넘으면 그 뒤는 나열되지 않고 조용히
+        누락된다(따라서 delete_prefix도 그만큼 지우지 못한다). 현재 산출물 규모로는
+        도달하기 어렵지만 한계로 남겨둔다.
+        """
         found = []
         resp = self._client.post(f"/storage/v1/object/list/{bucket}",
                                  json={"prefix": prefix, "limit": 1000, "offset": 0})
@@ -151,8 +157,15 @@ class SupabaseStorage:
         bucket, obj = split_key(f"{prefix}/x")
         keys = self._list_recursive(bucket, obj[: -len("/x")])
         if keys:
-            self._client.request("DELETE", f"/storage/v1/object/{bucket}",
-                                 json={"prefixes": keys})
+            resp = self._client.request("DELETE", f"/storage/v1/object/{bucket}",
+                                        json={"prefixes": keys})
+            # 코드리뷰 Important(I-1): download/upload/_list_recursive와 동일하게
+            # 상태코드를 검사한다 - 검사가 없으면 DELETE 실패(네트워크·권한)가 조용히
+            # 통과해, 지워지지 않은 옛 파일 위에 build_assets의 upload_dir이 새
+            # 파일을 얹는 사고(재생성 시 이전 자산 잔재)가 SupabaseStorage 경로에서만
+            # 재발한다.
+            if resp.status_code >= 400:
+                raise DBError(resp.status_code, resp.text)
 
 
 def get_storage(cfg, db):

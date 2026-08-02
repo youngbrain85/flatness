@@ -142,13 +142,18 @@ def handle_import(db, cfg, payload):
         # "바닥(flatness) 기준을 지정하세요" 안내)와 동일한 취지로 여기서 조기 차단한다.
         raise ValueError(
             f"임포트는 바닥(floor) 스캔만 지원합니다: scan.surface='{scan['surface']}'")
+    # 코드리뷰 Important(I-5): 확장자 검사를 다운로드보다 앞으로 옮긴다 - 지원하지
+    # 않는 형식이면 _fetch_raw로 원본을 받아오기 전에 즉시 거부한다(클라우드에서는
+    # 불필요한 다운로드가 대역폭 낭비로 이어짐). raw_file_path의 확장자는 스테이징
+    # 경로의 확장자와 항상 같다(_fetch_raw가 원래 파일명을 그대로 보존해서 받음).
+    suffix = Path(scan["raw_file_path"]).suffix.lower()
+    importer = _IMPORT_HANDLERS.get(suffix)
+    if importer is None:
+        raise ValueError(
+            f"지원하지 않는 임포트 파일 형식입니다: '{suffix}' (지원 형식: .csv, .json)")
     storage = get_storage(cfg, db)
     with staging_dir() as work:
         path = _fetch_raw(storage, scan, work)
-        importer = _IMPORT_HANDLERS.get(path.suffix.lower())
-        if importer is None:
-            raise ValueError(
-                f"지원하지 않는 임포트 파일 형식입니다: '{path.suffix}' (지원 형식: .csv, .json)")
         out_dir = work / "out"
         out_dir.mkdir(parents=True, exist_ok=True)
         stats = importer(path, crit, u_mm, out_dir)
