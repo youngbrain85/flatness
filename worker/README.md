@@ -112,3 +112,54 @@ Noto Sans KR을 설치해야 한다** - 폰트가 없으면 한글이 네모 상
 PYTHONPATH=../engine python -m pytest            # 기본(실제 브라우저 실행 제외)
 PYTHONPATH=../engine python -m pytest -m browser # 실제 Chromium 렌더 스모크 1건
 ```
+
+## 컨테이너로 실행
+
+### 이미지 빌드
+
+저장소 루트에서 이미지를 빌드한다. `engine/` 및 `worker/` 디렉터리가 모두 필요하므로 반드시 루트에서 실행해야 한다.
+
+```bash
+docker build -t flatworker:local .
+```
+
+워커 디렉터리 내에서 `docker build . -f ../Dockerfile`을 실행하면 `engine/` 디렉터리를 찾을 수 없어 실패한다.
+
+### 컨테이너 실행
+
+이미지 실행 시 다음 환경변수가 필수다:
+
+```bash
+docker run --rm \
+  -e SUPABASE_URL="https://yourproject.supabase.co" \
+  -e SUPABASE_SERVICE_ROLE_KEY="your-key-here" \
+  -e STORAGE_BACKEND="supabase" \
+  flatworker:local
+```
+
+작업 디렉터리는 `/app/worker`이며, 엔트리포인트는 `python -m flatworker`다.
+
+선택사항: 산출물을 호스트에 복사하려면 `-v` 마운트를 추가한다.
+
+```bash
+docker run --rm -v "$PWD/tmp-output:/app/worker/data" \
+  -e SUPABASE_URL="https://yourproject.supabase.co" \
+  -e SUPABASE_SERVICE_ROLE_KEY="your-key-here" \
+  -e STORAGE_BACKEND="supabase" \
+  flatworker:local
+```
+
+### 한글 폰트 검증
+
+배포 후 PDF 보고서의 한글이 정상인지 확인한다. `render_pdf` 메서드는 `html`, `base_dir`, `out_path` 세 인수를 받는다:
+
+```bash
+docker run --rm -v "$PWD/tmp-pdf:/out" flatworker:local python -c "
+from flatworker.report.renderer import PlaywrightRenderer
+PlaywrightRenderer().render_pdf(
+    \"<html><head><meta charset='utf-8'><style>body{font-family:'Noto Sans KR',sans-serif}</style></head>\"
+    \"<body><h1>평활도 분석 보고서</h1><p>한글 폰트 확인: 재시공·보수·경계·적합</p></body></html>\",
+    '/out', '/out/font-check.pdf')"
+```
+
+`tmp-pdf/font-check.pdf`를 열어서 한글이 정상 글자로 보이는지 확인한다. 한글이 네모 상자로 나오면 `fonts-noto-cjk` 시스템 패키지 설치가 실패한 것이다. 다시 빌드하거나 배포 환경을 점검한다.
