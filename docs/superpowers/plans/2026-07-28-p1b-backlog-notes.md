@@ -163,3 +163,21 @@
     타입 오류 2건이 남아 있다. `npm run lint`·`npm run build`·`npm run test`는 모두
     통과하므로(타입 체크가 별도 단계로 빠져 있어 이 오류들을 가리지 않음) 지금까지
     가시화되지 않았을 뿐이다 — 별도 정리 대상으로 남긴다
+53. **`_list_recursive` 페이지네이션 부재(I-2)** — `worker/flatworker/storage.py`의
+    `SupabaseStorage._list_recursive`가 `limit:1000, offset:0`으로 고정돼 있어 한
+    폴더의 객체 수가 1000개를 넘으면 그 뒤가 나열되지 않아 `delete_prefix`의 삭제
+    누락으로 이어진다. 현재 산출물 규모로는 도달하기 어려우나, 실사용 데이터가
+    쌓인 뒤 재확인 필요
+54. **`build_assets`의 부분 실패 창(I-4)** — `delete_prefix` 후 `upload_dir` 도중
+    실패하면 DB는 옛 snapshot을 유지한 채 원격 자산은 옛 것은 지워지고 새 것은
+    일부만 존재하는 상태가 되어, 그 시점에 대시보드가 깨진 이미지를 보여줄 수
+    있다. 잡 재시도로 자가 치유되지만 네트워크 업로드는 로컬 복사보다 중간 실패
+    확률이 높다. analyze/import는 `_finalize`가 `upload_dir` 완료 후에만 실행돼
+    해당 없음 — report 경로만의 문제
+55. **`raw_scans_all_auth` RLS가 경로 소유권을 검사하지 않음(I-3)** — 로그인한
+    사용자가 다른 현장의 원본 스캔을 덮어쓰거나 삭제할 수 있다(001 `all_auth`·003
+    `photos_all_auth`와 같은 트러스트 모델의 연장이며 신규 구멍은 아니다). 원본
+    스캔은 증거 자료이므로, 다중 기관 사용으로 확장할 때 경로 스코프 정책
+    (`storage.foldername(name)[1] = site_id` 등)으로 좁힐 것
+56. **`report_dir()` 데드 코드** — Task 5의 `upload_local_data.py`를 위해 남겨
+    두었으나 현재 호출부도 테스트도 없다
