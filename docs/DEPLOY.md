@@ -1,0 +1,115 @@
+# 클라우드 배포 절차
+
+Vercel(대시보드) + Railway(워커, Docker) + Supabase(DB·Auth·Storage) 구성으로 배포한다.
+**코드로 준비된 것**과 **사용자가 직접 해야 하는 것**을 절 단위로 분리했다.
+
+> **배포 전 필수**: 이 저장소는 공개(public)로 전환되고 대시보드는 공개 URL로 배포된다.
+> §1의 3번(회원가입 차단)을 하지 않으면 대시보드 주소를 아는 누구든 가입해서 전체
+> 현장·스캔·분석·보고서에 접근할 수 있다. 배포 직후 가장 먼저 처리한다.
+
+## 0. 코드로 준비된 것 (추가 작업 없음)
+
+- `supabase/migrations/005_storage_buckets.sql` - 버킷 3종(`raw-scans`·`artifacts`·`reports`) + RLS
+- 저장소 루트 `Dockerfile` - 워커 이미지(Chromium·`Noto Sans CJK KR` 포함 - Debian
+  `fonts-noto-cjk`가 실제로 등록하는 폰트 패밀리명이며 `Noto Sans KR`이 아니다)
+- 워커 `STORAGE_BACKEND=supabase` 기본값(Dockerfile `ENV`)
+- 대시보드 Storage 서빙(서명 URL 리다이렉트)·업로드(브라우저 직접 업로드) 경로
+
+## 1. Supabase (사용자 수행)
+
+1. SQL Editor에서 `005_storage_buckets.sql` 실행(001~004를 아직 실행하지 않았다면
+   `docs/SUPABASE_SETUP.md` 2단계부터 순서대로 먼저 진행한다)
+2. Storage 화면에서 `raw-scans`·`artifacts`·`reports` 버킷 3개 생성 확인
+   (정책 생성이 `42501`로 실패하면 백로그 티켓 42대로 Storage > Policies UI에서 수동 생성)
+3. **[필수] 회원가입(Sign Ups) 차단** - **Authentication** > **Providers** > **Email**에서
+   **"Enable Sign Ups"를 끈다.**
+
+   왜 필수인가 - `supabase/migrations/001_schema.sql`의 RLS 정책은 로그인 여부만
+   검사할 뿐 행의 소유자가 요청자 본인인지는 검사하지 않는다:
+
+   ```sql
+   create policy all_auth on sites for all to authenticated using (true) with check (true);
+   ```
+
+   이 형태의 정책이 `sites`·`locations`·`scans`·`analyses`·`photos`·`reports`·
+   `report_analyses` 7개 테이블 전부에 걸려 있고, `005_storage_buckets.sql`의
+   `raw_scans_all_auth` 정책도 `to authenticated`에게 `raw-scans` 버킷 전체의 읽기·쓰기를
+   허용한다. **즉 로그인만 하면 어떤 계정이든 모든 현장·스캔·분석·보고서를 읽고 쓰고
+   지울 수 있다.** 대시보드 주소가 공개된 상태에서 회원가입이 열려 있으면, 가입 버튼을
+   누르는 순간 이 전체 권한을 갖게 된다. "보안상 권장"이 아니라 이 저장소가 공개로
+   전환되는 순간 뚫리는 실제 구멍이므로 배포 전 필수 조치다(백로그 티켓 57 참고).
+
+   계정이 더 필요할 때는 회원가입 화면 대신 Supabase 대시보드 > **Authentication** >
+   **Add user**에서 관리자가 직접 만든다(**Auto Confirm User** 체크로 이메일 인증 절차
+   생략 - 이 대시보드 자체에는 회원가입 화면이 없다).
+4. 참고 - 원본 스캔 업로드(`raw-scans`)는 브라우저가 서버를 거치지 않고 Storage에 직접
+   올린다(`dashboard/lib/scans/upload.ts`). 서버 측 검증이 전혀 없으므로 위
+   `raw_scans_all_auth` 정책이 접근 통제의 유일한 방어선이다 - 이 정책을 바꿀 때는
+   3번의 회원가입 차단 상태가 여전히 유효한지 함께 재확인한다.
+
+## 2. Railway - 워커 (사용자 수행)
+
+1. New Project > Deploy from GitHub repo > 이 저장소 선택
+2. Settings > Build: Dockerfile 감지 확인(Root Directory는 저장소 루트 그대로)
+3. Variables에 아래를 입력한다. **service_role 키는 워커에만 넣는다**
+
+   | 키 | 값 |
+   |---|---|
+   | `SUPABASE_URL` | Supabase Project URL |
+   | `SUPABASE_SERVICE_ROLE_KEY` | service_role 키 |
+   | `STORAGE_BACKEND` | `supabase` |
+   | `WORKER_ID` | `railway-1` |
+   | `POLL_INTERVAL_S` | `3` |
+4. Deploy 후 Logs에서 `[flatworker] 시작: worker_id=railway-1` 확인
+
+## 3. Vercel - 대시보드 (사용자 수행)
+
+1. Add New Project > 이 저장소 Import
+2. **Root Directory를 `dashboard`로 지정**(이걸 빠뜨리면 빌드가 실패한다)
+3. Environment Variables
+
+   | 키 | 값 |
+   |---|---|
+   | `NEXT_PUBLIC_SUPABASE_URL` | Supabase Project URL |
+   | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | anon(public) 키 |
+   | `NEXT_PUBLIC_MAX_UPLOAD_BYTES` | `52428800` (Pro 승급 시 상향) |
+4. Deploy 후 Supabase > Authentication > URL Configuration에 Vercel 도메인 추가
+
+## 4. 배포 후 스모크 (필수)
+
+이 프로젝트를 개발한 PC에는 Docker가 설치돼 있지 않아 워커 컨테이너 이미지 빌드와 리눅스
+환경에서의 한글 렌더링을 **로컬에서 한 번도 검증하지 못했다.** 아래 스모크가 이 이미지의
+**최초 검증**이다 - Railway에서 처음으로 확인하게 된다는 뜻이며, 실패 가능성을 염두에 두고
+진행한다.
+
+1. 로그인 -> 스캔 업로드 -> 사전 검사 -> 단위 확정 -> 분석 완료까지 진행
+2. 결과 화면에서 히트맵 이미지와 결과표(`cells.json` fetch)가 뜨는지 확인
+3. 보고서 생성 -> PDF 미리보기에서 **한글이 네모 상자가 아닌지 확인**. 네모 상자로 나오면
+   이 순서로 확인한다:
+   - Railway의 Build Logs에서 `fonts-noto-cjk` 설치 단계(`apt-get install`)가 성공했는지
+   - **가장 유력한 원인은 폰트 패밀리명 불일치다.** 컨테이너에 실제 등록되는 이름은
+     `Noto Sans CJK KR`이지 `Noto Sans KR`이 아니다.
+     `worker/flatworker/report/templates/report.html.j2`의 `font-family`와
+     `engine/flatness/outputs/heatmap.py`의 `matplotlib.rc("font", family=...)` 폴백
+     체인 첫 후보가 이 이름과 정확히 일치하는지 확인한다
+4. 50MB 초과 파일을 올려 한국어 안내가 뜨는지 확인
+
+## 사용자가 직접 해야 하는 작업 요약 (코드로 대신할 수 없음)
+
+1. Supabase SQL Editor에서 `005_storage_buckets.sql` 실행, 버킷 3종 생성 확인(정책 42501
+   실패 시 UI 수동 생성)
+2. **[필수]** Supabase Authentication > Providers > Email에서 회원가입(Sign Ups) 차단 -
+   이유는 위 §1의 3번 참고
+3. Railway: GitHub 저장소 연결, 환경변수 5개 입력, Deploy
+4. Vercel: 저장소 Import, **Root Directory를 `dashboard`로 지정**, 환경변수 3개 입력, Deploy
+5. Supabase Authentication > URL Configuration에 Vercel 도메인 추가
+6. 배포 후 스모크: 업로드 -> 분석 -> 보고서 PDF 한글 육안 확인, 50MB 초과 안내 확인
+7. 저장소 공개 전환 전 `git log -p`로 키 노출 여부 최종 확인
+
+## 참고
+
+- Supabase 프로젝트 자체를 처음부터 준비하는 절차(001~004 마이그레이션, API 키 발급 등)는
+  [`SUPABASE_SETUP.md`](SUPABASE_SETUP.md) 참고.
+- 워커 컨테이너 이미지 빌드·로컬 실행·한글 폰트 검증 스니펫은
+  [`../worker/README.md`](../worker/README.md)의 "컨테이너로 실행" 절 참고.
+- 운영 비용 구성은 [`service-report.md`](service-report.md) §3.5 참고.

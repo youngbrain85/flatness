@@ -7,9 +7,9 @@
 ## 0. 준비물
 
 - Supabase 계정(없으면 1단계에서 가입)
-- 이 저장소 클론본(마이그레이션 SQL 파일 4개: `supabase/migrations/001_schema.sql`,
+- 이 저장소 클론본(마이그레이션 SQL 파일 5개: `supabase/migrations/001_schema.sql`,
   `supabase/migrations/002_functions_seed.sql`, `supabase/migrations/003_dashboard_support.sql`,
-  `supabase/migrations/004_report_support.sql`)
+  `supabase/migrations/004_report_support.sql`, `supabase/migrations/005_storage_buckets.sql`)
 - Python 3.11+ (워커 실행용, 5단계에서 사용)
 
 ## 1. Supabase 프로젝트 생성 — 사용자가 직접 수행
@@ -71,6 +71,13 @@
    > 진행 상태 화면이 더 이상 갱신되지 않는다). 재실행이 필요한 상황(스키마 확인,
    > 함수 재적용 등)이라면 반드시 003 → 004 순서로 **다시** 실행한다.
 
+5. **클라우드 배포 시에만 필요** — 로컬 워커만 쓰고 Vercel/Railway에 배포하지 않을 계획이면
+   생략해도 된다. `supabase/migrations/005_storage_buckets.sql` 전체 내용을 붙여넣고 **Run**.
+   `raw-scans`·`artifacts`·`reports` Storage 버킷 3개와 그 RLS 정책을 만든다(파일당 상한
+   50MB). 재실행해도 안전하다(멱등, `on conflict (id) do nothing`). 검증은 3단계 참고.
+   정책 생성이 `42501`로 실패하면 백로그 티켓 42대로 Storage > Policies UI에서 수동 생성한다.
+   클라우드 배포 전체 절차는 [`DEPLOY.md`](DEPLOY.md) 참고.
+
 ## 3. 검증 쿼리
 
 SQL Editor에서 새 쿼리로 아래 3개를 순서대로 실행해 스키마·함수·시드 데이터가 제대로
@@ -124,6 +131,16 @@ select * from fn_resolve_criteria(null, 'floor');
 
 `floor-kcs-finish7plus`, `floor-kcs-finish7minus`, `floor-kcs-exposed`(is_default=true),
 `floor-molit-cushion`, `floor-lh-exposed`, `floor-lh-thick` 6행이 반환되면 정상이다.
+
+**(4) Storage 버킷 확인**(2단계에서 005를 실행했을 때만 해당) — 버킷 3개와 파일당 상한이
+제대로 만들어졌는지:
+
+```sql
+select id, file_size_limit from storage.buckets;
+```
+
+`raw-scans`·`artifacts`·`reports` 3행이 각각 `file_size_limit = 52428800`(50MB)로
+반환되면 정상이다.
 
 ## 4. API 키 확인
 
@@ -201,25 +218,32 @@ select * from fn_resolve_criteria(null, 'floor');
 `data/` 접두나 OS 절대경로, 워커를 실행한 디렉터리 기준 상대경로는 **저장하지
 않는다**(스펙 §6.3).
 
-데모 단계(로컬 워커, Storage 버킷 아직 미사용)에서는 이 값을 소비자가 각자의 저장소
-루트에 결합해 실제 위치를 얻는다:
+로컬 개발·테스트(워커 `.env`의 `STORAGE_BACKEND=local`, 기본값)에서는 이 값을 소비자가
+각자의 저장소 루트에 결합해 실제 위치를 얻는다:
 
 - **워커**는 자신의 `DATA_DIR`(`.env`)에 결합한다 — 예:
   `DATA_DIR=../data` + `raw-scans/site1/scan1/raw.ply` →
   `../data/raw-scans/site1/scan1/raw.ply`. 이 결합은 `worker/flatworker/jobs.py`의
-  `_resolve_raw_path`(읽기)와 `artifacts.artifacts_dir()`(쓰기)가 담당한다.
-- **P3 대시보드**(정식 구현 시)도 동일 문자열을 자신의 정적 파일 서빙 루트에 결합해
-  읽는다.
+  `_fetch_raw`(읽기)와 `artifacts.artifacts_dir()`(쓰기)가 담당한다.
+- **대시보드**는 로컬 모드를 두지 않는다(Vercel 서버리스 파일시스템은 읽기 전용·휘발성이라
+  로컬 분기가 영원히 죽은 코드가 된다) — 개발·운영 구분 없이 항상 Storage 서명 URL로
+  읽는다. 즉 대시보드와 함께 로컬 개발을 하려면 워커도 `STORAGE_BACKEND=supabase`로
+  맞춰야 한다(워커 단독 테스트만 할 때는 `local`로 충분하다).
 
-정식 배포(Storage 버킷 전환) 시에도 이 문자열이 그대로 버킷 키가 되므로, DB에 특정
-소비자의 로컬 경로 관례를 섞어 저장하면 두 소비자 중 하나가 항상 깨진다 — 이 규약을
-어기지 않는 것이 버킷 전환의 전제 조건이다.
+**클라우드 배포(워커 `STORAGE_BACKEND=supabase`)에서는 이 문자열이 그대로 Storage 버킷의
+객체 키가 된다.** 경로 규약 문자열 자체는 로컬/클라우드 어느 쪽이든 **한 글자도 바뀌지
+않는다** — 바뀌는 것은 그 문자열이 가리키는 실체뿐이다(로컬 파일 → Storage 객체). DB에
+특정 소비자의 로컬 경로 관례를 섞어 저장하면 두 소비자 중 하나가 항상 깨지므로, 이 규약을
+어기지 않는 것이 배포 전환의 전제 조건이다. 클라우드 배포 절차 전체는
+[`DEPLOY.md`](DEPLOY.md) 참고.
 
 ## 7. 대시보드(P3) 연결
 
 `dashboard/.env.example`을 `dashboard/.env.local`로 복사하고 4단계의 **Project URL**과
-**anon(public) key**를 채운다(service_role 키는 절대 넣지 않는다). `DATA_DIR`은 워커의
-`DATA_DIR`과 같은 디렉터리(기본 `../data`)를 가리켜야 대시보드가 워커 산출물을 읽는다.
+**anon(public) key**를 채운다(service_role 키는 절대 넣지 않는다). 대시보드는 로컬
+파일시스템을 쓰지 않는다 — 원본 스캔·산출물·보고서 PDF는 모두 Storage 서명 URL로
+내려받으므로 `DATA_DIR` 설정이 필요 없다(6절 참고). 단, 워커가 Storage에 쓴 파일이어야
+대시보드에서 보이므로 워커도 `STORAGE_BACKEND=supabase`로 띄운다.
 실행: `cd dashboard && npm install && npm run dev` 후 http://localhost:3000
 
 ## 참고
@@ -229,3 +253,5 @@ select * from fn_resolve_criteria(null, 'floor');
 - 이 가이드의 SQL 예시는 `supabase/migrations/002_functions_seed.sql`의 함수 시그니처
   (`fn_job_claim(p_worker text)`, `fn_resolve_criteria(p_site_id uuid, p_surface
   surface_type)` 등)를 정본으로 삼는다 — 마이그레이션이 바뀌면 이 문서도 함께 갱신한다.
+- **클라우드(Vercel + Railway + Supabase Storage) 배포 절차는 [`DEPLOY.md`](DEPLOY.md)
+  참고.**

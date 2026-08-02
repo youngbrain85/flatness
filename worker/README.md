@@ -2,7 +2,9 @@
 
 평활도 분석 시스템 P2(로컬 파이썬 워커)의 잡 처리 프로세스다. Supabase(Postgres + PostgREST)의
 `jobs` 큐를 폴링하며 `precheck`/`analyze`/`import` 3종 잡을 처리하고, `flatness` 엔진(`../engine`)을
-호출해 산출물을 로컬 `DATA_DIR`(기본 `../data`)에 쓴다.
+호출해 산출물을 쓴다. 쓰는 위치는 `STORAGE_BACKEND`에 따라 갈린다 — `local`(기본값, 개발·테스트)
+이면 로컬 `DATA_DIR`(기본 `../data`)에, `supabase`(운영)이면 Supabase Storage 버킷 3종에 쓴다.
+클라우드(Railway) 배포 절차는 [`../docs/DEPLOY.md`](../docs/DEPLOY.md) 참고.
 
 Supabase 프로젝트 자체를 준비하는 절차(SQL 마이그레이션 실행, API 키 발급 등)는
 `../docs/SUPABASE_SETUP.md`를 참고한다. 이 문서는 워커 실행·테스트·구조만 다룬다.

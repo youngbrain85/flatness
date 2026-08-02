@@ -181,3 +181,22 @@
     (`storage.foldername(name)[1] = site_id` 등)으로 좁힐 것
 56. **`report_dir()` 데드 코드** — Task 5의 `upload_local_data.py`를 위해 남겨
     두었으나 현재 호출부도 테스트도 없다
+
+## 클라우드 배포(Task 5) 문서화 중 발견한 사안 (2026-08-01)
+
+57. **RLS가 사용자/조직 단위 격리를 하지 않는다(전 테이블 공통)** —
+    `supabase/migrations/001_schema.sql`의 `all_auth` 정책
+    (`create policy all_auth on sites for all to authenticated using (true) with check (true);`)이
+    `sites`·`locations`·`scans`·`analyses`·`photos`·`reports`·`report_analyses` 7개
+    테이블 전부에 동일하게 걸려 있어, 로그인한 사용자라면 누구나(다른 사용자·다른
+    조직 소유분을 포함해) 전체 행을 읽고 쓰고 지울 수 있다. 티켓 55
+    (`raw_scans_all_auth`, Storage RLS)와 같은 트러스트 모델을 DB 테이블 레벨까지
+    확장한 것일 뿐 신규 구멍은 아니며, 스펙 §6.3 "연구실 로그인 사용자 전원 동일
+    권한"이 원래 의도한 설계다. 문제는 저장소가 곧 공개(public)로 전환되고 대시보드도
+    공개 URL로 배포된다는 점 — 종전에는 "저장소 비공개 + 알음알음 로그인"이 암묵적
+    방어선이었지만 그 전제가 사라진다. **현재는 배포 절차(`docs/DEPLOY.md` §1)에서
+    Supabase Authentication > Providers > Email의 "Enable Sign Ups"를 꺼서 계정 생성
+    자체를 막는 것으로 방어한다** — 신뢰 경계를 "로그인 여부"에서 "계정 존재 여부"로
+    옮긴 것뿐이라, 여러 조직이 같은 배포를 나눠 써야 하는 시점에는 통하지 않는다.
+    다중 조직 지원이 필요해지면 각 테이블에 소유권 컬럼(예: `org_id`)을 추가하고
+    정책을 `using (org_id = ...)` 류로 재설계해야 한다
