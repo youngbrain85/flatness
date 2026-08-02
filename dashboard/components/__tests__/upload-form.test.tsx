@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 const { pushMock } = vi.hoisted(() => ({ pushMock: vi.fn() }));
@@ -22,6 +22,7 @@ const criteria: CriteriaRow = {
 
 // scans/analyses insert·update와 fn_resolve_criteria/fn_enqueue_job rpc 체인을 흉내내는
 // 로컬 스텁 - 이 파일 하나만 이 모양을 쓰므로(리뷰 대상 파일 기준) 공유 헬퍼로 뽑지 않았다.
+// storage.from().upload()는 uploadRawScan(lib/scans/upload.ts)이 브라우저에서 직접 호출한다.
 function stubSupabase(enqueueError: { code?: string; message: string } | null) {
   return {
     from: (table: string) => {
@@ -38,6 +39,12 @@ function stubSupabase(enqueueError: { code?: string; message: string } | null) {
       }
       throw new Error(`예상치 못한 테이블: ${table}`);
     },
+    storage: {
+      from: (bucket: string) => {
+        if (bucket !== 'raw-scans') throw new Error(`예상치 못한 버킷: ${bucket}`);
+        return { upload: async () => ({ error: null }) };
+      },
+    },
     rpc: async (fn: string) => {
       if (fn === 'fn_resolve_criteria') return { data: [criteria], error: null };
       if (fn === 'fn_enqueue_job') return { error: enqueueError };
@@ -52,15 +59,7 @@ async function selectSiteAndLocation() {
   fireEvent.change(screen.getByLabelText('측정위치'), { target: { value: 'l1' } });
 }
 
-beforeEach(() => {
-  vi.stubGlobal('fetch', vi.fn(async () => ({
-    ok: true,
-    json: async () => ({ rel_path: 'raw-scans/s1/scan1/raw.ply', size: 3 }),
-  })));
-});
-
 afterEach(() => {
-  vi.unstubAllGlobals();
   vi.clearAllMocks();
 });
 

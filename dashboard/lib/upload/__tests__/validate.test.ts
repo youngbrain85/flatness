@@ -39,12 +39,16 @@ describe('UNIT_OPTIONS', () => {
   });
 });
 
-describe('isUploadSizeAllowed (리뷰 Important #3: 업로드 크기 상한 1GiB)', () => {
+describe('isUploadSizeAllowed (Supabase Free 티어 상한 50MB)', () => {
   it('상한 이하(경계값 포함)는 허용한다', () => {
     expect(isUploadSizeAllowed(0)).toBe(true);
     expect(isUploadSizeAllowed(MAX_UPLOAD_BYTES)).toBe(true); // 경계값 통과
   });
   it('상한을 1바이트라도 초과하면 거부한다', () => {
     expect(isUploadSizeAllowed(MAX_UPLOAD_BYTES + 1)).toBe(false);
+  });
+  it('50MB 초과는 거부한다', () => {
+    expect(isUploadSizeAllowed(52428800)).toBe(true);
+    expect(isUploadSizeAllowed(52428801)).toBe(false);
   });
 });

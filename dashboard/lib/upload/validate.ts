@@ -28,10 +28,14 @@ export const UNIT_OPTIONS = [
   { value: 0.001, label: 'mm(밀리미터)' },
 ];
 
-// 업로드 크기 상한(리뷰 Important #3): 라이다 원본은 수백 MB~GB급이지만, 현재
-// app/api/upload/route.ts가 파일 전체를 메모리에 버퍼링하므로 데모 서버 보호를 위해
-// 1GiB로 제한한다. 스트리밍 저장으로 상한 자체를 없애는 건 이번 범위 밖(백로그).
-export const MAX_UPLOAD_BYTES = 1024 * 1024 * 1024; // 1 GiB
+// 업로드 크기 상한: Supabase Free 티어는 파일당 50MB·총 1GB다. 005 마이그레이션의
+// 버킷 file_size_limit과 반드시 같은 값을 써야 한다(불일치하면 브라우저는 통과시켰는데
+// Storage가 413으로 거부하는 혼란이 생긴다). Pro 승급 시 이 환경변수와 버킷 설정을
+// 함께 올린다.
+export const MAX_UPLOAD_BYTES = Number(
+  process.env.NEXT_PUBLIC_MAX_UPLOAD_BYTES ?? 52428800,
+);
+export const MAX_UPLOAD_MB = Math.round(MAX_UPLOAD_BYTES / (1024 * 1024));
 
 export function isUploadSizeAllowed(size: number): boolean {
   return size <= MAX_UPLOAD_BYTES;

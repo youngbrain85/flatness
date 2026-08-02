@@ -5,7 +5,8 @@ import { createClient } from '@/lib/supabase/client';
 import { enqueueJob } from '@/lib/domain/jobs';
 import { LINEAGE_LABEL, SURFACE_LABEL } from '@/lib/domain/labels';
 import type { CriteriaRow, Lineage, LocationRow, SiteRow, Surface } from '@/lib/domain/types';
-import { IMPORT_EXTS, MAX_UPLOAD_BYTES, SCAN_EXTS, validateFile } from '@/lib/upload/validate';
+import { uploadRawScan } from '@/lib/scans/upload';
+import { IMPORT_EXTS, MAX_UPLOAD_BYTES, MAX_UPLOAD_MB, SCAN_EXTS, validateFile } from '@/lib/upload/validate';
 
 interface Props {
   sites: SiteRow[];
@@ -66,8 +67,8 @@ export function UploadForm({ sites, locations, userId, initialSiteId, initialLoc
       return;
     }
     if (file.size > MAX_UPLOAD_BYTES) {
-      // 리뷰 Important #3: 서버 왕복 전에 미리 걸러 대용량 파일 전송 대기를 없앤다(서버도 동일 상한을 재검증)
-      setError(`파일이 너무 큽니다(최대 ${MAX_UPLOAD_BYTES / (1024 * 1024 * 1024)}GiB). 더 작은 파일로 나눠서 시도하세요.`);
+      // 리뷰 Important #3: Storage 왕복 전에 미리 걸러 대용량 파일 전송 대기를 없앤다(Storage도 동일 상한을 재검증)
+      setError(`파일이 너무 큽니다(최대 ${MAX_UPLOAD_MB}MB). 스캔 범위를 나눠 다시 시도하세요.`);
       return;
     }
     setBusy(true);
@@ -90,18 +91,12 @@ export function UploadForm({ sites, locations, userId, initialSiteId, initialLoc
       }).select('id').single();
       if (insErr || !scan) throw new Error(insErr?.message ?? '스캔 등록 실패');
 
-      // 2) 파일 저장 (로컬 data/raw-scans 규약 - 서버 route가 경로 생성)
-      const fd = new FormData();
-      fd.set('file', file);
-      fd.set('site_id', siteId);
-      fd.set('scan_id', scan.id);
-      const res = await fetch('/api/upload', { method: 'POST', body: fd });
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.error ?? '파일 업로드 실패');
+      // 2) 파일 저장 (브라우저 -> Supabase Storage 직접 업로드, raw-scans 버킷 규약)
+      const relPath = await uploadRawScan(supabase, file, siteId, scan.id, v.ext);
 
       // 3) raw_file_path 반영 (버킷-상대 규약 문자열)
       const { error: updErr } = await supabase.from('scans')
-        .update({ raw_file_path: body.rel_path, ...(mode === 'import' ? { status: 'ready' } : {}) })
+        .update({ raw_file_path: relPath, ...(mode === 'import' ? { status: 'ready' } : {}) })
         .eq('id', scan.id);
       if (updErr) throw new Error(updErr.message);
 
@@ -237,7 +232,7 @@ export function UploadForm({ sites, locations, userId, initialSiteId, initialLoc
         <input id="file" type="file" required onChange={(e) => setFile(e.target.files?.[0] ?? null)}
           className="mt-1 w-full text-sm" />
         <p className="mt-1 text-xs text-slate-500">
-          파일은 로컬 서버의 data/raw-scans/ 아래에 저장됩니다(Supabase를 거치지 않음).
+          파일은 Supabase Storage에 저장됩니다. 파일당 최대 {MAX_UPLOAD_MB}MB입니다.
         </p>
       </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
