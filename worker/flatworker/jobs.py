@@ -10,6 +10,7 @@ from flatness.core.pipeline import analyze_floor, analyze_wall
 from flatness.importer.colab_csv import import_colab_csv
 from flatness.importer.json_import import import_json
 
+from flatworker import slope
 from flatworker.artifacts import staging_dir
 from flatworker.report.assets import build_assets
 from flatworker.report.context import load_report_context
@@ -89,8 +90,16 @@ def _fetch_raw(storage, scan, work):
     return dst
 
 
-def _finalize(db, analysis_id, scan_id, stats):
-    """엔진 stats를 analyses 행에 반영하고 해당 스캔의 현재 분석으로 지정."""
+def _finalize(db, analysis_id, scan_id, stats, kind="flatness"):
+    """엔진 stats를 analyses 행에 반영하고 해당 스캔·종류의 현재 분석으로 지정.
+
+    handle_analyze(평활도 경로)와 handle_import가 공유하므로 kind 기본값을
+    'flatness'로 둬 기존 호출부를 그대로 둔다. 구배는 이 함수를 재사용하지
+    않는다 - 아래 파생 컬럼이 전부 stats.get() 기본값이라, 스키마가 다른 구배
+    stats를 태우면 coverage_pct·overall_verdict·engine_version·applied_criteria·
+    auto_summary가 조용히 NULL이 되고 잡은 '성공'으로 끝난다(태스크 노트 참고).
+    구배 경로는 slope.run_slope_analysis가 만든 필드 dict를 직접 저장한다.
+    """
     db.update_analysis(analysis_id, {
         "status": "done",
         "stats": stats,
@@ -105,11 +114,40 @@ def _finalize(db, analysis_id, scan_id, stats):
         "applied_criteria": stats.get("applied_criteria"),
         "auto_summary": stats.get("auto_summary"),
     })
-    db.set_current_analysis(scan_id, analysis_id)
+    db.set_current_analysis(scan_id, analysis_id, kind=kind)
+
+
+def _handle_analyze_slope(db, cfg, analysis_id):
+    """analyses.kind='slope' 전용 analyze 처리 (스펙 §6.4).
+
+    _load_context를 쓰지 않는다 - 구배 기준 행은 thresholds[0]에
+    metric/pass_mm/rework_mm이 없어 그 안의 _to_criterion에서 KeyError: 'metric'
+    으로 죽는다. 대신 slope.slope_context가 _to_criterion을 타지 않고 criteria
+    행·threshold·drain_points를 직접 읽는다.
+    """
+    analysis, scan, criteria_row, threshold, drain_points = slope.slope_context(
+        db, analysis_id)
+    storage = get_storage(cfg, db)
+    with staging_dir() as work:
+        path = _fetch_raw(storage, scan, work)
+        out_dir = work / "out"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        scale_to_m = scan["unit_scale"]
+        _, fields = slope.run_slope_analysis(
+            path, scale_to_m, threshold, out_dir, drain_points,
+            analysis_id, criteria_row)
+        storage.upload_dir(f"artifacts/{analysis_id}", out_dir)
+    db.update_analysis(analysis_id, fields)
+    db.set_current_analysis(analysis["scan_id"], analysis_id, kind="slope")
 
 
 def handle_analyze(db, cfg, payload):
     analysis_id = payload["analysis_id"]
+    analysis = db.get_analysis(analysis_id)
+    kind = analysis.get("kind") or "flatness"
+    if kind == "slope":
+        return _handle_analyze_slope(db, cfg, analysis_id)
+    # 이하 기존 평활도 경로 그대로
     analysis, scan, crit, u_mm = _load_context(db, analysis_id)
     storage = get_storage(cfg, db)
     with staging_dir() as work:

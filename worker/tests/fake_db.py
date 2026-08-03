@@ -49,7 +49,7 @@ class FakeDB(DBClient):
         self.criteria = {}
         self.app_settings = {}
         self.analyses = {}
-        self.current_analysis = {}  # scan_id -> analysis_id (is_current 대체)
+        self.current_analysis = {}  # (scan_id, kind) -> analysis_id (is_current 대체)
         self.reports = {}
         self.report_analyses = []   # {"report_id","analysis_id","sort_order"} 행 목록
         self.locations = {}
@@ -238,8 +238,10 @@ class FakeDB(DBClient):
     def update_analysis(self, analysis_id, fields):
         self.analyses[analysis_id].update(fields)
 
-    def set_current_analysis(self, scan_id, analysis_id):
-        self.current_analysis[scan_id] = analysis_id
+    def set_current_analysis(self, scan_id, analysis_id, kind="flatness"):
+        # 007의 analyses_current 부분 유니크 인덱스((scan_id, kind)당 is_current
+        # 1개) 시맨틱을 그대로 옮긴다 - kind별로 독립된 현재 분석을 허용한다.
+        self.current_analysis[(scan_id, kind)] = analysis_id
 
     # -- 보고서 (P4) -----------------------------------------------------
     def get_report(self, report_id):
