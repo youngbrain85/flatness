@@ -66,12 +66,45 @@ def test_cell_size_controls_cell_count():
     assert len(two) > len(four)
 
 
+def test_edge_fragment_cell_is_excluded_from_judgment():
+    # 바닥 폭(8.2m)이 cell_m(2.0m)의 배수가 아니라서 오른쪽 가장자리에 0.20m
+    # 조각 셀(cx=4)이 생긴다. y는 8.0m로 정확히 나누어떨어져 그쪽엔 조각이 없다.
+    # 이 조각 열은 서브셀 개수가 충분해도(0.20m/0.05m * 40 = 160개, min_subcells=10을
+    # 훌쩍 넘음) 폭이 좁아 baseline이 짧으므로, 개수 검사(min_subcells)만으로는
+    # 못 걸러내고 폭 하한 검사가 있어야만 ok=False로 빠진다.
+    pts = flat_floor(size=(8.2, 8.0), spacing=0.02, tilt=(0.02, 0.0))
+    cells = compute_slope_cells(_grid(pts), cell_m=2.0)
+
+    frags = [c for c in cells if c.cx == 4]      # 오른쪽 가장자리 열
+    interior = [c for c in cells if c.cx < 4]    # 나머지 정상 크기 열
+
+    assert frags and interior
+    for c in frags:
+        assert abs(c.width_m - 0.2) < 1e-6       # 실제 범위가 기록됐다
+        assert abs(c.height_m - 2.0) < 1e-6      # 높이 방향은 멀쩡하다
+        assert c.n_subcells >= 10                # 개수 자체는 충분했다
+        assert not c.ok                          # 그런데도 폭이 좁아 판정에서 제외
+
+    for c in interior:
+        assert c.ok
+        assert abs(c.width_m - 2.0) < 1e-6
+        assert abs(c.height_m - 2.0) < 1e-6
+        assert abs(c.slope_pct - 2.0) < 0.1      # 내부 셀은 여전히 정확
+
+    th = {"design_pct": 2.0, "pass_pct": 0.5, "re_pct": 1.5, "dir_pass_deg": 30.0}
+    graded = grade_slope_cells(cells, th, cell_m=2.0)
+    summary = slope_summary(graded)
+    assert summary["coverage_pct"] < 100.0       # 조각을 버려서 정직하게 낮아짐
+
+
 TH = {"design_pct": 2.0, "pass_pct": 0.5, "re_pct": 1.5, "dir_pass_deg": 30.0}
 
 
-def _cell(slope_pct, downhill_rad, se_pct=0.01, ok=True, cx=0, cy=0):
+def _cell(slope_pct, downhill_rad, se_pct=0.01, ok=True, cx=0, cy=0,
+         width_m=2.0, height_m=2.0):
     from flatness.core.slope import SlopeCell
-    return SlopeCell(cx, cy, 1.0, 1.0, 1600, slope_pct, downhill_rad, 0.001, se_pct, ok)
+    return SlopeCell(cx, cy, 1.0, 1.0, 1600, slope_pct, downhill_rad, 0.001, se_pct,
+                     width_m, height_m, ok)
 
 
 def test_on_target_slope_is_pass():
@@ -135,6 +168,14 @@ def test_correction_is_reported_in_mm_over_the_cell():
     assert abs(g["correction_mm"] - 10.0) < 0.5
 
 
+def test_correction_uses_actual_cell_extent_not_nominal_cell_m():
+    # 폭이 0.2m인 조각 셀(그래도 임계값 이상이라 ok=True인 경우)은 명목 cell_m(2.0m)이
+    # 아니라 실제 폭으로 환산해야 한다. 명목값을 쓰면 10배(2.4mm) 과대 보고된다.
+    cell = _cell(2.12, math.pi, width_m=0.2, height_m=2.0)  # dev_pct=0.12
+    g = grade_slope_cells([cell], TH, cell_m=2.0)[0]
+    assert abs(g["correction_mm"] - 0.24) < 0.01
+
+
 def test_summary_reports_required_statistics():
     cells = [_cell(2.0, math.pi), _cell(2.4, math.pi), _cell(3.0, math.pi)]
     s = slope_summary(grade_slope_cells(cells, TH))
@@ -158,4 +199,8 @@ def test_summary_excludes_undecidable_from_statistics():
 def test_summary_of_empty_input_is_safe():
     s = slope_summary([])
     assert s["coverage_pct"] == 0.0
-    assert math.isnan(s["mean_dev_pct"])
+    # nan이 아니라 None이어야 한다 - float("nan")은 RFC 8259 표준 JSON 토큰이 아니라서
+    # json.dump(allow_nan=False)와 브라우저 JSON.parse가 거부한다(stats.py의 관례와 일치).
+    assert s["mean_dev_pct"] is None
+    assert s["std_dev_pct"] is None
+    assert s["max_dev_pct"] is None

@@ -931,7 +931,7 @@ cd engine && python -c "
 from tests.fixtures.synthetic import flat_floor, write_binary_ply
 write_binary_ply(flat_floor(size=(10.0,8.0), spacing=0.02, tilt=(0.02,0.0)), 'demo_slope.ply')" \
 && echo '{"design_pct":2.0,"pass_pct":0.5,"re_pct":1.5,"dir_pass_deg":30.0}' > demo_crit.json \
-&& python -m flatness analyze-slope demo_slope.ply --units m --criteria demo_crit.json --out demo_slope_out --drain -5,4
+&& python -m flatness.cli analyze-slope demo_slope.ply --units m --criteria demo_crit.json --out demo_slope_out --drain=-5,4
 ```
 
 출력에 "구배 분석 완료"와 등급별 개수가 뜨는지, `demo_slope_out/`에 파일 3개가

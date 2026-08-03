@@ -27,9 +27,14 @@ def render_slope_map(graded, out_path, cell_m=2.0):
     fig, ax = plt.subplots(figsize=(8, 7))
     for g in graded:
         c = g["cell"]
-        x0 = c.center_x - cell_m / 2
-        y0 = c.center_y - cell_m / 2
-        ax.add_patch(plt.Rectangle((x0, y0), cell_m, cell_m,
+        # 명목 cell_m이 아니라 셀의 실제 폭·높이로 그린다. 바닥 폭이 cell_m의 배수가
+        # 아니면 가장자리 조각 셀이 생기는데, 명목 크기로 그리면 이웃과 겹치고
+        # 바닥 밖으로 삐져나온다.
+        w_m = getattr(c, "width_m", cell_m)
+        h_m = getattr(c, "height_m", cell_m)
+        x0 = c.center_x - w_m / 2
+        y0 = c.center_y - h_m / 2
+        ax.add_patch(plt.Rectangle((x0, y0), w_m, h_m,
                                    facecolor=_COLOR.get(g["grade"], "#9e9e9e"),
                                    edgecolor="white", linewidth=0.5))
         if not c.ok:

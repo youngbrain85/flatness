@@ -27,6 +27,8 @@ class SlopeCell:
     downhill_rad: float
     rmse_m: float
     se_pct: float
+    width_m: float
+    height_m: float
     ok: bool
 
 
@@ -35,6 +37,13 @@ def compute_slope_cells(grid, cell_m=2.0, min_subcells=10):
 
     min_subcells: 평면이 수치적으로 결정되려면 최소 이만큼의 유효 서브셀이 필요하다.
     3점이면 수학적으로는 평면이 정해지지만 잔차와 표준오차가 무의미해진다.
+
+    바닥 폭이 cell_m의 배수가 아니면 가장자리에 폭이 좁은 조각 셀이 생긴다.
+    개수(min_subcells)만으로는 이걸 못 걸러낸다 - 서브셀은 충분해도 실제 baseline이
+    짧으면 서브셀 중앙값의 실제 위치와 가정한 중심의 불일치가 평균되지 않고 편향으로
+    남는다(짧은 baseline일수록 이 편향이 커진다). 그래서 폭 하한을 개수 검사와 함께
+    건다: 폭이든 높이든 cell_m/2 미만이면 판정할 만큼의 baseline이 없다고 보고
+    ok=False로 뺀다.
     """
     ny, nx = grid.shape
     sub = grid.size_m
@@ -51,15 +60,18 @@ def compute_slope_cells(grid, cell_m=2.0, min_subcells=10):
         for cx in range(ncx):
             x0, x1 = cx * per_cell, min(nx, (cx + 1) * per_cell)
             y0, y1 = cy * per_cell, min(ny, (cy + 1) * per_cell)
+            width_m = (x1 - x0) * sub
+            height_m = (y1 - y0) * sub
             block = grid.median_z[y0:y1, x0:x1]
             valid = ~np.isnan(block)
             n = int(np.count_nonzero(valid))
             center_x = float(xs[min(nx - 1, (x0 + x1 - 1) // 2)])
             center_y = float(ys[min(ny - 1, (y0 + y1 - 1) // 2)])
-            if n < min_subcells:
+            geom_ok = width_m >= cell_m / 2 and height_m >= cell_m / 2
+            if n < min_subcells or not geom_ok:
                 out.append(SlopeCell(cx, cy, center_x, center_y, n,
                                      float("nan"), float("nan"), float("nan"),
-                                     float("nan"), False))
+                                     float("nan"), width_m, height_m, False))
                 continue
             jj, ii = np.nonzero(valid)
             px = xs[x0:x1][ii].astype(np.float64)
@@ -70,14 +82,14 @@ def compute_slope_cells(grid, cell_m=2.0, min_subcells=10):
             if sx <= 0.0 or sy <= 0.0:
                 out.append(SlopeCell(cx, cy, center_x, center_y, n,
                                      float("nan"), float("nan"), float("nan"),
-                                     float("nan"), False))
+                                     float("nan"), width_m, height_m, False))
                 continue
             try:
                 a, b, c = fit_plane_ransac(px, py, pz)
             except ValueError:
                 out.append(SlopeCell(cx, cy, center_x, center_y, n,
                                      float("nan"), float("nan"), float("nan"),
-                                     float("nan"), False))
+                                     float("nan"), width_m, height_m, False))
                 continue
             # 잔차는 인라이어가 아니라 셀 안의 모든 유효 서브셀에 대해 잰다.
             # 결함이 있으면 RMSE가 커지고 그만큼 불확도도 커져 보수적으로 판정된다.
@@ -92,7 +104,8 @@ def compute_slope_cells(grid, cell_m=2.0, min_subcells=10):
             # (a, b)는 오르막 방향이다. 물은 내리막으로 흐르므로 부호를 뒤집는다.
             downhill = math.atan2(-b, -a)
             out.append(SlopeCell(cx, cy, center_x, center_y, n,
-                                 slope_pct, downhill, rmse, se_pct, True))
+                                 slope_pct, downhill, rmse, se_pct,
+                                 width_m, height_m, True))
     return out
 
 
@@ -123,7 +136,13 @@ def grade_slope_cells(cells, threshold, drain_points=None, cell_m=2.0):
     out = []
     for c in cells:
         if not c.ok:
-            out.append({"cell": c, "grade": GRADE_NA, "reason": "유효 서브셀 부족",
+            # 격자 가장자리 조각 셀(폭·높이가 cell_m/2 미만)인지, 아니면 유효 서브셀
+            # 자체가 부족한지 구분해 사유를 정확히 남긴다.
+            if c.width_m < cell_m / 2 or c.height_m < cell_m / 2:
+                reason = "격자 가장자리 조각 셀(폭 또는 높이가 부족해 baseline 짧음)"
+            else:
+                reason = "유효 서브셀 부족"
+            out.append({"cell": c, "grade": GRADE_NA, "reason": reason,
                         "dev_pct": float("nan"), "dir_err_deg": None,
                         "correction_mm": float("nan")})
             continue
@@ -135,8 +154,11 @@ def grade_slope_cells(cells, threshold, drain_points=None, cell_m=2.0):
                         "correction_mm": float("nan")})
             continue
         d = abs(c.slope_pct - design)
-        # 2m 셀 양단 높이차로 환산: 구배 1%p = 셀 길이의 1% = cell_m*10 mm
-        correction_mm = d * cell_m * 10.0
+        # 양단 높이차로 환산: 구배 1%p = 셀 길이의 1% = 길이(m)*10 mm.
+        # 셀의 실제 폭·높이(width_m/height_m)로 환산해야 한다 - 명목 cell_m을 쓰면
+        # 가장자리에서 다소 잘린 셀(문턱은 넘었지만 나온 cell_m보다 작은 셀)의
+        # 보정량이 과대 보고된다.
+        correction_mm = d * min(c.width_m, c.height_m) * 10.0
         dir_err = None
         if drain_points:
             # 기대 방향: 셀 중심에서 가장 가까운 배수구를 향하는 방향
@@ -168,6 +190,10 @@ def slope_summary(graded):
 
     판정 불가 셀은 통계에서 제외한다. 편차가 nan이라 넣으면 전체가 nan이 되고,
     무엇보다 "잴 수 없었던 것"을 "편차 0"처럼 섞으면 결과가 왜곡된다.
+
+    valid가 비면(전 셀 판정불가) nan 대신 None을 반환한다 - stats.py의 build_stats와
+    같은 관례다. float("nan")은 RFC 8259 표준 JSON 토큰이 아니라서 json.dump가
+    기본값으로 내보내면 브라우저 JSON.parse·Postgres jsonb가 거부한다.
     """
     counts = {GRADE_PASS: 0, GRADE_BORDER: 0, GRADE_REPAIR: 0,
               GRADE_REDO: 0, GRADE_NA: 0}
@@ -180,9 +206,9 @@ def slope_summary(graded):
     decided = total - counts[GRADE_NA]
     arr = np.asarray(devs, dtype=np.float64)
     return {
-        "mean_dev_pct": float(arr.mean()) if arr.size else float("nan"),
-        "std_dev_pct": float(arr.std(ddof=0)) if arr.size else float("nan"),
-        "max_dev_pct": float(arr.max()) if arr.size else float("nan"),
+        "mean_dev_pct": float(arr.mean()) if arr.size else None,
+        "std_dev_pct": float(arr.std(ddof=0)) if arr.size else None,
+        "max_dev_pct": float(arr.max()) if arr.size else None,
         "counts": counts,
         "coverage_pct": (100.0 * decided / total) if total else 0.0,
     }

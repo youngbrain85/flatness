@@ -178,9 +178,10 @@ def analyze_slope(path, scale_to_m, threshold, out_dir, subcell_m=0.05,
     import csv
     import json
     import os
+    from collections import Counter
 
-    from flatness.core.slope import (compute_slope_cells, grade_slope_cells,
-                                     slope_summary)
+    from flatness.core.slope import (GRADE_NA, compute_slope_cells,
+                                     grade_slope_cells, slope_summary)
     from flatness.outputs.slope_map import render_slope_map
 
     os.makedirs(out_dir, exist_ok=True)
@@ -208,10 +209,31 @@ def analyze_slope(path, scale_to_m, threshold, out_dir, subcell_m=0.05,
 
     png_path = render_slope_map(graded, os.path.join(out_dir, "slope_map.png"),
                                 cell_m=cell_m)
+
+    # 배수구를 지정하지 않으면 방향(역구배) 판정이 조용히 꺼진다(같은 스캔이 --drain
+    # 유무에 따라 적합<->재시공으로 뒤집힐 수 있다). stats에 명시적으로 남겨야 보고서
+    # 받는 사람이 "coverage_pct 100%"를 "방향까지 다 봤다"로 오해하지 않는다.
+    direction_judged = bool(drain_points)
+    warnings = []
+    if not direction_judged:
+        warnings.append("배수구 위치를 지정하지 않아 방향(역구배)을 판정하지 않았습니다. "
+                        "크기만 판정한 결과입니다.")
+    na_reasons = Counter(g["reason"] for g in graded if g["grade"] == GRADE_NA)
+    if na_reasons:
+        detail = ", ".join(f"{reason} {cnt}건" for reason, cnt in na_reasons.items())
+        warnings.append(f"판정불가 셀 {sum(na_reasons.values())}개: {detail}")
+
     stats = {"format": "slope-stats-v1", "cell_m": cell_m, "subcell_m": subcell_m,
              "threshold": threshold, "summary": summary,
+             "direction_judged": direction_judged,
+             "drain_points": ([[round(float(x), 3), round(float(y), 3)]
+                               for x, y in drain_points] if drain_points else None),
+             "warnings": warnings,
              "artifacts": {"cells_csv": csv_path, "map_png": png_path}}
     stats_path = os.path.join(out_dir, "slope_stats.json")
     with open(stats_path, "w", encoding="utf-8") as f:
-        json.dump(stats, f, ensure_ascii=False, indent=2)
+        # allow_nan=False: 위 summary가 nan을 흘리면(회귀) 여기서 즉시 터진다.
+        # RFC 8259 표준 JSON에는 NaN 토큰이 없어 브라우저 JSON.parse·Postgres jsonb가
+        # 조용히 거부하므로, 조용히 통과시키느니 여기서 바로 예외로 잡는 편이 낫다.
+        json.dump(stats, f, ensure_ascii=False, indent=2, allow_nan=False)
     return stats

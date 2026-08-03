@@ -39,7 +39,8 @@ def main(argv=None):
     sl.add_argument("--out", required=True, help="산출물 디렉터리")
     sl.add_argument("--cell", type=float, default=2.0, help="분석 격자 크기(m, 기본 2.0)")
     sl.add_argument("--drain", action="append", default=None,
-                    help="배수구 위치 X,Y (여러 번 지정 가능). 없으면 방향 판정을 건너뛴다")
+                    help="배수구 위치 X,Y (여러 번 지정 가능). 없으면 방향 판정을 건너뛴다. "
+                         "음수 좌표는 옵션으로 오인되니 --drain=-5,4 처럼 '='를 붙여 지정하세요")
     args = p.parse_args(argv)
 
     crits = load_criteria()
@@ -108,12 +109,17 @@ def main(argv=None):
         stats = analyze_slope(args.path, _SCALES[args.units], threshold, args.out,
                               cell_m=args.cell, drain_points=drains)
         s = stats["summary"]
+        # 전 셀 판정불가면 mean/max_dev_pct가 None이다(stats.py build_stats와 같은 관례).
+        mean_txt = "N/A" if s["mean_dev_pct"] is None else f"{s['mean_dev_pct']:.3f}%p"
+        max_txt = "N/A" if s["max_dev_pct"] is None else f"{s['max_dev_pct']:.3f}%p"
         print(f"구배 분석 완료: 셀 {sum(s['counts'].values())}개, "
               f"판정 가능 {s['coverage_pct']:.1f}%, "
-              f"평균 편차 {s['mean_dev_pct']:.3f}%p, 최대 {s['max_dev_pct']:.3f}%p")
+              f"평균 편차 {mean_txt}, 최대 {max_txt}")
         for k, v in s["counts"].items():
             if v:
                 print(f"  {k}: {v}")
+        for w in stats.get("warnings", []):
+            print(f"  주의: {w}")
         return 0
 
     if args.criteria not in crits:
