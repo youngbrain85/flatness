@@ -46,3 +46,46 @@ def test_plumbness_criteria_rejected(tmp_path):
              "--units", "m", "--criteria", "wall-kcs-plumb")
     assert r.returncode == 1
     assert "자동 병행" in r.stdout
+
+def test_analyze_slope_cli_end_to_end(tmp_path):
+    """합성 2% 경사면을 CLI로 돌려 산출물과 요약이 나오는지 본다."""
+    import json
+    from tests.fixtures.synthetic import flat_floor, write_binary_ply
+    from flatness.cli import main
+
+    ply = tmp_path / "slope.ply"
+    write_binary_ply(flat_floor(size=(8.0, 8.0), spacing=0.02, tilt=(0.02, 0.0)), str(ply))
+    crit = tmp_path / "crit.json"
+    crit.write_text(json.dumps(
+        {"design_pct": 2.0, "pass_pct": 0.5, "re_pct": 1.5, "dir_pass_deg": 30.0}),
+        encoding="utf-8")
+    out = tmp_path / "out"
+
+    rc = main(["analyze-slope", str(ply), "--units", "m",
+               "--criteria", str(crit), "--out", str(out)])
+    assert rc == 0
+
+    stats = json.loads((out / "slope_stats.json").read_text(encoding="utf-8"))
+    assert abs(stats["summary"]["max_dev_pct"]) < 0.1
+    assert stats["summary"]["counts"]["적합"] > 0
+    assert (out / "slope_map.png").exists()
+    assert (out / "slope_cells.csv").exists()
+
+
+def test_analyze_slope_refuses_to_guess_units(tmp_path, capsys):
+    """단위 자동 확정 금지(스펙 5.1.1). --units 없으면 후보만 보여주고 exit 2."""
+    import json
+    from tests.fixtures.synthetic import flat_floor, write_binary_ply
+    from flatness.cli import main
+
+    ply = tmp_path / "s.ply"
+    write_binary_ply(flat_floor(size=(8.0, 8.0), spacing=0.05, tilt=(0.02, 0.0)), str(ply))
+    crit = tmp_path / "c.json"
+    crit.write_text(json.dumps(
+        {"design_pct": 2.0, "pass_pct": 0.5, "re_pct": 1.5, "dir_pass_deg": 30.0}),
+        encoding="utf-8")
+
+    rc = main(["analyze-slope", str(ply), "--criteria", str(crit),
+               "--out", str(tmp_path / "o")])
+    assert rc == 2
+    assert "--units" in capsys.readouterr().out

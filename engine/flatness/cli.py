@@ -1,5 +1,6 @@
 """CLI — 단위 자동 확정 금지: --units 없으면 감지 결과를 보여주고 exit 2 (스펙 §5.1.1)."""
 import argparse
+import json
 import sys
 from pathlib import Path
 from flatness.criteria import load_criteria
@@ -29,6 +30,16 @@ def main(argv=None):
     ij.add_argument("--out", type=Path, required=True)
     ij.add_argument("--criteria", default="floor-kcs-exposed")
     ij.add_argument("--uncertainty-mm", type=float, default=5.0)
+    sl = sub.add_parser("analyze-slope", help="2m 격자 구배 산출·판정 (세부과업 4)")
+    sl.add_argument("path", help="점군 파일(ply/las/laz/xyz/txt/csv/pts)")
+    sl.add_argument("--units", choices=sorted(_SCALES),
+                    help="좌표 단위. 없으면 감지 결과만 보여주고 exit 2 (자동 확정 금지)")
+    sl.add_argument("--criteria", required=True,
+                    help="설계기준 JSON: design_pct·pass_pct·re_pct·dir_pass_deg")
+    sl.add_argument("--out", required=True, help="산출물 디렉터리")
+    sl.add_argument("--cell", type=float, default=2.0, help="분석 격자 크기(m, 기본 2.0)")
+    sl.add_argument("--drain", action="append", default=None,
+                    help="배수구 위치 X,Y (여러 번 지정 가능). 없으면 방향 판정을 건너뛴다")
     args = p.parse_args(argv)
 
     crits = load_criteria()
@@ -72,6 +83,37 @@ def main(argv=None):
         print(f"  적합 {gc['pass']} / 경계 {gc['borderline']} / 보수 {gc['repair']}"
               f" / 재시공 {gc['rework']} / 판정불가 {gc['na']}")
         print(f"  산출물: {args.out}")
+        return 0
+
+    if args.cmd == "analyze-slope":
+        # 단위 자동 확정 금지 - 기존 analyze 분기(cli.py:86-91)와 같은 규칙.
+        # 구배 크기 자체는 축척에 무관하지만 2m 격자와 보정 높이차(mm)는 직접
+        # 영향받으므로 관례를 우회할 이유가 없다.
+        if args.units is None:
+            info = read_info(args.path)
+            print("좌표 단위를 확정할 수 없습니다. 감지 후보:")
+            for g in detect_units(info):
+                print(f"  --units {g.unit:2s} (scale={g.scale_to_m}) [{g.confidence}] {g.evidence}")
+            print("위 후보 중 하나를 --units 로 명시해 다시 실행하세요.")
+            return 2
+        with open(args.criteria, encoding="utf-8") as f:
+            threshold = json.load(f)
+        drains = None
+        if args.drain:
+            drains = []
+            for s in args.drain:
+                sx, _, sy = s.partition(",")
+                drains.append((float(sx), float(sy)))
+        from flatness.core.pipeline import analyze_slope
+        stats = analyze_slope(args.path, _SCALES[args.units], threshold, args.out,
+                              cell_m=args.cell, drain_points=drains)
+        s = stats["summary"]
+        print(f"구배 분석 완료: 셀 {sum(s['counts'].values())}개, "
+              f"판정 가능 {s['coverage_pct']:.1f}%, "
+              f"평균 편차 {s['mean_dev_pct']:.3f}%p, 최대 {s['max_dev_pct']:.3f}%p")
+        for k, v in s["counts"].items():
+            if v:
+                print(f"  {k}: {v}")
         return 0
 
     if args.criteria not in crits:
