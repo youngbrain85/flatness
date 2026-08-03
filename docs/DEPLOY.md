@@ -17,8 +17,19 @@ Vercel(대시보드) + Railway(워커, Docker) + Supabase(DB·Auth·Storage) 구
 
 ## 1. Supabase (사용자 수행)
 
-1. SQL Editor에서 `005_storage_buckets.sql` 실행(001~004를 아직 실행하지 않았다면
-   `docs/SUPABASE_SETUP.md` 2단계부터 순서대로 먼저 진행한다)
+1. SQL Editor에서 `001_schema.sql`부터 `007_slope_analysis.sql`까지 **순서대로** 실행한다
+   (001~004를 아직 실행하지 않았다면 `docs/SUPABASE_SETUP.md` 2단계부터 순서대로 먼저
+   진행한다). 006(`006_report_soft_delete.sql`)은 보고서 소프트 삭제, 007
+   (`007_slope_analysis.sql`)은 구배 분석(`analyses.kind` 컬럼·구배 판정 기준 시드)을
+   추가한다 - 둘 다 재실행 안전(멱등)하다
+
+   > **[필수] 배포 순서 경고**: **007 적용 -> 엔진·워커 배포(저장소 루트 `Dockerfile`이
+   > `engine/`·`worker/`를 한 이미지로 함께 빌드하므로 Railway 재배포 1회로 둘이 자동으로
+   > 동시에 올라간다) -> 대시보드 배포** 순서를 지킨다. 007을 적용하지 않은 채 대시보드를
+   > 먼저 배포하면 `analyses` 테이블에 `kind` 컬럼이 없어 모든 분석 목록·상세 조회가
+   > 실패한다. 반대로 007을 이미 적용했다면 재실행하지 않는다 - 007은 002가 만든
+   > `fn_resolve_criteria` 함수를 drop 후 3인자 시그니처로 재생성하므로, 재실행이
+   > 필요하면 002부터 007까지 순서대로 다시 실행해야 한다(`docs/SUPABASE_SETUP.md` 참고)
 2. Storage 화면에서 `raw-scans`·`artifacts`·`reports` 버킷 3개 생성 확인
    (정책 생성이 `42501`로 실패하면 백로그 티켓 42대로 Storage > Policies UI에서 수동 생성)
 3. **[필수] 회원가입(Sign Ups) 차단** - **Authentication** > **Providers** > **Email**에서
@@ -99,11 +110,17 @@ Vercel(대시보드) + Railway(워커, Docker) + Supabase(DB·Auth·Storage) 구
      `engine/flatness/outputs/heatmap.py`의 `matplotlib.rc("font", family=...)` 폴백
      체인 첫 후보가 이 이름과 정확히 일치하는지 확인한다
 4. 50MB 초과 파일을 올려 한국어 안내가 뜨는지 확인
+5. **구배 분석 스모크**: 업로드 화면에서 분석 종류를 "구배"로 선택해 스캔 업로드 -> 사전
+   검사 -> 단위 확정 -> 분석 완료까지 진행한다. 세부과업 4 단계 C 시점에는 결과 화면이
+   상세 표 대신 **안내 문구**를 보여주는 것이 정상이다(상세 표는 단계 D에서 추가된다).
+   Railway Logs에서 기동 로그에 `engine_version=p4-0.5.0`이 찍히는지, 분석 완료 후
+   해당 `analyses` 행의 `engine_version` 컬럼에 같은 값이 저장됐는지 확인한다
 
 ## 사용자가 직접 해야 하는 작업 요약 (코드로 대신할 수 없음)
 
-1. Supabase SQL Editor에서 `005_storage_buckets.sql` 실행, 버킷 3종 생성 확인(정책 42501
-   실패 시 UI 수동 생성)
+1. Supabase SQL Editor에서 `001_schema.sql` ~ `007_slope_analysis.sql`을 순서대로 실행
+   (**[필수] 007까지 반드시**, 007 없이 대시보드를 먼저 올리면 분석 조회 전체가 깨진다),
+   버킷 3종 생성 확인(정책 42501 실패 시 UI 수동 생성)
 2. **[필수]** Supabase Authentication > Providers > Email에서 회원가입(Sign Ups) 차단 -
    이유는 위 §1의 3번 참고
 3. **[필수]** Supabase Authentication > **Add user**로 로그인 계정 생성(**Auto Confirm
@@ -112,7 +129,8 @@ Vercel(대시보드) + Railway(워커, Docker) + Supabase(DB·Auth·Storage) 구
 4. Railway: GitHub 저장소 연결, 환경변수 5개 입력, Deploy
 5. Vercel: 저장소 Import, **Root Directory를 `dashboard`로 지정**, 환경변수 3개 입력, Deploy
 6. Supabase Authentication > URL Configuration에 Vercel 도메인 추가
-7. 배포 후 스모크: 업로드 -> 분석 -> 보고서 PDF 한글 육안 확인, 50MB 초과 안내 확인
+7. 배포 후 스모크: 업로드 -> 분석 -> 보고서 PDF 한글 육안 확인, 50MB 초과 안내 확인,
+   구배 분석 스모크(안내 화면·engine_version 확인)
 8. 저장소 공개 전환 전 `git log -p`로 키 노출 여부 최종 확인
 
 ## 참고

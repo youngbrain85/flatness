@@ -5,7 +5,7 @@
 > 코드가 사실(fact)이지만, 그 상태 자체가 결함이며 해당 PR/커밋에서 문서를 함께 고쳐야 한다.
 >
 > **대상 독자**: 엔진 내부 구현을 모르는 프론트엔드(P3 대시보드)·보고서(P4)·워커 개발자.
-> **ENGINE_VERSION**: `engine/flatness/__init__.py`의 `ENGINE_VERSION` 상수(현재 `p1d-0.4.0`). `stats.meta.engine_version`이
+> **ENGINE_VERSION**: `engine/flatness/__init__.py`의 `ENGINE_VERSION` 상수(현재 `p4-0.5.0`). `stats.meta.engine_version`이
 > 이 값을 그대로 담는다(단, §2의 "임포트 경로" 예외 참고).
 >
 > 이 문서의 모든 표는 아래 소스를 라인 단위로 대조해 작성했다(대조 방법·결과는 커밋 메시지 본문 참고):
@@ -89,7 +89,7 @@
 | `meta.bbox_min` | O(3원소) | O(3원소) | — | `info.bbox_min * scale_to_m` 반올림 4자리(`core/pipeline.py:54,109`). import는 `CloudInfo`를 직접 만들지만 meta에 넣지 않음 |
 | `meta.source` | — | — | O(`"colab-import"`) | floor/wall meta에는 키 자체가 없음(→ 소비자는 `"source" in meta`로 판별, 없으면 LiDAR 원본) |
 | `meta.subcell_m` / `meta.cell_m` | O | O | O | 세 경로 모두 존재(분석 파라미터, 기본값 0.05/1.0) |
-| `meta.engine_version` | `ENGINE_VERSION`(`p1d-0.4.0`) | `ENGINE_VERSION` | 고정 문자열 `"external-colab-v1"` | import는 실제 엔진 버전과 무관하게 별도 태그 사용(`importer/colab_csv.py:48`) — 소비자가 LiDAR 분석과 임포트 결과를 구분하는 또 다른 근거 |
+| `meta.engine_version` | `ENGINE_VERSION`(`p4-0.5.0`) | `ENGINE_VERSION` | 고정 문자열 `"external-colab-v1"` | import는 실제 엔진 버전과 무관하게 별도 태그 사용(`importer/colab_csv.py:48`) — 소비자가 LiDAR 분석과 임포트 결과를 구분하는 또 다른 근거 |
 
 ### 2.1 `walls[]` 원소 (wall 전용, `core/pipeline.py:97-103` + `core/walls.py:175-177`)
 
