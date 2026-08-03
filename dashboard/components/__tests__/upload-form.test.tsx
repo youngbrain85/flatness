@@ -26,7 +26,11 @@ const criteria: CriteriaRow = {
 // storage.from().upload()는 uploadRawScan(lib/scans/upload.ts)이 브라우저에서 직접 호출한다.
 function stubSupabase(
   enqueueError: { code?: string; message: string } | null,
-  spies: { scansUpdate?: (fields: unknown) => void; analysesUpdate?: (fields: unknown) => void } = {},
+  spies: {
+    scansUpdate?: (fields: unknown) => void;
+    analysesUpdate?: (fields: unknown) => void;
+    analysesInsert?: (fields: unknown) => void;
+  } = {},
 ) {
   return {
     from: (table: string) => {
@@ -41,7 +45,10 @@ function stubSupabase(
       }
       if (table === 'analyses') {
         return {
-          insert: () => ({ select: () => ({ single: async () => ({ data: { id: 'analysis1' }, error: null }) }) }),
+          insert: (fields: unknown) => {
+            spies.analysesInsert?.(fields);
+            return { select: () => ({ single: async () => ({ data: { id: 'analysis1' }, error: null }) }) };
+          },
           update: (fields: unknown) => {
             spies.analysesUpdate?.(fields);
             return { eq: async () => ({ error: null }) };
@@ -168,5 +175,23 @@ describe('UploadForm 임포트 모드 파일 형식(B4: CSV/JSON 지원)', () =>
 
     expect(await screen.findByText('지원 포맷: csv, json')).toBeInTheDocument();
     expect(pushMock).not.toHaveBeenCalled();
+  });
+
+  // 단계 C 회귀 차단: kind가 insert에서 빠지면 DB 기본값('flatness')에 조용히
+  // 기대게 된다 - 임포트 결과는 점 단위 편차 목록이지 점군이 아니라 애초에 구배
+  // 분석 대상이 될 수 없으므로 이 화면은 항상 kind='flatness'만 만들어야 한다.
+  it('단계 C: 임포트 모드의 분석 행 insert에 kind=flatness를 명시한다', async () => {
+    const analysesInsert = vi.fn();
+    vi.mocked(createClient).mockReturnValue(stubSupabase(null, { analysesInsert }) as never);
+    const { container } = render(<UploadForm sites={[site]} locations={[location]} userId="u1" />);
+    fireEvent.click(screen.getByLabelText('기존 결과 가져오기(CSV/JSON)'));
+    await selectSiteAndLocation();
+    const file = new File(['{}'], 'result.json', { type: 'application/json' });
+    fireEvent.change(screen.getByLabelText(/결과 파일 \(csv\/json\)/), { target: { files: [file] } });
+    fireEvent.submit(container.querySelector('form')!);
+
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith('/scans/scan1'));
+    expect(analysesInsert).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'flatness', criteria_id: 'cr1' }));
   });
 });
