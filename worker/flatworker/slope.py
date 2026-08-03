@@ -42,7 +42,10 @@ def normalize_slope_stats(stats, analysis_id):
     호스트 파일시스템 경로가 클라이언트에 노출되는 문제도 함께 사라진다.
     """
     out = dict(stats)
-    art = stats.get("artifacts") or {}
+    # 코드리뷰 재검토(M3): stats["summary"]["coverage_pct"]처럼 대괄호로 읽는다.
+    # .get() 기본값을 쓰면 엔진 키가 바뀌었을 때 조용히 빈 dict가 되고, 이는
+    # 이 태스크가 없애려던 바로 그 실패 양식(조용한 결측)을 재도입하는 것이다.
+    art = stats["artifacts"]
     out["artifacts"] = {
         k: f"artifacts/{analysis_id}/{str(v).replace(chr(92), '/').rsplit('/', 1)[-1]}"
         for k, v in art.items()
@@ -62,6 +65,15 @@ def slope_context(db, analysis_id):
     analysis = db.get_analysis(analysis_id)
     scan = db.get_scan(analysis["scan_id"])
     criteria_row = db.get_criteria(analysis["criteria_id"])
+    if criteria_row.get("kind") != "slope":
+        # 코드리뷰 재검토(M4): 여기서 막지 않으면 평활도 기준 행이 잘못 연결됐을 때
+        # grade_slope_cells 안쪽 깊은 곳에서 KeyError: 'design_pct'로 죽어 원인
+        # 파악이 어렵다. 여기서 명시적으로 거부하면 진단이 쉬워진다.
+        raise ValueError(
+            f"구배 분석(analysis_id={analysis_id})에 kind='slope'가 아닌 기준이 "
+            f"연결되어 있습니다: criteria_id={analysis['criteria_id']}, "
+            f"criteria.kind={criteria_row.get('kind')!r}"
+        )
     threshold = criteria_row["thresholds"][0]
     drain_points = slope_drain_points(analysis.get("params"))
     return analysis, scan, criteria_row, threshold, drain_points
@@ -89,7 +101,9 @@ def run_slope_analysis(path, scale_to_m, threshold, out_dir, drain_points,
         "overall_verdict": slope_overall_verdict(stats),
         # 엔진이 낸 한국어 문장을 그대로 저장한다(평활도는 ASCII 슬러그 +
         # WARNING_LABEL 번역이지만 구배는 완성 문장이다 - 설계 결정 표 참고).
-        "warnings": stats.get("warnings", []),
+        # 코드리뷰 재검토(M3): 대괄호로 읽는다 - .get() 기본값은 엔진 키가
+        # 바뀌었을 때 조용히 빈 리스트가 되어 버린다.
+        "warnings": stats["warnings"],
         "artifacts_dir": f"artifacts/{analysis_id}",
         "engine_version": ENGINE_VERSION,
         "applied_criteria": {"name": criteria_row["name"],

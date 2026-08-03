@@ -239,8 +239,23 @@ class FakeDB(DBClient):
         self.analyses[analysis_id].update(fields)
 
     def set_current_analysis(self, scan_id, analysis_id, kind="flatness"):
-        # 007의 analyses_current 부분 유니크 인덱스((scan_id, kind)당 is_current
-        # 1개) 시맨틱을 그대로 옮긴다 - kind별로 독립된 현재 분석을 허용한다.
+        """007의 analyses_current 부분 유니크 인덱스((scan_id, kind)당 is_current
+        1개)와 SupabaseRest.set_current_analysis의 실제 PATCH② 시맨틱
+        (`id=eq.<analysis_id>&kind=eq.<kind>&deleted_at=is.null`)을 그대로 옮긴다.
+
+        코드리뷰 재검토(I1/I2): 예전 구현은 인자를 무조건 신뢰해 대상 행을 보지
+        않고 성공시켰다 - 실제 PostgREST PATCH는 대상 analyses 행의 kind가
+        인자와 다르거나 deleted_at이 있으면 0행 매칭으로 **조용히 아무 것도
+        갱신하지 않는다**. 이 대체 표현이 그 결과를 반영하지 않으면, jobs.py가
+        kind 인자를 빠뜨리거나(기본값 'flatness'로 조용히 떨어짐) 잘못된 kind를
+        넘겨도 테스트가 계속 통과해 버려 이 태스크가 막으려던 회귀를 못 잡는다.
+        """
+        row = self.analyses.get(analysis_id)
+        if row is None:
+            return  # 실제 PATCH도 대상 행이 없으면 0행 매칭 -> no-op
+        row_kind = row.get("kind") or "flatness"
+        if row_kind != kind or row.get("deleted_at") is not None:
+            return  # PATCH②가 0행 매칭되는 경우와 동일한 no-op
         self.current_analysis[(scan_id, kind)] = analysis_id
 
     # -- 보고서 (P4) -----------------------------------------------------

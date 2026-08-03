@@ -160,7 +160,11 @@ def handle_analyze(db, cfg, payload):
         else:
             stats = analyze_floor(path, scale_to_m, crit, u_mm, out_dir)
         storage.upload_dir(f"artifacts/{analysis_id}", out_dir)
-    _finalize(db, analysis_id, analysis["scan_id"], stats)
+    # 코드리뷰 재검토(M1): 위에서 이미 읽은 kind를 명시적으로 넘긴다. enum이
+    # flatness/slope 2값뿐인 지금은 무해하지만(slope는 위에서 이미 분기해
+    # 걸러짐), 세 번째 kind가 추가되면 이 자리에서 _finalize의 기본값
+    # 'flatness'로 조용히 떨어져 kind 불일치 0행 매칭을 일으킬 수 있다.
+    _finalize(db, analysis_id, analysis["scan_id"], stats, kind=kind)
 
 
 # 확장자 -> 임포터 함수. 두 임포터 모두 (path, criterion, u_mm, out_dir) 시그니처와

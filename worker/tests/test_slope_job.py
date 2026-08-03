@@ -3,10 +3,12 @@ from types import SimpleNamespace
 
 import pytest
 
+from flatness import ENGINE_VERSION
+
 from flatworker.artifacts import raw_scan_dir
 from flatworker.config import Config
 from flatworker.jobs import handle_analyze
-from flatworker.slope import (normalize_slope_stats, slope_drain_points,
+from flatworker.slope import (normalize_slope_stats, slope_context, slope_drain_points,
                              slope_overall_verdict)
 from tests.fake_db import FakeDB
 from tests.synthetic_helpers import synthetic
@@ -75,14 +77,39 @@ def test_drain_points_absent_is_none():
     assert slope_drain_points({"drain_points": []}) is None
 
 
-@pytest.fixture
-def fake_db_with_two_kinds():
-    """FakeDB에 같은 스캔의 평활도 현재 분석을 미리 세워 둔다.
+def test_slope_context_rejects_non_slope_criteria():
+    """M4: criteria_row.kind가 'slope'가 아니면 명시적으로 거부한다.
 
-    구배 분석을 현재로 세우는 동작이 이 평활도 현재 분석을 밀어내지 않아야
-    한다는 것이 아래 테스트의 핵심 단언이다.
+    이 검사가 없으면 평활도 기준 행이 잘못 연결됐을 때 엔진 안쪽 깊은 곳
+    (grade_slope_cells)에서 KeyError: 'design_pct'로 죽어 원인 파악이 어렵다.
     """
     db = FakeDB()
+    db.scans["scan1"] = {"id": "scan1", "site_id": "site1", "surface": "floor",
+                         "raw_file_path": "raw-scans/site1/scan1/raw.ply", "unit_scale": 1.0}
+    db.criteria["c1"] = {"id": "c1", "surface": "floor", "kind": "flatness",
+                         "name": "floor-kcs-exposed", "source_text": "x",
+                         "thresholds": [{"span_m": 3, "metric": "flatness",
+                                         "pass_mm": 7, "rework_mm": 21}]}
+    db.analyses["a1"] = {"id": "a1", "scan_id": "scan1", "kind": "slope",
+                         "criteria_id": "c1", "status": "queued"}
+    with pytest.raises(ValueError, match="연결되어"):
+        slope_context(db, "a1")
+
+
+@pytest.fixture
+def fake_db_with_two_kinds():
+    """FakeDB에 같은 스캔의 평활도·구배 분석 행과 평활도 현재 분석을 미리 세운다.
+
+    분석 행 자체를 심어 두는 이유: FakeDB.set_current_analysis는 실제 PostgREST
+    PATCH와 같은 시맨틱으로 대상 행의 kind가 인자와 다르면(또는 deleted_at이
+    있으면) 조용히 no-op한다 - 대상 행이 아예 없으면 항상 no-op이라 이 테스트의
+    취지(kind 격리) 자체가 성립하지 않는다.
+    """
+    db = FakeDB()
+    db.analyses["flat-analysis"] = {"id": "flat-analysis", "scan_id": "scan-1",
+                                    "kind": "flatness"}
+    db.analyses["slope-analysis"] = {"id": "slope-analysis", "scan_id": "scan-1",
+                                     "kind": "slope"}
     db.current_analysis[("scan-1", "flatness")] = "flat-analysis"
     return db
 
@@ -107,7 +134,13 @@ def _cfg(tmp_path):
 
 @pytest.fixture
 def slope_job_env(tmp_path):
-    """구배 analyze 잡 시드 - 실내 평바닥 스캔 + 구배 기준 + drain_points 파라미터.
+    """구배 analyze 잡 라우팅 검증 전용 시드 - 엔진 호출을 몽키패치로 가로채므로
+    (test_handle_analyze_routes_slope_kind_to_slope_pipeline) 기준 수치가 실제
+    판정 결과에 영향을 주지 않는다. 그래도 코드리뷰(I4) 지적대로 실제 007 시드
+    기준 이름·출처 문구는 쓰지 않는다 - 임의 수치(design_pct=2.0)를 실제
+    'slope-indoor-level'(design_pct=0.0) 이름으로 포장하면 그 자체로 오해를
+    부른다. 결정론적 판정값 검증은 slope_env_real_criteria(007 시드값 그대로)가
+    맡는다.
 
     criteria_id는 버튼 클릭 시점에 fn_resolve_criteria(site_id, 'floor', 'slope')로
     이미 해석돼 analyses.criteria_id에 들어 있다고 가정한다(설계 결정 표) - 여기서도
@@ -121,9 +154,9 @@ def slope_job_env(tmp_path):
                          "raw_file_path": "raw-scans/site1/scan1/raw.ply",
                          "unit_scale": 1.0, "status": "ready"}
     db.criteria["c-slope"] = {"id": "c-slope", "surface": "floor", "kind": "slope",
-                              "name": "slope-indoor-level",
-                              "source_text": "설계 구배 0%(의도적 구배 없음)",
-                              "thresholds": [{"use": "실내 평바닥", "design_pct": 2.0,
+                              "name": "test-slope-routing-only",
+                              "source_text": "테스트 전용 구배 기준(007 시드 아님) - 라우팅 검증용",
+                              "thresholds": [{"use": "라우팅 테스트", "design_pct": 2.0,
                                               "pass_pct": 1.0, "re_pct": 3.0,
                                               "dir_pass_deg": 30}]}
     aid = db.insert_analysis({"scan_id": "scan1", "kind": "slope",
@@ -152,10 +185,86 @@ def test_handle_analyze_routes_slope_kind_to_slope_pipeline(monkeypatch, slope_j
     assert called["drain_points"] == [(3.2, 5.1)]
 
 
-def test_handle_analyze_slope_saves_mapped_verdict_and_relative_paths(slope_job_env):
-    handle_analyze(slope_job_env.db, slope_job_env.cfg,
-                   {"analysis_id": slope_job_env.slope_analysis_id})
-    row = slope_job_env.db.analyses[slope_job_env.slope_analysis_id]
-    assert row["overall_verdict"] in {"pass", "borderline", "repair", "rework", None}
+@pytest.fixture
+def slope_env_real_criteria(tmp_path):
+    """실제 007 시드 기준(slope-indoor-level) 값을 그대로 써서 실제 엔진 결과를
+    결정론적으로 만든다(코드리뷰 I4).
+
+    - `supabase/migrations/007_slope_analysis.sql`의 'slope-indoor-level' 행을
+      name/source_text/thresholds 전부 그대로 옮겼다(design_pct=0.0,
+      dir_pass_deg=180 등). 임의 수치를 실제 기준 이름에 붙이면 그 자체가
+      회귀다 - 그 실수를 이 태스크의 리뷰가 잡아냈다.
+    - 완전 평탄(무노이즈) 바닥(flat_floor, tilt 없음)을 써서 실측 구배가
+      0%에 극히 가깝게 나오도록 한다 - design_pct=0.0과 정확히 맞아떨어져
+      전 셀이 결정론적으로 '적합'이 된다(engine/tests/test_slope.py의
+      test_flat_floor_has_near_zero_slope와 동일 전제).
+    - drain_points를 넣지 않는다 - 007 시드의 source_text가 명시적으로
+      "방향 판정 대상이 아니므로 배수구를 지정하지 말 것"이라고 적어 뒀고,
+      완전 평탄한 바닥에서는 내리막 방향 자체가 수치 노이즈에 좌우돼
+      방향 판정을 결정론적으로 만들 수 없다.
+    """
+    db, cfg = FakeDB(), _cfg(tmp_path)
+    pts = flat_floor(size=(6.0, 6.0), spacing=0.02)
+    sd = raw_scan_dir(cfg.data_dir, "site1", "scan1")
+    write_binary_ply(pts, sd / "raw.ply")
+    db.scans["scan1"] = {"id": "scan1", "site_id": "site1", "surface": "floor",
+                         "raw_file_path": "raw-scans/site1/scan1/raw.ply",
+                         "unit_scale": 1.0, "status": "ready"}
+    source_text = ("설계 구배 0%(의도적 구배 없음). 허용폭은 기준 문서 근거가 없는 "
+                   "용역 설정값. 방향 판정 대상이 아니므로 배수구를 지정하지 말 것")
+    db.criteria["c-slope-indoor"] = {
+        "id": "c-slope-indoor", "surface": "floor", "kind": "slope",
+        "name": "slope-indoor-level", "source_text": source_text,
+        "thresholds": [{"use": "실내 평바닥", "design_pct": 0.0, "pass_pct": 1.0,
+                        "re_pct": 3.0, "dir_pass_deg": 180}],
+    }
+    aid = db.insert_analysis({"scan_id": "scan1", "kind": "slope",
+                              "criteria_id": "c-slope-indoor", "status": "queued",
+                              "params": {}})
+    return SimpleNamespace(db=db, cfg=cfg, slope_analysis_id=aid)
+
+
+def test_handle_analyze_slope_saves_mapped_verdict_and_relative_paths(slope_env_real_criteria):
+    """I3: 파생 컬럼 7종을 전부 정확한 값으로 단언한다(가능한 모든 값을 허용하는
+    공집합 단언은 조용한 NULL 회귀를 못 잡는다 - 코드리뷰에서 실측으로 확인됨).
+    """
+    env = slope_env_real_criteria
+    handle_analyze(env.db, env.cfg, {"analysis_id": env.slope_analysis_id})
+    row = env.db.analyses[env.slope_analysis_id]
+
+    assert row["status"] == "done"
+    assert row["overall_verdict"] == "pass"       # 완전 평탄 + design_pct=0.0 -> 전 셀 적합
     assert row["coverage_pct"] == 100.0
+    assert row["engine_version"] == ENGINE_VERSION
+    assert row["artifacts_dir"] == f"artifacts/{env.slope_analysis_id}"
+    assert row["applied_criteria"]["name"] == "slope-indoor-level"
+    assert row["applied_criteria"]["source"].startswith("설계 구배 0%")
+    assert row["applied_criteria"]["design_pct"] == 0.0
+    assert row["applied_criteria"]["dir_pass_deg"] == 180
+    assert row["auto_summary"] is None            # 구배용 문안 없음(단계 D에서 정함)
+    # drain_points를 안 줬으므로 direction_judged=False -> 엔진이 고지 문장을 낸다.
+    assert row["warnings"] == [
+        "배수구 위치를 지정하지 않아 방향(역구배)을 판정하지 않았습니다. "
+        "크기만 판정한 결과입니다."]
     assert not str(row["stats"]["artifacts"]["cells_csv"]).startswith("/")
+    assert row["stats"]["artifacts"]["cells_csv"] == \
+        f"artifacts/{env.slope_analysis_id}/slope_cells.csv"
+
+
+def test_handle_analyze_slope_keeps_flatness_current_analysis(slope_env_real_criteria):
+    """I1: FakeDB 단위 테스트만으로는 jobs.py 배선까지 지키지 못한다 -
+    _handle_analyze_slope가 실제로 kind='slope'를 db.set_current_analysis에
+    넘기는지 handle_analyze 전체 경로로 확인한다. jobs.py에서 kind 인자를
+    빠뜨리면(기본값 'flatness'로 조용히 떨어지면) 이 스캔의 구배 분석 행은
+    kind='slope'이므로 새 FakeDB.set_current_analysis가 no-op해 버려 두 단언
+    중 최소 하나가 반드시 깨진다.
+    """
+    env = slope_env_real_criteria
+    env.db.analyses["flat-analysis"] = {"id": "flat-analysis", "scan_id": "scan1",
+                                        "kind": "flatness"}
+    env.db.current_analysis[("scan1", "flatness")] = "flat-analysis"
+
+    handle_analyze(env.db, env.cfg, {"analysis_id": env.slope_analysis_id})
+
+    assert env.db.current_analysis[("scan1", "flatness")] == "flat-analysis"
+    assert env.db.current_analysis[("scan1", "slope")] == env.slope_analysis_id
