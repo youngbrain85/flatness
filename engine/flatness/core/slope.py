@@ -161,3 +161,28 @@ def grade_slope_cells(cells, threshold, drain_points=None, cell_m=2.0):
         out.append({"cell": c, "grade": grade, "reason": reason, "dev_pct": d,
                     "dir_err_deg": dir_err, "correction_mm": correction_mm})
     return out
+
+
+def slope_summary(graded):
+    """구간별 편차 통계(과업지시서 11쪽: 평균·표준편차·최대편차).
+
+    판정 불가 셀은 통계에서 제외한다. 편차가 nan이라 넣으면 전체가 nan이 되고,
+    무엇보다 "잴 수 없었던 것"을 "편차 0"처럼 섞으면 결과가 왜곡된다.
+    """
+    counts = {GRADE_PASS: 0, GRADE_BORDER: 0, GRADE_REPAIR: 0,
+              GRADE_REDO: 0, GRADE_NA: 0}
+    devs = []
+    for g in graded:
+        counts[g["grade"]] = counts.get(g["grade"], 0) + 1
+        if g["grade"] != GRADE_NA:
+            devs.append(g["dev_pct"])
+    total = len(graded)
+    decided = total - counts[GRADE_NA]
+    arr = np.asarray(devs, dtype=np.float64)
+    return {
+        "mean_dev_pct": float(arr.mean()) if arr.size else float("nan"),
+        "std_dev_pct": float(arr.std(ddof=0)) if arr.size else float("nan"),
+        "max_dev_pct": float(arr.max()) if arr.size else float("nan"),
+        "counts": counts,
+        "coverage_pct": (100.0 * decided / total) if total else 0.0,
+    }

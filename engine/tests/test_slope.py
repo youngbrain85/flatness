@@ -2,7 +2,7 @@
 import math
 import numpy as np
 
-from flatness.core.slope import compute_slope_cells, grade_slope_cells
+from flatness.core.slope import compute_slope_cells, grade_slope_cells, slope_summary
 from flatness.core.subcell import build_subcell_grid
 from flatness.io.reader import CloudInfo
 from tests.fixtures.synthetic import flat_floor
@@ -133,3 +133,29 @@ def test_correction_is_reported_in_mm_over_the_cell():
     # 2m 셀에서 구배 0.5%p 차이는 양단 높이차 10mm다
     g = grade_slope_cells([_cell(2.5, math.pi)], TH, cell_m=2.0)[0]
     assert abs(g["correction_mm"] - 10.0) < 0.5
+
+
+def test_summary_reports_required_statistics():
+    cells = [_cell(2.0, math.pi), _cell(2.4, math.pi), _cell(3.0, math.pi)]
+    s = slope_summary(grade_slope_cells(cells, TH))
+    # 편차 0.0, 0.4, 1.0 -> 평균 0.4667
+    assert abs(s["mean_dev_pct"] - (0.0 + 0.4 + 1.0) / 3) < 1e-6
+    assert abs(s["max_dev_pct"] - 1.0) < 1e-6
+    assert s["std_dev_pct"] > 0
+    assert s["counts"]["적합"] >= 1
+    assert abs(s["coverage_pct"] - 100.0) < 1e-6
+
+
+def test_summary_excludes_undecidable_from_statistics():
+    cells = [_cell(2.0, math.pi), _cell(float("nan"), float("nan"), ok=False)]
+    s = slope_summary(grade_slope_cells(cells, TH))
+    assert s["counts"]["판정불가"] == 1
+    assert abs(s["coverage_pct"] - 50.0) < 1e-6
+    # 판정불가 셀의 nan이 통계를 오염시키면 안 된다
+    assert not math.isnan(s["mean_dev_pct"])
+
+
+def test_summary_of_empty_input_is_safe():
+    s = slope_summary([])
+    assert s["coverage_pct"] == 0.0
+    assert math.isnan(s["mean_dev_pct"])
