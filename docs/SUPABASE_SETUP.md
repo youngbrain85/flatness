@@ -86,7 +86,15 @@
    소프트 삭제용 `reports.deleted_at` 컬럼을 추가한다(발행본은 내용 컬럼이 잠겨 있어도
    삭제는 통과하도록 설계됨). 재실행해도 안전하다(멱등, `add column if not exists`).
    검증: `select deleted_at from reports limit 1;`이 오류 없이 실행되면 성공.
-7. `supabase/migrations/007_slope_analysis.sql` 전체 내용을 붙여넣고 **Run**. 구배 분석(세부
+7. `supabase/migrations/007_slope_analysis.sql` 전체 내용을 붙여넣고 **Run**.
+   > **경고 - 007 다음에 002를 다시 실행하지 않는다.** 007은 002가 만든
+   > `fn_resolve_criteria(uuid, surface_type)`를 **drop한 뒤 3인자로 새로 만든다**
+   > (인자를 추가하려면 create or replace로는 안 되기 때문이다). 007을 실행한 뒤
+   > 002를 다시 실행하면 `create or replace`가 **kind 필터가 없는 2인자 함수를
+   > 되살려** 3인자 함수와 나란히 놓인다. 그러면 대시보드가 `{p_site_id, p_surface}`
+   > 두 키로 호출할 때 후보가 둘이 되어 기준 목록 조회가 깨진다. "시드를 되살리려면
+   > 002를 다시 돌리면 되겠지"가 자연스러운 판단이라 실제로 밟기 쉬운 경로다.
+   > 재실행이 필요하면 반드시 002 -> 007 순서로 **둘 다** 다시 실행한다. 구배 분석(세부
    과업 4) 지원을 추가한다: `analysis_kind` enum과 `analyses.kind`·`criteria.kind` 컬럼,
    현재 분석·기본 기준 유니크 인덱스 재정의(`analyses_current`·`criteria_global_default`·
    `criteria_site_default`), `fn_resolve_criteria`를 `p_kind` 인자가 추가된 3인자
