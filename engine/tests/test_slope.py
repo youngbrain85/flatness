@@ -2,7 +2,7 @@
 import math
 import numpy as np
 
-from flatness.core.slope import compute_slope_cells
+from flatness.core.slope import compute_slope_cells, grade_slope_cells
 from flatness.core.subcell import build_subcell_grid
 from flatness.io.reader import CloudInfo
 from tests.fixtures.synthetic import flat_floor
@@ -64,3 +64,72 @@ def test_cell_size_controls_cell_count():
     four = [c for c in compute_slope_cells(_grid(pts), cell_m=4.0) if c.ok]
     two = [c for c in compute_slope_cells(_grid(pts), cell_m=2.0) if c.ok]
     assert len(two) > len(four)
+
+
+TH = {"design_pct": 2.0, "pass_pct": 0.5, "re_pct": 1.5, "dir_pass_deg": 30.0}
+
+
+def _cell(slope_pct, downhill_rad, se_pct=0.01, ok=True, cx=0, cy=0):
+    from flatness.core.slope import SlopeCell
+    return SlopeCell(cx, cy, 1.0, 1.0, 1600, slope_pct, downhill_rad, 0.001, se_pct, ok)
+
+
+def test_on_target_slope_is_pass():
+    g = grade_slope_cells([_cell(2.0, math.pi)], TH)[0]
+    assert g["grade"] == "적합"
+
+
+def test_far_off_is_redo():
+    g = grade_slope_cells([_cell(4.0, math.pi)], TH)[0]
+    assert g["grade"] == "재시공"
+
+
+def test_slightly_off_is_repair():
+    g = grade_slope_cells([_cell(2.8, math.pi)], TH)[0]
+    assert g["grade"] == "보수"
+
+
+def test_wide_uncertainty_makes_it_borderline():
+    # 편차 0.6%p로 pass(0.5)를 넘지만 불확도 0.3%p가 경계를 걸친다
+    g = grade_slope_cells([_cell(2.6, math.pi, se_pct=0.3)], TH)[0]
+    assert g["grade"] == "경계"
+
+
+def test_uncertainty_larger_than_tolerance_is_undecidable():
+    # 불확도가 허용치보다 크면 애초에 가릴 해상도가 없다
+    g = grade_slope_cells([_cell(2.0, math.pi, se_pct=0.9)], TH)[0]
+    assert g["grade"] == "판정불가"
+
+
+def test_not_ok_cell_is_undecidable():
+    g = grade_slope_cells([_cell(float("nan"), float("nan"), ok=False)], TH)[0]
+    assert g["grade"] == "판정불가"
+
+
+# 역구배: 크기는 설계와 같은데 물이 배수구 반대로 흐른다. 크기만 보는 판정으로는
+# 절대 안 잡히고, 실무 배수 하자의 대부분이 이것이다.
+def test_reverse_slope_is_redo_even_when_magnitude_is_perfect():
+    # 배수구가 -x 쪽(원점)에 있는데 내리막이 +x 방향이면 역구배다
+    cell = _cell(2.0, 0.0)          # 내리막이 +x
+    g = grade_slope_cells([cell], TH, drain_points=[(-10.0, 1.0)])[0]
+    assert g["grade"] == "재시공"
+    assert "역구배" in g["reason"]
+
+
+def test_direction_toward_drain_is_pass():
+    cell = _cell(2.0, math.pi)      # 내리막이 -x
+    g = grade_slope_cells([cell], TH, drain_points=[(-10.0, 1.0)])[0]
+    assert g["grade"] == "적합"
+
+
+def test_direction_is_skipped_without_drain_points():
+    # 배수구를 모르면 방향은 판정하지 않는다(크기만 본다)
+    g = grade_slope_cells([_cell(2.0, 0.0)], TH)[0]
+    assert g["grade"] == "적합"
+    assert g["dir_err_deg"] is None
+
+
+def test_correction_is_reported_in_mm_over_the_cell():
+    # 2m 셀에서 구배 0.5%p 차이는 양단 높이차 10mm다
+    g = grade_slope_cells([_cell(2.5, math.pi)], TH, cell_m=2.0)[0]
+    assert abs(g["correction_mm"] - 10.0) < 0.5

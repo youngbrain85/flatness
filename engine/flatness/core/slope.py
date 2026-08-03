@@ -94,3 +94,70 @@ def compute_slope_cells(grid, cell_m=2.0, min_subcells=10):
             out.append(SlopeCell(cx, cy, center_x, center_y, n,
                                  slope_pct, downhill, rmse, se_pct, True))
     return out
+
+
+GRADE_PASS = "적합"
+GRADE_BORDER = "경계"
+GRADE_REPAIR = "보수"
+GRADE_REDO = "재시공"
+GRADE_NA = "판정불가"
+
+
+def _angle_diff(a, b):
+    """두 각의 최소 차이(0~pi)."""
+    d = abs(a - b) % (2 * math.pi)
+    return d if d <= math.pi else 2 * math.pi - d
+
+
+def grade_slope_cells(cells, threshold, drain_points=None, cell_m=2.0):
+    """셀별 구배를 설계기준과 대조해 등급을 매긴다(스펙 5.2).
+
+    불확도를 더하고 빼는 방향에 주의한다. 적합은 불확도를 감안해도 확실히 안쪽일
+    때만 주고(d + u), 재시공은 확실히 바깥일 때만 준다(d - u). 그 사이는 경계로
+    남긴다 - 데이터가 단정을 허락하지 않는데 단정하면 안 된다.
+    """
+    design = float(threshold["design_pct"])
+    pass_pct = float(threshold["pass_pct"])
+    re_pct = float(threshold["re_pct"])
+    dir_pass = float(threshold["dir_pass_deg"])
+    out = []
+    for c in cells:
+        if not c.ok:
+            out.append({"cell": c, "grade": GRADE_NA, "reason": "유효 서브셀 부족",
+                        "dev_pct": float("nan"), "dir_err_deg": None,
+                        "correction_mm": float("nan")})
+            continue
+        u = c.se_pct
+        if u > pass_pct:
+            out.append({"cell": c, "grade": GRADE_NA,
+                        "reason": "측정 불확도가 허용치보다 커서 가릴 해상도가 없음",
+                        "dev_pct": abs(c.slope_pct - design), "dir_err_deg": None,
+                        "correction_mm": float("nan")})
+            continue
+        d = abs(c.slope_pct - design)
+        # 2m 셀 양단 높이차로 환산: 구배 1%p = 셀 길이의 1% = cell_m*10 mm
+        correction_mm = d * cell_m * 10.0
+        dir_err = None
+        if drain_points:
+            # 기대 방향: 셀 중심에서 가장 가까운 배수구를 향하는 방향
+            best = min(drain_points,
+                       key=lambda p: (p[0] - c.center_x) ** 2 + (p[1] - c.center_y) ** 2)
+            expect = math.atan2(best[1] - c.center_y, best[0] - c.center_x)
+            dir_err = math.degrees(_angle_diff(c.downhill_rad, expect))
+            if dir_err > 90.0:
+                out.append({"cell": c, "grade": GRADE_REDO,
+                            "reason": "역구배(물이 배수구 반대로 흐름)",
+                            "dev_pct": d, "dir_err_deg": dir_err,
+                            "correction_mm": correction_mm})
+                continue
+        if d - u > re_pct:
+            grade, reason = GRADE_REDO, "설계 구배와의 편차가 재시공 기준을 넘음"
+        elif d + u <= pass_pct and (dir_err is None or dir_err <= dir_pass):
+            grade, reason = GRADE_PASS, "크기·방향 모두 허용 안"
+        elif d - u > pass_pct or (dir_err is not None and dir_err > dir_pass):
+            grade, reason = GRADE_REPAIR, "허용을 벗어났으나 국소 보정 가능"
+        else:
+            grade, reason = GRADE_BORDER, "불확도 폭이 허용 경계를 걸쳐 단정 불가"
+        out.append({"cell": c, "grade": grade, "reason": reason, "dev_pct": d,
+                    "dir_err_deg": dir_err, "correction_mm": correction_mm})
+    return out
