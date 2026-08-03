@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { SupabaseErrorNotice } from '@/components/supabase-error';
 import { ReportActions } from '@/components/report/report-actions';
+import { ReportDeleteButton } from '@/components/report/report-delete-button';
 import { ReportProgress } from '@/components/report/report-progress';
 import { GRADE_LABEL, REPORT_STATUS_LABEL, SURFACE_LABEL } from '@/lib/domain/labels';
 import { dataUrl } from '@/lib/domain/paths';
@@ -17,7 +18,7 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
   // snapshot은 용량이 커서 화면에서 쓰지 않는다(렌더러 전용) - 선택 목록에서 제외
   const { data: report, error } = await supabase.from('reports')
     .select('id, location_id, title, status, opinion_text, pdf_path, gen_status, gen_error, created_at')
-    .eq('id', id).maybeSingle();
+    .eq('id', id).is('deleted_at', null).maybeSingle();
   if (error) {
     return <main className="mx-auto max-w-5xl p-6"><SupabaseErrorNotice message={error.message} /></main>;
   }
@@ -55,6 +56,7 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
 
       <ReportProgress reportId={r.id} initialStatus={r.gen_status} genError={r.gen_error} reportStatus={r.status} />
       <ReportActions report={{ id: r.id, status: r.status, gen_status: r.gen_status, pdf_path: r.pdf_path }} />
+      <ReportDeleteButton report={{ id: r.id, status: r.status }} redirectTo="/reports" />
 
       <section>
         <h2 className="mb-2 font-semibold">포함 분석</h2>

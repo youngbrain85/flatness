@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
 import { SupabaseErrorNotice } from '@/components/supabase-error';
 import { REPORT_GEN_STATUS_LABEL, REPORT_STATUS_LABEL } from '@/lib/domain/labels';
+import { ReportDeleteButton } from '@/components/report/report-delete-button';
 import type { LocationRow, ReportRow } from '@/lib/domain/types';
 
 export const dynamic = 'force-dynamic';
@@ -14,6 +15,7 @@ export default async function ReportsPage({ searchParams }: {
   const supabase = await createClient();
   let query = supabase.from('reports')
     .select('id, location_id, title, status, pdf_path, gen_status, gen_error, created_at')
+    .is('deleted_at', null)
     .order('created_at', { ascending: false }).limit(50);
   if (locationId) query = query.eq('location_id', locationId);
   const { data, error } = await query;
@@ -46,12 +48,17 @@ export default async function ReportsPage({ searchParams }: {
       ) : (
         <ul className="space-y-2">
           {reports.map((r) => (
-            <li key={r.id} className="rounded border bg-white p-3 text-sm">
-              <Link href={`/reports/${r.id}`} className="font-medium hover:underline">{r.title}</Link>
-              <p className="text-xs text-slate-500">
-                {labelOf.get(r.location_id) ?? ''} · {REPORT_STATUS_LABEL[r.status]}
-                {' · '}{REPORT_GEN_STATUS_LABEL[r.gen_status]} · {r.created_at.slice(0, 10)}
-              </p>
+            <li key={r.id} className="flex items-start justify-between gap-3 rounded border bg-white p-3 text-sm">
+              <div>
+                <Link href={`/reports/${r.id}`} className="font-medium hover:underline">{r.title}</Link>
+                <p className="text-xs text-slate-500">
+                  {labelOf.get(r.location_id) ?? ''} · {REPORT_STATUS_LABEL[r.status]}
+                  {' · '}{REPORT_GEN_STATUS_LABEL[r.gen_status]} · {r.created_at.slice(0, 10)}
+                </p>
+              </div>
+              {/* redirectTo를 넘기지 않는다 - 이미 목록이므로 이동할 곳이 없고,
+                  삭제 후 router.refresh()로 그 자리에서 다시 그린다 */}
+              <ReportDeleteButton report={{ id: r.id, status: r.status }} />
             </li>
           ))}
         </ul>
