@@ -1,5 +1,6 @@
 """바닥 분석 오케스트레이션 v2 — 다중 구역·품질 마스크 (스펙 §5.1.3~4, P1b)."""
 from dataclasses import replace as _dc_replace
+import math
 import numpy as np
 from flatness import ENGINE_VERSION
 from flatness.io.reader import iter_chunks, read_info
@@ -16,6 +17,16 @@ from flatness.outputs.heatmap import render_heatmap
 from flatness.outputs.deviation import render_deviation_map
 from flatness.outputs.preview3d import render_preview3d
 from flatness.outputs.summary import generate_summary
+
+
+def _r(v, nd=3):
+    """nan은 빈 문자열로, 그 외는 반올림해 CSV 셀 값으로 쓴다."""
+    return "" if v is None or (isinstance(v, float) and math.isnan(v)) else round(v, nd)
+
+
+def _deg(rad):
+    """라디안을 도(반올림)로 바꾼다. nan은 빈 문자열."""
+    return "" if rad is None or math.isnan(rad) else round(math.degrees(rad), 1)
 
 
 def analyze_floor(path, scale_to_m, criterion, u_mm, out_dir,
@@ -154,4 +165,75 @@ def analyze_wall(path, scale_to_m, criterion, u_mm, out_dir,
     stats["deviation_paths"] = deviation_names
     stats["auto_summary"] = generate_summary(stats)
     write_outputs(out_dir, stats, all_cells, all_grades)
+    return stats
+
+
+def analyze_slope(path, scale_to_m, threshold, out_dir, subcell_m=0.05,
+                  cell_m=2.0, chunk_size=2_000_000, drain_points=None):
+    """점군 -> 2m 격자 구배 -> 판정 -> 산출물(csv/png/json).
+
+    평활도(analyze_floor)와 같은 스캔을 쓰지만 집계 단위와 판정 철학이 다르다.
+    평활도는 "평면에서 얼마나 벗어났나", 구배는 "설계한 경사대로인가"다.
+    """
+    import csv
+    import json
+    import os
+    from collections import Counter
+
+    from flatness.core.slope import (GRADE_NA, compute_slope_cells,
+                                     grade_slope_cells, slope_summary)
+    from flatness.outputs.slope_map import render_slope_map
+
+    os.makedirs(out_dir, exist_ok=True)
+    info = read_info(path, chunk_size=chunk_size)
+    grid = build_subcell_grid(iter_chunks(path, chunk_size=chunk_size),
+                              info, scale_to_m, subcell_m)
+    cells = compute_slope_cells(grid, cell_m=cell_m)
+    graded = grade_slope_cells(cells, threshold, drain_points=drain_points,
+                               cell_m=cell_m)
+    summary = slope_summary(graded)
+
+    csv_path = os.path.join(out_dir, "slope_cells.csv")
+    with open(csv_path, "w", newline="", encoding="utf-8-sig") as f:
+        w = csv.writer(f)
+        w.writerow(["cx", "cy", "center_x_m", "center_y_m", "n_subcells",
+                    "slope_pct", "downhill_deg", "dev_pct", "dir_err_deg",
+                    "correction_mm", "rmse_mm", "se_pct", "grade", "reason"])
+        for g in graded:
+            c = g["cell"]
+            w.writerow([c.cx, c.cy, round(c.center_x, 3), round(c.center_y, 3),
+                        c.n_subcells, _r(c.slope_pct), _deg(c.downhill_rad),
+                        _r(g["dev_pct"]), _r(g["dir_err_deg"]),
+                        _r(g["correction_mm"]), _r(c.rmse_m * 1000 if c.ok else float("nan")),
+                        _r(c.se_pct), g["grade"], g["reason"]])
+
+    png_path = render_slope_map(graded, os.path.join(out_dir, "slope_map.png"),
+                                cell_m=cell_m)
+
+    # 배수구를 지정하지 않으면 방향(역구배) 판정이 조용히 꺼진다(같은 스캔이 --drain
+    # 유무에 따라 적합<->재시공으로 뒤집힐 수 있다). stats에 명시적으로 남겨야 보고서
+    # 받는 사람이 "coverage_pct 100%"를 "방향까지 다 봤다"로 오해하지 않는다.
+    direction_judged = bool(drain_points)
+    warnings = []
+    if not direction_judged:
+        warnings.append("배수구 위치를 지정하지 않아 방향(역구배)을 판정하지 않았습니다. "
+                        "크기만 판정한 결과입니다.")
+    na_reasons = Counter(g["reason"] for g in graded if g["grade"] == GRADE_NA)
+    if na_reasons:
+        detail = ", ".join(f"{reason} {cnt}건" for reason, cnt in na_reasons.items())
+        warnings.append(f"판정불가 셀 {sum(na_reasons.values())}개: {detail}")
+
+    stats = {"format": "slope-stats-v1", "cell_m": cell_m, "subcell_m": subcell_m,
+             "threshold": threshold, "summary": summary,
+             "direction_judged": direction_judged,
+             "drain_points": ([[round(float(x), 3), round(float(y), 3)]
+                               for x, y in drain_points] if drain_points else None),
+             "warnings": warnings,
+             "artifacts": {"cells_csv": csv_path, "map_png": png_path}}
+    stats_path = os.path.join(out_dir, "slope_stats.json")
+    with open(stats_path, "w", encoding="utf-8") as f:
+        # allow_nan=False: 위 summary가 nan을 흘리면(회귀) 여기서 즉시 터진다.
+        # RFC 8259 표준 JSON에는 NaN 토큰이 없어 브라우저 JSON.parse·Postgres jsonb가
+        # 조용히 거부하므로, 조용히 통과시키느니 여기서 바로 예외로 잡는 편이 낫다.
+        json.dump(stats, f, ensure_ascii=False, indent=2, allow_nan=False)
     return stats

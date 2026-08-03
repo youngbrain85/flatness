@@ -189,7 +189,9 @@ alter table reports add column if not exists deleted_at timestamptz;
 산출값은 평면 `z = a·x + b·y + c`에서 다음과 같이 얻는다.
 
 - 구배 크기(%) = `sqrt(a² + b²) × 100`
-- 구배 방향(rad) = `atan2(b, a)`
+- 내리막 방향(rad) = `atan2(-b, -a)`. **`(a, b)`는 오르막 방향이므로 부호를 뒤집는다.**
+  물은 내리막으로 흐르므로 배수 방향 판정은 내리막 기준이다. `atan2(b, a)`를 그대로
+  쓰면 모든 방향 판정이 180도 뒤집혀 정상 배수가 역구배로 나온다
 - 피팅 잔차 RMSE
 - 기울기 표준오차 (4.3 참고)
 
