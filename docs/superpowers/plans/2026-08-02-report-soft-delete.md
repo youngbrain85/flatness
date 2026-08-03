@@ -79,9 +79,13 @@ alter table reports add column if not exists deleted_at timestamptz;
 
 Run:
 ```bash
-grep -c "if not exists" supabase/migrations/006_report_soft_delete.sql
+grep -cE "^alter table .* if not exists" supabase/migrations/006_report_soft_delete.sql
 ```
-Expected: `1` (add column 1건. 재실행해도 실패하지 않는다)
+Expected: `1` (SQL 절 1건. 재실행해도 실패하지 않는다)
+
+**주석이 아니라 SQL 절만 센다.** 단순히 `grep -c "if not exists"`로 세면 멱등성을
+설명하는 주석까지 잡혀 숫자가 어긋나고, 그러면 구현자가 검증을 맞추려고 주석을
+고치게 된다 — 검증이 산출물을 왜곡하는 방향으로 작동한다.
 
 - [ ] **Step 3: 커밋**
 
