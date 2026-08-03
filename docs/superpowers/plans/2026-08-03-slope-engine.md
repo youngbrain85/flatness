@@ -452,7 +452,7 @@ def grade_slope_cells(cells, threshold, drain_points=None, cell_m=2.0):
 - [ ] **Step 4: 통과를 확인한다**
 
 Run: `cd engine && python -m pytest tests/test_slope.py -q`
-Expected: 17 passed (Task 1의 6 + 신규 11)
+Expected: 16 passed (Task 1의 6 + 신규 10)
 
 - [ ] **Step 5: 커밋**
 
@@ -540,7 +540,7 @@ def slope_summary(graded):
 - [ ] **Step 4: 통과를 확인한다**
 
 Run: `cd engine && python -m pytest tests/test_slope.py -q`
-Expected: 20 passed
+Expected: 19 passed
 
 - [ ] **Step 5: 커밋**
 
@@ -940,7 +940,7 @@ write_binary_ply(flat_floor(size=(10.0,8.0), spacing=0.02, tilt=(0.02,0.0)), 'de
 - [ ] **Step 7: 전체 스위트를 돌린다**
 
 Run: `cd engine && python -m pytest -q`
-Expected: 164 passed (기준선 139 + 슬로프 20 + 지도 3 + CLI 2)
+Expected: 163 passed (기준선 139 + 슬로프 19 + 지도 3 + CLI 2)
 
 - [ ] **Step 8: 커밋**
 
