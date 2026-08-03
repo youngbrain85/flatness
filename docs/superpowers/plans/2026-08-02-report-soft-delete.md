@@ -486,8 +486,11 @@ Expected: 테스트 143 + 이번 신규분(도메인 3 + 컴포넌트 6 = 9) = *
 
 Run:
 ```bash
-cd /d/Projects/Flatness && git diff HEAD~3 | grep "^+" | grep -c "—"
+git diff HEAD~3 | grep "^+" | grep -c "—"
 ```
+
+**작업 중인 워크트리에서 실행한다.** 경로를 메인 저장소로 지정하면 이 브랜치의
+변경이 아니라 엉뚱한 트리를 검사하게 된다.
 Expected: `0`
 
 패턴이 실제로 매칭되는지 먼저 확인하려면, em-dash가 있는 기존 파일에서 같은 검색이 0이 아닌 값을 내는지 봐라.
