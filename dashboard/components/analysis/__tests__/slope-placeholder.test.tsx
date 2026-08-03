@@ -48,4 +48,39 @@ describe('SlopePlaceholder (단계 C 임시 안내 화면)', () => {
     render(<SlopePlaceholder stats={{ ...stats, warnings: [] }} />);
     expect(screen.queryByText('경고')).not.toBeInTheDocument();
   });
+
+  // M1/M2 (코드리뷰): stats는 jsonb 컬럼에서 온다 - 타입이 무결성을 보장하지 않는다.
+  // artifacts·warnings·summary.counts 키가 통째로 없는 레코드에서 TypeError로 죽지
+  // 않고, 각 파트가 빠진 채로 나머지가 정상 렌더되는지 확인한다.
+  it('artifacts 키 자체가 없어도 TypeError 없이 렌더한다(판정 지도만 생략)', () => {
+    const { artifacts, ...withoutArtifacts } = stats;
+    void artifacts;
+    render(<SlopePlaceholder stats={withoutArtifacts as SlopeStats} />);
+    expect(screen.getByText('구배')).toBeInTheDocument();
+    expect(screen.queryByAltText('구배 판정 지도')).not.toBeInTheDocument();
+  });
+
+  it('warnings 키 자체가 없어도 TypeError 없이 렌더한다(경고 섹션만 생략)', () => {
+    const { warnings, ...withoutWarnings } = stats;
+    void warnings;
+    render(<SlopePlaceholder stats={withoutWarnings as SlopeStats} />);
+    expect(screen.getByText('구배')).toBeInTheDocument();
+    expect(screen.queryByText('경고')).not.toBeInTheDocument();
+  });
+
+  it('summary.counts 키 자체가 없어도 TypeError 없이 렌더하고 0으로 채운다', () => {
+    const withoutCounts = {
+      ...stats,
+      summary: { mean_dev_pct: 0.1, std_dev_pct: 0.1, max_dev_pct: 0.1, coverage_pct: 50 },
+    };
+    render(<SlopePlaceholder stats={withoutCounts as unknown as SlopeStats} />);
+    expect(screen.getByText('적합 0 · 경계 0 · 보수 0 · 재시공 0 · 판정불가 0')).toBeInTheDocument();
+  });
+
+  it('편차 값이 undefined(키 누락)여도 null과 동일하게 안내 문구로 처리한다', () => {
+    const { mean_dev_pct, ...restSummary } = stats.summary;
+    void mean_dev_pct;
+    render(<SlopePlaceholder stats={{ ...stats, summary: restSummary as SlopeStats['summary'] }} />);
+    expect(screen.getAllByText('판정 가능한 셀 없음').length).toBeGreaterThanOrEqual(1);
+  });
 });
