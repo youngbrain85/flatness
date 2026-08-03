@@ -113,6 +113,7 @@ export interface ReportRow {
   id: string; location_id: string; title: string; status: ReportStatus;
   snapshot: Record<string, unknown> | null; opinion_text: string | null;
   pdf_path: string | null; gen_status: ReportGenStatus; gen_error: string | null;
+  deleted_at: string | null;
   created_by: string | null; created_at: string;
 }
 

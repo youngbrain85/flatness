@@ -33,3 +33,13 @@ export function buildDraftOpinion(
     .map((i) => `[${i.surfaceLabel}] ${i.text!.trim()}`)
     .join('\n\n');
 }
+
+// 삭제 확인 문구. 발행본과 초안을 구분하는 이유: 발행본은 발주처에 제출됐을 수
+// 있는 기록이고 스냅샷·복사된 자산으로 원본과 무관하게 재현되도록 만든 것이라,
+// 초안과 같은 무게로 지우게 하면 안 된다. 소프트 삭제라 되돌릴 수는 있지만
+// 화면에서는 사라지므로 그 사실을 알린다.
+export function deleteConfirmText(report: { status: ReportStatus }): string {
+  return report.status === 'finalized'
+    ? '이미 발행된 보고서입니다. 삭제하면 목록과 상세에서 사라집니다. 삭제할까요?'
+    : '이 보고서를 삭제할까요? 목록과 상세에서 사라집니다.';
+}

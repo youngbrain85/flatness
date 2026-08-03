@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildDraftOpinion, canFinalize, canRegenerate, reportPdfRelPath } from '../reports';
+import { buildDraftOpinion, canFinalize, canRegenerate, deleteConfirmText, reportPdfRelPath } from '../reports';
 
 describe('reportPdfRelPath', () => {
   it('버킷-상대 규약 문자열을 만든다', () => {
@@ -45,5 +45,24 @@ describe('buildDraftOpinion', () => {
       { surfaceLabel: '벽면', text: '  경계 구간 3개  ' },
     ]);
     expect(text).toBe('[바닥] 적합 구간이 대부분입니다.\n\n[벽면] 경계 구간 3개');
+  });
+});
+
+describe('deleteConfirmText', () => {
+  it('초안은 되돌릴 수 있다고 안내한다', () => {
+    const text = deleteConfirmText({ status: 'draft' });
+    expect(text).toMatch(/삭제/);
+    expect(text).not.toMatch(/발행/);
+  });
+
+  // 발행본은 발주처에 제출됐을 수 있는 기록이라 초안과 같은 문구로 지우게 하면 안 된다
+  it('발행본은 발행된 기록임을 경고한다', () => {
+    const text = deleteConfirmText({ status: 'finalized' });
+    expect(text).toMatch(/발행/);
+  });
+
+  it('두 문구가 서로 다르다', () => {
+    expect(deleteConfirmText({ status: 'draft' }))
+      .not.toBe(deleteConfirmText({ status: 'finalized' }));
   });
 });
