@@ -169,8 +169,9 @@ def test_correction_is_reported_in_mm_over_the_cell():
 
 
 def test_correction_uses_actual_cell_extent_not_nominal_cell_m():
-    # 폭이 0.2m인 조각 셀(그래도 임계값 이상이라 ok=True인 경우)은 명목 cell_m(2.0m)이
-    # 아니라 실제 폭으로 환산해야 한다. 명목값을 쓰면 10배(2.4mm) 과대 보고된다.
+    # 환산식만 직접 확인한다. compute_slope_cells가 폭 0.2m 셀에 ok=True를 주는
+    # 일은 없지만(폭 하한 cell_m/2에서 걸린다), 환산이 명목 cell_m(2.0m)이 아니라
+    # 셀의 실제 폭을 쓰는지는 여기서 못박아 둔다. 명목값을 쓰면 10배 과대다.
     cell = _cell(2.12, math.pi, width_m=0.2, height_m=2.0)  # dev_pct=0.12
     g = grade_slope_cells([cell], TH, cell_m=2.0)[0]
     assert abs(g["correction_mm"] - 0.24) < 0.01
