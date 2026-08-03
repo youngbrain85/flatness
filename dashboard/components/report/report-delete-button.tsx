@@ -55,7 +55,7 @@ export function ReportDeleteButton({ report, redirectTo }: {
           className="rounded bg-red-700 px-3 py-1.5 text-sm text-white disabled:opacity-50">
           삭제 확인
         </button>
-        <button type="button" onClick={() => setConfirming(false)} disabled={busy}
+        <button type="button" onClick={() => { setConfirming(false); setError(null); }} disabled={busy}
           className="rounded border px-3 py-1.5 text-sm disabled:opacity-50">
           취소
         </button>

@@ -49,7 +49,7 @@ describe('buildDraftOpinion', () => {
 });
 
 describe('deleteConfirmText', () => {
-  it('초안은 되돌릴 수 있다고 안내한다', () => {
+  it('초안은 발행을 언급하지 않는다', () => {
     const text = deleteConfirmText({ status: 'draft' });
     expect(text).toMatch(/삭제/);
     expect(text).not.toMatch(/발행/);
