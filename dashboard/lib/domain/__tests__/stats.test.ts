@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { coverageLabel, isExternalImport } from '../stats';
+import { coverageLabel, isExternalImport, isSlopeStats } from '../stats';
 import type { Stats } from '../types';
 
 function minimalStats(meta: Record<string, unknown>): Stats {
@@ -42,5 +42,18 @@ describe('isExternalImport', () => {
   });
   it('LiDAR 원본은 외부 결과 아님', () => {
     expect(isExternalImport('p1d-0.4.0', { file: 'f', n_points: 1 })).toBe(false);
+  });
+});
+
+describe('isSlopeStats', () => {
+  it('구배 stats를 format 키로 판별한다', () => {
+    expect(isSlopeStats({ format: 'slope-stats-v1' })).toBe(true);
+  });
+  it('평활도 stats에는 format 키가 없다', () => {
+    expect(isSlopeStats({ meta: { source: undefined }, n_cells: 4 })).toBe(false);
+  });
+  it('null·undefined를 견딘다', () => {
+    expect(isSlopeStats(null)).toBe(false);
+    expect(isSlopeStats(undefined)).toBe(false);
   });
 });

@@ -18,6 +18,7 @@ const location: LocationRow = {
 const criteria: CriteriaRow = {
   id: 'cr1', site_id: null, surface: 'floor', name: 'floor-kcs', source_text: 'KCS 근거',
   thresholds: [], is_default: true, is_active: true, version: 1, supersedes_id: null, created_at: '',
+  kind: 'flatness',
 };
 
 // scans/analyses insert·update와 fn_resolve_criteria/fn_enqueue_job rpc 체인을 흉내내는

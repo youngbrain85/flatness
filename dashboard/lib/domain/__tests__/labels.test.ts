@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { GRADE_COLOR, GRADE_LABEL, fmtMm, warningLabel } from '../labels';
+import { ANALYSIS_KIND_LABEL, GRADE_COLOR, GRADE_LABEL, fmtMm, warningLabel } from '../labels';
 
 describe('등급 라벨·색상 (stats-schema.md 부록 A와 1:1)', () => {
   it('5등급 한국어 라벨', () => {
@@ -26,6 +26,12 @@ describe('warningLabel', () => {
   });
   it('모르는 코드는 원문 그대로 반환한다(누락보다 노출이 안전)', () => {
     expect(warningLabel('future_code')).toBe('future_code');
+  });
+});
+
+describe('ANALYSIS_KIND_LABEL', () => {
+  it('구배·평활도 라벨', () => {
+    expect(ANALYSIS_KIND_LABEL).toEqual({ flatness: '평활도', slope: '구배' });
   });
 });
 

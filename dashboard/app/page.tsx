@@ -15,8 +15,10 @@ export default async function HomePage() {
     supabase.from('locations').select('id, site_id'),
     supabase.from('scans').select('id, scanned_at, location_id').is('deleted_at', null),
     // 리뷰 Important 3: "판정 불가"(done인데 overall_verdict null) 집계를 위해 status도 함께 조회
-    supabase.from('analyses').select('scan_id, status, overall_verdict')
-      .eq('is_current', true).is('deleted_at', null),
+    // 단계 C 회귀 차단: kind 필터가 없으면 구배 분석이 섞여 판정 집계가 2배로 계상된다.
+    // 홈·현장 트리에 두 종류를 함께 보이는 화면 설계는 아직 없다(단계 D 몫).
+    supabase.from('analyses').select('scan_id, status, overall_verdict, kind')
+      .eq('is_current', true).eq('kind', 'flatness').is('deleted_at', null),
   ]);
   const firstError = sitesRes.error ?? locationsRes.error ?? scansRes.error ?? analysesRes.error;
   if (firstError) {

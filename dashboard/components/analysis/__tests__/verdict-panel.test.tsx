@@ -27,7 +27,7 @@ const analysis = {
   status: 'done', stats, coverage_pct: 88.5, overall_verdict: 'repair',
   warnings: ['low_coverage'], artifacts_dir: 'artifacts/a1',
   auto_summary: stats.auto_summary, user_summary: null, is_current: true,
-  deleted_at: null, created_at: '2026-07-28T00:00:00Z', created_by: null,
+  deleted_at: null, created_at: '2026-07-28T00:00:00Z', created_by: null, kind: 'flatness',
 } as AnalysisRow;
 
 describe('VerdictPanel (C안 우측 고정 패널)', () => {

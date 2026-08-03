@@ -1,5 +1,15 @@
 // stats.json 소비 규칙 (stats-schema.md §3: coverage 3중 의미)
-import type { Stats, StatsMeta } from './types';
+import type { SlopeStats, Stats, StatsMeta } from './types';
+
+/** 구배 분석 stats인지 내용으로 판별한다.
+ *
+ * analyses/[id]는 .eq('id', id)뿐이라 URL 직접 접근을 쿼리 필터로 막을 수 없다.
+ * 엔진이 이미 최상위에 format 판별자를 넣고(pipeline.py), 평활도 build_stats에는
+ * 이 키가 없으므로 kind 컬럼 없이도 안전하게 갈린다. */
+export function isSlopeStats(stats: unknown): stats is SlopeStats {
+  return !!stats && typeof stats === 'object'
+    && (stats as { format?: string }).format === 'slope-stats-v1';
+}
 
 export function coverageLabel(stats: Stats): string {
   const isImport = stats.meta.source !== undefined;

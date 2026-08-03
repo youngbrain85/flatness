@@ -42,9 +42,11 @@ export default async function SitePage({ params }: { params: Promise<{ id: strin
   }
   const scans = scansRes.data;
   const scanIds = (scans ?? []).map((s) => s.id);
+  // 단계 C 회귀 차단: kind 필터가 없으면 같은 scan_id의 구배 현재분석이 Map을 덮어써
+  // 조회 순서에 따라 배지가 비결정적으로 바뀐다. 트리는 평활도만 보여 기존 동작을 유지한다.
   const currentsRes = scanIds.length
-    ? await supabase.from('analyses').select('id, scan_id, status, overall_verdict')
-        .in('scan_id', scanIds).eq('is_current', true).is('deleted_at', null)
+    ? await supabase.from('analyses').select('id, scan_id, status, overall_verdict, kind')
+        .in('scan_id', scanIds).eq('is_current', true).eq('kind', 'flatness').is('deleted_at', null)
     : { data: [], error: null };
   if (currentsRes.error) {
     return <main className="mx-auto max-w-6xl p-6"><SupabaseErrorNotice message={currentsRes.error.message} /></main>;

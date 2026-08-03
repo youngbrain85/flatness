@@ -13,6 +13,7 @@ const rows: CriteriaRow[] = [
     source_text: 'KCS 14 20 10 표 3.7-1 (제물치장·얇은 마감)',
     thresholds: [{ span_m: 3, metric: 'flatness', pass_mm: 7, rework_mm: 21 }],
     is_default: true, is_active: true, version: 1, supersedes_id: null, created_at: '',
+    kind: 'flatness',
   },
 ];
 

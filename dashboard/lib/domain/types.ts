@@ -5,6 +5,8 @@ export type Verdict = 'pass' | 'borderline' | 'repair' | 'rework';
 export type ScanStatus = 'uploaded' | 'awaiting_unit_confirm' | 'ready' | 'archived' | 'failed';
 export type AnalysisStatus = 'queued' | 'processing' | 'done' | 'failed';
 export type Lineage = 'raw' | 'fused_mesh' | 'unknown';
+// 007: analyses.kind/criteria.kind (기본값 'flatness'). 단계 C가 이 값으로 조회를 분기한다.
+export type AnalysisKind = 'flatness' | 'slope';
 
 export interface SiteRow {
   id: string; name: string; address: string | null; memo: string | null;
@@ -21,10 +23,19 @@ export interface Threshold {
   pass_mm: number; rework_mm: number; note?: string;
 }
 
+/** 구배 기준의 thresholds[0] 형태. 평활도(span_m/metric/pass_mm/rework_mm)와 다르다. */
+export interface SlopeThreshold {
+  use: string;
+  design_pct: number;
+  pass_pct: number;
+  re_pct: number;
+  dir_pass_deg: number;
+}
+
 export interface CriteriaRow {
   id: string; site_id: string | null; surface: Surface; name: string; source_text: string;
   thresholds: Threshold[]; is_default: boolean; is_active: boolean; version: number;
-  supersedes_id: string | null; created_at: string;
+  supersedes_id: string | null; created_at: string; kind: AnalysisKind;
 }
 
 export interface ScanRow {
@@ -43,6 +54,7 @@ export interface AnalysisRow {
   coverage_pct: number | null; overall_verdict: Verdict | null; warnings: string[];
   artifacts_dir: string | null; auto_summary: string | null; user_summary: string | null;
   is_current: boolean; deleted_at: string | null; created_at: string; created_by: string | null;
+  kind: AnalysisKind;
 }
 
 export interface PhotoRow {
@@ -103,6 +115,29 @@ export interface CellRow {
   ix: number; iy: number; center_x: number; center_y: number;
   value_mm: number | null; span_used_m: number; occupancy: number; grade: Grade;
   worst_x: number | null; worst_y: number | null; zone_id: number | null;
+}
+
+// ---- 구배(slope) stats.json (engine/flatness/core/pipeline.py analyze_slope 반환값과 동일한 형태.
+// 워커가 artifacts 경로만 버킷-상대로 치환해 저장한다) ----
+export interface SlopeSummary {
+  mean_dev_pct: number | null;
+  std_dev_pct: number | null;
+  max_dev_pct: number | null;
+  // 엔진이 한국어 등급 문자열을 그대로 키로 쓴다(engine/flatness/core/slope.py GRADE_*)
+  counts: Record<'적합' | '경계' | '보수' | '재시공' | '판정불가', number>;
+  coverage_pct: number;
+}
+
+export interface SlopeStats {
+  format: 'slope-stats-v1';
+  cell_m: number;
+  subcell_m: number;
+  threshold: SlopeThreshold;
+  summary: SlopeSummary;
+  direction_judged: boolean;
+  drain_points: [number, number][] | null;
+  warnings: string[];
+  artifacts: { cells_csv: string; map_png: string };
 }
 
 // ---- 보고서 (001_schema.sql reports + 004_report_support.sql) ----
