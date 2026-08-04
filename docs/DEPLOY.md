@@ -13,6 +13,10 @@ Vercel(대시보드) + Railway(워커, Docker) + Supabase(DB·Auth·Storage) 구
 - `supabase/migrations/008_slope_judge_enum.sql`·`009_slope_judge_functions.sql` - 재판정
   (구배 배수구 재클릭) 잡 타입. 이 배포 절차의 필수 최소 범위(007까지)에는 포함되지
   않지만, 재판정 기능을 켤 계획이면 §1의 1번에서 함께 적용한다
+- `supabase/migrations/010_scan_height_view.sql` - `scans.height_view_path` 컬럼
+  (`precheck` 잡이 만드는 높이 뷰 PNG 경로, 세부과업 4 단계 E). 008·009와 달리
+  선택 기능이 아니다 - `precheck`는 스캔 업로드마다 무조건 도는 경로라 §1의 1번
+  필수 범위에 포함된다
 - 저장소 루트 `Dockerfile` - 워커 이미지(Chromium·`Noto Sans CJK KR` 포함 - Debian
   `fonts-noto-cjk`가 실제로 등록하는 폰트 패밀리명이며 `Noto Sans KR`이 아니다)
 - 워커 `STORAGE_BACKEND=supabase` 기본값(Dockerfile `ENV`)
@@ -20,11 +24,24 @@ Vercel(대시보드) + Railway(워커, Docker) + Supabase(DB·Auth·Storage) 구
 
 ## 1. Supabase (사용자 수행)
 
-1. SQL Editor에서 `001_schema.sql`부터 `007_slope_analysis.sql`까지 **순서대로** 실행한다
-   (001~004를 아직 실행하지 않았다면 `docs/SUPABASE_SETUP.md` 2단계부터 순서대로 먼저
+1. SQL Editor에서 `001_schema.sql`부터 `007_slope_analysis.sql`까지 **순서대로** 실행한
+   뒤 `010_scan_height_view.sql`도 이어서 실행한다(008·009는 건너뛰어도 된다 - 아래
+   참고)(001~004를 아직 실행하지 않았다면 `docs/SUPABASE_SETUP.md` 2단계부터 순서대로 먼저
    진행한다). 006(`006_report_soft_delete.sql`)은 보고서 소프트 삭제, 007
-   (`007_slope_analysis.sql`)은 구배 분석(`analyses.kind` 컬럼·구배 판정 기준 시드)을
-   추가한다 - 둘 다 재실행 안전(멱등)하다
+   (`007_slope_analysis.sql`)은 구배 분석(`analyses.kind` 컬럼·구배 판정 기준 시드)을,
+   010(`010_scan_height_view.sql`)은 `scans.height_view_path` 컬럼 하나를 추가한다 -
+   셋 다 재실행 안전(멱등)하다. 010은 008·009처럼 job_type enum을 건드리지 않는
+   단순 컬럼 추가라 007 다음 어디에 두어도(008·009보다 먼저든 나중이든) 상관없다.
+
+   > **[필수] 010을 워커 배포보다 먼저 적용한다.** `precheck` 잡 핸들러
+   > (`worker/flatworker/jobs.py`의 `handle_precheck`)는 상태 승격·`point_count`·
+   > `height_view_path`를 한 PATCH로 묶어 보낸다. 010 미적용 DB에 이 코드가 담긴
+   > 워커를 먼저 배포하면 `height_view_path` 컬럼이 없어 그 PATCH 전체가
+   > `42703`(undefined_column)으로 실패하고 **상태 승격까지 함께 막힌다** - 아래
+   > 007 배포 순서 경고와 같은 종류의 사고이며 해법도 같다: 새 워커 이미지를
+   > 배포하기 전에 SQL을 먼저 적용한다. `precheck`는 008·009(재판정)와 달리 켜고
+   > 끌 수 있는 선택 기능이 아니라 스캔 업로드마다 무조건 도는 경로이므로, 이
+   > 워커 이미지를 배포할 계획이면 010은 선택이 아니라 필수다.
 
    **재판정(구배 배수구 재클릭) 기능을 쓸 계획이면 007 다음에 008·009도 이어서
    적용한다**: `008_slope_judge_enum.sql`(job_type에 `slope_judge` 값 추가) →
