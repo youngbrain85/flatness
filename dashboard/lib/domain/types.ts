@@ -44,6 +44,12 @@ export interface ScanRow {
   selected_criteria_id: string | null; raw_file_path: string | null;
   original_filename: string | null; file_format: string | null; point_count: number | null;
   unit_scale: number | null; lineage: Lineage; status: ScanStatus;
+  // 010_scan_height_view.sql. precheck 잡이 남기는 높이 뷰 PNG의 버킷-상대 "전체"
+  // 경로다(artifacts/scans/{scan_id}/height_view.png) - artifacts_dir 같은 디렉터리
+  // 조각이 아니므로 소비할 때 dataUrl()에 그대로 넘긴다(artifactUrl 금지).
+  // nullable인 이유는 두 가지이고 둘 다 정상이다: (1) precheck를 돈 적이 없는 기존
+  // 스캔(임포트 등), (2) 점이 너무 성겨 워커가 렌더를 건너뛴 경우.
+  height_view_path: string | null;
   deleted_at: string | null; created_at: string; updated_at: string;
 }
 

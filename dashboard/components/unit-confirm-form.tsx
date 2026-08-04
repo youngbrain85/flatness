@@ -1,11 +1,14 @@
 // 스펙 §7.4 단위 확인 화면.
-// P2 확정: precheck는 단위 후보를 저장할 컬럼이 없어 후보·근거 표시는 백로그 -
-// 사용자가 파일의 좌표 단위를 직접 선택해 확정한다.
+// P2 확정: precheck는 단위 "후보"(detect_units의 판별 결과)를 저장할 컬럼이 없어
+// 후보·근거 문구 표시는 여전히 백로그다 - 단계 E에서도 그 컬럼은 생기지 않았다.
+// 대신 precheck가 높이 뷰 PNG를 남기므로(scans.height_view_path, 010) 사용자가
+// 그 그림의 축 눈금과 실제 공간 크기를 견주어 단위를 직접 확정한다.
 'use client';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { enqueueJob } from '@/lib/domain/jobs';
+import { dataUrl } from '@/lib/domain/paths';
 import type { ScanRow } from '@/lib/domain/types';
 import { UNIT_OPTIONS } from '@/lib/upload/validate';
 
@@ -14,6 +17,23 @@ export function UnitConfirmForm({ scan, userId }: { scan: ScanRow; userId: strin
   const [unitScale, setUnitScale] = useState<number>(1.0);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // 경로가 남아 있어도 그림을 못 받을 수 있다: /api/data는 서명 URL 302를 거치므로
+  // 객체가 나중에 지워졌으면 404다. null 검사만으로는 이 경우를 못 잡아 깨진 이미지
+  // 아이콘만 남고, 사용자는 "원래 없는 것"인지 "지금 못 불러온 것"인지 구별하지 못한다.
+  const [viewFailed, setViewFailed] = useState(false);
+  const imgRef = useRef<HTMLImageElement>(null);
+
+  // ★ onError 하나만으로는 부족하다(실측으로 확인: 401을 주고 실제 브라우저에서
+  // 띄웠더니 하이드레이션까지 끝났는데도 폴백이 안 뜨고 깨진 이미지 아이콘만 남았다).
+  // 이 화면은 서버 렌더된 HTML에 <img>가 이미 들어 있어, 브라우저가 그 요청을
+  // 하이드레이션(=React가 onError를 붙이는 시점)보다 먼저 끝낸다. 그 사이에 지나간
+  // error 이벤트는 React가 받지 못하고 영영 사라진다. 그래서 마운트 직후 이미지의
+  // 최종 상태를 직접 확인한다: complete인데 naturalWidth가 0이면 깨진 이미지다.
+  // (onError는 하이드레이션 이후에 실패하는 경우를 위해 그대로 둔다.)
+  useEffect(() => {
+    const el = imgRef.current;
+    if (el && el.complete && el.naturalWidth === 0) setViewFailed(true);
+  }, []);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -72,7 +92,7 @@ export function UnitConfirmForm({ scan, userId }: { scan: ScanRow; userId: strin
     router.push(`/scans/${scan.id}`);
   }
 
-  return (
+  const form = (
     <form onSubmit={onSubmit} className="max-w-md space-y-4">
       <p className="rounded bg-slate-100 p-3 text-sm">
         <span className="font-medium">{scan.original_filename ?? '(파일명 없음)'}</span>
@@ -95,5 +115,43 @@ export function UnitConfirmForm({ scan, userId }: { scan: ScanRow; userId: strin
         단위 확정 후 분석 시작
       </button>
     </form>
+  );
+
+  // 높이 뷰가 없는 스캔(precheck를 돈 적 없는 기존 스캔, 점이 너무 성겨 워커가
+  // 렌더를 건너뛴 경우)은 지금까지와 완전히 같은 화면을 본다 - 이 경로가 죽으면
+  // 기존 스캔 전부가 단위를 확정하지 못한다.
+  if (!scan.height_view_path) return form;
+
+  // 그림이 단위 판단의 근거이므로 폼보다 넓게 잡는다. 폼 자신은 max-w-md로 묶여
+  // 있어(라디오 3개짜리 폼을 늘릴 이유가 없다) 페이지의 max-w-6xl을 그림이 쓴다.
+  return (
+    <div className="grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] lg:items-start">
+      <section className="space-y-2">
+        <h2 className="text-sm font-semibold">높이 뷰 (평면도)</h2>
+        {viewFailed ? (
+          <p className="rounded border border-amber-300 bg-amber-50 p-3 text-xs text-slate-700">
+            높이 뷰를 불러오지 못했습니다. 그림 없이도 단위는 확정할 수 있습니다.
+            파일명과 스캔 앱의 내보내기 설정을 확인해 단위를 고르세요.
+          </p>
+        ) : (
+          <>
+            {/* 로컬 route 서빙 이미지 - 데모에서 next/image 최적화 불필요
+                (components/analysis/slope-result.tsx와 같은 판단) */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img ref={imgRef} src={dataUrl(scan.height_view_path)}
+              alt="높이 뷰: 위에서 내려다본 점군의 상대 높이"
+              onError={() => setViewFailed(true)}
+              className="w-full rounded border bg-white" />
+            <p className="text-xs text-slate-500">
+              위에서 내려다본 점군의 상대 높이입니다. 축 눈금은 미터가 아니라
+              <span className="font-medium"> 파일 단위</span>이므로, 눈금이 가리키는
+              크기와 실제 공간 크기를 견주어 단위를 고르세요. 예를 들어 8m짜리 방인데
+              눈금이 8000까지 간다면 mm입니다.
+            </p>
+          </>
+        )}
+      </section>
+      {form}
+    </div>
   );
 }

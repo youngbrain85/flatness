@@ -88,6 +88,13 @@ export default async function ScanPage({ params }: { params: Promise<{ id: strin
         <dt className="text-slate-500">원본 파일</dt><dd>{s.original_filename ?? '-'}</dd>
         <dt className="text-slate-500">장비</dt><dd>{s.device ?? '-'}</dd>
         <dt className="text-slate-500">데이터 계보</dt><dd>{LINEAGE_LABEL[s.lineage]}</dd>
+        {/* point_count는 001_schema.sql에 선언만 되고 비어 있다가 단계 E의
+            precheck 잡부터 채워진다(worker/flatworker/jobs.py). 그 전에 올라온
+            스캔은 계속 null이므로 '-'로 둔다. 단위 확정의 근거는 아니다
+            (점 개수는 파일 단위가 m이든 mm이든 같다) - 스캔 규모를 가늠하는
+            메타데이터로만 쓴다. */}
+        <dt className="text-slate-500">점 개수</dt>
+        <dd>{s.point_count === null ? '-' : s.point_count.toLocaleString('ko-KR')}</dd>
         <dt className="text-slate-500">상태</dt><dd>{SCAN_STATUS_LABEL[s.status]}</dd>
         <dt className="text-slate-500">단위 배율</dt><dd>{s.unit_scale ?? '미확정'}</dd>
       </dl>
@@ -101,8 +108,12 @@ export default async function ScanPage({ params }: { params: Promise<{ id: strin
         </Link>
       )}
       {s.status === 'uploaded' && (
+        // E1: 옛 문구는 "워커가 실행 중인지 확인하세요(python -m flatworker)"였다.
+        // 운영자 지시문이지 사용자 안내가 아니다 - 대시보드만 쓰는 사용자는 워커를
+        // 실행할 수도 확인할 수도 없어서, 정상적인 대기를 장애로 오인한다. 단계 E부터
+        // precheck가 높이 뷰까지 렌더하므로 대기 시간 자체도 눈에 띄게 길어졌다.
         <p className="text-sm text-slate-600">
-          사전 검사 대기 중입니다. 워커가 실행 중인지 확인하세요(python -m flatworker).
+          사전 검사 대기 중입니다. 파일 크기에 따라 수십 초 걸릴 수 있습니다.
           이 화면을 새로고침하면 상태가 갱신됩니다.
         </p>
       )}
