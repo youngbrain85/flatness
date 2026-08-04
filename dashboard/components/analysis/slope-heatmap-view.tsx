@@ -96,6 +96,10 @@ export function SlopeHeatmapView({
           <span className="inline-block h-3 w-3 rounded-full" style={{ backgroundColor: DRAIN_COLOR }} />
           배수구
         </span>
+        {/* 코드리뷰(2차) Minor: 엔진 PNG 제목에는 화살표 의미가 적혀 있는데
+            Canvas 범례에는 없었다 - 화살표를 오르막으로 오독하면 판정 근거를
+            정반대로 이해하게 된다. */}
+        <span className="text-slate-400">얇은 화살표 = 내리막(물이 흐르는) 방향</span>
         <span className="text-slate-400">굵은 화살표 = 역구배(물이 배수구 반대로 흐름)</span>
       </div>
     </div>

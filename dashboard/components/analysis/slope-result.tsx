@@ -16,6 +16,7 @@ import { ANALYSIS_KIND_LABEL, warningLabel } from '@/lib/domain/labels';
 import { dataUrl } from '@/lib/domain/paths';
 import { isSlopeCellsFile, slopeCellsJsonUrl } from '@/lib/domain/slope-cells';
 import { isSlopeJudgedFile, joinSlopeCells, slopeJudgedJsonUrl } from '@/lib/domain/slope-judged';
+import { isDirectionAwareCriteria } from '@/lib/domain/slope-direction';
 import type { SlopeCellResult } from '@/lib/domain/slope-judged';
 import { useJudgeStatus } from '@/lib/hooks/use-judge-status';
 import { SlopeHeatmapView } from './slope-heatmap-view';
@@ -57,28 +58,49 @@ export function SlopeResult({ analysis }: { analysis: AnalysisRow }) {
   // 코드리뷰 M3: slope_cells.json/slope_judged.json 중 한쪽에만 있어 조인에서
   // 빠진 셀 수. 0이면 배너를 그리지 않는다.
   const [unmatchedCount, setUnmatchedCount] = useState(0);
-  // 배수구는 낙관적 갱신 대상이다(클릭 즉시 지도에 반영) - 폴링이 아니라 클릭
-  // 핸들러가 직접 쓰는 값이므로 judge와 분리된 별도 state로 둔다.
-  const [drainPoints, setDrainPoints] = useState<DrainPoint[]>(initialParams.drain_points ?? []);
+  // 코드리뷰(2차) Minor: drainPoints를 마운트 시점 props로만 초기화(useState 초기값)
+  // 하면 이후 서버 데이터가 갱신돼도(다른 탭의 변경, router.refresh() 등) 옛
+  // 좌표를 계속 보여준다. 클릭 전까지는 매 렌더 최신 prop(initialParams.drain_points)
+  // 을 그대로 따르고, 클릭한 뒤에만 낙관적 값으로 화면에 즉시 반영한다 - 두 값을
+  // 하나의 state로 합치지 않고 "언제 덮어쓸지"만 별도로 추적한다.
+  const [clickedDrainPoints, setClickedDrainPoints] = useState<DrainPoint[] | null>(null);
+  const drainPoints = clickedDrainPoints ?? initialParams.drain_points ?? [];
 
   // 재판정 진행 상태 폴링(브리프 D5). useJudgeStatus 내부 state를 그대로 표시값으로
   // 쓴다 - 별도 effect로 params에 옮겨 담지 않는다(effect 안에서 setState를 동기
   // 호출하면 불필요한 연쇄 렌더가 생긴다 - react-hooks/set-state-in-effect).
   const judge = useJudgeStatus(analysis.id, initialParams.judge ?? null);
-  const judgeBusy = judge?.state === 'processing' || judge?.state === 'queued';
+  // 코드리뷰(2차) C2: 'queued'는 judgeBusy에서 뺀다. 워커가 잠깐 내려가면
+  // 'queued'에서 오래 머물 수 있는데, 여기 포함시키면 사용자가 스스로 빠져나올
+  // 방법이 없는 화면(배너 무한, 클릭 영구 차단)이 된다. 이 저장소가 보고서에서
+  // 이미 낸 결론과 같다(lib/domain/reports.ts의 canRegenerate - draft이고
+  // gen_status가 processing이 아니면 된다, queued는 막지 않음). 재큐 중 다시
+  // 클릭해도 잡이 실제로 대기 중이면 jobs_dedup(23505)이 막아 안내 문구로
+  // 바뀌므로 중복 엔큐 걱정은 없다.
+  const judgeBusy = judge?.state === 'processing';
+
+  // 코드리뷰(2차) I1: 방향 판정 대상이 아닌 기준(기본 기준 slope-indoor-level 등,
+  // 007_slope_analysis.sql:131-133)에서는 배수구 클릭을 비활성화한다. 등급 계산이
+  // 아니라 "이 기준이 방향을 보는가"라는 UI 가용성 질문이다(slope-direction.ts
+  // isDirectionAwareCriteria 참고, 리트머스 대상 아님).
+  const directionAware = isDirectionAwareCriteria(stats.threshold);
 
   // 재판정이 끝나면(done/failed) 서버 데이터(stats·coverage_pct·overall_verdict 등)를
-  // 다시 받아온다 - report-progress.tsx/analysis-progress.tsx와 같은 패턴. 비교
-  // 기준을 analysis.params(현재 prop)에서 매번 새로 읽어야 router.refresh() 이후
-  // 이 값도 함께 갱신되어 반복 refresh를 멈춘다(ref에 고정하면 무한 반복한다).
-  // (setState가 아니라 router.refresh() 호출이므로 위 규칙과 무관하다.)
-  const initialJudgeState = initialParams.judge?.state ?? null;
+  // 다시 받아온다 - report-progress.tsx/analysis-progress.tsx와 같은 패턴.
+  //
+  // ★ 코드리뷰(2차) C1: 비교 기준을 judge.state가 아니라 judge.at으로 삼는다.
+  // state로 비교하면(예전 코드) 2회차 이후 재판정에서 refresh가 영구히 멎는다 -
+  // 1회차 완료 후 router.refresh()가 initialParams.judge.state를 'done'으로
+  // 갱신시키는데, 2회차가 다시 'done'으로 끝나면 'done' !== 'done'이 false라
+  // 조건을 아예 타지 않는다(페이지를 새로고침해 최초 prop이 이미 'done'인
+  // 경우도 마찬가지 - 그 세션 1회차부터 막힌다). at은 전이마다 반드시 바뀌고,
+  // refresh 후에는 prop의 at도 갱신되어 같아지므로 무한 refresh도 생기지 않는다.
+  const initialJudgeAt = initialParams.judge?.at ?? null;
   useEffect(() => {
-    if (judge && judge.state !== initialJudgeState
-        && (judge.state === 'done' || judge.state === 'failed')) {
+    if (judge && (judge.state === 'done' || judge.state === 'failed') && judge.at !== initialJudgeAt) {
       router.refresh();
     }
-  }, [judge, initialJudgeState, router]);
+  }, [judge, initialJudgeAt, router]);
 
   // slope_cells.json + slope_judged.json fetch. judge?.at을 의존성에 넣는 이유:
   // 재판정은 같은 경로를 제자리에서 덮어쓴다(x-upsert:true, 브리프 D8) - URL
@@ -128,7 +150,7 @@ export function SlopeResult({ analysis }: { analysis: AnalysisRow }) {
   // 23505(중복)면 params를 절대 건드리지 않는다 - 순서를 뒤집으면 이미 처리 중인
   // 잡이 나중 클릭의 좌표로 판정하는 경합이 생긴다(브리프 실측 시나리오).
   async function handleDrainClick(pt: DrainPoint) {
-    if (busy || judgeBusy) return;
+    if (busy || judgeBusy || !directionAware) return;
     setBusy(true);
     setClickError(null);
     const supabase = createClient();
@@ -144,7 +166,7 @@ export function SlopeResult({ analysis }: { analysis: AnalysisRow }) {
     const { error } = await supabase.from('analyses').update({ params: nextParams }).eq('id', analysis.id);
     setBusy(false);
     if (error) { setClickError(`상태 갱신에 실패했습니다: ${error.message}`); return; }
-    setDrainPoints([pt]); // 낙관적 갱신 - judge는 useJudgeStatus의 Realtime/폴링이 뒤따라 반영한다
+    setClickedDrainPoints([pt]); // 낙관적 갱신 - judge는 useJudgeStatus의 Realtime/폴링이 뒤따라 반영한다
   }
 
   return (
@@ -200,20 +222,37 @@ export function SlopeResult({ analysis }: { analysis: AnalysisRow }) {
         </div>
       ) : (
         <>
-          <p className="text-sm text-slate-700">
-            배수구 위치를 클릭하세요. 클릭하면 그 지점을 기준으로 재판정 작업이 시작되고, 완료되면
-            화면이 자동으로 갱신됩니다.
-            {/* 코드리뷰 M5: 브리프 D3 - 엔진 PNG는 화면에 다시 그리지 않되(Canvas와
-                색표가 다를 수 있음) 다운로드 링크로는 둔다. */}
-            {mapPng && (
-              <>
-                {' '}
-                <a href={dataUrl(mapPng)} download className="text-blue-700 hover:underline">
-                  구배 판정 지도(PNG) 다운로드
-                </a>
-              </>
-            )}
-          </p>
+          {/* 코드리뷰(2차) I1: 방향 판정 대상이 아닌 기준에서는 클릭을 권하지 않고
+              이유를 알린다. */}
+          {directionAware ? (
+            <p className="text-sm text-slate-700">
+              배수구 위치를 클릭하세요. 클릭하면 그 지점을 기준으로 재판정 작업이 시작되고, 완료되면
+              화면이 자동으로 갱신됩니다.
+              {/* 코드리뷰 M5: 브리프 D3 - 엔진 PNG는 화면에 다시 그리지 않되(Canvas와
+                  색표가 다를 수 있음) 다운로드 링크로는 둔다. */}
+              {mapPng && (
+                <>
+                  {' '}
+                  <a href={dataUrl(mapPng)} download className="text-blue-700 hover:underline">
+                    구배 판정 지도(PNG) 다운로드
+                  </a>
+                </>
+              )}
+            </p>
+          ) : (
+            <p className="rounded border border-slate-300 bg-slate-50 p-3 text-xs text-slate-600">
+              이 기준({stats.threshold?.use ?? '적용 기준'})은 방향(역구배)을 판정하지 않습니다.
+              배수구를 지정해도 방향 결과를 신뢰할 수 없어 클릭을 비활성화했습니다.
+              {mapPng && (
+                <>
+                  {' '}
+                  <a href={dataUrl(mapPng)} download className="text-blue-700 hover:underline">
+                    구배 판정 지도(PNG) 다운로드
+                  </a>
+                </>
+              )}
+            </p>
+          )}
           {clickError && <p className="text-xs text-red-600">{clickError}</p>}
           {/* 코드리뷰 Important-2: cells가 채워진 뒤(성공적으로 로드된 뒤) 재판정으로
               재fetch가 실패하면, 아래 히트맵/결과표는 옛 cells를 계속 보여주므로
@@ -240,7 +279,7 @@ export function SlopeResult({ analysis }: { analysis: AnalysisRow }) {
                   results={cells}
                   cellM={stats.cell_m}
                   drainPoints={drainPoints}
-                  clickable={!busy && !judgeBusy}
+                  clickable={!busy && !judgeBusy && directionAware}
                   onDrainClick={handleDrainClick}
                 />
               ) : (
@@ -248,14 +287,18 @@ export function SlopeResult({ analysis }: { analysis: AnalysisRow }) {
               )}
             </section>
             <div className="lg:sticky lg:top-4 lg:self-start">
-              <SlopeVerdictPanel stats={stats} judge={judge} drainPoints={drainPoints} />
+              <SlopeVerdictPanel stats={stats} judge={judge} drainPoints={drainPoints} directionAware={directionAware} />
             </div>
           </div>
 
           <section>
             <h2 className="mb-2 font-semibold">셀별 결과표</h2>
             {cells ? (
-              <SlopeResultTable results={cells} designPct={stats.threshold?.design_pct ?? 0} />
+              <SlopeResultTable
+                results={cells}
+                designPct={stats.threshold?.design_pct ?? null}
+                dirPassDeg={stats.threshold?.dir_pass_deg ?? 180}
+              />
             ) : (
               <p className="text-sm text-slate-500">{loadError ?? '셀 데이터 로딩 중...'}</p>
             )}

@@ -18,6 +18,15 @@ function fmtDrainPoints(pts: DrainPoint[] | null | undefined): string {
   return pts.map((p) => `(${p.x}, ${p.y})`).join(', ');
 }
 
+// stats.drain_points는 slope_judge_cells가 판정에 실제로 쓴 좌표를 [x,y] 쌍
+// 배열로 echo한 것이다({x,y} 객체가 아니다 - engine/flatness/core/pipeline.py
+// judge_slope_cells 참고). DrainPoint[]([{x,y}]) 형태의 drainPoints(현재 지정,
+// 낙관적)와 별개다.
+function fmtDrainPointPairs(pts: [number, number][] | null | undefined): string {
+  if (!pts || pts.length === 0) return '없음';
+  return pts.map(([x, y]) => `(${x}, ${y})`).join(', ');
+}
+
 function JudgeBanner({ judge }: { judge: JudgeInfo | null }) {
   if (!judge) return null;
   if (judge.state === 'processing' || judge.state === 'queued') {
@@ -41,10 +50,13 @@ function JudgeBanner({ judge }: { judge: JudgeInfo | null }) {
   return null;
 }
 
-export function SlopeVerdictPanel({ stats, judge, drainPoints }: {
+export function SlopeVerdictPanel({ stats, judge, drainPoints, directionAware }: {
   stats: SlopeStats;
   judge: JudgeInfo | null;
   drainPoints: DrainPoint[];
+  /** 코드리뷰(2차) I1: 방향 판정 대상이 아닌 기준이면 클릭 자체가 비활성화되므로
+   * "지도에서 배수구 위치를 클릭하세요" 안내가 모순된다 - 문구를 갈라 낸다. */
+  directionAware: boolean;
 }) {
   const summary = stats.summary ?? ({} as SlopeStats['summary']);
   const counts = summary.counts ?? ({} as SlopeStats['summary']['counts']);
@@ -72,6 +84,13 @@ export function SlopeVerdictPanel({ stats, judge, drainPoints }: {
       <div>
         <h3 className="text-sm font-semibold">현재 배수구</h3>
         <p className="mt-1 text-sm text-slate-700">{fmtDrainPoints(drainPoints)}</p>
+        {/* 코드리뷰(2차) Minor: 재판정 실패 시 지도에는 거부된 새 배수구가 찍히는데
+            히트맵·결과표는 옛 배수구 기준 판정을 보여준다 - "지금 보이는 판정이
+            쓴 배수구"가 어디에도 없어 혼란스러웠다. stats.drain_points는 현재
+            화면의 grade·히트맵을 낸 그 판정이 실제로 쓴 좌표다. */}
+        <p className="mt-1 text-xs text-slate-500">
+          이 판정에 사용됨: {fmtDrainPointPairs(stats.drain_points)}
+        </p>
         {judge?.previous_drain_points && judge.previous_drain_points.length > 0 && (
           <p className="mt-1 text-xs text-slate-500">
             직전 배수구: {fmtDrainPoints(judge.previous_drain_points)}
@@ -79,7 +98,9 @@ export function SlopeVerdictPanel({ stats, judge, drainPoints }: {
         )}
         {!stats.direction_judged && (
           <p className="mt-1 text-xs text-amber-700">
-            배수구가 지정되지 않아 방향(역구배)은 판정하지 않았습니다. 지도에서 배수구 위치를 클릭하세요.
+            {directionAware
+              ? '배수구가 지정되지 않아 방향(역구배)은 판정하지 않았습니다. 지도에서 배수구 위치를 클릭하세요.'
+              : '이 기준은 방향(역구배)을 판정 대상으로 삼지 않습니다.'}
           </p>
         )}
       </div>

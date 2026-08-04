@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { compassLabel, correctionDirectionLabel } from '../slope-direction';
+import { compassLabel, correctionDirectionLabel, isDirectionAwareCriteria } from '../slope-direction';
 import type { SlopeCellRow } from '../types';
 
 function cell(over: Partial<SlopeCellRow> = {}): SlopeCellRow {
@@ -80,5 +80,34 @@ describe('correctionDirectionLabel (스펙 §5.3 "북동쪽 끝을 10mm 낮춤" 
   it('reverse=true여도 측정 불가 셀(ok=false)은 여전히 null', () => {
     const c = cell({ ok: false, slope_pct: null, downhill_rad: null });
     expect(correctionDirectionLabel(c, null, 2.0, true)).toBeNull();
+  });
+
+  // ★ 코드리뷰(2차) Minor: designPct가 null(threshold 결측)이면 `?? 0` 폴백으로
+  // 방향을 뒤집어 내느니 아무 문구도 내지 않는다.
+  it('designPct가 null이면 낮춤/높임을 추측하지 않고 null을 낸다', () => {
+    const c = cell({ slope_pct: 1.5, downhill_rad: 0 });
+    expect(correctionDirectionLabel(c, 10.0, null, false)).toBeNull();
+  });
+});
+
+describe('isDirectionAwareCriteria (코드리뷰 I1: 등급 계산 아님, UI 가용성 질문)', () => {
+  it('dir_pass_deg가 180 미만이고 design_pct가 0이 아니면 방향 판정 대상이다', () => {
+    expect(isDirectionAwareCriteria({ use: 't', design_pct: 2, pass_pct: 0.5, re_pct: 1.5, dir_pass_deg: 30 }))
+      .toBe(true);
+  });
+
+  it('dir_pass_deg가 180 이상이면 방향 판정 대상이 아니다(007 slope-indoor-level)', () => {
+    expect(isDirectionAwareCriteria({ use: 't', design_pct: 0, pass_pct: 1, re_pct: 3, dir_pass_deg: 180 }))
+      .toBe(false);
+  });
+
+  it('design_pct가 0이면 dir_pass_deg가 작아도 방향 판정 대상이 아니다', () => {
+    expect(isDirectionAwareCriteria({ use: 't', design_pct: 0, pass_pct: 1, re_pct: 3, dir_pass_deg: 30 }))
+      .toBe(false);
+  });
+
+  it('threshold가 없으면(결측) 기존 동작대로 방향 판정 대상으로 취급한다', () => {
+    expect(isDirectionAwareCriteria(null)).toBe(true);
+    expect(isDirectionAwareCriteria(undefined)).toBe(true);
   });
 });

@@ -21,19 +21,19 @@ const stats: SlopeStats = {
 
 describe('SlopeVerdictPanel 재판정 진행 배너 (브리프 D5 상태표)', () => {
   it('judge=null이면 배너를 렌더하지 않는다', () => {
-    render(<SlopeVerdictPanel stats={stats} judge={null} drainPoints={[]} />);
+    render(<SlopeVerdictPanel stats={stats} judge={null} drainPoints={[]} directionAware />);
     expect(screen.queryByText(/재판정/)).not.toBeInTheDocument();
   });
 
   it('processing이면 진행 중 배너를 보여준다', () => {
     const judge: JudgeInfo = { state: 'processing', at: 't0' };
-    render(<SlopeVerdictPanel stats={stats} judge={judge} drainPoints={[]} />);
+    render(<SlopeVerdictPanel stats={stats} judge={judge} drainPoints={[]} directionAware />);
     expect(screen.getByText(/재판정 진행 중/)).toBeInTheDocument();
   });
 
   it('queued면 대기 중 배너를 보여준다', () => {
     const judge: JudgeInfo = { state: 'queued', at: 't0' };
-    render(<SlopeVerdictPanel stats={stats} judge={judge} drainPoints={[]} />);
+    render(<SlopeVerdictPanel stats={stats} judge={judge} drainPoints={[]} directionAware />);
     expect(screen.getByText(/재판정 대기 중/)).toBeInTheDocument();
   });
 
@@ -41,7 +41,7 @@ describe('SlopeVerdictPanel 재판정 진행 배너 (브리프 D5 상태표)', (
   // 관례) 최종 실패가 아니므로 노출하면 안 된다(대시보드 계약).
   it('queued이고 error가 남아 있어도 화면에 노출하지 않는다', () => {
     const judge: JudgeInfo = { state: 'queued', at: 't0', error: '이전 시도 실패 사유' };
-    const { container } = render(<SlopeVerdictPanel stats={stats} judge={judge} drainPoints={[]} />);
+    const { container } = render(<SlopeVerdictPanel stats={stats} judge={judge} drainPoints={[]} directionAware />);
     // queryByText 정확 일치는 "사유: 이전 시도 실패 사유"처럼 다른 문자열과 한
     // 요소 안에 섞이면 놓친다 - 컨테이너 전체 텍스트로 부분 문자열 포함 여부를 본다.
     expect(container.textContent).not.toContain('이전 시도 실패 사유');
@@ -49,33 +49,62 @@ describe('SlopeVerdictPanel 재판정 진행 배너 (브리프 D5 상태표)', (
 
   it('failed면 error를 노출한다(대시보드 계약: state===failed일 때만)', () => {
     const judge: JudgeInfo = { state: 'failed', at: 't0', error: '셀 데이터 파일을 찾을 수 없습니다' };
-    render(<SlopeVerdictPanel stats={stats} judge={judge} drainPoints={[]} />);
+    render(<SlopeVerdictPanel stats={stats} judge={judge} drainPoints={[]} directionAware />);
     expect(screen.getByText(/재판정에 실패했습니다/)).toBeInTheDocument();
     expect(screen.getByText(/셀 데이터 파일을 찾을 수 없습니다/)).toBeInTheDocument();
   });
 
   it('done이면 배너를 렌더하지 않는다', () => {
     const judge: JudgeInfo = { state: 'done', at: 't0' };
-    render(<SlopeVerdictPanel stats={stats} judge={judge} drainPoints={[]} />);
+    render(<SlopeVerdictPanel stats={stats} judge={judge} drainPoints={[]} directionAware />);
     expect(screen.queryByText(/재판정/)).not.toBeInTheDocument();
   });
 
-  it('direction_judged=false면 배수구 지정 안내를 보여준다', () => {
-    render(<SlopeVerdictPanel stats={{ ...stats, direction_judged: false }} judge={null} drainPoints={[]} />);
+  it('direction_judged=false·directionAware=true면 배수구 클릭 안내를 보여준다', () => {
+    render(
+      <SlopeVerdictPanel stats={{ ...stats, direction_judged: false }} judge={null} drainPoints={[]}
+        directionAware />,
+    );
     expect(screen.getByText(/방향\(역구배\)은 판정하지 않았습니다/)).toBeInTheDocument();
+    expect(screen.getByText(/지도에서 배수구 위치를 클릭하세요/)).toBeInTheDocument();
+  });
+
+  // ★ 코드리뷰(2차) I1: 방향 판정 대상이 아닌 기준에서는 클릭이 비활성화되므로
+  // "지도에서 배수구 위치를 클릭하세요"라는 모순된 안내를 하면 안 된다.
+  it('direction_judged=false·directionAware=false면 클릭을 권하지 않는다', () => {
+    render(
+      <SlopeVerdictPanel stats={{ ...stats, direction_judged: false }} judge={null} drainPoints={[]}
+        directionAware={false} />,
+    );
+    expect(screen.getByText(/방향\(역구배\)을 판정 대상으로 삼지 않습니다/)).toBeInTheDocument();
+    expect(screen.queryByText(/지도에서 배수구 위치를 클릭하세요/)).not.toBeInTheDocument();
   });
 
   it('현재 배수구·직전 배수구를 보여준다', () => {
     const judge: JudgeInfo = {
       state: 'done', at: 't0', previous_drain_points: [{ x: 1, y: 2 }],
     };
-    render(<SlopeVerdictPanel stats={stats} judge={judge} drainPoints={[{ x: 3.2, y: 5.1 }]} />);
+    render(
+      <SlopeVerdictPanel stats={stats} judge={judge} drainPoints={[{ x: 3.2, y: 5.1 }]} directionAware />,
+    );
     expect(screen.getByText('(3.2, 5.1)')).toBeInTheDocument();
     expect(screen.getByText(/직전 배수구: \(1, 2\)/)).toBeInTheDocument();
   });
 
+  // ★ 코드리뷰(2차) Minor: "현재 지정된" 배수구(낙관적, 거부됐을 수도 있음)와
+  // "이 판정이 실제로 쓴" 배수구(stats.drain_points)는 다른 값일 수 있다 -
+  // 둘 다 화면에 보여야 재판정 실패 시 혼란이 없다.
+  it('이 판정에 사용된 배수구(stats.drain_points)를 별도로 보여준다', () => {
+    render(
+      <SlopeVerdictPanel stats={{ ...stats, drain_points: [[9, 9]] }} judge={null}
+        drainPoints={[{ x: 1, y: 1 }]} directionAware />,
+    );
+    expect(screen.getByText('(1, 1)')).toBeInTheDocument(); // 현재 지정(낙관적)
+    expect(screen.getByText(/이 판정에 사용됨: \(9, 9\)/)).toBeInTheDocument(); // 실제 판정에 쓰인 값
+  });
+
   it('구역별 통계는 후속 단계임을 명시한다(브리프 D2)', () => {
-    render(<SlopeVerdictPanel stats={stats} judge={null} drainPoints={[]} />);
+    render(<SlopeVerdictPanel stats={stats} judge={null} drainPoints={[]} directionAware />);
     expect(screen.getByText(/구역별 통계는 후속 단계/)).toBeInTheDocument();
   });
 });

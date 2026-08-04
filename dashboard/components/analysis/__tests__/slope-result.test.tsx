@@ -2,7 +2,22 @@ import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { JudgeInfo } from '@/lib/domain/types';
 
-vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
+// 코드리뷰(2차) C1 검증 전제: useRouter()가 호출될 때마다 새 vi.fn()을 만들면
+// (예전 코드) refresh 호출을 단언할 방법이 없다 - 렌더마다 다른 mock 인스턴스를
+// 돌려주므로 "그 refresh가 불렸는지"를 특정할 수 없다. vi.hoisted로 안정된
+// 하나의 mock을 만들어 매 useRouter() 호출이 같은 함수를 돌려주게 한다.
+//
+// routerStub 객체 자체도 매번 새로 만들지 않는다 - 실제 Next.js useRouter()는
+// 안정된 참조를 돌려주는데(App Router 컨텍스트), 여기서 매 렌더 `{ refresh:
+// refreshMock }` 리터럴을 새로 만들면 slope-result.tsx의 refresh effect
+// 의존성 배열([judge, initialJudgeAt, router])의 router가 매 렌더 "바뀐 것"으로
+// 오인돼, 실제로는 한 번이어야 할 전이에서 effect가 여러 번 재실행되는
+// 테스트 전용 아티팩트가 생긴다(운영 환경에서는 재현되지 않는 문제였다).
+const { refreshMock, routerStub } = vi.hoisted(() => {
+  const refreshMock = vi.fn();
+  return { refreshMock, routerStub: { refresh: refreshMock } };
+});
+vi.mock('next/navigation', () => ({ useRouter: () => routerStub }));
 
 const { useJudgeStatusMock } = vi.hoisted(() => ({
   useJudgeStatusMock: vi.fn((): JudgeInfo | null => null),
@@ -309,5 +324,248 @@ describe('SlopeResult - cells_json/judged_json 있는 분석: 히트맵/결과�
     // 1.5>=0이라 "높임"으로 뒤집힌다.
     await waitFor(() => expect(screen.getByText(/낮춤/)).toBeInTheDocument());
     expect(screen.queryByText(/높임/)).not.toBeInTheDocument();
+  });
+
+  // ★ 코드리뷰(2차) Minor: threshold가 통째로 없으면(jsonb 결측) `?? 0` 폴백으로
+  // designPct를 채워 넘기지 않는다 - slope_pct는 항상 0 이상이라 0을 기준으로
+  // 삼으면 거의 모든 셀이 "높임"으로 잘못 나온다. slope-result.tsx의 배선
+  // (`stats.threshold?.design_pct ?? null`)이 이 회귀를 실제로 막는지 여기서
+  // 전체 컴포넌트를 통해 확인한다(단위 테스트는 slope-direction.test.ts/
+  // slope-result-table.test.tsx가 이미 하지만, 배선 지점 자체가 되돌아가는
+  // 회귀는 못 잡는다).
+  it('threshold가 없으면 보정 방향을 추측하지 않는다(?? 0 폴백 금지)', async () => {
+    stubFetch();
+    const { threshold, ...statsWithoutThreshold } = rejudgeableStats;
+    void threshold;
+    render(<SlopeResult analysis={analysisWith(statsWithoutThreshold)} />);
+    await waitFor(() => expect(document.querySelector('canvas')).not.toBeNull());
+    await waitFor(() => expect(screen.getByText('(0, 0)')).toBeInTheDocument());
+    expect(screen.queryByText(/낮춤|높임/)).not.toBeInTheDocument();
+  });
+
+  // ★ 코드리뷰(2차) C2: 'queued'는 진행 표시만 하고 클릭을 막지 않는다 - 워커가
+  // 잠깐 내려가 'queued'에 오래 머물러도 사용자가 스스로 빠져나올 수 있어야
+  // 한다(lib/domain/reports.ts canRegenerate와 같은 결론).
+  it('재판정 대기 중(queued)에는 클릭을 막지 않는다(데드엔드 방지)', async () => {
+    stubFetch();
+    rpcMock.mockClear();
+    useJudgeStatusMock.mockReturnValue({ state: 'queued', at: 't0' });
+    render(<SlopeResult analysis={analysisWith(rejudgeableStats)} />);
+    await waitFor(() => expect(document.querySelector('canvas')).not.toBeNull());
+
+    const canvas = document.querySelector('canvas')!;
+    Object.defineProperty(canvas, 'getBoundingClientRect', {
+      value: () => ({
+        left: 0, top: 0, right: canvas.width, bottom: canvas.height,
+        width: canvas.width, height: canvas.height, x: 0, y: 0, toJSON() {},
+      }),
+    });
+    fireEvent.click(canvas, { clientX: canvas.width / 2, clientY: canvas.height / 2 });
+
+    await waitFor(() => expect(rpcMock).toHaveBeenCalledTimes(1));
+    useJudgeStatusMock.mockReturnValue(null);
+  });
+
+  // ★ 코드리뷰(2차) Minor: busy 가드(handler `if (busy...) return`과 뷰의
+  // clickable prop) 둘 다 지워도 잡던 테스트가 없었다(judgeBusy와 달리 정당한
+  // 이중 방어가 아니라 커버리지 공백). rpc 응답을 수동으로 지연시켜 첫 클릭이
+  // 아직 처리 중인 동안 두 번째 클릭을 보내 본다.
+  it('연속 클릭에도 엔큐가 한 번만 일어난다(busy 가드)', async () => {
+    stubFetch();
+    rpcMock.mockClear();
+    let resolveRpc!: (v: { error: null }) => void;
+    rpcMock.mockImplementationOnce(() => new Promise((resolve) => { resolveRpc = resolve; }));
+    render(<SlopeResult analysis={analysisWith(rejudgeableStats)} />);
+    await waitFor(() => expect(document.querySelector('canvas')).not.toBeNull());
+
+    const canvas = document.querySelector('canvas')!;
+    Object.defineProperty(canvas, 'getBoundingClientRect', {
+      value: () => ({
+        left: 0, top: 0, right: canvas.width, bottom: canvas.height,
+        width: canvas.width, height: canvas.height, x: 0, y: 0, toJSON() {},
+      }),
+    });
+    fireEvent.click(canvas, { clientX: canvas.width / 2, clientY: canvas.height / 2 }); // 1차: 응답 대기 중(busy)
+    fireEvent.click(canvas, { clientX: canvas.width / 2, clientY: canvas.height / 2 }); // 2차: 막혀야 함
+
+    resolveRpc({ error: null });
+    await waitFor(() => expect(eqMock).toHaveBeenCalledTimes(1));
+    expect(rpcMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('SlopeResult - 재판정 완료 후 router.refresh() (코드리뷰 C1)', () => {
+  it('페이지가 이미 judge.state=done인 채로 열린 뒤(1회차부터) 재판정이 완료되면 refresh를 호출한다', async () => {
+    stubFetch();
+    refreshMock.mockClear();
+    // "재판정이 한 번이라도 끝난 뒤 새로고침" 시나리오: 최초 prop이 이미
+    // judge.state='done'이다. 예전 코드(state 비교)라면 이 세션의 1회차부터
+    // 'done' !== 'done' = false로 refresh가 영원히 막힌다.
+    useJudgeStatusMock.mockReturnValue({ state: 'done', at: 't0' });
+    const analysis = analysisWith(rejudgeableStats, { judge: { state: 'done', at: 't0' } });
+    const { rerender } = render(<SlopeResult analysis={analysis} />);
+    await waitFor(() => expect(document.querySelector('canvas')).not.toBeNull());
+    expect(refreshMock).not.toHaveBeenCalled(); // 아직 새 완료를 관측하지 않음
+
+    // 이 세션에서 재판정을 한 번 더 완료(state는 여전히 'done', at만 바뀜)
+    useJudgeStatusMock.mockReturnValue({ state: 'done', at: 't1' });
+    rerender(<SlopeResult analysis={analysis} />);
+
+    await waitFor(() => expect(refreshMock).toHaveBeenCalledTimes(1));
+    useJudgeStatusMock.mockReturnValue(null);
+  });
+
+  it('refresh 이후 prop의 at이 따라잡으면 반복 호출을 멈춘다(무한 refresh 방지)', async () => {
+    stubFetch();
+    refreshMock.mockClear();
+    useJudgeStatusMock.mockReturnValue({ state: 'done', at: 't0' });
+    let analysis = analysisWith(rejudgeableStats, { judge: { state: 'done', at: 't0' } });
+    const { rerender } = render(<SlopeResult analysis={analysis} />);
+    await waitFor(() => expect(document.querySelector('canvas')).not.toBeNull());
+
+    useJudgeStatusMock.mockReturnValue({ state: 'done', at: 't1' });
+    rerender(<SlopeResult analysis={analysis} />); // prop은 아직 t0
+    await waitFor(() => expect(refreshMock).toHaveBeenCalledTimes(1));
+
+    // router.refresh()가 실제로 서버 데이터를 다시 받아왔다고 가정 - prop이 t1로 갱신됨
+    analysis = analysisWith(rejudgeableStats, { judge: { state: 'done', at: 't1' } });
+    rerender(<SlopeResult analysis={analysis} />);
+
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(refreshMock).toHaveBeenCalledTimes(1); // 추가 호출 없음
+
+    useJudgeStatusMock.mockReturnValue(null);
+  });
+});
+
+describe('SlopeResult - 방향 판정 대상이 아닌 기준 (코드리뷰 I1)', () => {
+  // 007_slope_analysis.sql의 기본 기준 slope-indoor-level과 같은 형태
+  // (design_pct=0, dir_pass_deg=180).
+  const notDirectionAwareStats: SlopeStats = {
+    ...rejudgeableStats,
+    threshold: { use: '실내 평바닥', design_pct: 0.0, pass_pct: 1.0, re_pct: 3.0, dir_pass_deg: 180 },
+  };
+
+  it('클릭을 비활성화하고 이유를 안내하며, 클릭해도 엔큐하지 않는다', async () => {
+    stubFetch();
+    rpcMock.mockClear();
+    render(<SlopeResult analysis={analysisWith(notDirectionAwareStats)} />);
+    await waitFor(() => expect(document.querySelector('canvas')).not.toBeNull());
+
+    expect(screen.getByText(/방향\(역구배\)을 판정하지 않습니다/)).toBeInTheDocument();
+    expect(screen.queryByText(/배수구 위치를 클릭하세요\. 클릭하면/)).not.toBeInTheDocument();
+
+    const canvas = document.querySelector('canvas')!;
+    Object.defineProperty(canvas, 'getBoundingClientRect', {
+      value: () => ({
+        left: 0, top: 0, right: canvas.width, bottom: canvas.height,
+        width: canvas.width, height: canvas.height, x: 0, y: 0, toJSON() {},
+      }),
+    });
+    fireEvent.click(canvas, { clientX: canvas.width / 2, clientY: canvas.height / 2 });
+
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(rpcMock).not.toHaveBeenCalled();
+  });
+
+  it('방향 판정 대상인 기준(dir_pass_deg=30)에서는 평소대로 클릭 안내를 보여준다', async () => {
+    stubFetch();
+    render(<SlopeResult analysis={analysisWith(rejudgeableStats)} />);
+    await waitFor(() => expect(document.querySelector('canvas')).not.toBeNull());
+    expect(screen.getAllByText(/배수구 위치를 클릭하세요/).length).toBeGreaterThanOrEqual(1);
+  });
+});
+
+// ★ 코드리뷰(2차) I3: 앞 라운드에서 고친 fetch 실패·형식 불량·조인 누락 경로가
+// 전부 스텁이 항상 성공만 돌려줘 무테스트였다. 각 경로를 실제로 재현한다.
+describe('SlopeResult - fetch 실패/형식 불량/조인 누락 경로 (코드리뷰 I3)', () => {
+  // loadError는 히트맵 자리·결과표 자리 두 곳에서 동시에 폴백으로 쓰이므로
+  // (둘 다 `{loadError ?? '로딩 중...'}`) getAllByText로 확인한다.
+  it('fetch 자체가 실패(네트워크 오류)하면 안내 문구를 보여준다(unhandled rejection 아님)', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('network down'); }));
+    render(<SlopeResult analysis={analysisWith(rejudgeableStats)} />);
+    await waitFor(() => {
+      expect(screen.getAllByText(/셀 데이터를 불러오는 중 오류가 발생했습니다/).length).toBeGreaterThanOrEqual(1);
+    });
+    expect(screen.getAllByText(/network down/).length).toBeGreaterThanOrEqual(1);
+    expect(document.querySelector('canvas')).toBeNull();
+  });
+
+  it('.json() 파싱이 실패(HTML 오류 페이지 등)하면 안내 문구를 보여준다', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      ok: true, json: async (): Promise<unknown> => { throw new SyntaxError('Unexpected token <'); },
+    } as Response)));
+    render(<SlopeResult analysis={analysisWith(rejudgeableStats)} />);
+    await waitFor(() => {
+      expect(screen.getAllByText(/셀 데이터를 불러오는 중 오류가 발생했습니다/).length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  it('fetch 응답이 ok:false(404 등)면 저장소에서 못 찾았다는 안내를 보여준다', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false } as Response)));
+    render(<SlopeResult analysis={analysisWith(rejudgeableStats)} />);
+    await waitFor(() => {
+      expect(screen.getAllByText(/저장소에서 찾을 수 없습니다/).length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  it('응답 형식이 SlopeCellsFile/SlopeJudgedFile이 아니면 형식 오류를 보여준다', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      ok: true, json: async () => ({ not: '이 형태가 아님' }),
+    } as Response)));
+    render(<SlopeResult analysis={analysisWith(rejudgeableStats)} />);
+    await waitFor(() => {
+      expect(screen.getAllByText('셀 데이터 형식이 올바르지 않습니다.').length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  it('두 파일의 셀 수가 어긋나면(한쪽에만 있는 셀) 손실 개수를 배너로 알린다', async () => {
+    const cellsPayload = {
+      schema_version: 2, engine_version: 'p4-0.5.0', cell_m: 2.0, subcell_m: 0.05,
+      cells: [slopeCell({ cx: 0, cy: 0 }), slopeCell({ cx: 1, cy: 0 })], // 2개
+    };
+    const judgedPayload = {
+      schema_version: 1, direction_judged: false,
+      cells: [{ // 1개뿐 - (cx=1,cy=0) 셀이 조인에서 빠진다
+        cx: 0, cy: 0, grade: '적합', reason: '크기·방향 모두 허용 안',
+        dev_pct: 0.5, dir_err_deg: null, correction_mm: 10.0,
+      }],
+    };
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      if (url.includes('slope_cells.json')) return { ok: true, json: async () => cellsPayload } as Response;
+      return { ok: true, json: async () => judgedPayload } as Response;
+    }));
+    render(<SlopeResult analysis={analysisWith(rejudgeableStats)} />);
+    await waitFor(() => {
+      expect(screen.getByText(/1개 셀이 화면에서 빠졌습니다/)).toBeInTheDocument();
+    });
+  });
+
+  // ★ 코드리뷰(2차) I2(1차 라운드 번호): 성공적으로 로드된 뒤 재판정으로 재fetch가
+  // 실패하면 옛 cells가 그대로 보이면서 동시에 상단에 경고가 떠야 한다.
+  it('성공적으로 로드된 뒤 재fetch가 실패하면 옛 셀을 유지하면서 경고 배너를 보여준다', async () => {
+    let callCount = 0;
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      callCount += 1;
+      if (callCount <= 2) { // 1차: 성공
+        if (url.includes('slope_cells.json')) return { ok: true, json: async () => cellsFilePayload } as Response;
+        return { ok: true, json: async () => judgedFilePayload } as Response;
+      }
+      return { ok: false } as Response; // 2차(재fetch): 실패
+    }));
+    useJudgeStatusMock.mockReturnValue({ state: 'processing', at: 't0' });
+    const { rerender } = render(<SlopeResult analysis={analysisWith(rejudgeableStats)} />);
+    await waitFor(() => expect(screen.getByText('(0, 0)')).toBeInTheDocument()); // 1차 로드 성공
+
+    useJudgeStatusMock.mockReturnValue({ state: 'failed', at: 't1', error: '재판정 실패' });
+    rerender(<SlopeResult analysis={analysisWith(rejudgeableStats)} />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/최신 판정을 불러오지 못해 이전 판정 결과가 표시되고 있습니다/)).toBeInTheDocument();
+    });
+    expect(screen.getByText('(0, 0)')).toBeInTheDocument(); // 옛 셀 그대로 유지
+    expect(document.querySelector('canvas')).not.toBeNull();
+
+    useJudgeStatusMock.mockReturnValue(null);
   });
 });
