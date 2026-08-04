@@ -337,6 +337,30 @@ def test_slope_judge_prefers_cell_file_meta_over_stale_db_stats(tmp_path):
     assert row["stats"]["subcell_m"] == 0.1
 
 
+def test_slope_judge_rejects_cell_file_with_explicit_null_cell_m(tmp_path):
+    """2차 리뷰 M3 - `load_slope_cells` 자신의 검증(엔진 커밋 `c064055`)은 필수
+    키의 "존재 여부"만 본다(`"cell_m" not in payload`) - 키는 있지만 값이
+    명시적으로 null인 파일은 그 검증을 통과시킨다. `dump_slope_cells`는 이런
+    파일을 만들지 않으므로(필수 인자라 None을 넘기면 그 시점에 이미 잘못된
+    호출이다) 정상 API로는 재현할 수 없다 - 저장소를 직접 조작해 시뮬레이션한다.
+    이 좁은 틈을 워커의 가드(jobs.py)가 여전히 막는다는 것을 증명해, "이제
+    도달 불가능하니 지워도 된다"는 오판을 막는다.
+    """
+    db, cfg = FakeDB(), _cfg(tmp_path)
+    aid = _seed_judgeable_analysis(db, cfg, tmp_path)
+    storage = get_storage(cfg, db)
+
+    raw = json.loads(storage.download(f"artifacts/{aid}/slope_cells.json"))
+    raw["cell_m"] = None  # 키는 유지하되 값만 오염 - load_slope_cells의 키-존재
+    # 검사는 통과하지만(모든 필수 키가 있다) 워커의 None 검사는 걸려야 한다.
+    storage.upload(f"artifacts/{aid}/slope_cells.json",
+                   json.dumps(raw).encode("utf-8"), "application/json")
+
+    with pytest.raises(ValueError, match="cell_m/subcell_m 정보가 없습니다"):
+        handle_slope_judge(db, cfg, {"analysis_id": aid,
+                                     "drain_points": [{"x": 10.0, "y": 1.0}]})
+
+
 def test_slope_judge_registered_in_default_handlers():
     """러너 등록(Step 5) - runner._DEFAULT_HANDLERS에 slope_judge가 이 모듈의
     handle_slope_judge로 정확히 배선돼 있어야 한다."""

@@ -226,8 +226,22 @@ def handle_slope_judge(db, cfg, payload):
         # grade_slope_cells의 조각 셀 분기(width_m < cell_m/2)가 같은 값을 써야
         # 한다. analyses.stats로 조용히 물러서면(폴백) judge_slope_cells가 이제
         # cell_m을 필수 인자로 요구하게 만든 Task 1 리뷰의 강제를 워커가 키워드
-        # 인자로 몰래 우회하는 셈이다 - meta에 없으면 조용히 넘어가지 않고 즉시
-        # 예외로 막는다(SlopeCell 스키마 계약 위반이므로 재시도해도 소용없다).
+        # 인자로 몰래 우회하는 셈이다.
+        #
+        # 2차 리뷰 M3 정정: 필수 키 결측(schema v1 등)·schema_version 불일치는
+        # 이제 load_slope_cells 자신이 한국어 ValueError로 먼저 거부한다(엔진
+        # 커밋 c064055) - 그런 파일은 위 load_slope_cells(cells_path) 호출에서
+        # 이미 죽으므로 이 줄에 도달하지 못한다. 그래서 아래 가드가 실제로 잡는
+        # 것은 "cell_m"/"subcell_m" 키는 있지만 값이 명시적으로 null인 경우
+        # 뿐이다(dump_slope_cells는 이런 파일을 만들지 않으므로 정상 경로에서는
+        # 도달하지 않는다). 그래도 남겨 둔다 - 실측 결과(가드를 지우고 재현),
+        # 이 가드가 없으면 cell_m=None이 그대로 judge_slope_cells 안쪽까지
+        # 흘러가 render_slope_map의 `L = cell_m * 0.35`에서 `TypeError:
+        # unsupported operand type(s) for *: 'NoneType' and 'float'`처럼 원인을
+        # 짐작하기 어려운 예외로 죽는다(`test_slope_judge_rejects_cell_file_
+        # with_explicit_null_cell_m`가 이 가드 자체를 고정한다). 이 가드가
+        # 있으면 대신 명확한 한국어 예외로 즉시 막힌다(SlopeCell 스키마 계약
+        # 위반이므로 재시도해도 소용없다).
         if meta.get("cell_m") is None or meta.get("subcell_m") is None:
             raise ValueError(
                 f"셀 데이터 파일에 cell_m/subcell_m 정보가 없습니다: {cells_json_key}. "
