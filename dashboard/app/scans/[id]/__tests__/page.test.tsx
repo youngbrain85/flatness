@@ -16,6 +16,7 @@ vi.mock('@/lib/supabase/server', () => ({ createClient: vi.fn() }));
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
 import ScanPage from '../page';
+import { AnalysisProgress } from '@/components/analysis-progress';
 import { ReanalyzeButton } from '@/components/reanalyze-button';
 import type { AnalysisKind, AnalysisRow, LocationRow, ScanRow } from '@/lib/domain/types';
 
@@ -160,6 +161,78 @@ describe('ScanPage 종류별 분석 섹션 배선 (단계 C 회귀 차단)', () 
 
     expect(buttons).toHaveLength(1);
     expect(buttons[0].props.kind).toBe('flatness');
+  });
+
+  // 재리뷰 I-new: 1차 수정(latestFlatness.status==='done' 요구)이 임포트 오판은
+  // 막았지만, 그 대가로 "평활도를 재분석하는 동안 이미 완료된 구배 결과·이력까지
+  // 통째로 사라지는" 새 회귀를 만들었다(확정 5 "두 분석은 서로 독립" 위반). 아래
+  // E·E2·F·H가 이 트레이드오프의 경계를 각각 확인한다.
+  it('E(재리뷰): 정상 스캔의 첫 평활도 분석이 queued면(완료된 분석 없음) 구배 버튼을 숨긴다(받아들인 트레이드오프)', async () => {
+    // I1 실험군 A와 구조는 같다 - 완료된 분석이 하나도 없으면 코드는 이 스캔이
+    // 임포트인지 정상 LiDAR인지 구별할 방법이 없다(engine_version이 아직 null).
+    // 정상 스캔이라도 첫 분석이 끝나기 전까지는 구배 버튼을 숨기는 쪽이 안전하다.
+    const flatness = mkAnalysis({ id: 'f1', kind: 'flatness', status: 'queued', engine_version: null });
+    vi.mocked(createClient).mockResolvedValue(
+      stubSupabase(mkScan(), [flatness]) as never);
+
+    const el = await ScanPage({ params: Promise.resolve({ id: 'sc1' }) });
+    const buttons = findAll(el, ReanalyzeButton);
+
+    expect(buttons).toHaveLength(1);
+    expect(buttons[0].props.kind).toBe('flatness');
+  });
+
+  it('F(재리뷰): 정상 스캔의 첫 평활도 분석이 failed면(완료된 분석 없음) 구배 버튼을 숨긴다', async () => {
+    const flatness = mkAnalysis({ id: 'f1', kind: 'flatness', status: 'failed', engine_version: null });
+    vi.mocked(createClient).mockResolvedValue(
+      stubSupabase(mkScan(), [flatness]) as never);
+
+    const el = await ScanPage({ params: Promise.resolve({ id: 'sc1' }) });
+    const buttons = findAll(el, ReanalyzeButton);
+
+    expect(buttons).toHaveLength(1);
+    expect(buttons[0].props.kind).toBe('flatness');
+  });
+
+  it('E2(재리뷰): 평활도 재분석이 queued여도 옛 완료 분석이 LiDAR임을 증명하면 구배 버튼이 살아 있다', async () => {
+    // 재분석 큐잉으로 latestFlatness는 status='queued'·engine_version=null이 됐지만,
+    // flatnessAnalyses 전체를 훑으면 옛 done 행(f1, 정상 엔진 버전)이 남아 있다 -
+    // "완료된 평활도 분석이 하나라도 있으면 그 스캔의 정체를 알 수 있다"는 원칙의
+    // 핵심 사례. latestFlatness.status==='done'만 보던 1차 수정이라면 이 버튼이 죽는다.
+    const requeued = mkAnalysis({
+      id: 'f2', kind: 'flatness', status: 'queued', engine_version: null,
+      created_at: '2026-07-25T00:00:00Z',
+    });
+    const doneLidar = mkAnalysis({
+      id: 'f1', kind: 'flatness', status: 'done', engine_version: 'p1d-0.4.0',
+      created_at: '2026-07-20T00:00:00Z',
+    });
+    vi.mocked(createClient).mockResolvedValue(
+      stubSupabase(mkScan(), [requeued, doneLidar]) as never);
+
+    const el = await ScanPage({ params: Promise.resolve({ id: 'sc1' }) });
+    const buttons = findAll(el, ReanalyzeButton);
+    const slopeBtn = buttons.find((b) => b.props.kind === 'slope');
+
+    expect(slopeBtn).toBeDefined();
+  });
+
+  it('H(재리뷰): 평활도가 processing이어도 이미 완료된 구배 결과·이력은 계속 보인다(확정 5)', async () => {
+    // 섹션 렌더 여부(showSlopeSection)와 버튼 노출 여부(showSlopeButton)를 분리한
+    // 핵심 사례. latestFlatness가 done이 아니라는 이유만으로 이미 완료된 구배
+    // 섹션 전체를 가리면 안 된다 - "두 분석은 서로 독립"(확정 5) 위반이기 때문이다.
+    const processingFlatness = mkAnalysis({ id: 'f1', kind: 'flatness', status: 'processing' });
+    const doneSlope = mkAnalysis({ id: 's1', kind: 'slope', status: 'done' });
+    vi.mocked(createClient).mockResolvedValue(
+      stubSupabase(mkScan(), [processingFlatness, doneSlope]) as never);
+
+    const el = await ScanPage({ params: Promise.resolve({ id: 'sc1' }) });
+    const sections = findAll(el, 'section');
+    const progresses = findAll(el, AnalysisProgress);
+
+    // 평활도 섹션(진행 중) + 구배 섹션(완료된 결과 표시) 둘 다 그려진다.
+    expect(sections).toHaveLength(2);
+    expect(progresses.map((p) => p.props.analysisId)).toEqual(['f1', 's1']);
   });
 
   it('평활도 첫 분석이 아직 없으면(analyses 없음) 구배 버튼도 함께 숨긴다', async () => {

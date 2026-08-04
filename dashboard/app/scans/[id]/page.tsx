@@ -43,29 +43,39 @@ export default async function ScanPage({ params }: { params: Promise<{ id: strin
   const latestSlope = slopeAnalyses[0];
 
   // 임포트 결과(외부 프로그램 CSV/JSON)는 점 단위 편차 목록이지 점군이 아니라 구배
-  // 분석을 걸 수 없다(컨트롤러 보강 확정 4). 평활도 latest 기준으로 판별한다 - 구배
-  // stats에는 meta 키가 아예 없어 latestSlope로 판별하면 항상 false가 나오는
-  // 우연에 기대게 된다.
+  // 분석을 걸 수 없다(컨트롤러 보강 확정 4). 평활도 재분석 버튼(kind='flatness')이
+  // 참고할 isImport는 latestFlatness 기준을 유지한다 - 재분석 대상이 바로
+  // latestFlatness이므로 "그 분석 자체가 임포트 결과인가"를 물어야 옳다(C1: 임포트
+  // 결과를 'analyze' 잡으로 다시 돌리면 Colab 편차값이 무시된다).
   const isImport = latestFlatness
     ? isExternalImport(latestFlatness.engine_version, latestFlatness.stats?.meta)
     : false;
-  // 구배 버튼은 (1) 시드한 구배 기준 5종이 전부 surface='floor'라 벽 스캔에는 의미가
-  // 없고(컨트롤러 보강 확정 2) (2) 임포트 스캔에는 걸 수 없으며(확정 4) (3) 스캔이
-  // 아직 준비되지 않았으면(단위 미확정 등) 애초에 첫 분석조차 없어 raw_file_path/
-  // unit_scale이 갖춰지지 않았을 수 있으므로, 평활도 첫 분석이 이미 존재할 때만
-  // 보여준다(latestFlatness가 이 화면에서 "분석 가능 상태"의 유일한 신호다).
+  // 리뷰 Important(재리뷰 I-new): 구배 "버튼 노출" 판별은 latestFlatness 하나만 보면
+  // 안 된다. isExternalImport는 engine_version/stats.meta.source로 판별하는데 워커는
+  // 이 값들을 잡이 성공 완료했을 때만 채운다(worker/flatworker/jobs.py) - 그래서
+  // latestFlatness가 queued/processing/failed면 임포트 여부 자체를 알 수 없다.
+  // 1차 수정(status==='done' 요구)은 이 오판은 막았지만, 그 대가로 "평활도를
+  // 재분석하는 동안 이미 완료된 구배 결과·이력까지 화면에서 통째로 사라지는" 새
+  // 회귀를 만들었다(확정 5 "두 분석은 서로 독립" 위반) - latestFlatness가 아직 done이
+  // 아니라는 이유만으로 구배 섹션 전체를 가려버렸기 때문이다.
   //
-  // 리뷰 Important(I1): latestFlatness.status === 'done'도 반드시 함께 확인해야 한다.
-  // isExternalImport는 engine_version/stats.meta.source로 판별하는데, 워커는 이 값들을
-  // 잡이 성공적으로 끝났을 때만 채운다(worker/flatworker/jobs.py). 그래서 queued·
-  // processing·failed 상태의 임포트 분석에서는 isImport가 항상 false로 오판된다.
-  // 게다가 import 잡이 재시도 끝에 실패해도 fn_enqueue_job이 건 잡 타입이 'analyze'가
-  // 아니면 fn_job_fail이 analyses.status를 건드리지 않으므로(002_functions_seed.sql)
-  // 그 임포트 분석 행은 queued에 영구히 머문다 - status==='done' 체크 없이는 구배
-  // 버튼이 영구히 노출된 채 눌리면, 엔진이 편차 목록 CSV를 점군 리더로 잘못 읽어
-  // 형식만 멀쩡한 구배 결과를 만든다(C1과 같은 사고 계열).
-  const showSlopeSection = !!latestFlatness && latestFlatness.status === 'done'
-    && s.surface === 'floor' && !isImport && !!loc;
+  // 근본 수정: "임포트 여부 판별"과 "구배 섹션을 그릴지"를 분리한다.
+  // - 임포트 판별은 flatnessAnalyses 전체에서 완료(done)된 분석을 아무거나 찾아 쓴다.
+  //   완료된 평활도 분석이 하나라도 있으면 그 스캔이 LiDAR인지 임포트인지 이미 알 수
+  //   있다(이후 재분석이 진행 중이어도 그 사실은 변하지 않는다). scans 테이블에는
+  //   임포트 여부를 나타내는 영속 필드가 없다 - file_format은 'csv'가 스캔/임포트
+  //   양쪽 확장자 목록에 걸쳐 있어 판별 불가(upload-form.tsx), lineage는 DB
+  //   기본값이자 사용자가 스캔 모드에서도 고를 수 있는 값이라 마찬가지다. 완료된
+  //   평활도 분석이 하나도 없으면(첫 분석이 아직 안 끝났거나 실패) 판별 불가로 보고
+  //   구배 "버튼"만 숨긴다(받아들인 트레이드오프 - 첫 분석이 끝나면 곧바로 풀린다).
+  const doneFlatness = flatnessAnalyses.find((a) => a.status === 'done');
+  const isImportUnknownOrTrue = doneFlatness
+    ? isExternalImport(doneFlatness.engine_version, doneFlatness.stats?.meta)
+    : true;
+  // - "섹션을 그릴지"는 버튼 노출과 별개다. 이미 완료된(또는 진행 중인) 구배 분석이
+  //   있으면 그 결과는 무조건 보여준다 - latestFlatness가 무슨 상태이든 상관없다.
+  const showSlopeButton = s.surface === 'floor' && !isImportUnknownOrTrue && !!loc;
+  const showSlopeSection = !!latestSlope || showSlopeButton;
 
   return (
     <main className="mx-auto max-w-6xl space-y-4 p-6">
@@ -152,11 +162,14 @@ export default async function ScanPage({ params }: { params: Promise<{ id: strin
         <section className="space-y-2">
           <div className="flex items-center justify-between">
             <h2 className="font-semibold">{ANALYSIS_KIND_LABEL.slope} 분석</h2>
-            {user && (
+            {user && showSlopeButton && (
               // 구배는 항상 클릭 시점에 fn_resolve_criteria(site, 'floor', 'slope')로
               // 기준을 새로 해석하므로 criteriaId를 넘기지 않는다(컨트롤러 보강 확정 1).
-              // showSlopeSection이 이미 !isImport로 걸렀으므로 이 버튼은 항상 'analyze'
-              // 잡만 건다.
+              // showSlopeButton이 이미 !isImportUnknownOrTrue로 걸렀으므로 이 버튼은
+              // 항상 'analyze' 잡만 건다. 재리뷰 수정: 섹션 자체는 showSlopeSection이
+              // 따로 관리하므로(latestSlope 존재만으로도 그려진다) 버튼만 이 조건으로
+              // 별도 게이트한다 - 이미 있는 구배 결과를 숨기지 않으면서도 새 구배
+              // 분석은 임포트 여부가 확실할 때만 시작하게 한다.
               <ReanalyzeButton scanId={id} userId={user.id} surface="floor" kind="slope"
                 siteId={loc?.site_id}
                 latestStatus={latestSlope?.status}
