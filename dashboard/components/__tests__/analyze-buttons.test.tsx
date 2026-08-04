@@ -126,4 +126,19 @@ describe('ReanalyzeButton kind=slope (단계 C: 구배 분석 시작)', () => {
     expect(insertSpy).not.toHaveBeenCalled();
     expect(refreshMock).not.toHaveBeenCalled();
   });
+
+  // ★ 코드리뷰(5차) Minor-1: rpc가 err를 냈을 때(권한 오류·PostgREST 스키마 캐시
+  // 문제 등 007과 무관한 원인) "007이 적용됐는지 확인하세요"만 보여주면 err.message
+  // 가 버려져 운영자가 멀쩡한 마이그레이션을 뒤지게 된다. 원인 문구가 그대로
+  // 노출되는지 확인한다(rows.length===0인 정상 "007 미적용" 케이스와는 다른 문구).
+  it('rpc가 오류를 내면(권한 문제 등) err.message를 그대로 보여준다(007 오진 방지)', async () => {
+    vi.mocked(createClient).mockReturnValue(
+      stubSupabase({ criteriaError: { message: 'permission denied for function fn_resolve_criteria' } }) as never);
+    render(<ReanalyzeButton scanId="s1" userId="u1" surface="floor" kind="slope" siteId="site1"
+      isImport={false} />);
+
+    await screen.findByText(/permission denied for function fn_resolve_criteria/);
+    expect(screen.queryByText(/마이그레이션 007이 적용됐는지 확인하세요/)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /구배 분석/ })).toBeDisabled();
+  });
 });

@@ -343,6 +343,39 @@ describe('SlopeResult - cells_json/judged_json 있는 분석: 히트맵/결과�
     expect(screen.queryByText(/낮춤|높임/)).not.toBeInTheDocument();
   });
 
+  // ★ 코드리뷰(5차) Minor-2: dirPassDeg도 designPct와 같은 "모르면 차단" 원칙이
+  // 걸려 있다 - threshold 결측 시 `?? 180`(엔진 dir_err_deg는 0~180도 범위라
+  // 절대 초과할 수 없는 값 = 방향 편차 배지 영구 억제)이어야 한다. `?? 0`으로
+  // 뒤집히면 결측 시 모든 셀에 "허용 0도 초과" 배지가 뜨는 정반대 동작이 된다.
+  // isDirectionAwareCriteria가 threshold 결측을 이미 차단(N2)하지만, 차단은
+  // 클릭만 막을 뿐 결과표 렌더 자체는 막지 않으므로(D7의 canRejudge와는 별개
+  // 게이트) 이 배선 지점은 여전히 실제로 도달 가능하다.
+  it('threshold가 없으면 방향 편차 배지를 추측해서 켜지 않는다(?? 180 폴백 유지)', async () => {
+    const cellsPayload = {
+      schema_version: 2, engine_version: 'p4-0.5.0', cell_m: 2.0, subcell_m: 0.05,
+      cells: [slopeCell()],
+    };
+    const judgedPayloadWithDirErr = {
+      schema_version: 1, direction_judged: false,
+      cells: [{
+        cx: 0, cy: 0, grade: '적합', reason: '크기·방향 모두 허용 안',
+        // null이 아닌 값을 쓴다 - dirPassDeg가 0으로 뒤집히면 5<=0이 거짓이라
+        // "초과" 배지가 뜬다(180이면 5<=180이 참이라 계속 억제된다).
+        dev_pct: 0.5, dir_err_deg: 5, correction_mm: 10.0,
+      }],
+    };
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      if (url.includes('slope_cells.json')) return { ok: true, json: async () => cellsPayload } as Response;
+      return { ok: true, json: async () => judgedPayloadWithDirErr } as Response;
+    }));
+    const { threshold, ...statsWithoutThreshold } = rejudgeableStats;
+    void threshold;
+    render(<SlopeResult analysis={analysisWith(statsWithoutThreshold)} />);
+    await waitFor(() => expect(document.querySelector('canvas')).not.toBeNull());
+    await waitFor(() => expect(screen.getByText('(0, 0)')).toBeInTheDocument());
+    expect(screen.queryByText(/초과/)).not.toBeInTheDocument();
+  });
+
   // ★ 코드리뷰(2차) C2: 'queued'는 진행 표시만 하고 클릭을 막지 않는다 - 워커가
   // 잠깐 내려가 'queued'에 오래 머물러도 사용자가 스스로 빠져나올 수 있어야
   // 한다(lib/domain/reports.ts canRegenerate와 같은 결론).

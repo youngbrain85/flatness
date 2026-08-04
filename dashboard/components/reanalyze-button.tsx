@@ -93,8 +93,16 @@ export function ReanalyzeButton({
         if (cancelled) return;
         const rows = (data ?? []) as CriteriaRow[];
         if (err || rows.length === 0) {
-          // 마이그레이션 007 미적용 또는 시드가 비어 있으면 빈 배열이 온다.
-          setCriteriaLoadError('구배 판정 기준을 찾을 수 없습니다. 마이그레이션 007이 적용됐는지 확인하세요.');
+          // 코드리뷰(5차) Minor-1: err일 때도 rows.length===0(마이그레이션 007
+          // 미적용/시드 없음)과 똑같이 "007 확인하세요"만 보여주면 err.message가
+          // 버려진다 - 권한 오류·PostgREST 스키마 캐시 문제 등 007과 무관한
+          // 원인일 때 운영자가 멀쩡한 마이그레이션을 뒤지게 된다. 아래 catch
+          // 블록과 같은 형태로 원인을 덧붙인다.
+          setCriteriaLoadError(
+            err
+              ? `구배 판정 기준을 불러오지 못했습니다: ${err.message}`
+              : '구배 판정 기준을 찾을 수 없습니다. 마이그레이션 007이 적용됐는지 확인하세요.',
+          );
           return;
         }
         setSlopeCriteria(rows);
