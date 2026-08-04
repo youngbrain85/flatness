@@ -30,6 +30,7 @@ class SlopeCell:
     width_m: float
     height_m: float
     ok: bool
+    zone_id: int | None = None   # 구역별 통계는 후속 단계. 스키마만 미리 뚫어 둔다
 
 
 def compute_slope_cells(grid, cell_m=2.0, min_subcells=10):
