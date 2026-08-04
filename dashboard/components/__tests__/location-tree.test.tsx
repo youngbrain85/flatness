@@ -19,7 +19,7 @@ const scan = (id: string, locationId: string, current?: ScanWithCurrent['current
   device: null, operator_id: null, operator_name_manual: null,
   selected_criteria_id: null, raw_file_path: null, original_filename: null,
   file_format: null, point_count: null, unit_scale: null, lineage: 'unknown',
-  status: 'ready', deleted_at: null, created_at: '', updated_at: '',
+  status: 'ready', height_view_path: null, deleted_at: null, created_at: '', updated_at: '',
   current,
 });
 

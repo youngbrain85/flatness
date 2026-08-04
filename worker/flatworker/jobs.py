@@ -7,8 +7,12 @@ from pathlib import Path
 
 from flatness.criteria import Criterion
 from flatness.core.pipeline import analyze_floor, analyze_wall, judge_slope_cells
+from flatness.core.subcell import build_subcell_grid
 from flatness.importer.colab_csv import import_colab_csv
 from flatness.importer.json_import import import_json
+from flatness.io.reader import iter_chunks, read_info
+from flatness.outputs.height_view import (dump_height_view_meta, render_height_view,
+                                          render_height_view_plain, subcell_m_for_bbox)
 from flatness.outputs.slope_cells import load_slope_cells
 
 from flatworker import slope
@@ -44,20 +48,125 @@ def overall_verdict(stats):
 
 
 def handle_precheck(db, cfg, payload):
-    """scan_id의 단위 확정 여부만 확인해 상태를 승격/대기시킨다.
+    """scan_id의 단위 확정 여부를 확인해 상태를 승격/대기시키고, 곁들여 높이 뷰
+    (평면도 PNG + 장식 없는 PNG + 좌표 사이드카)를 만든다(세부과업 4 단계 E,
+    설계 결정 E1·E2).
 
     원래 스펙(§5.1.1)은 read_info→detect_units로 단위 후보를 산출해 사용자에게
     보여주는 흐름이지만, 데모 스키마의 scans 테이블에는 후보를 저장할 컬럼
     (unit_candidates 등)이 없다 — 계산해도 어디에도 남길 곳이 없다. 따라서
     scans.unit_scale이 이미 확정되어 있으면(P3 UI가 업로드 단계에서 직접 설정)
     'ready'로 승격하고, 아니면 'awaiting_unit_confirm'으로 둔다.
+
+    높이 뷰는 그 판단을 돕는 보조 그림일 뿐이다 - 사용자가 이 그림으로 "이
+    방이 8m인가 80cm인가"를 눈으로 가늠하고, 다음 단계(정합)가 사이드카의
+    좌표계를 그대로 쓴다(설계 결정 E2). 렌더·업로드 실패가 위 상태 승격을
+    막으면 안 된다: precheck 잡이 실패로 끝나면 fn_job_fail이
+    scans.status='failed'로 만들고 사용자는 아무것도 못 한다
+    (003_dashboard_support.sql) - 렌더는 편의 기능이지 필수 경로가 아니다.
+    core/pipeline.py의 렌더 격리 패턴(try/except + warnings)을 그대로 따른다.
+
+    다만 "삼킨다"와 "아무데도 안 남긴다"는 다른 문제다(1차 리뷰 지적). scans
+    테이블에 warnings에 해당하는 컬럼이 없어 실패 사유를 **DB에 영속화**할 수는
+    없지만, 관측 가능성은 DB 영속화와 별개다 - runner.py의 `print(f"[flatworker]
+    ...")` 관례대로 표준출력에 한 줄 남긴다. 로그마저 없으면 높이 뷰가 전량
+    실패해도 잡은 done, 스캔은 ready, 로그는 완전히 깨끗해서 운영자가 알아낼
+    방법이 아예 없다 - docs/DEPLOY.md가 "증상 - 로그를 믿지 마라 ... Railway
+    로그에는 아무것도 남지 않고 워커도 죽지 않는다(실측 확인)"고 적어 둔 바로
+    그 함정이며, 이 저장소는 이미 한 번 데였다(이연 티켓 45 "보고서 생성 실패
+    사유 가시성"도 같은 계열).
     """
     scan_id = payload["scan_id"]
     scan = db.get_scan(scan_id)
-    if scan.get("unit_scale") is not None:
-        db.update_scan(scan_id, {"status": "ready"})
-    else:
-        db.update_scan(scan_id, {"status": "awaiting_unit_confirm"})
+
+    fields = {"status": "ready" if scan.get("unit_scale") is not None
+              else "awaiting_unit_confirm"}
+
+    try:
+        storage = get_storage(cfg, db)
+        with staging_dir() as work:
+            path = _fetch_raw(storage, scan, work)
+            info = read_info(path)
+            # 공짜 부수효과(브리프 "덤"): read_info가 이미 세어 둔 값이다.
+            # point_count는 001_schema.sql에 선언만 되고 지금까지 아무도 채우지
+            # 않았다. 렌더 성공 여부와 무관하게 여기서 바로 채운다 - 아래 렌더
+            # 단계가 실패해도 이 값은 이미 확보됐으므로 잃지 않는다.
+            fields["point_count"] = info.n_points
+
+            # 서브셀 크기는 반드시 bbox에서 유도한다 - 고정 상수(예: 0.05)를
+            # 쓰면 안 된다(설계 결정 E3). precheck는 정의상 단위 미확정 상태에서
+            # 도는 잡이라 mm 단위 파일이 정상 입력인데, 8000 x 6000(mm) 파일에
+            # 0.05를 그대로 주면 nx=160,000 x ny=120,000 격자가 되어 median_z
+            # 배열 하나만 71GB다. 컨테이너에서는 OOM Kill(SIGKILL)이라 아래
+            # except로도 못 잡고 워커 프로세스가 통째로 죽는다 - 잡은
+            # processing에 고착됐다가 30분 뒤 reap -> 재시도 -> 재사망을
+            # 반복한다.
+            subcell_m = subcell_m_for_bbox(info)
+            # scale_to_m=1.0 고정(설계 결정 E3): 이 시점엔 scans.unit_scale이
+            # 아직 확정되지 않았을 수 있다(애초에 이 잡의 목적이 그 확정을 돕는
+            # 것이다) - 파일이 담은 좌표를 원 단위 그대로 격자화한다. 더 강한
+            # 이유가 하나 더 있다(1차 리뷰): 사이드카는 bbox_min을 info(원 파일
+            # 단위)에서, subcell_m_file을 grid.size_m(scale_to_m이 이미 곱해진
+            # 값)에서 가져온다 - scale_to_m != 1.0이면 좌표 환산식
+            # (world = bbox_min + (i+0.5) * subcell_m_file)이 "스케일 안 된
+            # bbox + 스케일 된 서브셀"을 섞어 조용히 깨진다.
+            grid = build_subcell_grid(iter_chunks(path), info, 1.0, subcell_m)
+
+            out_dir = work / "out"
+            out_dir.mkdir(parents=True, exist_ok=True)
+            # 유효 서브셀이 하나도 없어도(점이 너무 성기거나 손상) 렌더·업로드
+            # 한다. 이전 구현은 여기서 건너뛰었고 "형체 없는 회색 한 장을 근거로
+            # 사용자가 단위를 잘못 확정할 위험이 그림이 아예 없음보다 크다"고
+            # 정당화했는데, **그 전제가 더 이상 사실이 아니다**(결정 번복).
+            # Task 1이 1차 리뷰 반영(엔진 커밋 032980a)으로 전부-NaN일 때
+            # 거짓 컬러바를 아예 만들지 않고 "유효 데이터 없음 - 점 밀도 부족"
+            # 이라고 한국어로 못 박게 바꿨다. 그러고도 X·Y 축 눈금은 진짜 bbox
+            # 값을 "파일 단위" 라벨과 함께 찍는다 - mm 단위 파일이면 그 축이
+            # 8000 x 6000으로 읽힌다. **축 눈금이 곧 단위의 답이라 높이 색깔은
+            # 단위 판단에 필요조차 없다.** 건너뛰면 그 유일한 단서를 지우고 그
+            # 자리에 아무 표시도 남기지 않는다 - 게다가 예외가 아니라 의도적
+            # 분기라 로그조차 남지 않았다.
+            render_height_view(grid, out_dir / "height_view.png")
+            # 장식 없는 PNG를 하나 더 낸다: 격자 1칸 = 이미지 1픽셀이라 브라우저
+            # 클릭 좌표를 월드 좌표로 되돌릴 수 있다(render_height_view_plain
+            # 독스트링의 좌표 계약). 장식 PNG(제목·여백·컬러바)로는 그 역산이
+            # 불가능해 다음 단계(정합, 단계 F)가 막힌다. DB 컬럼을 새로 만들지
+            # 않는다 - 사이드카 JSON과 같은 관례로, 다음 단계가
+            # scans.height_view_path에서 파일명만 바꿔 유도한다
+            # (height_view.png -> height_view_plain.png).
+            render_height_view_plain(grid, out_dir / "height_view_plain.png")
+            # 사이드카 파일명은 PNG와 같은 basename·같은 디렉터리 규약을
+            # 따른다(height_view.png -> height_view.json) - 다음 단계
+            # (정합)가 scans.height_view_path 하나에서 확장자만 바꿔
+            # 사이드카 키를 유도할 수 있게 하기 위함이다.
+            dump_height_view_meta(grid, info, out_dir / "height_view.json")
+            # artifacts/scans/{scan_id}/ — raw-scans/가 아니다(설계 결정
+            # E2). raw-scans는 authenticated가 전면 쓰기 가능이라
+            # (005_storage_buckets.sql) 워커 산출물이 브라우저 업로드에
+            # 덮일 수 있다. artifacts는 authenticated 읽기 전용·
+            # service_role 쓰기라 "워커가 쓰고 대시보드가 읽는다"에 맞는다.
+            storage.upload_dir(f"artifacts/scans/{scan_id}", out_dir)
+            # DB에는 버킷-상대 문자열만 저장한다(slope.py의
+            # normalize_slope_stats와 동일한 관례) - 스테이징 절대경로가
+            # 아니다.
+            fields["height_view_path"] = f"artifacts/scans/{scan_id}/height_view.png"
+    except Exception as e:
+        # 렌더·업로드는 편의 기능 - 실패해도 위에서 정한 상태 승격은 그대로
+        # 진행한다. 다만 조용히 삼키지는 않는다(독스트링 참고): runner.py의
+        # `[flatworker]` 접두 관례로 한 줄 남겨, 높이 뷰가 전량 실패하는
+        # 상황을 운영자가 Railway 로그에서 알아챌 수 있게 한다.
+        print(f"[flatworker] 높이 뷰 생성 실패 (scan_id={scan_id}) - 스캔 상태 승격은 "
+              f"그대로 진행합니다: {type(e).__name__}: {e}")
+
+    # 남는 위험(은폐하지 않고 명시한다, handle_report의 발행본 보호 주석과 같은
+    # 태도): status·point_count·height_view_path를 한 PATCH로 묶어 보내므로,
+    # 010_scan_height_view.sql(height_view_path 컬럼)을 아직 적용하지 않은 DB에
+    # 이 코드를 먼저 배포하면 fields에 height_view_path가 담긴 이번 PATCH
+    # 전체가 42703(undefined_column)으로 실패해 상태 승격까지 함께 막힐 수
+    # 있다 - 007/kind 배포 순서 사고(docs/DEPLOY.md 1절)와 같은 종류의 위험이다.
+    # 해법은 런타임 방어가 아니라 배포 순서다: 010은 반드시 이 코드보다 먼저
+    # 적용한다(docs/DEPLOY.md·docs/SUPABASE_SETUP.md에 명시).
+    db.update_scan(scan_id, fields)
 
 
 def _load_context(db, analysis_id):

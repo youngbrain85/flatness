@@ -1,0 +1,17 @@
+-- 010: 스캔 높이 뷰 (세부과업 4 단계 E)
+-- 선행: 001. (scans 테이블을 만드는 001_schema.sql 하나뿐이다 - 002~009는 이
+-- 컬럼과 무관하며, docs/DEPLOY.md도 008·009는 건너뛰어도 된다고 안내한다.)
+--
+-- precheck 잡(worker/flatworker/jobs.py의 handle_precheck)이 단위 확정 전에
+-- 점군을 내려다본 PNG(높이 뷰)를 만들어 이 컬럼에 그 경로를 남긴다 - 사용자가
+-- 그 그림으로 파일 단위(m/cm/mm)를 가늠하는 유일한 단서다(설계 결정 E1).
+--
+-- 008/009처럼 파일을 둘로 나눌 필요가 없다: 008/009 분리는 job_type enum에
+-- 새 값(slope_judge)을 추가한 뒤 그 값을 "같은 트랜잭션 안에서" 즉시 SQL이
+-- 참조해야 했기 때문이었다(PostgreSQL이 "unsafe use of new value"로 막는다,
+-- docs/SUPABASE_SETUP.md 2단계 8번 참고). 이 마이그레이션은 enum 추가가 전혀
+-- 없는 단순 컬럼 추가뿐이라 그 제약이 애초에 성립하지 않는다 - 파일 하나로
+-- 안전하게 끝난다.
+--
+-- 멱등성(006:18·007:6 관례): add column if not exists로 재실행 안전.
+alter table scans add column if not exists height_view_path text;

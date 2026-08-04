@@ -34,7 +34,7 @@ const scan: ScanRow = {
   id: 'scan1', location_id: 'loc1', surface: 'floor', scanned_at: '2026-07-20', device: null,
   operator_id: null, operator_name_manual: null, selected_criteria_id: null,
   raw_file_path: null, original_filename: null, file_format: null, point_count: null,
-  unit_scale: null, lineage: 'raw', status: 'ready', deleted_at: null,
+  unit_scale: null, lineage: 'raw', status: 'ready', height_view_path: null, deleted_at: null,
   created_at: '2026-07-20', updated_at: '2026-07-20',
 };
 

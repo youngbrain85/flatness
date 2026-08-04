@@ -33,6 +33,16 @@ function findAll(node: unknown, type: unknown, acc: { props: Record<string, unkn
   return acc;
 }
 
+// 안내 문구 회귀를 잡으려면 엘리먼트 트리에서 문자열 children을 모아야 한다.
+// findAll은 타입(컴포넌트/태그)만 보므로 문구 자체는 잡지 못한다.
+function collectText(node: unknown, acc: string[] = []): string[] {
+  if (typeof node === 'string' || typeof node === 'number') { acc.push(String(node)); return acc; }
+  if (node == null || typeof node !== 'object') return acc;
+  if (Array.isArray(node)) { node.forEach((n) => collectText(n, acc)); return acc; }
+  collectText((node as { props?: { children?: unknown } }).props?.children, acc);
+  return acc;
+}
+
 function chain(result: { data: unknown; error: null }) {
   const obj: Record<string, unknown> = {
     select: () => obj, eq: () => obj, is: () => obj, order: () => obj,
@@ -52,7 +62,8 @@ function mkScan(overrides: Partial<ScanRow> = {}): ScanRow {
     id: 'sc1', location_id: 'l1', surface: 'floor', scanned_at: '2026-07-20', device: null,
     operator_id: null, operator_name_manual: null, selected_criteria_id: 'cr1', raw_file_path: 'raw-scans/x',
     original_filename: 'a.ply', file_format: 'ply', point_count: null, unit_scale: 1,
-    lineage: 'raw', status: 'ready', deleted_at: null, created_at: '', updated_at: '',
+    lineage: 'raw', status: 'ready', height_view_path: null,
+    deleted_at: null, created_at: '', updated_at: '',
     ...overrides,
   };
 }
@@ -306,5 +317,45 @@ describe('ScanPage 종류별 분석 섹션 배선 (단계 C 회귀 차단)', () 
     // latest(가장 최근 1건)는 "이전 분석" 목록이 아니라 AnalysisProgress로만 표시된다.
     expect(flatnessLinks).toEqual(['/analyses/flatness1']);
     expect(slopeLinks).toEqual(['/analyses/slope1']);
+  });
+});
+
+describe('ScanPage 메타·안내 문구 (단계 E)', () => {
+  // E1: uploaded 안내가 "워커가 실행 중인지 확인하세요(python -m flatworker)"였다.
+  // 이건 운영자 지시문이지 사용자 안내가 아니다 - 대시보드만 쓰는 사용자는 워커를
+  // 실행할 수도, 확인할 수도 없어서 정상적인 대기 상태를 장애로 오인한다.
+  it('E1: uploaded 안내는 워커 실행 여부가 아니라 소요 시간을 알린다', async () => {
+    vi.mocked(createClient).mockResolvedValue(
+      stubSupabase(mkScan({ status: 'uploaded' }), []) as never);
+
+    const el = await ScanPage({ params: Promise.resolve({ id: 'sc1' }) });
+    const text = collectText(el).join('');
+
+    expect(text).toContain('파일 크기에 따라 수십 초 걸릴 수 있습니다');
+    expect(text).not.toContain('워커가 실행 중인지 확인하세요');
+  });
+
+  // point_count는 001_schema.sql에 선언만 되고 비어 있다가 이번 단계에서
+  // precheck가 채우기 시작했다(worker/flatworker/jobs.py). 어디에도 안 보이면
+  // 채우는 의미가 없다.
+  it('precheck가 채운 점 개수를 스캔 메타에 보여준다', async () => {
+    vi.mocked(createClient).mockResolvedValue(
+      stubSupabase(mkScan({ point_count: 1234567 }), []) as never);
+
+    const el = await ScanPage({ params: Promise.resolve({ id: 'sc1' }) });
+    const text = collectText(el).join('');
+
+    expect(text).toContain('점 개수');
+    expect(text).toContain('1,234,567');
+  });
+
+  it('점 개수가 없는 기존 스캔에서도 메타가 죽지 않는다', async () => {
+    vi.mocked(createClient).mockResolvedValue(
+      stubSupabase(mkScan({ point_count: null }), []) as never);
+
+    const el = await ScanPage({ params: Promise.resolve({ id: 'sc1' }) });
+    const text = collectText(el).join('');
+
+    expect(text).toContain('점 개수');
   });
 });

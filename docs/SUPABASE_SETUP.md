@@ -7,11 +7,12 @@
 ## 0. 준비물
 
 - Supabase 계정(없으면 1단계에서 가입)
-- 이 저장소 클론본(마이그레이션 SQL 파일 9개: `supabase/migrations/001_schema.sql`,
+- 이 저장소 클론본(마이그레이션 SQL 파일 10개: `supabase/migrations/001_schema.sql`,
   `supabase/migrations/002_functions_seed.sql`, `supabase/migrations/003_dashboard_support.sql`,
   `supabase/migrations/004_report_support.sql`, `supabase/migrations/005_storage_buckets.sql`,
   `supabase/migrations/006_report_soft_delete.sql`, `supabase/migrations/007_slope_analysis.sql`,
-  `supabase/migrations/008_slope_judge_enum.sql`, `supabase/migrations/009_slope_judge_functions.sql`)
+  `supabase/migrations/008_slope_judge_enum.sql`, `supabase/migrations/009_slope_judge_functions.sql`,
+  `supabase/migrations/010_scan_height_view.sql`)
 - Python 3.11+ (워커 실행용, 5단계에서 사용)
 
 ## 1. Supabase 프로젝트 생성 — 사용자가 직접 수행
@@ -205,6 +206,44 @@ surface_type)` 함수를 drop 후 3인자 시그니처로 재생성하므로 001
    > **003 → 004 → 009** 순서로 다시 실행한다(`fn_resolve_criteria`는 007이 별도로
    > 정본이므로, 007까지 함께 쓰는 프로젝트는 007을 그 사이 어디에 두어도 - 잡 큐
    > 함수 3종과 무관한 별개 함수라 - 최종 상태는 같다).
+
+10. `supabase/migrations/010_scan_height_view.sql` 전체 내용을 붙여넣고 **Run**.
+    `scans.height_view_path` 컬럼 하나만 추가한다 - `precheck` 잡(세부과업 4 단계 E)이
+    단위 확정 전에 점군을 내려다본 높이 뷰 PNG를 만들어 그 경로를 이 컬럼에 남긴다.
+    재실행해도 안전하다(멱등, `add column if not exists`). 검증:
+    `select height_view_path from scans limit 1;`이 오류 없이 실행되면 성공(빈
+    테이블이면 결과가 0행이어도 오류가 없으면 정상).
+
+    **008·009와 달리 파일 하나로 안전하게 끝난다.** 008·009가 둘로 나뉜 이유는
+    `job_type` enum에 새 값(`slope_judge`)을 추가한 뒤 그 값을 **같은 트랜잭션
+    안에서** 곧바로 참조해야 했기 때문이다(PostgreSQL이 "unsafe use of new
+    value"로 막는다 - 위 8번 참고). 010은 enum 추가가 전혀 없는 단순
+    `alter table ... add column`뿐이라 그 제약이 애초에 성립하지 않는다.
+
+    > **[필수] 배포 순서 경고 - 010을 워커 코드보다 먼저 적용한다.** `precheck`
+    > 잡 핸들러(`worker/flatworker/jobs.py`의 `handle_precheck`)는 상태
+    > 승격(`status`)·점 개수(`point_count`)·높이 뷰 경로(`height_view_path`)를
+    > **한 PATCH**로 묶어 보낸다. 010을 적용하지 않은 DB에 이 코드가 담긴 워커를
+    > 먼저 배포하면 `height_view_path` 컬럼이 없어 그 PATCH 전체가
+    > `42703`(undefined_column)으로 실패하고, `status` 승격까지 함께 막힌다 -
+    > **007을 워커보다 늦게 배포했을 때와 같은 종류의 사고**다(위 007 경고 문단
+    > 참고). 해법도 동일하다: 새 코드를 배포하기 **전에** 010을 먼저 적용한다.
+    >
+    > **단, 이 제약은 워커 한쪽에만 걸린다 - 대시보드는 010보다 먼저 배포해도
+    > 안전하다.** 007은 대시보드도 함께 깨졌기 때문에 010에도 같은 제약이 있다고
+    > 읽기 쉬운데 사실이 아니다. 단위 확정 화면
+    > (`dashboard/components/unit-confirm-form.tsx`)은
+    > `if (!scan.height_view_path) return form;`이라는 **truthy** 가드를 쓴다 -
+    > 010 미적용 DB의 `select('*')`에는 이 컬럼이 없어 값이 `undefined`로 오는데
+    > truthy 가드가 그것까지 걸러, 화면은 그림 없이 예전과 똑같이 동작한다.
+    >
+    > **이미 `failed`로 굳은 스캔은 010을 뒤늦게 적용해도 자동 복구되지 않는다.**
+    > precheck가 실패한 스캔에는 재시도 버튼 자체가 없고(재분석 버튼은 `analyses`
+    > 행이 있어야 뜨는데, 그 행은 단위 확정 시점에 만들어진다), 화면 안내는
+    > "지원하지 않는 파일 포맷이나 손상·불완전한 파일"이라는 **정반대 진단**을
+    > 준다. 복구하려면 010을 적용한 뒤 해당 스캔을 **새로 업로드**해야 한다 -
+    > 그래서 순서를 지키는 것이 유일하게 값싼 길이다. 자세한 내용은
+    > `docs/DEPLOY.md` §1의 010 경고 문단 참고.
 
 ## 3. 검증 쿼리
 

@@ -13,6 +13,10 @@ Vercel(대시보드) + Railway(워커, Docker) + Supabase(DB·Auth·Storage) 구
 - `supabase/migrations/008_slope_judge_enum.sql`·`009_slope_judge_functions.sql` - 재판정
   (구배 배수구 재클릭) 잡 타입. 이 배포 절차의 필수 최소 범위(007까지)에는 포함되지
   않지만, 재판정 기능을 켤 계획이면 §1의 1번에서 함께 적용한다
+- `supabase/migrations/010_scan_height_view.sql` - `scans.height_view_path` 컬럼
+  (`precheck` 잡이 만드는 높이 뷰 PNG 경로, 세부과업 4 단계 E). 008·009와 달리
+  선택 기능이 아니다 - `precheck`는 스캔 업로드마다 무조건 도는 경로라 §1의 1번
+  필수 범위에 포함된다
 - 저장소 루트 `Dockerfile` - 워커 이미지(Chromium·`Noto Sans CJK KR` 포함 - Debian
   `fonts-noto-cjk`가 실제로 등록하는 폰트 패밀리명이며 `Noto Sans KR`이 아니다)
 - 워커 `STORAGE_BACKEND=supabase` 기본값(Dockerfile `ENV`)
@@ -20,11 +24,47 @@ Vercel(대시보드) + Railway(워커, Docker) + Supabase(DB·Auth·Storage) 구
 
 ## 1. Supabase (사용자 수행)
 
-1. SQL Editor에서 `001_schema.sql`부터 `007_slope_analysis.sql`까지 **순서대로** 실행한다
-   (001~004를 아직 실행하지 않았다면 `docs/SUPABASE_SETUP.md` 2단계부터 순서대로 먼저
+1. SQL Editor에서 `001_schema.sql`부터 `007_slope_analysis.sql`까지 **순서대로** 실행한
+   뒤 `010_scan_height_view.sql`도 이어서 실행한다(008·009는 건너뛰어도 된다 - 아래
+   참고)(001~004를 아직 실행하지 않았다면 `docs/SUPABASE_SETUP.md` 2단계부터 순서대로 먼저
    진행한다). 006(`006_report_soft_delete.sql`)은 보고서 소프트 삭제, 007
-   (`007_slope_analysis.sql`)은 구배 분석(`analyses.kind` 컬럼·구배 판정 기준 시드)을
-   추가한다 - 둘 다 재실행 안전(멱등)하다
+   (`007_slope_analysis.sql`)은 구배 분석(`analyses.kind` 컬럼·구배 판정 기준 시드)을,
+   010(`010_scan_height_view.sql`)은 `scans.height_view_path` 컬럼 하나를 추가한다 -
+   셋 다 재실행 안전(멱등)하다. 010은 008·009처럼 job_type enum을 건드리지 않는
+   단순 컬럼 추가라 007 다음 어디에 두어도(008·009보다 먼저든 나중이든) 상관없다.
+
+   > **[필수] 010을 워커 배포보다 먼저 적용한다.** `precheck` 잡 핸들러
+   > (`worker/flatworker/jobs.py`의 `handle_precheck`)는 상태 승격·`point_count`·
+   > `height_view_path`를 한 PATCH로 묶어 보낸다. 010 미적용 DB에 이 코드가 담긴
+   > 워커를 먼저 배포하면 `height_view_path` 컬럼이 없어 그 PATCH 전체가
+   > `42703`(undefined_column)으로 실패하고 **상태 승격까지 함께 막힌다** - 아래
+   > 007 배포 순서 경고와 같은 종류의 사고이며 해법도 같다: 새 워커 이미지를
+   > 배포하기 전에 SQL을 먼저 적용한다. `precheck`는 008·009(재판정)와 달리 켜고
+   > 끌 수 있는 선택 기능이 아니라 스캔 업로드마다 무조건 도는 경로이므로, 이
+   > 워커 이미지를 배포할 계획이면 010은 선택이 아니라 필수다.
+   >
+   > **다만 007과 달리 이 제약은 워커 한쪽에만 걸린다 - 대시보드는 010보다 먼저
+   > 배포해도 안전하다.** 바로 아래 007 문단이 "007 적용 → 엔진·워커 → 대시보드"
+   > 순서를 못 박고 있어 010에도 같은 제약이 있다고 읽기 쉬운데, 사실이 아니다.
+   > 단위 확정 화면(`dashboard/components/unit-confirm-form.tsx`)은
+   > `if (!scan.height_view_path) return form;`이라는 **truthy** 가드로 그림을
+   > 감싼다. 010 미적용 DB의 `select('*')`에는 이 컬럼이 아예 없어 값이
+   > `undefined`로 오는데 truthy 가드가 그것까지 걸러 주므로, 화면은 그림 없이
+   > 예전과 똑같이 동작한다(`=== null`로 좁히면 이 성질이 사라지므로 회귀 테스트로
+   > 고정해 두었다 - `components/__tests__/unit-confirm-form.test.tsx`). 즉 010과
+   > 대시보드 사이에는 순서 제약이 없다.
+   >
+   > **이미 `failed`로 굳은 스캔은 010을 뒤늦게 적용해도 자동으로 복구되지 않는다**
+   > (007 문단의 같은 경고와 동일하지만, 이쪽이 사용자에게 더 불친절하다).
+   > precheck가 실패한 스캔에는 **재시도 버튼이 아예 없다** - `/scans/[id]`의
+   > 재분석 버튼은 분석(`analyses`) 행이 있어야 렌더되는데(`app/scans/[id]/page.tsx`의
+   > `latestFlatness &&` 분기), 분석 행은 단위 확정 시점에 만들어지므로 precheck에서
+   > 죽은 스캔에는 존재하지 않는다. 화면에 남는 것은 이 안내뿐이다:
+   > "가장 흔한 원인은 지원하지 않는 파일 포맷이나 손상·불완전한 파일입니다. …
+   > 파일을 확인한 뒤 업로드 화면에서 새 스캔으로 다시 시도하세요." **42703으로
+   > 죽은 사용자에게 정반대 진단을 준다** - 파일은 멀쩡한데 파일을 의심하게 만든다.
+   > 그러므로 이 경우의 실제 복구는 "010 적용 후 **해당 스캔들을 새로 업로드**"이며,
+   > 010을 먼저 적용해 애초에 이 상태를 만들지 않는 것이 유일하게 값싼 길이다.
 
    **재판정(구배 배수구 재클릭) 기능을 쓸 계획이면 007 다음에 008·009도 이어서
    적용한다**: `008_slope_judge_enum.sql`(job_type에 `slope_judge` 값 추가) →
@@ -171,7 +211,41 @@ Vercel(대시보드) + Railway(워커, Docker) + Supabase(DB·Auth·Storage) 구
 **최초 검증**이다 - Railway에서 처음으로 확인하게 된다는 뜻이며, 실패 가능성을 염두에 두고
 진행한다.
 
-1. 로그인 -> 스캔 업로드 -> 사전 검사 -> 단위 확정 -> 분석 완료까지 진행
+1. 로그인 -> 스캔 업로드 -> 사전 검사 -> 단위 확정 -> 분석 완료까지 진행.
+   **업로드는 반드시 "스캔 분석" 모드로 한다**(임포트 모드가 아니다) - 임포트는
+   `unit_scale=1.0`을 업로드 시점에 박고 `status='ready'`로 바로 넘어가
+   `precheck` 잡 자체가 등록되지 않으므로(`components/upload-form.tsx:93,102,122-138`)
+   아래 높이 뷰 확인에 도달하지 못한다.
+
+   **[필수] 높이 뷰 확인 - 이 배포가 추가한 유일한 사용자 대면 산출물이고,
+   실패가 화면에 아무 신호도 남기지 않는다.** 사전 검사가 끝나면 스캔 상세에
+   "단위 확인하고 분석 시작" 버튼이 뜬다(`scans.status='awaiting_unit_confirm'`일
+   때만 - `app/scans/[id]/page.tsx`). 눌러서 `/scans/{id}/confirm-unit`으로 가
+   아래 셋을 확인한다:
+   - **높이 뷰 그림이 뜨는지**(위에서 내려다본 평면도. 그 아래 "원본 크기로 열기
+     (새 탭)" 링크가 함께 있다). 넓은 화면에서는 단위 선택 폼 왼쪽에, 좁은
+     화면에서는 폼 위에 놓인다(2열 배치가 `lg:` 이상에서만 걸린다). 좁은
+     화면에서는 축 눈금 숫자가 뭉개지므로 그 링크로 원본을 열어 읽는다
+   - 그림 안의 **한글이 네모 상자가 아닌지** - 제목 "높이 뷰 (평면도)", 축 라벨
+     "X (파일 단위)"·"Y (파일 단위)", 컬러바 라벨 "상대 높이 (파일 단위, bbox 최저
+     Z 기준)". 유효 서브셀이 하나도 없는 성긴 스캔이면 **컬러바가 아예 없는 대신**
+     (거짓 범위를 보여주지 않으려는 의도적 설계다) 회색 바탕 한가운데에 빨간
+     "유효 데이터 없음 - 점 밀도 부족"이 찍히고, 그 경우에도 축 눈금은 진짜 bbox
+     값이라 단위 판단은 그대로 할 수 있다. **이건 보고서 PDF·히트맵과 별개인 새 matplotlib
+     산출물이라 3번의 PDF 확인으로 대신할 수 없다** - 개발 PC(Windows/Malgun
+     Gothic)에서만 확인했고 리눅스 컨테이너 렌더는 이 스모크가 최초 검증이다
+     (`engine/flatness/outputs/height_view.py`가 `heatmap`을 부수효과 import 해
+     폰트 설정을 물려받으므로, 네모 상자가 나오면 원인과 처방은 3번과 같다)
+   - **그림이 아예 없으면**(그림 영역 자체가 없고 단위 선택 폼만 덩그러니 뜬다.
+     주황색이든 무슨 색이든 경고 박스도 함께 없다) Railway Logs에서
+     `[flatworker] 높이 뷰 생성 실패` 를 검색한다. 렌더·업로드 실패는
+     `handle_precheck`의 `except`가 삼켜 `height_view_path`가 NULL로 남고, 화면은
+     **예전과 완전히 똑같은 모습으로 폴백해 아무 이상 신호도 띄우지 않는다**
+     (`components/unit-confirm-form.tsx`의 `if (!scan.height_view_path) return form;`).
+     유일한 흔적이 이 로그 한 줄이다(`Dockerfile`에 `PYTHONUNBUFFERED=1`이 있어
+     Railway에 즉시 뜬다). 참고로 **주황색 "높이 뷰를 불러오지 못했습니다" 박스는
+     다른 경우다** - 경로는 남았는데 이미지 fetch가 실패한 상태(객체 삭제·서명 URL
+     401/404)이고, 이때는 렌더 자체는 성공했으므로 위 로그가 없다
 2. 결과 화면에서 히트맵 이미지와 결과표(`cells.json` fetch)가 뜨는지 확인
 3. 보고서 생성 -> PDF 미리보기에서 **한글이 네모 상자가 아닌지 확인**. 네모 상자로 나오면
    이 순서로 확인한다:
@@ -390,7 +464,10 @@ Vercel(대시보드) + Railway(워커, Docker) + Supabase(DB·Auth·Storage) 구
 4. Railway: GitHub 저장소 연결, 환경변수 5개 입력, Deploy
 5. Vercel: 저장소 Import, **Root Directory를 `dashboard`로 지정**, 환경변수 3개 입력, Deploy
 6. Supabase Authentication > URL Configuration에 Vercel 도메인 추가
-7. 배포 후 스모크: 업로드 -> 분석 -> 보고서 PDF 한글 육안 확인, 50MB 초과 안내 확인,
+7. 배포 후 스모크: 업로드 -> 분석 -> **단위 확정 화면의 높이 뷰 한글 육안 확인**
+   (§4-1 참고 - 이 배포가 추가한 새 matplotlib 산출물이고, 실패해도 화면에
+   신호가 없어 Railway 로그 확인이 유일한 수단이다), 보고서 PDF 한글 육안 확인,
+   50MB 초과 안내 확인,
    구배 분석 스모크(§4-5 참고 - 007 검증을 겸한다), 008·009를 적용했다면 재판정
    (배수구 클릭) 스모크(§4-5의 8~10번 참고 - 3번에서 배수 목적 기준을 골라야
    도달 가능하다)
