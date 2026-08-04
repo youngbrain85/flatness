@@ -28,11 +28,14 @@ export default async function NewReportPage({ searchParams }: {
     .from('scans').select('*').eq('location_id', locationId).is('deleted_at', null);
   const scanRows = (scans ?? []) as ScanRow[];
   const scanById = new Map(scanRows.map((s) => [s.id, s]));
+  // 단계 C 회귀 차단: kind 필터 없이는 구배 분석이 보고서 후보로 섞이고 평활도와 육안
+  // 구별도 안 된다. 보고서에서 구배를 제외하는 것은 이 쿼리 단계가 맡는다(워커 쪽에서
+  // 막는 것은 형식만 멀쩡한 빈 평활도 섹션을 발행본에 박제시켜 더 나쁘다).
   const analysesRes = scanRows.length
     ? await supabase.from('analyses')
-        .select('id, scan_id, surface, overall_verdict, auto_summary, user_summary')
+        .select('id, scan_id, surface, overall_verdict, auto_summary, user_summary, kind')
         .in('scan_id', scanRows.map((s) => s.id))
-        .eq('is_current', true).eq('status', 'done').is('deleted_at', null)
+        .eq('is_current', true).eq('status', 'done').eq('kind', 'flatness').is('deleted_at', null)
     : { data: [], error: null };
   if (analysesRes.error) {
     return <main className="mx-auto max-w-4xl p-6"><SupabaseErrorNotice message={analysesRes.error.message} /></main>;

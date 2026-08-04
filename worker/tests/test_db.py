@@ -129,6 +129,53 @@ def test_fail_job_and_reap_stuck_jobs_do_not_retry_permanent_dberror():
         db.reap_stuck_jobs()
 
 
+def test_set_current_analysis_patches_both_queries_with_kind_and_deleted_at_filters():
+    """코드리뷰 재검토(I1-3): FakeDB 기반 테스트는 FakeDB 자신의 정확성만
+    증명하고 이 파일(SupabaseRest, 실제 PostgREST PATCH를 만드는 코드)의
+    정확성은 증명하지 못한다 - 서로 완전히 독립된 구현이라 한쪽이 회귀해도
+    다른 쪽 테스트는 계속 초록이다. kind·deleted_at 필터를 직접 지키는
+    유일한 테스트가 이것이다.
+    """
+    seen = []
+
+    def handler(request):
+        seen.append(dict(request.url.params))
+        return httpx.Response(204)
+
+    db = SupabaseRest(_cfg(), transport=httpx.MockTransport(handler))
+    db.set_current_analysis("scan-1", "slope-analysis", kind="slope")
+
+    assert len(seen) == 2
+    unset_params, set_params = seen
+
+    # PATCH① - 같은 scan·kind의 기존 현재 분석 해제
+    assert unset_params["scan_id"] == "eq.scan-1"
+    assert unset_params["id"] == "neq.slope-analysis"
+    assert unset_params["kind"] == "eq.slope"
+    assert unset_params["deleted_at"] == "is.null"
+
+    # PATCH② - 신규 분석을 현재로 지정
+    assert set_params["id"] == "eq.slope-analysis"
+    assert set_params["kind"] == "eq.slope"
+    assert set_params["deleted_at"] == "is.null"
+
+
+def test_set_current_analysis_defaults_kind_to_flatness():
+    """기존 평활도 전용 호출부(handle_analyze/handle_import의 _finalize)가
+    kind 인자 없이 그대로 호출해도 동작해야 한다."""
+    seen = []
+
+    def handler(request):
+        seen.append(dict(request.url.params))
+        return httpx.Response(204)
+
+    db = SupabaseRest(_cfg(), transport=httpx.MockTransport(handler))
+    db.set_current_analysis("scan-1", "flat-analysis")
+
+    assert seen[0]["kind"] == "eq.flatness"
+    assert seen[1]["kind"] == "eq.flatness"
+
+
 def test_enqueue_job_not_wrapped_in_retry():
     """enqueue_job은 워커 자신이 실제로 호출하지 않는 경로라 재시도 대상에서
     제외한다(리뷰 지시 범위) — 전송 오류가 나면 재시도 없이 즉시 전파해야 한다."""

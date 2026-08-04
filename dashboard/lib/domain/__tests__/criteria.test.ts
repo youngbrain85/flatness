@@ -5,7 +5,8 @@ import type { CriteriaRow } from '../types';
 const crit = (over: Partial<CriteriaRow>): CriteriaRow => ({
   id: 'c', site_id: null, surface: 'floor', name: 'n', source_text: 's',
   thresholds: [{ span_m: 3, metric: 'flatness', pass_mm: 7, rework_mm: 21 }],
-  is_default: false, is_active: true, version: 1, supersedes_id: null, created_at: '', ...over,
+  is_default: false, is_active: true, version: 1, supersedes_id: null, created_at: '',
+  kind: 'flatness', ...over,
 });
 
 describe('thresholdSummary', () => {
@@ -16,6 +17,10 @@ describe('thresholdSummary', () => {
   it('plumbness(span null): 수직도 표기', () => {
     expect(thresholdSummary({ span_m: null, metric: 'plumbness', pass_mm: 25, rework_mm: 75 }))
       .toBe('수직도 허용 25mm / 재시공 75mm');
+  });
+  it('slope: span_m 키 자체가 없어도(undefined !== null) 구배 분기로 판별한다', () => {
+    expect(thresholdSummary({ use: '옥상', design_pct: 2, pass_pct: 0.5, re_pct: 1.5, dir_pass_deg: 30 }))
+      .toBe('설계 2% · 적합 ±0.5%p · 재시공 1.5%p 초과');
   });
 });
 

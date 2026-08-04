@@ -42,6 +42,9 @@ export function UploadForm({ sites, locations, userId, initialSiteId, initialLoc
     (async () => {
       // 이펙트 본문 최상단 동기 setState는 린트 경고 대상이라 IIFE 내부로 통일한다
       if (!siteId) { setCriteria([]); setCriteriaId(''); return; }
+      // p_kind 인자를 생략한다 - 기본값 'flatness'가 이 업로드 화면이 의도하는 값과
+      // 정확히 일치한다(업로드 폼은 항상 평활도 첫 분석만 만든다. 구배는 스캔 상세의
+      // 별도 버튼에서 시작한다 - reanalyze-button.tsx).
       const { data, error: err } = await createClient().rpc('fn_resolve_criteria', {
         p_site_id: siteId, p_surface: effectiveSurface,
       });
@@ -117,9 +120,11 @@ export function UploadForm({ sites, locations, userId, initialSiteId, initialLoc
       // unit-confirm-form.tsx와 동일 패턴. 이전에는 setError 직후 무조건 router.push가
       // 실행돼 컴포넌트가 언마운트되며 오류 메시지가 사용자 눈에 보이기 전에 사라졌다)
       if (mode === 'import') {
+        // kind를 명시적으로 지정한다(단계 C). DB 기본값에 기대지 않는다 - 임포트 결과는
+        // 점 단위 편차 목록이지 점군이 아니라 애초에 구배 분석 대상이 될 수 없다.
         const { data: analysis, error: aErr } = await supabase.from('analyses').insert({
           scan_id: scanId, surface: 'floor', criteria_id: criteriaId,
-          status: 'queued', created_by: userId,
+          kind: 'flatness', status: 'queued', created_by: userId,
         }).select('id').single();
         if (aErr || !analysis) { await discardScan(aErr?.message ?? '분석 등록 실패'); return; }
         const r = await enqueueJob(supabase, 'import', { analysis_id: analysis.id });

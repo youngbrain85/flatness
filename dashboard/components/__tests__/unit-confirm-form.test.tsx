@@ -27,6 +27,7 @@ type Opts = {
   scansRevertError?: { message: string } | null;
   scansUpdateSpy?: (fields: unknown) => void;
   analysesUpdateSpy?: (fields: unknown) => void;
+  analysesInsertSpy?: (fields: unknown) => void;
 };
 
 function stubSupabase(o: Opts = {}) {
@@ -46,13 +47,16 @@ function stubSupabase(o: Opts = {}) {
       }
       if (table === 'analyses') {
         return {
-          insert: () => ({
-            select: () => ({
-              single: async () => (o.insertError
-                ? { data: null, error: o.insertError }
-                : { data: { id: 'a1' }, error: null }),
-            }),
-          }),
+          insert: (fields: unknown) => {
+            o.analysesInsertSpy?.(fields);
+            return {
+              select: () => ({
+                single: async () => (o.insertError
+                  ? { data: null, error: o.insertError }
+                  : { data: { id: 'a1' }, error: null }),
+              }),
+            };
+          },
           update: (fields: unknown) => {
             o.analysesUpdateSpy?.(fields);
             return { eq: async () => ({ error: null }) };
@@ -148,5 +152,18 @@ describe('UnitConfirmForm', () => {
 
     await vi.waitFor(() => expect(pushMock).toHaveBeenCalledWith('/scans/c1'));
     expect(refreshMock).not.toHaveBeenCalled();
+  });
+
+  // 단계 C 회귀 차단: kind가 insert에서 빠지면 DB 기본값('flatness')에 조용히
+  // 기대게 된다 - 단위 확인 화면은 항상 평활도 첫 분석만 만들어야 한다.
+  it('단계 C: 분석 행 insert에 kind=flatness를 명시한다', async () => {
+    const analysesInsertSpy = vi.fn();
+    vi.mocked(createClient).mockReturnValue(stubSupabase({ analysesInsertSpy }) as never);
+    render(<UnitConfirmForm scan={scan} userId="u1" />);
+    fireEvent.click(screen.getByRole('button', { name: '단위 확정 후 분석 시작' }));
+
+    await vi.waitFor(() => expect(pushMock).toHaveBeenCalledWith('/scans/c1'));
+    expect(analysesInsertSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'flatness', criteria_id: 'cr1' }));
   });
 });

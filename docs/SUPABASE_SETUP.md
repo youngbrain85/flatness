@@ -7,9 +7,10 @@
 ## 0. 준비물
 
 - Supabase 계정(없으면 1단계에서 가입)
-- 이 저장소 클론본(마이그레이션 SQL 파일 5개: `supabase/migrations/001_schema.sql`,
+- 이 저장소 클론본(마이그레이션 SQL 파일 7개: `supabase/migrations/001_schema.sql`,
   `supabase/migrations/002_functions_seed.sql`, `supabase/migrations/003_dashboard_support.sql`,
-  `supabase/migrations/004_report_support.sql`, `supabase/migrations/005_storage_buckets.sql`)
+  `supabase/migrations/004_report_support.sql`, `supabase/migrations/005_storage_buckets.sql`,
+  `supabase/migrations/006_report_soft_delete.sql`, `supabase/migrations/007_slope_analysis.sql`)
 - Python 3.11+ (워커 실행용, 5단계에서 사용)
 
 ## 1. Supabase 프로젝트 생성 — 사용자가 직접 수행
@@ -38,12 +39,15 @@
 2. 에디터를 비우고(또는 새 쿼리 탭) `supabase/migrations/002_functions_seed.sql` 전체
    내용을 붙여넣고 **Run**. 마찬가지로 성공 메시지 확인.
 
-**반드시 001 → 002 → 003 → 004 → 005 순서로 실행한다** — 뒤 마이그레이션이 앞 마이그레이션이
-만든 테이블·enum·함수를 전제하며, 특히 003과 004는 순서를 건너뛰거나 뒤집으면 오류 없이
-조용히 기능이 사라질 수 있다(아래 4단계 경고 참고). 005도 순서를 지켜야 하며, 클라우드
-배포 전에 누락되면 Storage 버킷이 없어 업로드가 전부 실패한다(아래 5번 참고). 이 프로젝트를
-워커만 쓰고 대시보드나 보고서 기능을 쓰지 않을 계획이라도 003·004까지 실행해 두는 것을
-권장한다 — 나중에 P3/P4를 켤 때 순서를 다시 챙기지 않아도 된다.
+**반드시 001 → 002 → 003 → 004 → 005 → 006 → 007 순서로 실행한다** — 뒤 마이그레이션이
+앞 마이그레이션이 만든 테이블·enum·함수를 전제하며, 특히 003과 004는 순서를 건너뛰거나
+뒤집으면 오류 없이 조용히 기능이 사라질 수 있다(아래 4단계 경고 참고). 005도 순서를
+지켜야 하며, 클라우드 배포 전에 누락되면 Storage 버킷이 없어 업로드가 전부 실패한다(아래
+5번 참고). 007은 002가 만든 `fn_resolve_criteria(uuid, surface_type)` 함수를 drop 후
+3인자 시그니처로 재생성하므로 001·002 다음에 실행돼 있어야 한다(006과는 직접적인 의존
+관계가 없다). 이 프로젝트를 워커만 쓰고 대시보드나 보고서 기능을 쓰지 않을 계획이라도
+003·004까지 실행해 두는 것을 권장한다 — 나중에 P3/P4를 켤 때 순서를 다시 챙기지 않아도
+된다.
 
 실행 중 오류가 나면 대부분 앞 단계를 건너뛰었거나 이미 한 번 실행한 마이그레이션을 다시
 실행한 경우(테이블/함수 이미 존재)다. 새 프로젝트에서 순서대로 한 번씩만 실행하면 정상.
@@ -78,19 +82,65 @@
    50MB). 재실행해도 안전하다(멱등, `on conflict (id) do nothing`). 검증은 3단계 참고.
    정책 생성이 `42501`로 실패하면 백로그 티켓 42대로 Storage > Policies UI에서 수동 생성한다.
    클라우드 배포 전체 절차는 [`DEPLOY.md`](DEPLOY.md) 참고.
+6. `supabase/migrations/006_report_soft_delete.sql` 전체 내용을 붙여넣고 **Run**. 보고서
+   소프트 삭제용 `reports.deleted_at` 컬럼을 추가한다(발행본은 내용 컬럼이 잠겨 있어도
+   삭제는 통과하도록 설계됨). 재실행해도 안전하다(멱등, `add column if not exists`).
+   검증: `select deleted_at from reports limit 1;`이 오류 없이 실행되면 성공.
+7. `supabase/migrations/007_slope_analysis.sql` 전체 내용을 붙여넣고 **Run**. 구배
+   분석(세부과업 4) 지원을 추가한다: `analysis_kind` enum과 `analyses.kind`·
+   `criteria.kind` 컬럼, 현재 분석·기본 기준 유니크 인덱스 재정의
+   (`analyses_current`·`criteria_global_default`·`criteria_site_default`),
+   `fn_resolve_criteria`를 `p_kind` 인자가 추가된 3인자 시그니처로 교체,
+   `registrations` 테이블(정합 이력, 단계 F에서 사용), 구배 판정 기준 5종 시드.
+   재실행해도 안전하다(멱등). **주의 - `fn_resolve_criteria`는 인자 개수가 바뀌어
+   drop 후 재생성되므로, 이 파일이 함수 실행 권한(revoke/grant)도 함께 재발급한다.
+   반드시 파일 전체를 한 번에 실행한다.** 검증: 아래 3단계 (1)·(3)번 참고.
+
+   > **경고 - 재실행이 필요하면 007만 다시 실행한다. 002는 어떤 경우에도 다시
+   > 실행하지 않는다.**
+   >
+   > **002를 재실행하면 안 되는 이유 둘:**
+   > 1. `criteria` 시드 INSERT(002:176)에는 `on conflict` 절이 없다(app_settings
+   >    시드(002:169)는 `on conflict (key) do nothing`, 005·006·007의 시드는 전부
+   >    `on conflict`가 있는 것과 다르다). 001이 건 `criteria_global_name` 부분
+   >    유니크(전역 `(surface, name)`, 001:93)를 두 번째 실행이 그대로 위반해
+   >    **23505로 죽는다.**
+   > 2. 002가 정의한 `fn_job_claim`(002:50)·`fn_job_fail`(002:80)·
+   >    `fn_reap_stuck_jobs`(002:119)는 이후 003(:63·:83)과 004(:55·:78·:109)가
+   >    `create or replace`로 이미 확장한 함수들이다. 002를 다시 실행하면 이 셋이
+   >    **P2 시절 정의로 조용히 강등된다**(오류 없음).
+   >
+   > 두 사실을 합치면 복구가 성립하지 않는다. SQL 에디터가 스크립트 전체를 한
+   > 트랜잭션으로 실행하면 시드에서 23505가 나 **전체가 롤백**된다(아무것도
+   > 복구되지 않았는데 복구했다고 믿기 쉽다). 문(statement)별로 커밋되면 함수
+   > 3종이 강등된 채로 남는다 - `fn_job_fail`이 002 버전으로 돌아가면 import 잡
+   > 실패가 `analyses.status`를 더 이상 갱신하지 않아 분석이 `queued`에 영구
+   > 고착되고, precheck 실패가 `scans.status='failed'`로 전이되지 않아 "사전
+   > 검사에 실패했습니다" 박스가 영영 안 뜨고, report의 `gen_status` 전이가
+   > 사라져 "생성 중" 표시가 폴링을 영원히 지속한다. **세 회귀 모두 오류 없이
+   > 조용하다** - 화면이 "진행 중"에 머물 뿐이다.
+   >
+   > **007만 재실행하면 충분하다.** `fn_resolve_criteria`의 drop(007:50-51)이
+   > `fn_resolve_criteria(uuid, surface_type)`(2인자)와
+   > `fn_resolve_criteria(uuid, surface_type, analysis_kind)`(3인자) **양쪽을 모두**
+   > 겨냥하므로, 어떤 이유로든 옛 2인자 오버로드가 남아 있어도 007 재실행 한 번으로
+   > 제거되고 3인자가 정본으로 재생성된다(권한 revoke/grant도 007:69-71이 함께
+   > 재발급한다). 이 저장소의 원칙(위 "실행 중 오류가 나면..." 문단 - "새 프로젝트에서
+   > 순서대로 한 번씩만 실행하면 정상")은 007에도 그대로 적용된다.
 
 ## 3. 검증 쿼리
 
 SQL Editor에서 새 쿼리로 아래 3개를 순서대로 실행해 스키마·함수·시드 데이터가 제대로
 들어갔는지 확인한다.
 
-**(1) 기준 시드 11종 확인** — `criteria` 테이블에 시드 데이터가 정확히 11행 들어왔는지:
+**(1) 기준 시드 16종 확인** — `criteria` 테이블에 시드 데이터가 정확히 16행(평활도 11종 +
+007이 넣는 구배 5종) 들어왔는지:
 
 ```sql
 select count(*) from criteria;
 ```
 
-결과가 **11**이어야 한다.
+결과가 **16**이어야 한다(007을 아직 실행하지 않았다면 11).
 
 **(2) 잡 큐 함수 확인** — 잡을 하나 등록하고(`fn_enqueue_job`) 클레임해본다(`fn_job_claim`):
 
@@ -132,6 +182,18 @@ select * from fn_resolve_criteria(null, 'floor');
 
 `floor-kcs-finish7plus`, `floor-kcs-finish7minus`, `floor-kcs-exposed`(is_default=true),
 `floor-molit-cushion`, `floor-lh-exposed`, `floor-lh-thick` 6행이 반환되면 정상이다.
+
+007을 실행하면 `fn_resolve_criteria`가 `p_kind analysis_kind default 'flatness'` 인자
+하나를 더 받는 3인자 시그니처로 바뀐다. 위 쿼리처럼 세 번째 인자를 생략한 2인자 호출은
+기본값 `'flatness'`가 채워져 그대로 동작하므로(위 6행 결과가 그대로 나온다) 기존 호출부를
+고칠 필요가 없다. 구배 기준을 조회하려면 세 번째 인자에 `'slope'`를 명시한다:
+
+```sql
+select * from fn_resolve_criteria(null, 'floor', 'slope');
+```
+
+`slope-roof-exposed`, `slope-roof-protected`, `slope-bathroom`, `slope-parking`,
+`slope-indoor-level`(is_default=true) 5행이 반환되면 정상이다.
 
 **(4) Storage 버킷 확인**(2단계에서 005를 실행했을 때만 해당) — 버킷이 제대로 만들어졌는지:
 
@@ -202,7 +264,7 @@ select id, file_size_limit from storage.buckets;
 4. 시작 로그 확인:
 
    ```
-   [flatworker] 시작: worker_id=local-1, storage_backend=local, data_dir=..\data, poll_interval=3.0s
+   [flatworker] 시작: worker_id=local-1, storage_backend=local, data_dir=..\data, poll_interval=3.0s, engine_version=p4-0.5.0
    ```
 
    이 로그가 찍히고 프로세스가 종료되지 않은 채 대기 중이면 설정·연결이 정상이다(잡
@@ -253,7 +315,9 @@ select id, file_size_limit from storage.buckets;
 - 워커 자체의 실행·테스트·코드 구조는 `worker/README.md` 참고.
 - `jobs`/`analyses` 등 산출물 JSON의 필드 계약은 `docs/contracts/stats-schema.md` 참고.
 - 이 가이드의 SQL 예시는 `supabase/migrations/002_functions_seed.sql`의 함수 시그니처
-  (`fn_job_claim(p_worker text)`, `fn_resolve_criteria(p_site_id uuid, p_surface
-  surface_type)` 등)를 정본으로 삼는다 — 마이그레이션이 바뀌면 이 문서도 함께 갱신한다.
+  (`fn_job_claim(p_worker text)` 등)를 정본으로 삼는다. 다만 `fn_resolve_criteria`는
+  007이 `(p_site_id uuid, p_surface surface_type, p_kind analysis_kind default
+  'flatness')` 3인자 시그니처로 교체했으므로 `007_slope_analysis.sql`이 정본이다 —
+  마이그레이션이 바뀌면 이 문서도 함께 갱신한다.
 - **클라우드(Vercel + Railway + Supabase Storage) 배포 절차는 [`DEPLOY.md`](DEPLOY.md)
   참고.**

@@ -48,7 +48,7 @@ def test_handle_analyze_floor(tmp_path):
     assert a["overall_verdict"] in ("borderline", "repair")
     assert (artifacts_dir(cfg.data_dir, aid) / "heatmap.png").exists()
     assert a["auto_summary"] and "대체하지 않습니다" in a["auto_summary"]
-    assert db.current_analysis.get("scan1") == aid
+    assert db.current_analysis.get(("scan1", "flatness")) == aid
     # 코드리뷰 Important(I1): DB에는 버킷-상대 규약 문자열만 저장(워커 CWD 상대·OS
     # 종속 절대경로가 아님) — 실제 파일 위치는 소비자가 DATA_DIR에 결합해 얻는다.
     assert a["artifacts_dir"] == f"artifacts/{aid}"

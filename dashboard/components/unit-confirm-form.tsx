@@ -44,9 +44,12 @@ export function UnitConfirmForm({ scan, userId }: { scan: ScanRow; userId: strin
     }
 
     // 2) 분석 행 생성 -> 분석 잡 등록 (스펙 §3.2.③: 단위 확정 시 분석 잡 자동 등록)
+    // kind를 명시적으로 지정한다(단계 C). DB 기본값('flatness')에 기대면 나중에
+    // 기본값이 바뀔 때 이 화면의 의미가 조용히 바뀐다 - 단위 확인 화면은 항상
+    // 평활도 첫 분석만 만든다(구배는 스캔 상세의 별도 버튼으로 시작한다).
     const { data: analysis, error: aErr } = await supabase.from('analyses').insert({
       scan_id: scan.id, surface: scan.surface, criteria_id: scan.selected_criteria_id,
-      status: 'queued', created_by: userId,
+      kind: 'flatness', status: 'queued', created_by: userId,
     }).select('id').single();
     if (aErr || !analysis) { await failAndRevert(aErr?.message ?? '분석 등록 실패'); return; }
     const r = await enqueueJob(supabase, 'analyze', { analysis_id: analysis.id });

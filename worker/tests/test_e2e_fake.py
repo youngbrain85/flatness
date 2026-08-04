@@ -70,7 +70,7 @@ def test_e2e_enqueue_to_artifacts_via_runner(tmp_path):
     assert (out_dir / "stats.json").exists()
     assert (out_dir / "cells.json").exists()
     assert (out_dir / "heatmap.png").exists()
-    assert db.current_analysis.get("scan1") == aid  # set_current_analysis 반영
+    assert db.current_analysis.get(("scan1", "flatness")) == aid  # set_current_analysis 반영
 
 
 def test_e2e_unknown_job_type_fails_without_touching_analyses(tmp_path):

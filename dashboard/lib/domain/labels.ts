@@ -1,7 +1,11 @@
 // 표시 매핑 정본 (stats-schema.md 부록 A, 스펙 §9)
 import type {
-  AnalysisStatus, Grade, Lineage, ReportGenStatus, ReportStatus, ScanStatus, Surface,
+  AnalysisKind, AnalysisStatus, Grade, Lineage, ReportGenStatus, ReportStatus, ScanStatus, Surface,
 } from './types';
+
+export const ANALYSIS_KIND_LABEL: Record<AnalysisKind, string> = {
+  flatness: '평활도', slope: '구배',
+};
 
 export const GRADE_LABEL: Record<Grade, string> = {
   pass: '적합', borderline: '경계', repair: '보수', rework: '재시공', na: '판정 불가',

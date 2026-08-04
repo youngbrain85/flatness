@@ -17,8 +17,52 @@ Vercel(대시보드) + Railway(워커, Docker) + Supabase(DB·Auth·Storage) 구
 
 ## 1. Supabase (사용자 수행)
 
-1. SQL Editor에서 `005_storage_buckets.sql` 실행(001~004를 아직 실행하지 않았다면
-   `docs/SUPABASE_SETUP.md` 2단계부터 순서대로 먼저 진행한다)
+1. SQL Editor에서 `001_schema.sql`부터 `007_slope_analysis.sql`까지 **순서대로** 실행한다
+   (001~004를 아직 실행하지 않았다면 `docs/SUPABASE_SETUP.md` 2단계부터 순서대로 먼저
+   진행한다). 006(`006_report_soft_delete.sql`)은 보고서 소프트 삭제, 007
+   (`007_slope_analysis.sql`)은 구배 분석(`analyses.kind` 컬럼·구배 판정 기준 시드)을
+   추가한다 - 둘 다 재실행 안전(멱등)하다
+
+   > **[필수] 배포 순서 경고**: **007 적용 -> 엔진·워커 배포(저장소 루트 `Dockerfile`이
+   > `engine/`·`worker/`를 한 이미지로 함께 빌드하므로 Railway 재배포 1회로 둘이 자동으로
+   > 동시에 올라간다) -> 대시보드 배포** 순서를 지킨다. 007을 적용하지 않은 채 대시보드를
+   > 먼저 배포하면 `analyses` 테이블에 `kind` 컬럼이 없어 모든 분석 목록·상세 조회가
+   > 실패한다.
+   >
+   > **워커를 007보다 먼저 배포하면 더 심각한 문제가 생긴다 - 이미 검수를 통과한
+   > 평활도·임포트 분석까지 전부 실패한다.** `worker/flatworker/db.py`의
+   > `set_current_analysis`(모든 analyze/import 잡의 마지막 단계)는 두 PATCH 모두에
+   > `kind` 필터를 무조건 건다. 007 미적용 DB에는 `analyses.kind` 컬럼 자체가 없어
+   > PostgREST가 400(`42703 undefined_column`)을 돌려준다. 엔진은 이미 다 돌고
+   > stats까지 만들어진 뒤 **마지막 PATCH에서만** 실패하므로, 3회 재시도로 엔진이
+   > 세 번 돌아 자원을 태우고 `analyses.status='failed'`인데 `stats`·
+   > `overall_verdict`·`coverage_pct`는 정상적으로 채워진 **모순 상태**가 남는다.
+   > **증상**: Railway 로그에 `[flatworker] 복구 불가능한 DB 오류로 종료합니다
+   > (status=400)` 계열의 한 줄만 남고, 화면에는 "사전 검사에 실패했습니다" 대신
+   > 그냥 "분석 실패"만 뜬다 - 워커를 의심할 단서가 로그의 400 하나뿐이다.
+   > **실질적 조치**: Railway가 GitHub push 자동 재배포로 설정돼 있다면, **push하기
+   > 전에** Supabase SQL Editor에서 007을 먼저 적용한다(push와 SQL 실행 사이에 워커가
+   > 옛 상태로 먼저 뜨는 시간차를 만들지 않는다). 이미 이 창에서 `failed`로 굳은
+   > 분석은 007을 뒤늦게 적용해도 **자동으로 복구되지 않는다** - 스캔 상세 화면에서
+   > "분석" 버튼을 다시 눌러 재분석해야 한다.
+   >
+   > **007 자체는 재실행해도 안전하다**(`007_slope_analysis.sql`이 스스로 "재실행
+   > 안전(멱등)"이라 선언하며, `drop function if exists`가 2인자·3인자 시그니처를 모두
+   > 겨냥한 뒤 재생성한다). **`002_functions_seed.sql`은 어떤 경우에도 다시 실행하지
+   > 않는다** - (1) `criteria` 시드 INSERT(002:176)에 `on conflict` 절이 없어(005·006·
+   > 007의 시드는 전부 있다) 001이 건 `criteria_global_name` 부분 유니크 위반으로
+   > 재실행이 그 자리에서 23505로 죽는다. (2) 002가 003·004에서 이미 확장한 잡 큐
+   > 함수 3종(`fn_job_claim`·`fn_job_fail`·`fn_reap_stuck_jobs`)을 P2 시절 정의로
+   > `create or replace`한다 - 오류 없이 조용히 되돌아가며, import 잡 실패가
+   > `analyses.status`를 더 이상 갱신하지 않아 분석이 `queued`에 영구 고착되거나,
+   > precheck 실패가 `scans.status`에 반영되지 않아 실패 안내 박스가 영영 안 뜨거나,
+   > report의 `gen_status` 전이가 사라져 생성 중 표시가 폴링을 영원히 지속하는 회귀
+   > 3종이 되살아난다. **007이 필요한 상황이면 007만 다시 실행한다** -
+   > `fn_resolve_criteria`의 drop(007:50-51)이 2인자·3인자 시그니처를 모두 겨냥하므로,
+   > 002 재실행으로 되살아난 옛 2인자 오버로드가 있더라도 007 재실행 한 번으로
+   > 제거되고 3인자가 정본으로 재생성된다(권한 revoke/grant도 007:69-71이 함께
+   > 재발급한다). 이 원칙은 `docs/SUPABASE_SETUP.md`의 "새 프로젝트에서 순서대로
+   > 한 번씩만 실행하면 정상"과 일치한다 - 예외는 007 하나뿐이다
 2. Storage 화면에서 `raw-scans`·`artifacts`·`reports` 버킷 3개 생성 확인
    (정책 생성이 `42501`로 실패하면 백로그 티켓 42대로 Storage > Policies UI에서 수동 생성)
 3. **[필수] 회원가입(Sign Ups) 차단** - **Authentication** > **Providers** > **Email**에서
@@ -65,8 +109,19 @@ Vercel(대시보드) + Railway(워커, Docker) + Supabase(DB·Auth·Storage) 구
    | `WORKER_ID` | `railway-1` |
    | `POLL_INTERVAL_S` | `3` |
 4. Deploy 후 Logs에서 `[flatworker] 시작: worker_id=railway-1, storage_backend=supabase,
-   poll_interval=3.0s` 확인(`storage_backend=supabase`가 찍혀야 정상이다. 로컬 실행 시 보이는
-   `data_dir=...`는 `storage_backend=local`에서만 출력되므로 여기서는 나타나지 않는다)
+   poll_interval=3.0s, engine_version=p4-0.5.0` 확인(`storage_backend=supabase`가 찍혀야
+   정상이다. 로컬 실행 시 보이는 `data_dir=...`는 `storage_backend=local`에서만
+   출력되므로 여기서는 나타나지 않는다)
+5. **엔진 능력 가드**: 위 로그 대신 `[flatworker] 엔진 모듈을 불러올 수 없습니다: ...`와
+   `[flatworker] 엔진(engine/)을 워커보다 먼저 배포해야 합니다...` 두 줄이 찍히고
+   워커가 종료 코드 1로 죽으면, 배포된 엔진에 `analyze_slope`가 없다는 뜻이다
+   (`worker/flatworker/__main__.py`가 기동 시점에 이 상태를 붙잡아 트레이스백 대신
+   남기는 안내다). §0에서 보듯 Dockerfile이 `engine/`·`worker/`를 한 이미지로 함께
+   빌드하므로 정상 배포에서는 발생하지 않는다 - 이 로그가 보이면 대부분 **빌드
+   캐시가 낡은 엔진 레이어를 재사용**한 경우다. Railway Deployments에서 캐시 없이
+   재배포한다(또는 새 커밋을 하나 만들어 캐시를 무효화한 뒤 재배포한다). 오류
+   메시지 안의 `pip install -e engine` 안내는 **로컬 개발 환경**을 위한 것이고
+   Railway 컨테이너 안에서 실행할 수 있는 명령이 아니니 혼동하지 않는다
 
 ## 3. Vercel - 대시보드 (사용자 수행)
 
@@ -99,11 +154,40 @@ Vercel(대시보드) + Railway(워커, Docker) + Supabase(DB·Auth·Storage) 구
      `engine/flatness/outputs/heatmap.py`의 `matplotlib.rc("font", family=...)` 폴백
      체인 첫 후보가 이 이름과 정확히 일치하는지 확인한다
 4. 50MB 초과 파일을 올려 한국어 안내가 뜨는지 확인
+5. **구배 분석 스모크** - 007 적용 여부를 실제로 검증하는 유일한 절차다. 업로드
+   화면에는 분석 종류 선택기가 없다(구배는 스캔 상세의 별도 버튼에서 시작한다 -
+   `dashboard/components/upload-form.tsx:45-47` 주석). 아래 실제 경로를 따라간다:
+
+   1. 로그인 -> 업로드 화면에서 **바닥(floor) 스캔**을 "스캔 분석" 모드로 올린다
+      (임포트 모드가 아니다) -> 사전 검사 -> 단위 확정 -> **평활도** 분석이
+      `status='done'`이 될 때까지 기다린다
+   2. `/scans/[id]` 화면으로 이동한다. 아래 조건을 **모두** 만족해야 "구배 분석"
+      섹션이 나타난다(`dashboard/app/scans/[id]/page.tsx`의 `showSlopeSection`):
+      방금 완료한 평활도 분석이 있고 `status === 'done'`, 스캔이 바닥(`surface ===
+      'floor'`, 벽 스캔에는 뜨지 않는다), 임포트(CSV/JSON) 결과가 아님, 스캔에
+      측정위치(location)가 지정돼 있음. **섹션이 안 보이면** 이 네 조건부터 확인한다
+   3. **"구배 분석" 버튼**(`dashboard/components/reanalyze-button.tsx`의
+      `ANALYSIS_KIND_LABEL.slope + ' 분석'` = "구배 분석" 문구)을 클릭해 분석을
+      시작하고 완료까지 기다린다. **여기가 007 적용 여부가 실제로 갈리는 지점이다**
+      - 007 미적용 시 `fn_resolve_criteria`가 3인자를 못 받아 화면에 "구배 판정
+      기준을 찾을 수 없습니다. 마이그레이션 007이 적용됐는지 확인하세요."가 뜬다
+   4. 완료 후 `/analyses/[id]`를 연다. `isSlopeStats(stats)` 가드
+      (`dashboard/app/analyses/[id]/page.tsx`)가 안내 화면으로 보낸다 - 세부과업 4
+      단계 C 시점에는 **상세 표가 아니라** 판정 요약(등급별 셀 수)·판정 가능 비율·
+      평균/표준편차/최대 편차·경고 목록·**구배 판정 지도 PNG**가 뜨고, 맨 아래에
+      "구배 분석 상세 결과 화면은 준비 중입니다" 문구가 붙는 것이 정상이다(상세
+      표는 단계 D에서 추가된다. `dashboard/components/analysis/slope-placeholder.tsx`)
+   5. **지도 PNG가 실제로 뜨는지 확인한다** - 이 이미지는 Storage 서명 URL로
+      서빙되므로, 뜬다면 워커가 산출물 경로를 버킷-상대로 바꿔 올리는 배선까지
+      함께(간접) 검증된 것이다
+   6. Railway Logs에서 기동 로그에 `engine_version=p4-0.5.0`이 찍히는지, 방금 만든
+      `analyses` 행의 `engine_version` 컬럼에 같은 값이 저장됐는지 확인한다
 
 ## 사용자가 직접 해야 하는 작업 요약 (코드로 대신할 수 없음)
 
-1. Supabase SQL Editor에서 `005_storage_buckets.sql` 실행, 버킷 3종 생성 확인(정책 42501
-   실패 시 UI 수동 생성)
+1. Supabase SQL Editor에서 `001_schema.sql` ~ `007_slope_analysis.sql`을 순서대로 실행
+   (**[필수] 007까지 반드시**, 007 없이 대시보드를 먼저 올리면 분석 조회 전체가 깨진다),
+   버킷 3종 생성 확인(정책 42501 실패 시 UI 수동 생성)
 2. **[필수]** Supabase Authentication > Providers > Email에서 회원가입(Sign Ups) 차단 -
    이유는 위 §1의 3번 참고
 3. **[필수]** Supabase Authentication > **Add user**로 로그인 계정 생성(**Auto Confirm
@@ -112,7 +196,8 @@ Vercel(대시보드) + Railway(워커, Docker) + Supabase(DB·Auth·Storage) 구
 4. Railway: GitHub 저장소 연결, 환경변수 5개 입력, Deploy
 5. Vercel: 저장소 Import, **Root Directory를 `dashboard`로 지정**, 환경변수 3개 입력, Deploy
 6. Supabase Authentication > URL Configuration에 Vercel 도메인 추가
-7. 배포 후 스모크: 업로드 -> 분석 -> 보고서 PDF 한글 육안 확인, 50MB 초과 안내 확인
+7. 배포 후 스모크: 업로드 -> 분석 -> 보고서 PDF 한글 육안 확인, 50MB 초과 안내 확인,
+   구배 분석 스모크(§4-5 참고 - 007 검증을 겸한다)
 8. 저장소 공개 전환 전 `git log -p`로 키 노출 여부 최종 확인
 
 ## 참고

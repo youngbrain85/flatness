@@ -120,8 +120,12 @@ class DBClient(ABC):
     def update_analysis(self, analysis_id, fields):
         raise NotImplementedError
 
-    def set_current_analysis(self, scan_id, analysis_id):
-        """scan_id의 is_current 분석을 analysis_id로 전환(기존 현재 분석은 해제)."""
+    def set_current_analysis(self, scan_id, analysis_id, kind="flatness"):
+        """scan_id·kind의 is_current 분석을 analysis_id로 전환(기존 현재 분석은 해제).
+
+        kind 기본값은 기존 평활도 전용 호출부(handle_analyze/handle_import의
+        `_finalize`)가 인자 없이 그대로 호출해도 동작하도록 한다.
+        """
         raise NotImplementedError
 
     # -- 보고서 (P4) -----------------------------------------------------
@@ -292,16 +296,27 @@ class SupabaseRest(DBClient):
     def update_analysis(self, analysis_id, fields):
         self._patch("analyses", analysis_id, fields)
 
-    def set_current_analysis(self, scan_id, analysis_id):
-        # analyses_current 부분 유니크 인덱스(scan_id당 is_current 1개)를 지키려면
-        # 먼저 같은 scan의 기존 현재 분석을 해제한 뒤에 새 분석을 현재로 세워야 한다.
+    def set_current_analysis(self, scan_id, analysis_id, kind="flatness"):
+        # analyses_current 부분 유니크 인덱스(007: (scan_id, kind)당 is_current 1개)를
+        # 지키려면 먼저 같은 scan·kind의 기존 현재 분석을 해제한 뒤에 새 분석을
+        # 현재로 세워야 한다. kind 필터가 없으면 구배 분석을 현재로 세울 때마다
+        # 같은 스캔의 평활도 현재 분석이 함께 내려간다(007이 인덱스를 넓혀도 이쪽은
+        # 코드 문제라 그대로 재현된다). deleted_at 필터도 함께 건다 - 삭제된 행까지
+        # 다시 쓸 이유가 없다. 두 PATCH 쿼리 모두에 동일하게 건다.
         resp = self._client.patch(
             "/rest/v1/analyses",
-            params={"scan_id": f"eq.{scan_id}", "id": f"neq.{analysis_id}"},
+            params={"scan_id": f"eq.{scan_id}", "id": f"neq.{analysis_id}",
+                    "kind": f"eq.{kind}", "deleted_at": "is.null"},
             json={"is_current": False},
         )
         self._raise_for_status(resp)
-        self._patch("analyses", analysis_id, {"is_current": True})
+        resp2 = self._client.patch(
+            "/rest/v1/analyses",
+            params={"id": f"eq.{analysis_id}", "kind": f"eq.{kind}",
+                    "deleted_at": "is.null"},
+            json={"is_current": True},
+        )
+        self._raise_for_status(resp2)
 
     # -- 보고서 (P4) -----------------------------------------------------
     def get_report(self, report_id):

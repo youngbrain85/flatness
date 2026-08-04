@@ -27,7 +27,7 @@ const analysis: AnalysisRow = {
   params: {}, engine_version: 'p1d-0.4.0', status: 'done', stats, coverage_pct: 98.0,
   overall_verdict: 'pass', warnings: [], artifacts_dir: 'artifacts/an1',
   auto_summary: '자동 의견', user_summary: null, is_current: true, deleted_at: null,
-  created_at: '2026-07-29', created_by: null,
+  created_at: '2026-07-29', created_by: null, kind: 'flatness',
 };
 
 const scan: ScanRow = {
