@@ -40,6 +40,25 @@ def slope_drain_points(params):
     return [(float(p["x"]), float(p["y"])) for p in pts] or None
 
 
+def drain_points_from_stats(stats):
+    """judge_slope_cells가 낸 stats["drain_points"](예: [[3.2, 5.1], ...] - 정렬된
+    좌표쌍) -> 스펙 §3.5 표준 형태([{"x":3.2,"y":5.1}, ...])로 되돌린다.
+
+    Task 3 리뷰 Important-3: 재판정의 previous_drain_points는 params가 아니라
+    이 stats에서 가져와야 한다 - params.drain_points는 D4의 "엔큐 먼저, 성공하면
+    params 쓰기" 순서 때문에 워커가 analyses 행을 읽는 시점에 이미 "이번 클릭"
+    좌표로 덮여 있을 수 있다. stats는 직전 판정이 워커 자신의 update_analysis로
+    쓴 값이라 이 경합에 영향받지 않는 유일하게 신뢰할 수 있는 출처다.
+
+    slope_drain_points의 역함수이지만 입력 스키마가 다르다(dict가 아니라
+    [x, y] 좌표쌍 리스트) - stats는 judge_slope_cells가 이미 그 형태로 낸다.
+    params.drain_points와 동일한 §3.5 형태로 되돌려야 화면(대시보드)이
+    previous_drain_points를 drain_points와 같은 스키마로 읽을 수 있다.
+    """
+    pairs = (stats or {}).get("drain_points") or []
+    return [{"x": p[0], "y": p[1]} for p in pairs] or None
+
+
 def normalize_slope_stats(stats, analysis_id):
     """DB 저장 전 정규화. 원본을 건드리지 않고 사본을 돌려준다.
 
@@ -114,7 +133,8 @@ def _iso_now():
     return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
 
 
-def build_slope_judge_fields(stats, analysis_id, old_params, drain_points_raw):
+def build_slope_judge_fields(stats, analysis_id, old_params, previous_drain_points,
+                             drain_points_raw):
     """재판정 결과(judge_slope_cells의 stats) -> analyses 갱신 필드 dict.
 
     브리프 함정 2: `_finalize`를 쓰지 않는다 - 그 함수는 set_current_analysis를
@@ -125,8 +145,15 @@ def build_slope_judge_fields(stats, analysis_id, old_params, drain_points_raw):
 
     params는 PATCH가 전체 컬럼을 통째로 대체하므로(부분 병합이 아님) 기존
     params를 복사해 drain_points·judge 두 키만 갱신한 새 dict를 만들어 돌려준다.
-    직전 drain_points는 judge.previous_drain_points에 남긴다(설계 결정 D8) -
-    산출물이 x-upsert:true로 무조건 덮이므로 이전 판정을 되돌릴 유일한 단서다.
+
+    previous_drain_points는 호출자가 이미 계산해 넘긴다(Task 3 리뷰 Important-3) -
+    `old_params.get("drain_points")`를 여기서 다시 읽지 않는다. old_params는 D4의
+    경합 때문에 이미 "이번 클릭" 좌표로 덮여 있을 수 있어(대시보드가 엔큐 성공
+    직후 params를 쓰므로, 이 핸들러가 analyses 행을 읽는 시점엔 대개 이미 반영돼
+    있다) previous의 출처로 못 쓴다 - 호출자가 stats_prev(직전 판정이 워커
+    자신이 쓴 값)에서 뽑아 넘긴 것을 그대로 신뢰한다. judge.previous_drain_points
+    에 남기는 이유는 설계 결정 D8 - 산출물이 x-upsert:true로 무조건 덮이므로
+    이전 판정을 되돌릴 유일한 단서다.
     """
     old_params = dict(old_params or {})
     new_params = dict(old_params)
@@ -134,7 +161,7 @@ def build_slope_judge_fields(stats, analysis_id, old_params, drain_points_raw):
     new_params["judge"] = {
         "state": "done",
         "at": _iso_now(),
-        "previous_drain_points": old_params.get("drain_points"),
+        "previous_drain_points": previous_drain_points,
     }
     return {
         "stats": normalize_slope_stats(stats, analysis_id),

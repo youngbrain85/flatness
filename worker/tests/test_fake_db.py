@@ -252,6 +252,61 @@ def test_slope_judge_job_status_propagates_to_params_judge_without_touching_stat
     assert db.analyses["a1"]["status"] == "done"
 
 
+def test_slope_judge_judge_merge_preserves_previous_drain_points_through_all_transitions():
+    """009가 전면 교체(jsonb_build_object만)에서 병합(coalesce(...) || ...)으로
+    바뀐 이유(Task 2 리뷰 대응) - Task 3(D8)이 재판정 성공 시 남기는
+    judge.previous_drain_points가 그 다음 claim에서 사라지면 "재판정 3회 실패
+    시 되돌릴 수단"이라는 D8의 유일한 안전장치가 무력화된다. claim -> fail(재큐)
+    -> claim -> [고착 재현] reap -> claim -> fail(소진) 순서로 다섯 번 전이하는
+    동안 이 키가 끝까지 살아남는지 추적한다. 클레임이 이전 'error'만 지우고
+    'previous_drain_points'는 그대로 두는지도 함께 확인한다.
+    """
+    db = FakeDB()
+    db.analyses["a1"] = {
+        "id": "a1", "status": "done",
+        "params": {"drain_points": [{"x": 9.0, "y": 9.0}],
+                  "judge": {"state": "done", "at": "2026-01-01T00:00:00Z",
+                            "previous_drain_points": [{"x": 1.0, "y": 1.0}]}},
+    }
+    jid = db.enqueue_job("slope_judge", {"analysis_id": "a1"})
+
+    db.claim_job(ignore_backoff=True)  # attempts=1
+    judge = db.analyses["a1"]["params"]["judge"]
+    assert judge["state"] == "processing"
+    assert judge["previous_drain_points"] == [{"x": 1.0, "y": 1.0}]
+    assert "error" not in judge  # 클레임은 병합 전 기존 error를 지운다(이번엔 애초에 없었음)
+
+    db.fail_job(jid, "err0")  # attempts(1) < max_attempts(3) -> 재큐
+    judge = db.analyses["a1"]["params"]["judge"]
+    assert judge["state"] == "queued"
+    assert judge["error"] == "err0"
+    assert judge["previous_drain_points"] == [{"x": 1.0, "y": 1.0}]  # 살아남음
+
+    db.claim_job(ignore_backoff=True)  # attempts=2
+    judge = db.analyses["a1"]["params"]["judge"]
+    assert judge["state"] == "processing"
+    assert "error" not in judge  # 클레임이 직전 err0를 지웠다
+    assert judge["previous_drain_points"] == [{"x": 1.0, "y": 1.0}]  # 여전히 살아남음
+
+    # 워커 크래시 모사 -> 회수
+    db.jobs[jid]["locked_at"] = datetime.now(timezone.utc) - timedelta(minutes=31)
+    db.reap_stuck_jobs()
+    judge = db.analyses["a1"]["params"]["judge"]
+    assert judge["state"] == "queued"
+    assert judge["previous_drain_points"] == [{"x": 1.0, "y": 1.0}]  # 회수를 거쳐도 살아남음
+
+    db.claim_job(ignore_backoff=True)  # attempts=3
+    db.fail_job(jid, "err-final")  # attempts(3) >= max_attempts(3) -> 최종 실패
+    assert db.jobs[jid]["status"] == "failed"
+    judge = db.analyses["a1"]["params"]["judge"]
+    assert judge["state"] == "failed"
+    assert judge["error"] == "err-final"
+    assert judge["previous_drain_points"] == [{"x": 1.0, "y": 1.0}]  # 끝까지 살아남음
+
+    # 형제 키(drain_points)도 판정 전이 내내 무관하게 보존돼야 한다.
+    assert db.analyses["a1"]["params"]["drain_points"] == [{"x": 9.0, "y": 9.0}]
+
+
 def test_slope_judge_complete_job_does_not_touch_params_judge():
     """fn_job_complete는 params를 건드리지 않는다 - judge.state='done'은 워커
     핸들러(handle_slope_judge)가 stats 등 다른 파생 컬럼과 함께 직접 쓴다

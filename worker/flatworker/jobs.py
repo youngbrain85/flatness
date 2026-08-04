@@ -187,8 +187,20 @@ def handle_slope_judge(db, cfg, payload):
     브리프 함정 3: 단계 C까지 만들어진 구배 분석에는 slope_cells.json이 없다
     (재판정 입력이 이번 단계에 새로 생긴 산출물이므로). 화면이 이 경우를 미리
     막지만(설계 결정 D7) 워커도 명확한 한국어 예외로 방어한다.
+
+    Task 3 리뷰 Important-1: slope_judge 잡은 정의상 배수구 클릭으로만 생긴다 -
+    좌표 없는 payload는 호출자(대시보드) 버그이지 정상적인 "방향 미판정" 경로가
+    아니다. 조용히 통과시키면 판정은 "성공"으로 끝나면서 방향 판정만 빠지고,
+    거기다 params.drain_points까지 빈 배열로 덮여 화면의 배수구 마커가 사라진다
+    (조용한 실패 - 이 저장소가 가장 경계하는 실패 양식). 그래서 여기서 시끄럽게
+    거부한다.
     """
     analysis_id = payload["analysis_id"]
+    drain_points_raw = payload.get("drain_points")
+    if not drain_points_raw:
+        raise ValueError(
+            "배수구 좌표가 없는 재판정 요청입니다. 지도에서 배수구 위치를 다시 클릭한 뒤 시도하세요.")
+
     analysis, criteria_row, threshold = slope.slope_judge_context(db, analysis_id)
 
     stats_prev = analysis.get("stats") or {}
@@ -196,12 +208,6 @@ def handle_slope_judge(db, cfg, payload):
     if not cells_json_key:
         raise ValueError("이 분석에는 셀 데이터 파일이 없습니다. 구배 분석을 다시 실행하세요.")
 
-    # 원 analyze_slope가 쓴 격자 크기를 그대로 물려받는다 - 재판정마다 다른 cell_m을
-    # 쓰면 이미 산출된 셀(고정된 width_m/height_m)과 렌더·판정 단위가 어긋난다.
-    cell_m = stats_prev.get("cell_m", 2.0)
-    subcell_m = stats_prev.get("subcell_m", 0.05)
-
-    drain_points_raw = payload.get("drain_points") or []
     drain_points = slope.slope_drain_points({"drain_points": drain_points_raw})
 
     storage = get_storage(cfg, db)
@@ -214,14 +220,37 @@ def handle_slope_judge(db, cfg, payload):
         cells_path = out_dir / "slope_cells.json"
         if not storage.download_to(cells_json_key, cells_path):
             raise ValueError(f"셀 데이터 파일을 저장소에서 찾을 수 없습니다: {cells_json_key}")
-        cells = load_slope_cells(cells_path)
+        cells, meta = load_slope_cells(cells_path)
+        # Task 3 리뷰 Critical-2: cell_m/subcell_m의 정본은 이 셀 파일의 meta뿐이다.
+        # cells의 width_m/height_m이 바로 이 cell_m으로 산출됐으므로
+        # grade_slope_cells의 조각 셀 분기(width_m < cell_m/2)가 같은 값을 써야
+        # 한다. analyses.stats로 조용히 물러서면(폴백) judge_slope_cells가 이제
+        # cell_m을 필수 인자로 요구하게 만든 Task 1 리뷰의 강제를 워커가 키워드
+        # 인자로 몰래 우회하는 셈이다 - meta에 없으면 조용히 넘어가지 않고 즉시
+        # 예외로 막는다(SlopeCell 스키마 계약 위반이므로 재시도해도 소용없다).
+        if meta.get("cell_m") is None or meta.get("subcell_m") is None:
+            raise ValueError(
+                f"셀 데이터 파일에 cell_m/subcell_m 정보가 없습니다: {cells_json_key}. "
+                "구배 분석을 다시 실행하세요.")
+        cell_m = meta["cell_m"]
+        subcell_m = meta["subcell_m"]
         judged_stats = judge_slope_cells(cells, threshold, out_dir,
                                          drain_points=drain_points,
                                          cell_m=cell_m, subcell_m=subcell_m)
         storage.upload_dir(f"artifacts/{analysis_id}", out_dir)
 
+    # Task 3 리뷰 Important-3: previous_drain_points의 출처는 params가 아니라
+    # stats_prev(직전 판정이 워커 자신의 update_analysis로 쓴 값)여야 한다.
+    # D4가 "엔큐 먼저, 성공하면 params 쓰기" 순서를 못 박았으므로, 이 핸들러가
+    # analyses 행을 읽는 시점에 params.drain_points는 이미 이번 클릭(payload와
+    # 동일)의 좌표일 수 있다(대시보드 폴링이 3초 간격이라 사실상 거의 항상 이
+    # 순서다) - 그 값을 previous로 쓰면 "직전"이 "방금"이 되어 D8이 만들려던
+    # 되돌리기 안전장치가 무력화된다. stats_prev는 이 잡이 시작되기 전 워커
+    # 자신이 마지막으로 성공시킨 판정의 결과이므로 이 경합에 영향받지 않는다.
+    previous_drain_points = slope.drain_points_from_stats(stats_prev)
     fields = slope.build_slope_judge_fields(
-        judged_stats, analysis_id, analysis.get("params"), drain_points_raw)
+        judged_stats, analysis_id, analysis.get("params"),
+        previous_drain_points, drain_points_raw)
     db.update_analysis(analysis_id, fields)
 
 
