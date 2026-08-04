@@ -36,10 +36,21 @@
 -- params.judge.previous_drain_points에 직전 배수구 좌표를 남겨 되돌리기용으로
 -- 쓴다 - jsonb_build_object로 judge를 통째로 갈아치우면 다음 클레임 순간 이
 -- 키가 사라져 D8이 만들려던 안전장치가 정확히 필요한 순간에 무력화된다. 그래서
--- 아래 네 분기 모두 `coalesce(params->'judge', '{}'::jsonb) || jsonb_build_object
--- (...)` 형태로 기존 judge 위에 이번 전이분만 덮어쓴다(클레임만 예외적으로
--- `- 'error'`로 이전 실패 메시지를 먼저 지운다 - 004의 gen_error=null 클레임
--- 관례와 동일한 의도).
+-- 아래 네 분기 모두 `coalesce(nullif(params->'judge', 'null'::jsonb), '{}'::jsonb)
+-- || jsonb_build_object(...)` 형태로 기존 judge 위에 이번 전이분만 덮어쓴다
+-- (클레임만 예외적으로 `- 'error'`로 이전 실패 메시지를 먼저 지운다 - 004의
+-- gen_error=null 클레임 관례와 동일한 의도).
+--
+-- **`nullif(..., 'null'::jsonb)`가 빠지면 안 되는 이유**: `params->'judge'`는
+-- judge 키가 아예 없으면 SQL `NULL`이라 `coalesce`가 잡아내지만, judge 키가
+-- JSON *리터럴* `null`이면(예: 다른 코드가 `{"judge": null, ...}`을 쓴 경우)
+-- `params->'judge'`는 SQL `NULL`이 아니라 jsonb 스칼라 `'null'::jsonb`를
+-- 반환한다 - `coalesce`는 이걸 그대로 통과시킨다. `'null'::jsonb - 'error'`와
+-- `'null'::jsonb || obj`는 둘 다 스칼라에 키 삭제·객체 연결을 할 수 없어
+-- **예외**를 던진다. 이 함수는 security definer라 RPC 호출자에게 예외가
+-- 그대로 전파되므로, 걸리면 fn_job_claim이 계속 실패해 그 잡이 영구히 큐에
+-- 남는다 - 009 자체가 막으려는 것과 같은 계열의 실패 양식이다. `nullif`로
+-- JSON null도 '{}'로 정규화해 미리 막는다.
 --
 -- 대시보드 계약(Task 5가 읽는다): error 키는 state='failed'일 때만 사용자에게
 -- 노출한다. state='queued'일 때도 error가 함께 저장돼 있을 수 있으나(재큐 중인
@@ -92,7 +103,7 @@ begin
     -- 병합(||)으로 previous_drain_points(Task 3, D8) 등 judge의 다른 키를
     -- 보존한다. 이전 실패 메시지(error)만 지운다.
     update analyses set params = jsonb_set(params, '{judge}',
-             (coalesce(params->'judge', '{}'::jsonb) - 'error')
+             (coalesce(nullif(params->'judge', 'null'::jsonb), '{}'::jsonb) - 'error')
                || jsonb_build_object('state', 'processing', 'at', to_jsonb(now())), true)
      where id = (v_job.payload->>'analysis_id')::uuid;
   end if;
@@ -119,7 +130,7 @@ begin
       -- 재시도 소진: analyses.status='done'은 그대로 두고 judge 채널만 failed로.
       -- 병합(||)으로 previous_drain_points 등 judge의 다른 키를 보존한다.
       update analyses set params = jsonb_set(params, '{judge}',
-               coalesce(params->'judge', '{}'::jsonb)
+               coalesce(nullif(params->'judge', 'null'::jsonb), '{}'::jsonb)
                  || jsonb_build_object('state', 'failed', 'at', to_jsonb(now()), 'error', p_error), true)
        where id = (v_job.payload->>'analysis_id')::uuid;
     end if;
@@ -140,7 +151,7 @@ begin
       -- 계약: error는 state='failed'일 때만 사용자에게 노출한다). 병합(||)으로
       -- previous_drain_points 등 judge의 다른 키를 보존한다.
       update analyses set params = jsonb_set(params, '{judge}',
-               coalesce(params->'judge', '{}'::jsonb)
+               coalesce(nullif(params->'judge', 'null'::jsonb), '{}'::jsonb)
                  || jsonb_build_object('state', 'queued', 'at', to_jsonb(now()), 'error', p_error), true)
        where id = (v_job.payload->>'analysis_id')::uuid;
     end if;
@@ -170,7 +181,7 @@ begin
   -- 골라 queued로 되돌린다. analyses.status는 여기서도 건드리지 않는다. 병합(||)
   -- 으로 previous_drain_points 등 judge의 다른 키를 보존한다.
   update analyses a set params = jsonb_set(a.params, '{judge}',
-           coalesce(a.params->'judge', '{}'::jsonb)
+           coalesce(nullif(a.params->'judge', 'null'::jsonb), '{}'::jsonb)
              || jsonb_build_object('state', 'queued', 'at', to_jsonb(now())), true)
    from jobs j
    where j.status = 'queued' and j.type = 'slope_judge'
