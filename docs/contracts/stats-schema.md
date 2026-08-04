@@ -6,29 +6,39 @@
 >
 > **대상 독자**: 엔진 내부 구현을 모르는 프론트엔드(P3 대시보드)·보고서(P4)·워커 개발자.
 > **ENGINE_VERSION**: `engine/flatness/__init__.py`의 `ENGINE_VERSION` 상수(현재 `p4-0.5.0`). `stats.meta.engine_version`이
-> 이 값을 그대로 담는다(단, §2의 "임포트 경로" 예외 참고). **이 문서는 floor/wall/import 세 경로만 다룬다** -
-> 구배(slope) stats는 `meta` 키 자체가 없어 `stats.meta.engine_version` 경로가 존재하지 않는다. 구배 분석의
-> 엔진 버전은 오직 `analyses.engine_version` 컬럼으로만 흐른다(`dashboard/components/analysis/slope-placeholder.tsx`
-> 상단 주석 참고).
+> 이 값을 그대로 담는다(단, §2의 "임포트 경로" 예외 참고). **§1~§7은 floor/wall/import 세 경로만 다룬다** -
+> 구배(slope) stats는 완전히 다른 스키마(`slope-stats-v1`)를 쓰고 `meta` 키 자체가 없어 `stats.meta.engine_version`
+> 경로가 존재하지 않는다. 구배 계약은 **§8**에서 별도로 다룬다. 구배 분석의 엔진 버전은 오직
+> `analyses.engine_version` 컬럼으로만 흐르며(§8.7 참고), 그마저도 재판정(§7.3)에서는 갱신되지 않는다는 한계가
+> 있다(백로그 참고).
 >
 > 이 문서의 모든 표는 아래 소스를 라인 단위로 대조해 작성했다(대조 방법·결과는 커밋 메시지 본문 참고):
 > `engine/flatness/outputs/stats.py`, `engine/flatness/core/pipeline.py`, `engine/flatness/core/cells.py`,
 > `engine/flatness/core/walls.py`, `engine/flatness/core/zones.py`, `engine/flatness/criteria.py`,
 > `engine/flatness/importer/colab_csv.py`, `engine/flatness/outputs/summary.py`, `engine/flatness/outputs/heatmap.py`,
-> `engine/flatness/outputs/preview3d.py`, `engine/flatness/outputs/deviation.py`.
+> `engine/flatness/outputs/preview3d.py`, `engine/flatness/outputs/deviation.py`. §8은 별도로
+> `engine/flatness/core/slope.py`, `engine/flatness/outputs/slope_cells.py`, `engine/flatness/outputs/slope_judged.py`,
+> `engine/flatness/outputs/slope_map.py`, `engine/flatness/core/pipeline.py`의 `judge_slope_cells`/`analyze_slope`를
+> 대조했다.
 
-## 0. 산출 경로 3가지
+## 0. 산출 경로 4가지
 
-엔진은 세 개의 진입점에서 `stats` 객체를 만든다. 세 경로 모두 `build_stats()`(`engine/flatness/outputs/stats.py:9`)로 공통
-키를 만든 뒤, 호출자가 경로별 키를 덧붙인다.
+엔진은 네 경로에서 stats류 객체를 만든다. floor/wall/import 세 경로는 `build_stats()`
+(`engine/flatness/outputs/stats.py:9`)로 공통 키를 만든 뒤 호출자가 경로별 키를 덧붙이는 방식을 공유한다.
+**구배(slope)는 이 공통 함수를 전혀 타지 않는다** - 완전히 다른 스키마(`slope-stats-v1`)를 쓰는
+`judge_slope_cells`(`core/pipeline.py:171`)가 유일한 작성자다. `analyze_slope`(`core/pipeline.py:280`)는
+점군을 읽어 셀을 산출한 뒤 이 `judge_slope_cells`를 그대로 호출하는 것일 뿐, 별도의 stats 스키마를
+만들지 않는다 - 그래서 "진입점"은 넷이지만 slope stats의 실제 **작성자 함수는 하나**다. 자세한 내용은 §8.
 
 | 경로 | 함수 | 소스 | `meta.surface` |
 |---|---|---|---|
 | 바닥(LiDAR 원본) | `analyze_floor` | `core/pipeline.py:19` | `"floor"` |
 | 벽면(LiDAR 원본) | `analyze_wall` | `core/pipeline.py:68` | `"wall"` |
 | 외부 결과 임포트(Colab CSV) | `import_colab_csv` | `importer/colab_csv.py:38` | `"floor"`(임포트는 바닥 결과 전용) |
+| 구배(LiDAR 원본, §7.3 재판정 포함) | `analyze_slope`(최초) / `judge_slope_cells`(재판정) | `core/pipeline.py:280` / `core/pipeline.py:171` | 키 자체 없음(§8 참고) |
 
-이하 표에서 "경로" 컬럼은 이 세 값(`floor`/`wall`/`import`)으로 표기한다.
+§1~§7에서 "경로" 컬럼은 앞 세 값(`floor`/`wall`/`import`)으로만 표기한다 - 그 표들은 `build_stats()` 공통 스키마
+얘기이고 구배는 그 스키마를 아예 쓰지 않기 때문이다.
 
 ## 1. 공통 키 (모든 경로, `build_stats()` 반환값)
 
@@ -315,6 +325,176 @@ w_fit = a * center_x + b * center_y + c   # a,b,c = walls[i].plane_abc
 - `stats.meta.engine_version = "external-json-v1"`, `stats.meta.source = "json-import"`(`json_import.py:81-82`) —
   대시보드는 이 두 값(또는 CSV 쪽 동급 값)으로 "외부 결과" 배지를 판별한다(`dashboard/lib/domain/stats.ts`의
   `isExternalImport`)
+
+## 8. 구배(slope) stats 계약 (`slope-stats-v1`, 세부과업 4)
+
+구배는 §0~§7의 `build_stats()` 공통 계약과 완전히 별개다 - 분석 단위(2m 격자 vs 1m 판정셀)·판정 철학("설계
+구배대로인가" vs "평면에서 얼마나 벗어났나")·산출 파일 구성이 전부 다르다. 이 절은 `judge_slope_cells`
+(`core/pipeline.py:171-277`)가 쓰는 4개 산출물(`slope_stats.json`·`slope_cells.json`·`slope_judged.json`·
+`slope_cells.csv`)과 `slope_map.png`의 계약을 다룬다.
+
+### 8.0 두 진입점, 한 작성자
+
+| 호출 경로 | 함수 | 언제 | 점군을 다시 읽는가 |
+|---|---|---|---|
+| 최초 분석 | `analyze_slope` | 워커의 `_handle_analyze_slope`(`worker/flatworker/jobs.py:121`, 잡 타입 `analyze`) | 읽는다 |
+| 재판정(§7.3) | `judge_slope_cells` | 워커의 `handle_slope_judge`(`worker/flatworker/jobs.py:171`, 잡 타입 `slope_judge`) | 안 읽는다 - `slope_cells.json`만 읽는다 |
+
+`analyze_slope`는 점군 → `compute_slope_cells`(`core/slope.py:36`)로 셀을 산출한 뒤 `judge_slope_cells`를
+그대로 호출해 판정~산출물 단계를 위임한다(`core/pipeline.py:310-312`). 따라서 아래 스키마는 최초 분석이든
+재판정이든 **동일한 함수가 동일한 형태로** 쓴다 - 최초 분석 전용 필드나 재판정 전용 필드가 따로 없다.
+
+### 8.1 `slope_stats.json` 최상위 키
+
+`judge_slope_cells`가 매 호출(최초 분석·재판정 둘 다)마다 통째로 새로 쓴다(`core/pipeline.py:262-276`).
+
+| 키 | 타입 | 설명 |
+|---|---|---|
+| `format` | string | 고정값 `"slope-stats-v1"`. 대시보드의 `isSlopeStats`(`dashboard/lib/domain/stats.ts:9-12`)가 이 값 하나로 구배/평활도를 가른다 |
+| `cell_m` | number | 판정 격자 한 변(m). 기본 2.0. 재판정은 `slope_cells.json`의 `cell_m`을 그대로 이어 쓴다(§8.2) |
+| `subcell_m` | number | 서브셀 한 변(m). 기본 0.05 |
+| `threshold` | object | 적용 기준 원본(`{use, design_pct, pass_pct, re_pct, dir_pass_deg}`, `criteria.thresholds[0]` 그대로). floor/wall/import의 `applied_criteria`(§1)와 달리 `name`/`source`가 없다 - 그 둘은 `analyses.applied_criteria` DB 컬럼(워커가 별도로 채움, 8.7 참고)에만 있다 |
+| `summary` | object | §8.1.1 |
+| `direction_judged` | boolean | 배수구 좌표가 있어 방향(역구배) 판정까지 했는지. `false`면 크기만 판정된 것 - 화면은 이 값으로 역구배 강조를 켤지 정한다 |
+| `drain_points` | `[number, number][] \| null` | 판정에 쓰인 배수구 좌표(정렬됨, 소수 3자리 반올림). §3.5의 `{"x":..,"y":..}` 형태가 아니라 좌표쌍 배열이다 - 워커의 `drain_points_from_stats`(`worker/flatworker/slope.py:43-59`)가 §3.5 형태로 역변환한다 |
+| `warnings` | string[] | **완성된 한국어 문장**이다(floor/wall/import의 ASCII 슬러그 + `WARNING_LABEL` 번역 관례와 다르다 - 코드 기반 필터링 불가, 백로그 기록됨) |
+| `artifacts` | object | §8.1.2 |
+
+#### 8.1.1 `summary` (`core/slope.py`의 `slope_summary` 반환값, §5.4 요건)
+
+| 키 | 타입 | 설명 |
+|---|---|---|
+| `mean_dev_pct` / `std_dev_pct` / `max_dev_pct` | number \| null | 판정 가능(등급 ≠ 판정불가) 셀의 설계 구배 대비 편차(%p) 평균·표준편차(모집단, ddof=0)·최댓값. 전 셀 판정불가면 `null` |
+| `counts` | `{적합, 경계, 보수, 재시공, 판정불가}` → int | 등급별 셀 개수(5키 항상 존재) |
+| `coverage_pct` | number | `100 * (전체 - 판정불가) / 전체`(전체 0이면 `0.0`) |
+
+**전역 통계뿐이다.** §5.4가 요구하는 구간(구역)별 평균·표준편차·최대편차는 이번 단계(세부과업 4 단계 D)에서
+구현하지 않았다 - 백로그 참고(`docs/superpowers/plans/2026-07-28-p1b-backlog-notes.md`).
+
+#### 8.1.2 `artifacts`
+
+| 키 | 필수 | 설명 |
+|---|---|---|
+| `cells_json` | 조건부 | `slope_cells.json` 경로(§8.2). **세부과업 4 단계 C까지 만들어진 분석에는 이 키 자체가 없다** - `judge_slope_cells`가 이 값을 새로 쓰지 않고 호출자가 넘긴 경로를 그대로 싣기 때문이다(`core/pipeline.py:187-196`). 대시보드는 이 키의 부재로 "재판정 불가"를 판별한다(`dashboard/lib/domain/slope-cells.ts:41-44`의 `slopeCellsJsonUrl`이 `null` 반환) |
+| `judged_json` | 조건부 | `slope_judged.json` 경로(§8.3). `cells_json`과 항상 함께 있거나 함께 없다(같은 판정 호출에서 나온다) |
+| `cells_csv` | 항상 | `slope_cells.csv` 경로(§8.5). **기계 판독 금지** - 아래 참고 |
+| `map_png` | 항상 | `slope_map.png` 경로. matplotlib이 그린 정적 이미지(§8.6). 대시보드는 재판정 가능한 분석(`cells_json`/`judged_json`이 있는 분석)에서는 이 이미지를 화면에 전혀 노출하지 않는다 - Canvas로 다시 그린 히트맵만 보여준다(`components/analysis/slope-result.tsx`, D3 설계 결정). `cells_json`이 없는(재판정 불가) 분석의 안내 화면에서만 이 PNG를 폴백으로 보여준다(`slope-result.tsx:168-176`) |
+
+### 8.2 `slope_cells.json` (재판정 입력, 무손실 왕복, `schema_version=2`)
+
+`analyze_slope`가 판정 이전에 쓰고(`core/pipeline.py:306-308`), 이후로는 아무도 다시 쓰지 않는다(§7.3 재판정은
+이 파일을 **읽기만** 한다). `engine/flatness/outputs/slope_cells.py`의 `dump_slope_cells`/`load_slope_cells`가
+왕복을 담당한다.
+
+| 키 | 타입 | 설명 |
+|---|---|---|
+| `schema_version` | int | 현재 2(1에서 `cell_m`/`subcell_m` 최상위 키가 추가됨) |
+| `engine_version` | string | 이 셀 벡터를 산출한 엔진 빌드(`ENGINE_VERSION`). **재판정은 이 값을 검사하지 않는다** - `grade_slope_cells` 판정 로직이 엔진 버전 사이에 안정적이라는 전제다(한계는 `slope_cells.py:83-88` 참고) |
+| `cell_m` / `subcell_m` | number | 원 분석의 격자 파라미터. 재판정이 이 값을 그대로 이어 써야 조각 셀 판정불가 분기(`width_m < cell_m/2`)와 화살표 길이가 원 분석과 일치한다(Task 1 리뷰 I1) |
+| `cells` | array | `SlopeCell` 13필드(`core/slope.py:20-33`) 그대로, **반올림 없음**. 아래 표 |
+
+`cells[]` 원소(= `SlopeCell` 데이터클래스 필드, `core/slope.py:20-33`):
+
+| 필드 | 타입 | 설명 |
+|---|---|---|
+| `cx` / `cy` | int | 셀 격자 인덱스 |
+| `center_x` / `center_y` | number | 셀 중심 절대 좌표(m). floor와 같은 좌표 프레임(§4.1) - `grid.origin`(=`bbox_min`의 xy) 기준으로 복원되므로 역매핑 없이 그대로 X/Y로 쓴다 |
+| `n_subcells` | int | 셀 내 유효 서브셀 개수 |
+| `slope_pct` \| `null` | number \| null | 구배 크기(%). `ok=false`면 `null`(엔진 내부에서는 NaN, JSON 직렬화 시 null로 치환) |
+| `downhill_rad` \| `null` | number \| null | 내리막 방향(라디안, matplotlib 데이터 좌표계 - y 위로 증가). `ok=false`면 `null` |
+| `rmse_m` \| `null` | number \| null | 평면 피팅 잔차 RMSE(m). `ok=false`면 `null` |
+| `se_pct` \| `null` | number \| null | 기울기 표준오차(%p). `ok=false`면 `null` |
+| `width_m` / `height_m` | number | 셀의 **실제** 폭·높이(m). 바닥 크기가 `cell_m`의 배수가 아니면 가장자리 조각 셀에서 명목 `cell_m`보다 작다. **`correction_mm` 환산과 화살표 렌더가 명목 `cell_m`이 아니라 이 값을 쓴다** - CSV 근사 복원이 이 값을 잃어 판정을 왜곡시켰다(D1) |
+| `ok` | boolean | 이 셀에 평면을 피팅할 수 있었는지(`false`면 위 4개 수치 필드가 전부 `null`) |
+| `zone_id` | int \| null | **항상 `null`**(이번 단계 스코프 아님, §8.1.1의 구역별 통계 미구현과 같은 사유). 위치 인자로 `SlopeCell`을 생성하는 6곳(`core/slope.py:73,84,91,107` 및 테스트 2곳)이 깨지지 않도록 **기본값 있는 마지막 필드**로 미리 뚫어 두었다 |
+
+`slope_pct`/`downhill_rad`/`rmse_m`/`se_pct` 네 필드만 `ok=false`일 때 `null`이 될 수 있다(`outputs/slope_cells.py`의
+`_NAN_FIELDS`) - `zone_id`의 `null`은 "판정불가"가 아니라 "구역 기능 미구현"이라는 별개의 의미다.
+
+### 8.3 `slope_judged.json` (판정 결과 전용, `schema_version=1`)
+
+`slope_cells.json`이 담지 않는 판정 결과(`grade`/`dev_pct`/`correction_mm`/`dir_err_deg`/`reason`)만 담는
+별도 파일이다. **매 판정(최초 분석·재판정 둘 다)마다 통째로 다시 쓰인다** - 그래서 `slope_stats.json`·
+`slope_cells.json`과 시점이 어긋나는 이중 진실이 될 수 없다(같은 `judge_slope_cells` 호출 안에서 함께 나온다).
+
+| 키 | 타입 | 설명 |
+|---|---|---|
+| `schema_version` | int | 현재 1 |
+| `direction_judged` | boolean | `slope_stats.json`의 동명 키와 항상 같은 값(같은 호출에서 나옴). 화면이 `slope_stats.json`을 따로 fetch하지 않고 이 파일 하나로 역구배 강조 여부를 결정할 수 있게 중복 저장 |
+| `cells` | array | 아래 표. **셀 식별자는 배열 순서가 아니라 `(cx, cy)` 키다** - 대시보드는 `slope_cells.json`과 이 파일을 `(cx, cy)`로 조인한다(`dashboard/lib/domain/slope-judged.ts`의 `joinSlopeCells`), 배열 길이·순서 일치를 가정하지 않는다 |
+
+`cells[]` 원소(`grade_slope_cells` 반환, `core/slope.py:126-186` → `outputs/slope_judged.py:59-70`):
+
+| 필드 | 타입 | 설명 |
+|---|---|---|
+| `cx` / `cy` | int | `slope_cells.json`의 같은 셀과 짝짓는 키 |
+| `grade` | `적합\|경계\|보수\|재시공\|판정불가` | 한국어 등급 문자열(§8.1의 `counts` 키와 동일 어휘) |
+| `reason` | string | 판정 사유 한국어 문장(예: `"역구배(물이 배수구 반대로 흐름)"`, `"격자 가장자리 조각 셀(폭 또는 높이가 부족해 baseline 짧음)"`). 대시보드는 `reason.startsWith('역구배')`로 역구배 셀을 판별한다(`slope-judged.ts:73`) - 판정 로직이 아니라 이미 계산된 문자열 매칭일 뿐이므로 §7.3 금지(판정 이중화)에 해당하지 않는다 |
+| `dev_pct` \| `null` | number \| null | 설계 구배 대비 편차(%p 절댓값). 판정불가 셀은 `null` |
+| `dir_err_deg` \| `null` | number \| null | 기대 방향과의 각도 오차(도). 배수구가 없거나(방향 미판정) 판정불가면 `null` |
+| `correction_mm` \| `null` | number \| null | 보정 높이차(mm, §5.3). `d * min(width_m, height_m) * 10.0` - 알려진 한계(정사각 셀 밖에서 과소 보고 가능)는 백로그 티켓 60 참고. 판정불가 셀은 `null` |
+
+### 8.4 `slope_cells.json`/`slope_judged.json` 역할 분리 이유
+
+**입력(무손실)과 출력(파생값)을 분리했다.** `slope_cells.json`은 재판정이 점군을 다시 읽지 않고 같은 답을
+내기 위한 **원본**이다 - 반올림이나 파생 계산이 조금이라도 섞이면 재판정이 최초 분석과 다른 결과를 낼 수
+있다(D1이 CSV 근사 복원을 배제한 이유이기도 하다: 판정 경계에 걸터앉은 바닥 20개 중 11개에서 등급이
+뒤집혔다). 반대로 `slope_judged.json`은 판정할 때마다(배수구를 다시 클릭할 때마다) 통째로 다시 계산되는
+**파생 결과**다 - 이 값들을 입력 파일에 같이 담으면 "이전 판정의 결과가 남아있는 입력 파일"이라는 이중
+진실이 생긴다. 그래서 입력은 절대 다시 쓰지 않고(재판정이 값을 읽기만 함), 출력은 매번 통째로 새로 쓴다
+(부분 갱신이 없으므로 새·옛 값이 섞이는 경합도 없다).
+
+### 8.5 `slope_cells.csv` - 사람용 export, 기계 판독 금지
+
+`judge_slope_cells`가 매 판정마다 함께 쓰는 사람이 엑셀로 여는 산출물이다(`core/pipeline.py:221-237`).
+**`slope_cells.json`과 다음 세 가지가 다르다:**
+
+1. **인코딩이 `utf-8-sig`(BOM)다** - 평활도의 `results.csv`는 `utf-8`이다. BOM을 모르고 파싱하면 첫 열 이름이
+   `﻿cx`로 읽히는 함정이 있다.
+2. **반올림된 값이다** - `slope_pct`·`dev_pct`·`correction_mm`은 소수 3자리(`_r`), `downhill_deg`·`dir_err_deg`는
+   소수 1자리(`_deg`)로 반올림된다. **실측: 판정 경계에 걸터앉은 바닥 20개 중 11개에서 이 반올림이 최소
+   1셀의 등급을 뒤집었다**(D1 실측, `docs/superpowers/sdd/2026-08-03-slope-phase-d/task-6-brief.md` D1 참고).
+3. **`width_m`/`height_m`이 열 끝에만 추가돼 있다**(기존 엑셀 사용자의 열 위치를 보존하기 위해) - 앞쪽 열
+   순서(`cx, cy, center_x_m, center_y_m, n_subcells, slope_pct, downhill_deg, dev_pct, dir_err_deg,
+   correction_mm, rmse_mm, se_pct, grade, reason`)는 그대로다.
+
+**결론: `slope_cells.csv`는 사람이 눈으로 확인하는 용도로만 쓴다. 재판정·화면 렌더·후속 배치 처리 등 어떤
+기계 판독 소비자도 이 CSV 대신 `slope_cells.json`(§8.2)·`slope_judged.json`(§8.3)을 읽어야 한다.**
+
+### 8.6 `slope_map.png`
+
+`render_slope_map`(`engine/flatness/outputs/slope_map.py:26-64`)이 그리는 정적 이미지 - 등급 색 배경 사각형 +
+내리막 방향 화살표(역구배 셀은 굵은 화살표). 색표는 대시보드 Canvas 렌더러(`dashboard/lib/domain/slope-heatmap.ts`의
+`SLOPE_GRADE_COLOR`)와 **독립적으로 유지되지만 우연이 아니라 의도적으로 같은 hex 값**을 쓴다
+(`적합 #3d8b3d`·`경계 #d6c11e`·`보수 #e07b1a`·`재시공 #c0392b`·`판정불가 #9e9e9e`) - 같은 판정 결과가 두 렌더러
+사이에서 다른 색으로 보이면 안 되기 때문이다. **다만 판정 로직 자체는 완전히 파이썬 한 곳(`grade_slope_cells`)
+에만 있다** - PNG는 이미 계산된 `grade` 문자열을 색으로 옮기기만 한다(§7.3 리트머스: 이 파일에도, Canvas
+렌더러에도 `pass_pct`/`re_pct`/`dir_pass_deg` 같은 임계값 비교가 등장하지 않는다).
+
+이미지에는 좌표계 정보가 없고(`tight_layout`·`dpi=120`이라 여백이 가변) 클릭 좌표를 미터로 환산할 수
+없어, 배수구 클릭이 필요한 화면에서는 이 PNG 대신 Canvas가 `slope_cells.json`으로 히트맵을 다시 그린다
+(§8.1.2 참고). **알려진 한계**: `render_slope_map` 호출(`core/pipeline.py:239`)이 try/except로 격리돼 있지
+않다 - 렌더가 실패하면 `judge_slope_cells` 전체가 예외로 끝나 `slope_stats.json`/`slope_judged.json`도
+쓰이지 않는다(백로그 참고).
+
+### 8.7 구배의 `engine_version` 경로 - `slope_stats.json`에는 없다
+
+floor/wall/import와 달리 `slope_stats.json`에는 `meta` 키 자체가 없어 `stats.meta.engine_version` 경로가
+존재하지 않는다. 구배의 엔진 버전은 두 곳에 따로 있고 **서로 갱신 시점이 다르다**:
+
+- **`analyses.engine_version`(DB 컬럼)** - 워커가 최초 분석(`analyze` 잡) 성공 시 `ENGINE_VERSION`을 직접
+  써 넣는다(`worker/flatworker/slope.py:201`, `run_slope_analysis`의 `fields["engine_version"]`). **재판정
+  (`slope_judge` 잡)은 이 필드를 갱신하지 않는다** - `build_slope_judge_fields`(`worker/flatworker/slope.py:166-172`)가
+  반환하는 필드 dict에 `engine_version` 키가 없고, `update_analysis`의 PATCH는 넘긴 필드만 갱신하므로
+  DB에는 최초 분석 시점의 값이 그대로 남는다.
+- **`slope_cells.json`의 `engine_version`(§8.2)** - 셀 기하를 산출한 엔진 빌드. 재판정은 이 값을 검사하지
+  않지만 참고용으로 노출된다.
+
+같은 이유로 `analyses.applied_criteria`(DB 컬럼, `{name, source, ...threshold}` 형태)도 재판정 후
+`slope_stats.json.threshold`(§8.1의 원본 기준 값)와 어긋날 수 있다 - 재판정은 기준을 다시 읽어
+`stats.threshold`는 최신이지만 `applied_criteria`는 최초 분석 시점 그대로다. 기준 자체를 바꾸지 않는 한
+값이 같아 보통은 드러나지 않지만, 기준 개정 이후 재판정하면 두 필드가 서로 다른 시점의 기준을 가리키는
+모순 상태가 된다(백로그 기록됨).
 
 ## 부록 A. 등급 라벨 매핑 (프론트엔드 참고)
 

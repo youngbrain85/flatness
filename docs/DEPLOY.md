@@ -199,17 +199,82 @@ Vercel(대시보드) + Railway(워커, Docker) + Supabase(DB·Auth·Storage) 구
       시작하고 완료까지 기다린다. **여기가 007 적용 여부가 실제로 갈리는 지점이다**
       - 007 미적용 시 `fn_resolve_criteria`가 3인자를 못 받아 화면에 "구배 판정
       기준을 찾을 수 없습니다. 마이그레이션 007이 적용됐는지 확인하세요."가 뜬다
-   4. 완료 후 `/analyses/[id]`를 연다. `isSlopeStats(stats)` 가드
-      (`dashboard/app/analyses/[id]/page.tsx`)가 안내 화면으로 보낸다 - 세부과업 4
-      단계 C 시점에는 **상세 표가 아니라** 판정 요약(등급별 셀 수)·판정 가능 비율·
-      평균/표준편차/최대 편차·경고 목록·**구배 판정 지도 PNG**가 뜨고, 맨 아래에
-      "구배 분석 상세 결과 화면은 준비 중입니다" 문구가 붙는 것이 정상이다(상세
-      표는 단계 D에서 추가된다. `dashboard/components/analysis/slope-placeholder.tsx`)
-   5. **지도 PNG가 실제로 뜨는지 확인한다** - 이 이미지는 Storage 서명 URL로
-      서빙되므로, 뜬다면 워커가 산출물 경로를 버킷-상대로 바꿔 올리는 배선까지
-      함께(간접) 검증된 것이다
+   4. 완료 후 `/analyses/[id]`를 연다. `a.status !== 'done' || !a.stats`면 아직
+      완료되지 않은 것이니 대기한다(`dashboard/app/analyses/[id]/page.tsx:27-36`).
+      완료됐다면 `isSlopeStats(a.stats)` 가드(같은 파일 49행, 실제 판별은
+      `dashboard/lib/domain/stats.ts:9-12`의 `stats.format === 'slope-stats-v1'`)가
+      `SlopeResult`로 보낸다(`dashboard/components/analysis/slope-result.tsx`).
+      **세부과업 4 단계 D 배포 이후로는 이 화면이 상세 결과 화면이다** - "배수구
+      위치를 클릭하세요" 안내 문구(`slope-result.tsx:184-187`)와 함께 등급별 색
+      히트맵(Canvas)·셀별 결과표·판정 요약 패널이 뜬다. 방금 이 배포에서 새로
+      돌린 분석이므로 `slope_cells.json`/`slope_judged.json`이 항상 함께
+      생성돼(`engine/flatness/core/pipeline.py:306-308`이 무조건 호출) 이 상태로
+      뜨는 것이 정상이다 - "이 분석은 재판정할 수 없습니다" 안내 박스
+      (`slope-result.tsx:139-181`)가 보이면 그건 이번 배포(단계 D 엔진) 이전에
+      만들어진 **오래된** 구배 분석을 열었다는 뜻이므로, 방금 새로 돌린 분석의
+      URL이 맞는지 다시 확인한다(아래 10번 참고 - 오래된 분석으로는 7~9번을
+      시도할 수 없다)
+   5. **지도 PNG는 이 화면에 뜨지 않는 것이 정상이다.** `slope_map.png`는 계속
+      산출되지만(`stats.artifacts.map_png`), 재판정 가능한 분석(방금 만든 분석이
+      해당)의 화면 코드에는 이 이미지를 보여주는 경로 자체가 없다
+      (`slope-result.tsx`에서 `mapPng`는 44행에서 읽지만 168-176행의
+      `!canRejudge` 분기 - 재판정 **불가능**한 옛 분석의 폴백 - 안에서만 쓰인다).
+      대신 **Canvas 히트맵**(등급별 색 사각형 + 검은 화살표)이 결과표 위에
+      뜨는지 확인한다 - 이게 뜬다면 `slope_cells.json`·`slope_judged.json`이
+      Storage에 정상 업로드되고 서명 URL로 fetch까지 됐다는 뜻이라, PNG보다 더
+      넓은 배선을 검증한 셈이다
    6. Railway Logs에서 기동 로그에 `engine_version=p4-0.5.0`이 찍히는지, 방금 만든
       `analyses` 행의 `engine_version` 컬럼에 같은 값이 저장됐는지 확인한다
+   7. **재판정(배수구 클릭) 스모크** - 008·009를 적용했고 재판정 기능을 켤
+      계획이면 이어서 확인한다(008·009를 적용하지 않은 상태에서 클릭하면
+      "구배 판정 기준을 찾을 수 없습니다"와는 다른 오류가 뜬다 - `fn_enqueue_job`
+      (`supabase/migrations/002_functions_seed.sql:101`)의 `p_type` 인자가
+      `job_type` enum 타입이라, 008 미적용 DB에는 `'slope_judge'`라는 라벨
+      자체가 없어 PostgREST가 enum 캐스팅 오류를 돌려주고 `enqueueJob`
+      (`dashboard/lib/domain/jobs.ts:17-28`)이 이를 "작업 등록에 실패했습니다: ..."
+      로 그대로 보여준다). 위 4번 화면에서 히트맵 위 아무 지점이나 클릭한다
+      (`slope-heatmap-view.tsx`가 클릭 좌표를 미터로 환산해 `onDrainClick`을
+      부른다). 클릭 즉시:
+      - 잡이 성공적으로 등록되면 배수구 마커가 그 자리에 낙관적으로 찍히고
+        (`slope-result.tsx:122-128`), 판정 요약 패널 맨 위에 파란색 "재판정
+        진행 중... / 대기 중..." 배너가 뜬다(`slope-verdict-panel.tsx:21-30`의
+        `JudgeBanner`, `state==='processing'|'queued'`). 이 상태는
+        `analyses.status`가 아니라 `analyses.params.judge.state`에서 오므로
+        (설계 결정 D5) 화면 상단의 분석 상태 표시는 계속 "완료"로 남아 있는
+        것이 정상이다
+      - 이미 처리 중인 잡이 있는데 다시 클릭하면(중복 엔큐) 배너 대신
+        `clickError` 메시지 "이미 같은 대상의 작업이 대기 중이거나 실행
+        중입니다..."가 뜬다(`dashboard/lib/domain/jobs.ts:9-15`의
+        `isDuplicateJobError`/`DUPLICATE_JOB_MESSAGE`, PostgREST 23505를
+        판별). 이때는 `params`가 갱신되지 않는다(브리프 D4 - 엔큐 먼저,
+        성공해야 params를 쓴다)
+   8. 워커 로그에서 `slope_judge` 잡 처리를 확인한다(수 초 안에 끝나야 한다 -
+      점군을 다시 읽지 않으므로, `worker/flatworker/jobs.py:171-254`의
+      `handle_slope_judge`). 완료되면:
+      - 화면이 자동 갱신된다(`use-judge-status.ts`의 Realtime 구독 + 5초 폴링이
+        `params.judge.state`를 감지 → `slope-result.tsx:73-78`이 `done`/`failed`에서
+        `router.refresh()`를 부른다)
+      - 배너가 사라지고 히트맵·결과표·판정 요약이 새 배수구 기준으로 다시
+        뜬다. "현재 배수구" 아래 "직전 배수구" 좌표도 함께 보이면
+        (`slope-verdict-panel.tsx:75-79`) `params.judge.previous_drain_points`가
+        정상적으로 남은 것이다
+   9. **재판정 실패 경로도 한 번은 확인한다** - 가장 쉬운 재현은 008만 적용하고
+      009는 적용하지 않은 상태(또는 criteria 행을 일시적으로 지워 워커가
+      예외를 던지게 만드는 것)에서 클릭해 보는 것이다. 재시도가 소진되면
+      판정 요약 패널에 빨간 박스 "재판정에 실패했습니다. 이전 판정 결과가
+      표시되고 있습니다."가 뜨고 그 아래 실패 사유가 보여야 한다
+      (`slope-verdict-panel.tsx:31-39`, `state==='failed'`일 때만 `judge.error`를
+      노출하는 것이 009의 계약이다 - "재큐 중인 재시도"의 `state==='queued'`+`error`
+      조합에서는 이 박스가 뜨면 안 된다). 이때도 위 4~6번에서 확인한 이전 판정
+      결과(등급·히트맵)는 그대로 남아 있어야 한다 - `analyses.status`가 재판정
+      실패로 `failed`가 되지 않는 것(D5)이 이 스모크의 핵심이다
+   10. **세부과업 4 단계 C 이전(007만 적용한 시점)에 만들어진 구배 분석으로는
+       위 7~9번을 시도하지 않는다.** 그런 분석에는 `slope_cells.json`이 없어
+       (백로그 티켓 75) 4번 화면 자체가 "이 분석은 재판정할 수 없습니다.
+       구배 분석을 다시 실행하면 배수구를 지정할 수 있습니다."로 클릭을 막는다
+       (`slope-result.tsx:179`) - 히트맵도, 배수구 클릭도 뜨지 않는 것이 정상
+       동작이며 결함이 아니다. 재판정을 확인하려면 반드시 이 배포 이후 새로
+       실행한 구배 분석을 써야 한다
 
 ## 사용자가 직접 해야 하는 작업 요약 (코드로 대신할 수 없음)
 
@@ -227,7 +292,8 @@ Vercel(대시보드) + Railway(워커, Docker) + Supabase(DB·Auth·Storage) 구
 5. Vercel: 저장소 Import, **Root Directory를 `dashboard`로 지정**, 환경변수 3개 입력, Deploy
 6. Supabase Authentication > URL Configuration에 Vercel 도메인 추가
 7. 배포 후 스모크: 업로드 -> 분석 -> 보고서 PDF 한글 육안 확인, 50MB 초과 안내 확인,
-   구배 분석 스모크(§4-5 참고 - 007 검증을 겸한다)
+   구배 분석 스모크(§4-5 참고 - 007 검증을 겸한다), 008·009를 적용했다면 재판정
+   (배수구 클릭) 스모크(§4-5의 7~10번 참고)
 8. 저장소 공개 전환 전 `git log -p`로 키 노출 여부 최종 확인
 
 ## 참고
