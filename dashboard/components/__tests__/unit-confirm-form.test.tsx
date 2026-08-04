@@ -20,12 +20,16 @@ const scan = {
   deleted_at: null, created_at: '', updated_at: '',
 } as ScanRow;
 
-// precheck가 남기는 값은 버킷-상대 "전체" 경로다(worker/flatworker/jobs.py의
-// handle_precheck: artifacts/scans/{scan_id}/height_view.png). 스캔 id가 'c1'이므로
-// 경로 안에도 c1이 들어간다 - artifactUrl로 다시 접두사를 붙이면 곧바로 중복이 보인다.
-const scanWithView = {
-  ...scan, height_view_path: 'artifacts/scans/c1/height_view.png',
-} as ScanRow;
+// ★ 픽스처 경로를 워커의 생성 규칙(artifacts/scans/{scan_id}/height_view.png)에서
+// 일부러 벗어나게 잡는다(리뷰 1). 규칙과 같은 값을 쓰면 단언이 픽스처에 대한
+// 항등식이 되어, "저장된 컬럼 값을 그대로 쓴다"가 전혀 고정되지 않는다 - scan.id로
+// 경로를 재조립하는 구현도, src를 상수로 하드코딩한 구현도 똑같이 초록이 된다
+// (같은 단계 Task 1의 subcell_m_file 항등식과 같은 형태). 단계 F가 이 값에서
+// 파일명만 바꿔 사이드카·플레인 PNG를 유도하도록 설계돼 있어(worker/flatworker/jobs.py)
+// 파일명 규약이 확장되는 순간 실제로 물린다.
+const VIEW_PATH = 'artifacts/scans/OTHER-DIR/hv-2026.png';
+const VIEW_URL = '/api/data/artifacts/scans/OTHER-DIR/hv-2026.png';
+const scanWithView = { ...scan, height_view_path: VIEW_PATH } as ScanRow;
 
 // scans 갱신 -> analyses insert -> fn_enqueue_job 순서를 흉내 내는 최소 스텁.
 // analyses.update는 고아 행 롤백(soft delete) 여부를 관찰하려고 스파이를 건다.
@@ -190,15 +194,75 @@ describe('UnitConfirmForm 높이 뷰 (단계 E)', () => {
     expect(screen.getByLabelText(/mm/)).toBeInTheDocument();
   });
 
-  it('height_view_path가 있으면 높이 뷰를 표시한다(dataUrl 그대로 - artifactUrl 이중 접두사 금지)', () => {
+  it('저장된 height_view_path를 그대로 URL로 만든다(재조립·하드코딩·이중 접두사 전부 금지)', () => {
     // 경로 함정(lib/domain/slope-cells.ts가 문서화): 저장값이 이미 버킷-상대
-    // 전체 경로라 artifactUrl(dir, name)로 다시 조립하면
-    // artifacts/scans/c1/artifacts/scans/c1/... 로 중복돼 404가 난다.
+    // 전체 경로라 artifactUrl(dir, name)로 다시 조립하면 접두사가 중복돼 404가 난다.
+    // 픽스처가 워커 생성 규칙에서 벗어난 값이므로(VIEW_PATH), scan.id로 경로를
+    // 재조립하거나 src를 상수로 박은 구현은 여기서 곧바로 어긋난다.
     render(<UnitConfirmForm scan={scanWithView} userId="u1" />);
 
     const img = screen.getByRole('img', { name: /높이 뷰/ });
-    expect(img).toHaveAttribute('src', '/api/data/artifacts/scans/c1/height_view.png');
+    expect(img).toHaveAttribute('src', VIEW_URL);
     // 폼도 함께 살아 있어야 한다(그림이 폼을 대체하는 것이 아니다)
+    expect(screen.getByRole('button', { name: '단위 확정 후 분석 시작' })).toBeEnabled();
+  });
+
+  // 리뷰 3: 좁은 화면에서 그림은 원본의 22.6%까지 줄어 축 눈금 숫자가 판독 불가다
+  // (리뷰어 실측: 390px에서 4배 확대해도 1000/2000/... 이 뭉개진다). 축 눈금을 읽는
+  // 것이 이 화면의 전부이므로 원본을 여는 길이 사라지면 기능이 무너진다.
+  it('원본 크기로 여는 링크를 제공한다(좁은 화면에서 축 눈금 판독용)', () => {
+    render(<UnitConfirmForm scan={scanWithView} userId="u1" />);
+
+    const link = screen.getByRole('link', { name: /원본 크기로 열기/ });
+    expect(link).toHaveAttribute('href', VIEW_URL);
+    expect(link).toHaveAttribute('target', '_blank');
+    // 새 탭으로 여는 링크는 rel=noopener가 없으면 opener를 넘긴다
+    expect(link).toHaveAttribute('rel', expect.stringContaining('noopener'));
+  });
+
+  // 리뷰 2: 그림을 썸네일로 줄이거나 세로로 밀어도 전부 초록이던 구멍을 막는다.
+  // 실측(1280 뷰포트): 그림 648px / 폼 432px, 같은 행. jsdom에는 CSS가 없어 픽셀을
+  // 잴 수 없으므로 폭·배치를 결정하는 클래스와 DOM 순서를 고정한다.
+  it('그림이 폼보다 시각적으로 우선한다(폭·2열 배치·DOM 순서 고정)', () => {
+    const { container } = render(<UnitConfirmForm scan={scanWithView} userId="u1" />);
+
+    // (1) 그림은 자기 열을 꽉 채운다 - w-24 같은 썸네일로 줄이면 눈금을 못 읽는다
+    expect(screen.getByRole('img', { name: /높이 뷰/ })).toHaveClass('w-full');
+
+    // (2) 넓은 화면에서 그림 3fr : 폼 2fr 2열. 격자 클래스가 사라지면 그림이 폼
+    //     아래로 밀려 "폼이 먼저, 그림은 스크롤해야 보이는" 화면이 된다.
+    const grid = container.firstElementChild!;
+    expect(grid).toHaveClass('grid');
+    expect(grid).toHaveClass('lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]');
+
+    // (3) DOM 순서: 그림이 폼보다 먼저다. 좁은 화면에서 세로로 쌓일 때 이 순서가
+    //     그대로 화면 순서가 되고, 스크린리더 낭독 순서이기도 하다.
+    const kids = Array.from(grid.children).map((el) => el.tagName);
+    expect(kids).toEqual(['SECTION', 'FORM']);
+  });
+
+  // 리뷰 6: PNG 안에 matplotlib가 같은 제목을 이미 구워 넣는다. 보이는 h2를 두면
+  // 제목이 두 번 뜨고, 아예 지우면 스크린리더에서 이 영역이 익명 블록이 된다.
+  it('영역 제목은 스크린리더에만 남긴다(PNG에 구워진 제목과 이중 표시 방지)', () => {
+    render(<UnitConfirmForm scan={scanWithView} userId="u1" />);
+
+    expect(screen.getByRole('heading', { name: '높이 뷰 (평면도)' })).toHaveClass('sr-only');
+  });
+
+  // 리뷰 8: 이 가드가 undefined와 ''까지 걸러 주는 것은 우연이 아니라 의도다.
+  // 010을 아직 적용하지 않은 DB의 select('*')에는 이 컬럼이 아예 없어 undefined로
+  // 온다 - 즉 대시보드를 010보다 먼저 배포해도 이 화면이 산다. === null로 좁히면
+  // 그 성질이 조용히 사라지고, 그 DB에서는 dataUrl(undefined)로 화면이 죽는다.
+  it.each([
+    ['undefined(010 미적용 DB의 select(*))', undefined],
+    ['빈 문자열', ''],
+  ])('height_view_path가 %s여도 폼 전용 화면으로 살아남는다', (_label, value) => {
+    const oddScan = { ...scan, height_view_path: value } as unknown as ScanRow;
+
+    render(<UnitConfirmForm scan={oddScan} userId="u1" />);
+
+    expect(screen.queryByRole('img')).toBeNull();
+    expect(screen.queryByRole('link', { name: /원본 크기로 열기/ })).toBeNull();
     expect(screen.getByRole('button', { name: '단위 확정 후 분석 시작' })).toBeEnabled();
   });
 
@@ -245,5 +309,15 @@ describe('UnitConfirmForm 높이 뷰 (단계 E)', () => {
     render(<UnitConfirmForm scan={scanWithView} userId="u1" />);
 
     expect(screen.getByText(/파일 단위/)).toBeInTheDocument();
+  });
+
+  // 리뷰 5: Task 2 리뷰에서 워커의 "점이 성기면 렌더 건너뛰기" 분기가 제거돼,
+  // 이제 전부-NaN(거의 빈) 그림 + 빨간 "유효 데이터 없음" 경고가 사용자에게 그대로
+  // 온다. 그 화면에서 사용자가 "그림이 고장났다"고 판단해 버리면 단위 확정이 막힌다 -
+  // 안내가 색이 아니라 축 눈금을 가리켜야 하는 이유다.
+  it('데이터가 비어 보여도 축 눈금은 유효하다고 안내한다(성긴 스캔)', () => {
+    render(<UnitConfirmForm scan={scanWithView} userId="u1" />);
+
+    expect(screen.getByText(/축 눈금은 유효하니/)).toBeInTheDocument();
   });
 });

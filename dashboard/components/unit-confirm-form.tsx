@@ -117,9 +117,20 @@ export function UnitConfirmForm({ scan, userId }: { scan: ScanRow; userId: strin
     </form>
   );
 
-  // 높이 뷰가 없는 스캔(precheck를 돈 적 없는 기존 스캔, 점이 너무 성겨 워커가
-  // 렌더를 건너뛴 경우)은 지금까지와 완전히 같은 화면을 본다 - 이 경로가 죽으면
-  // 기존 스캔 전부가 단위를 확정하지 못한다.
+  // 높이 뷰가 없는 스캔은 지금까지와 완전히 같은 화면을 본다 - 이 경로가 죽으면
+  // 기존 스캔 전부가 단위를 확정하지 못한다. 값이 비는 진짜 이유는 두 가지다:
+  // (1) precheck를 돈 적이 없는 기존 스캔(임포트 등), (2) 렌더·업로드가 실패한 경우.
+  // "점이 성기면 워커가 건너뛴다"는 더 이상 사실이 아니다 - Task 2 리뷰에서 그 스킵
+  // 분기가 제거됐다. 전부-NaN 그림이어도 축 눈금은 진짜 bbox 값으로 찍혀(mm 파일이면
+  // 0~8000) 단위 질문의 답이 나오기 때문이다. 그래서 성긴 스캔은 이제 "그림 없음"이
+  // 아니라 "거의 빈 그림 + 빨간 경고"로 온다(아래 안내가 색이 아니라 눈금을 가리키는
+  // 이유이기도 하다).
+  //
+  // truthy 검사인 이유(방어가 아니라 의도): null뿐 아니라 undefined와 ''도 함께
+  // 걸러야 한다. 010_scan_height_view.sql을 아직 적용하지 않은 DB에서는 select('*')에
+  // 이 컬럼 자체가 없어 undefined로 온다 - 즉 대시보드를 010보다 먼저 배포해도 이
+  // 화면은 살아 있다(워커와 정반대라 배포 순서 위험이 한쪽으로 준다). === null로
+  // 좁히면 그 성질이 조용히 사라진다.
   if (!scan.height_view_path) return form;
 
   // 그림이 단위 판단의 근거이므로 폼보다 넓게 잡는다. 폼 자신은 max-w-md로 묶여
@@ -127,7 +138,13 @@ export function UnitConfirmForm({ scan, userId }: { scan: ScanRow; userId: strin
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] lg:items-start">
       <section className="space-y-2">
-        <h2 className="text-sm font-semibold">높이 뷰 (평면도)</h2>
+        {/* 리뷰 6: PNG 안에 matplotlib가 같은 제목("높이 뷰 (평면도)")을 이미 구워
+            넣는다. 눈에 보이는 h2를 그대로 두면 한 화면에 제목이 두 번 뜬다. 제목
+            자체를 지우는 대신 sr-only로 돌린 이유는 접근성이다: 스크린리더는 PNG
+            안의 글자를 읽지 못하므로, 제목을 지우면 이 영역이 heading 없는 익명
+            블록이 되어 건너뛰기 탐색에서 사라진다. 보이는 라벨 역할은 아래
+            "원본 크기로 열기" 링크와 설명 문단이 대신한다. */}
+        <h2 className="sr-only">높이 뷰 (평면도)</h2>
         {viewFailed ? (
           <p className="rounded border border-amber-300 bg-amber-50 p-3 text-xs text-slate-700">
             높이 뷰를 불러오지 못했습니다. 그림 없이도 단위는 확정할 수 있습니다.
@@ -135,18 +152,31 @@ export function UnitConfirmForm({ scan, userId }: { scan: ScanRow; userId: strin
           </p>
         ) : (
           <>
-            {/* 로컬 route 서빙 이미지 - 데모에서 next/image 최적화 불필요
-                (components/analysis/slope-result.tsx와 같은 판단) */}
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img ref={imgRef} src={dataUrl(scan.height_view_path)}
-              alt="높이 뷰: 위에서 내려다본 점군의 상대 높이"
-              onError={() => setViewFailed(true)}
-              className="w-full rounded border bg-white" />
+            {/* 리뷰 3: 좁은 화면에서 그림은 원본의 22.6%까지 줄어 축 눈금 숫자가
+                뭉개진다(실측). 축 눈금을 읽는 것이 이 화면의 전부이므로 원본을 새 탭
+                으로 여는 길이 반드시 있어야 한다 - "데스크톱 전용"으로 선언하는 대신
+                모든 뷰포트에서 통하는 링크 하나로 푼다. 그림과 라벨을 한 링크로 묶어
+                (그림 클릭 = 라벨 클릭) 링크가 둘로 갈라지지 않게 했다. */}
+            <a href={dataUrl(scan.height_view_path)} target="_blank" rel="noopener noreferrer"
+              className="block">
+              {/* 로컬 route 서빙 이미지 - 데모에서 next/image 최적화 불필요
+                  (components/analysis/slope-result.tsx와 같은 판단) */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img ref={imgRef} src={dataUrl(scan.height_view_path)}
+                alt="높이 뷰: 위에서 내려다본 점군의 상대 높이"
+                onError={() => setViewFailed(true)}
+                className="w-full rounded border bg-white" />
+              <span className="mt-1 block text-xs text-blue-700 underline">
+                원본 크기로 열기 (새 탭)
+              </span>
+            </a>
             <p className="text-xs text-slate-500">
               위에서 내려다본 점군의 상대 높이입니다. 축 눈금은 미터가 아니라
               <span className="font-medium"> 파일 단위</span>이므로, 눈금이 가리키는
               크기와 실제 공간 크기를 견주어 단위를 고르세요. 예를 들어 8m짜리 방인데
-              눈금이 8000까지 간다면 mm입니다.
+              눈금이 8000까지 간다면 mm입니다. 점이 성겨 색이 거의 없거나 &quot;유효
+              데이터 없음&quot; 경고가 찍힌 그림이어도 축 눈금은 유효하니 눈금만 보고
+              판단하면 됩니다.
             </p>
           </>
         )}
