@@ -446,6 +446,11 @@ describe('SlopeResult - 방향 판정 대상이 아닌 기준 (코드리뷰 I1)'
     threshold: { use: '실내 평바닥', design_pct: 0.0, pass_pct: 1.0, re_pct: 3.0, dir_pass_deg: 180 },
   };
 
+  // ★ 코드리뷰(4차) N5: directionAware도 busy/judgeBusy와 같은 이중 방어다
+  // (핸들러의 `if (... || !directionAware) return`과 뷰의 `clickable={...&&
+  // directionAware}`). 프로브로 확인한 결과 둘 중 하나만 지우면 나머지가 여전히
+  // 막아 이 테스트가 그대로 통과하고, **둘을 동시에 지워야** 실패한다 - busy에
+  // 적용한 것과 같은 잣대를 그대로 적용해 이 사실을 명시적으로 남긴다.
   it('클릭을 비활성화하고 이유를 안내하며, 클릭해도 엔큐하지 않는다', async () => {
     stubFetch();
     rpcMock.mockClear();

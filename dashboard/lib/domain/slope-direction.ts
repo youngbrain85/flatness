@@ -1,13 +1,19 @@
 // 보정 방향 문구 (스펙 §5.3): "북동쪽 끝을 10mm 낮춤" 형태.
 //
-// ★ 판정 이중화가 아니다(리트머스, 브리프 D3): 이 파일 어디에도 pass_pct·re_pct·
-// dir_pass_deg 같은 판정 임계값이 등장하지 않는다. 하는 일은 두 가지뿐이다.
+// ★ 판정 이중화가 아니다(리트머스, 브리프 D3) - 단, 코드리뷰(4차) N4: 이 파일에
+// dir_pass_deg가 실제로 등장한다(isDirectionAwareCriteria). "등장 자체가 없다"는
+// 이전 설명은 사실과 어긋났다 - 등장하되 **등급(grade)을 계산하는 데 쓰이지
+// 않는다**는 것이 리트머스의 진짜 기준이다. 이 파일이 하는 일은 세 가지뿐이다.
 //   1) 각도 하나(downhill_rad)를 8구간으로 나누는 표시 로직(compassLabel)
 //   2) 이미 grade_slope_cells(engine/flatness/core/slope.py)가 계산해 낸 두 값
 //      (slope_pct·design_pct)의 부호를 그대로 읽는 것(correctionDirectionLabel).
 //      그 함수는 d = |slope_pct - design_pct|로 절댓값만 남기고 부호를 버리는데,
 //      여기서는 절댓값을 취하기 전 부호만 해석에 쓸 뿐 새 임계값 비교를 하지
 //      않는다 - 이미 난 값을 다시 읽는 것이지 새로 판정하는 것이 아니다.
+//   3) dir_pass_deg를 "이 기준이 방향을 판정 대상으로 삼는가"라는 UI 가용성
+//      질문에 쓰는 것(isDirectionAwareCriteria). 셀 등급을 매기지 않는다 -
+//      배수구 클릭 가능 여부만 정한다. 등급은 여전히 100% 엔진(judge_slope_cells)
+//      이 낸 값을 joinSlopeCells가 그대로 옮길 뿐이다.
 //
 // 부호 해석: 실측 구배(slope_pct)가 설계(design_pct)보다 가파르면(양수) 내리막
 // 끝이 설계보다 이미 낮으므로 그만큼 "높여야" 하고, 실측이 설계보다 완만하면
@@ -72,8 +78,18 @@ export function correctionDirectionLabel(
  * 방향을 안 보기로 한 기준에서도 배수구를 클릭하면 그대로 발동한다 - 리뷰
  * 실측: 완전히 평탄한 8x8m 바닥(설계 구배 0%)에 배수구를 아무 데나 클릭하니
  * 노이즈만으로 "재시공 5셀"이 나왔다. 결함 없는 바닥이 결함 있는 것처럼
- * 보고되는 조용한 오탐이므로, 애초에 그런 기준에서는 클릭을 막는다. */
+ * 보고되는 조용한 오탐이므로, 애초에 그런 기준에서는 클릭을 막는다.
+ *
+ * ★ 코드리뷰(4차) N2: 결측 시 기본값을 "모르면 차단"으로 통일한다. threshold가
+ * 통째로 없는 경우(이전엔 true=허용)와 dir_pass_deg/design_pct 중 하나만 빠진
+ * 경우(undefined < 180이 항상 false라 이전에도 false=차단이었다)가 서로 다른
+ * 답을 냈었다 - 부분 결측과 전체 결측이 다른 결론을 내는 건 일관성이 없을 뿐만
+ * 아니라, dirPassDeg 표시 쪽 기본값(slope-result.tsx의 `?? 180` - 항상 배지를
+ * 억제하는 "차단" 방향)과도 어긋났다(허용 리스크가 있는 클릭은 열려 있는데
+ * 방향 편차 배지는 영구히 안 뜨는 모순). 이제 두 기본값 모두 "모르면 차단"
+ * 한 방향으로 수렴한다. */
 export function isDirectionAwareCriteria(threshold: SlopeThreshold | null | undefined): boolean {
-  if (!threshold) return true; // 결측 시 기존 동작(클릭 가능) 유지 - 안전한 기본값
+  if (!threshold) return false;
+  if (typeof threshold.dir_pass_deg !== 'number' || typeof threshold.design_pct !== 'number') return false;
   return threshold.dir_pass_deg < 180 && threshold.design_pct !== 0;
 }

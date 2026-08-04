@@ -67,26 +67,35 @@ describe('ReanalyzeButton kind=slope (단계 C: 구배 분석 시작)', () => {
     expect(screen.getByRole('button', { name: /구배 분석/ })).toBeInTheDocument();
   });
 
-  it('이 종류의 분석이 한 번도 없었어도(latestStatus 미지정) 버튼이 활성 상태다(첫 시작)', () => {
+  // 코드리뷰(4차) N1(Blocker) 수정: 구배는 이제 클릭 시점이 아니라 마운트 시점에
+  // fn_resolve_criteria를 불러 후보를 보여준다(reanalyze-button.test.tsx의
+  // "kind=slope 기준 선택" describe가 그 선택 UI 자체를 검증한다). 여기서는
+  // "이 종류가 한 번도 없었어도" 버튼이 결국 활성화됨을 후보 로딩까지 기다려 확인한다 -
+  // createClient 목을 안 주면 마운트 즉시 rpc()가 undefined 위에서 던지므로 반드시 준다.
+  it('이 종류의 분석이 한 번도 없었어도(latestStatus 미지정) 후보 로딩 후 버튼이 활성 상태다(첫 시작)', async () => {
+    vi.mocked(createClient).mockReturnValue(stubSupabase() as never);
     render(<ReanalyzeButton scanId="s1" userId="u1" surface="floor" kind="slope" siteId="site1"
       isImport={false} />);
-    expect(screen.getByRole('button', { name: /구배 분석/ })).toBeEnabled();
+    await waitFor(() => expect(screen.getByRole('button', { name: /구배 분석/ })).toBeEnabled());
   });
 
-  it('구배 버튼은 클릭 시점에 fn_resolve_criteria(site, floor, slope)로 구배 기준을 해석해 쓴다', async () => {
+  it('구배 버튼은 마운트 시 fn_resolve_criteria(site, floor, slope)로 후보를 불러오고 기본 선택으로 시작한다', async () => {
     const rpcSpy = vi.fn();
     const insertSpy = vi.fn();
     vi.mocked(createClient).mockReturnValue(stubSupabase({ rpcSpy, insertSpy }) as never);
     render(<ReanalyzeButton scanId="s1" userId="u1" surface="floor" kind="slope" siteId="site1"
       isImport={false} />);
+    // scans.selected_criteria_id(평활도 기준)를 그대로 쓰면 워커가 KeyError로 죽으므로
+    // 반드시 p_kind: 'slope'로 새로 해석해야 한다 - 마운트 시 이미 호출됐는지 기다린다.
+    await waitFor(() => expect(rpcSpy).toHaveBeenCalledWith('fn_resolve_criteria',
+      { p_site_id: 'site1', p_surface: 'floor', p_kind: 'slope' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: /구배 분석/ })).toBeEnabled());
+
     fireEvent.click(screen.getByRole('button', { name: /구배 분석/ }));
     await waitFor(() => expect(refreshMock).toHaveBeenCalled());
 
-    // scans.selected_criteria_id(평활도 기준)를 그대로 쓰면 워커가 KeyError로 죽으므로
-    // 반드시 p_kind: 'slope'로 새로 해석해야 한다.
-    expect(rpcSpy).toHaveBeenCalledWith('fn_resolve_criteria',
-      { p_site_id: 'site1', p_surface: 'floor', p_kind: 'slope' });
-    // fn_resolve_criteria는 order by is_default desc, name이므로 첫 행이 기본 기준이다.
+    // is_default 행이 기본 선택이다(N1 이전에는 "첫 행"이라는 배열 순서 우연에
+    // 기댔지만, 지금은 선택 로직이 명시적으로 is_default를 찾는다).
     expect(insertSpy).toHaveBeenCalledWith(
       expect.objectContaining({ kind: 'slope', criteria_id: 'slope-crit-1', scan_id: 's1', surface: 'floor' }));
   });

@@ -32,12 +32,13 @@
 // 임포터를 통해 다시 읽게 한다. 구배(kind='slope')는 임포트 스캔에서 이 버튼
 // 자체가 렌더되지 않으므로(app/scans/[id]/page.tsx) 사실상 평활도에서만 의미가 있다.
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { enqueueJob } from '@/lib/domain/jobs';
 import { ANALYSIS_KIND_LABEL } from '@/lib/domain/labels';
-import type { AnalysisKind, AnalysisStatus, CriteriaRow, Surface } from '@/lib/domain/types';
+import { isDirectionAwareCriteria } from '@/lib/domain/slope-direction';
+import type { AnalysisKind, AnalysisStatus, CriteriaRow, SlopeThreshold, Surface } from '@/lib/domain/types';
 
 interface Props {
   scanId: string;
@@ -46,9 +47,9 @@ interface Props {
   /** 이 버튼이 만들 분석의 종류. 버튼 문구·insert의 kind·기준 해석 방식을 모두 결정한다. */
   kind: AnalysisKind;
   /** kind==='flatness'일 때 호출부가 미리 해석해(scan.selected_criteria_id 등) 내려주는 기준.
-   *  kind==='slope'이면 클릭 시점에 fn_resolve_criteria로 새로 해석하므로 쓰이지 않는다. */
+   *  kind==='slope'이면 사용자가 아래 선택 UI에서 고른 기준을 쓰므로 쓰이지 않는다. */
   criteriaId?: string;
-  /** kind==='slope'일 때 기준 해석(fn_resolve_criteria)에 쓰는 현장 id. flatness에서는 쓰이지 않는다. */
+  /** kind==='slope'일 때 기준 후보 해석(fn_resolve_criteria)에 쓰는 현장 id. flatness에서는 쓰이지 않는다. */
   siteId?: string;
   /** 가장 최근 "같은 종류" 분석의 상태 — queued/processing이면 중복 실행을 막는다.
    *  이 종류의 분석이 아직 한 번도 없었다면 undefined(진행 중 아님으로 취급). */
@@ -65,28 +66,66 @@ export function ReanalyzeButton({
   const [error, setError] = useState<string | null>(null);
   const inProgress = latestStatus === 'queued' || latestStatus === 'processing';
 
+  // 코드리뷰(4차) N1(★★ Blocker): 예전에는 클릭 시점에 fn_resolve_criteria를
+  // 불러 rows[0](= is_default 기준)을 무조건 썼다. 007 시드에서 is_default인
+  // 구배 기준은 slope-indoor-level 하나뿐인데 그 기준은 방향 비대상
+  // (design_pct=0, dir_pass_deg=180)이라, 대시보드 어디에도 다른 기준을 고를
+  // 방법이 없어 배수구 클릭 -> slope_judge 잡으로 이어지는 단계 D 전체 경로가
+  // UI로 영원히 도달 불가능했다(리뷰 실측 - 기본 기준으로는 클릭 안내조차
+  // 안 뜬다). upload-form.tsx가 평활도 기준을 고르는 패턴(마운트 시 후보를
+  // 불러와 라디오로 고르게 하고 is_default를 기본 선택으로 둠)을 그대로
+  // 따른다 - 기본 선택은 유지하되 사용자가 바꿀 수 있게 한다.
+  const [slopeCriteria, setSlopeCriteria] = useState<CriteriaRow[]>([]);
+  const [slopeCriteriaId, setSlopeCriteriaId] = useState('');
+  const [criteriaLoadError, setCriteriaLoadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (kind !== 'slope' || !siteId) return;
+    let cancelled = false;
+    (async () => {
+      // 코드리뷰 I3와 같은 이유로 try/catch를 둔다 - rpc() 자체가 reject하면
+      // (네트워크 오류 등) unhandled rejection으로 조용히 죽고 버튼은 "후보
+      // 로딩 중"으로 영원히 멈춘다.
+      try {
+        const { data, error: err } = await createClient().rpc('fn_resolve_criteria', {
+          p_site_id: siteId, p_surface: 'floor', p_kind: 'slope',
+        });
+        if (cancelled) return;
+        const rows = (data ?? []) as CriteriaRow[];
+        if (err || rows.length === 0) {
+          // 마이그레이션 007 미적용 또는 시드가 비어 있으면 빈 배열이 온다.
+          setCriteriaLoadError('구배 판정 기준을 찾을 수 없습니다. 마이그레이션 007이 적용됐는지 확인하세요.');
+          return;
+        }
+        setSlopeCriteria(rows);
+        setSlopeCriteriaId(rows.find((c) => c.is_default)?.id ?? rows[0].id); // 기본 선택 = is_default
+      } catch (e) {
+        if (!cancelled) {
+          const detail = e instanceof Error ? e.message : String(e);
+          setCriteriaLoadError(`구배 판정 기준을 불러오는 중 오류가 발생했습니다: ${detail}`);
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [kind, siteId]);
+
   async function onClick() {
     setBusy(true);
     setError(null);
     const supabase = createClient();
 
-    // 0) 구배는 클릭 시점에 기준을 해석한다(컨트롤러 보강 확정 1). scans.selected_criteria_id는
-    // kind 개념이 없는 단일 컬럼이라 그대로 쓰면 평활도 기준이 실려 워커가 KeyError로 죽는다.
-    // 업로드 화면(upload-form.tsx)이 이미 같은 RPC를 클라이언트에서 부르는 선례를 따른다.
+    // 0) 구배는 마운트 시점에 이미 후보를 불러와 사용자가 고른 값을 쓴다
+    // (컨트롤러 보강 확정 1 + N1 수정). scans.selected_criteria_id는 kind
+    // 개념이 없는 단일 컬럼이라 그대로 쓰면 평활도 기준이 실려 워커가
+    // KeyError로 죽는다.
     let resolvedCriteriaId = criteriaId;
     if (kind === 'slope') {
-      const { data, error: critErr } = await supabase.rpc('fn_resolve_criteria', {
-        p_site_id: siteId, p_surface: 'floor', p_kind: 'slope',
-      });
-      const rows = (data ?? []) as CriteriaRow[];
-      if (critErr || rows.length === 0) {
-        // 마이그레이션 007 미적용 또는 시드가 비어 있으면 빈 배열이 온다. 그대로
-        // rows[0].id를 읽으면 TypeError로 화면이 죽으므로 반드시 먼저 확인한다.
+      if (!slopeCriteriaId) {
         setBusy(false);
-        setError('구배 판정 기준을 찾을 수 없습니다. 마이그레이션 007이 적용됐는지 확인하세요.');
+        setError(criteriaLoadError ?? '적용 기준을 확인할 수 없습니다.');
         return;
       }
-      resolvedCriteriaId = rows[0].id; // order by is_default desc, name -> 첫 행이 기본 기준
+      resolvedCriteriaId = slopeCriteriaId;
     }
     if (!resolvedCriteriaId) {
       setBusy(false);
@@ -126,7 +165,40 @@ export function ReanalyzeButton({
   const label = `${ANALYSIS_KIND_LABEL[kind]} 분석`;
   return (
     <div className="flex flex-col items-end gap-1">
-      <button type="button" onClick={onClick} disabled={busy || inProgress}
+      {/* N1: 구배 기준 선택 - upload-form.tsx의 "적용 기준" 라디오 목록과 같은 패턴.
+          thresholds[0].use(옥상 슬래브(노출방수) / 욕실·화장실 바닥 / 주차장 바닥 /
+          실내 평바닥 등, 007_slope_analysis.sql:118-133)를 보여준다. */}
+      {kind === 'slope' && slopeCriteria.length > 0 && (
+        <div className="w-full max-w-xs rounded border bg-white p-2 text-xs">
+          <p className="mb-1 font-medium text-slate-600">적용 기준</p>
+          <div className="space-y-1">
+            {slopeCriteria.map((c) => {
+              // CriteriaRow.thresholds는 컴파일 타임에는 평활도 Threshold[]지만
+              // kind='slope' 행의 실제 jsonb 내용은 SlopeThreshold다(런타임
+              // 형태가 다르다 - slope-result.tsx의 stats 캐스팅과 같은 사정).
+              const t = c.thresholds?.[0] as unknown as SlopeThreshold | undefined;
+              const aware = isDirectionAwareCriteria(t ?? null);
+              return (
+                <label key={c.id} className="flex items-start gap-1.5">
+                  <input type="radio" name={`slope-criteria-${scanId}`} checked={slopeCriteriaId === c.id}
+                    onChange={() => setSlopeCriteriaId(c.id)} disabled={busy || inProgress}
+                    className="mt-0.5" />
+                  <span>
+                    {t?.use ?? c.name}
+                    {c.is_default && <em className="ml-1 not-italic text-blue-700">(기본)</em>}
+                    {!aware && <em className="ml-1 not-italic text-slate-400">- 방향 판정 안 함</em>}
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+        </div>
+      )}
+      {kind === 'slope' && criteriaLoadError && (
+        <p className="max-w-xs text-xs text-red-600">{criteriaLoadError}</p>
+      )}
+      <button type="button" onClick={onClick}
+        disabled={busy || inProgress || (kind === 'slope' && !slopeCriteriaId)}
         title={inProgress ? '이미 진행 중인 분석이 끝난 뒤 다시 시도하세요.' : undefined}
         className="rounded border px-3 py-1.5 text-sm hover:bg-slate-50 disabled:opacity-50">
         {busy ? '요청 중...' : label}

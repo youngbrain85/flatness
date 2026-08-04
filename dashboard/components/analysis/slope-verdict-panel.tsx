@@ -96,11 +96,23 @@ export function SlopeVerdictPanel({ stats, judge, drainPoints, directionAware }:
             직전 배수구: {fmtDrainPoints(judge.previous_drain_points)}
           </p>
         )}
-        {!stats.direction_judged && (
+        {/* 코드리뷰(4차) N3: 조건을 !stats.direction_judged가 아니라
+            !directionAware로 옮긴다. 예전 조건은 direction_judged가 이미 true인
+            "오염된" 분석(방향 비대상 기준인데도 과거에 배수구를 클릭해 역구배·
+            재시공이 노이즈로 찍혀버린 경우)에서는 아예 안 떴다 - I1이 신규
+            클릭만 막을 뿐 기존 오탐을 알리지도 되돌리지도 못했다. directionAware
+            기준으로 갈면 오염된 분석에서도 경고가 뜬다. */}
+        {!directionAware ? (
           <p className="mt-1 text-xs text-amber-700">
-            {directionAware
-              ? '배수구가 지정되지 않아 방향(역구배)은 판정하지 않았습니다. 지도에서 배수구 위치를 클릭하세요.'
-              : '이 기준은 방향(역구배)을 판정 대상으로 삼지 않습니다.'}
+            이 기준은 방향(역구배)을 판정 대상으로 삼지 않습니다.
+            {stats.direction_judged && (
+              ' 그런데도 이 판정에는 방향 결과가 포함돼 있어 역구배·재시공 표시가 노이즈일 수 있습니다. '
+              + '구배 분석을 다시 실행해(배수구 지정 없이) 재판정하는 것을 권장합니다.'
+            )}
+          </p>
+        ) : !stats.direction_judged && (
+          <p className="mt-1 text-xs text-amber-700">
+            배수구가 지정되지 않아 방향(역구배)은 판정하지 않았습니다. 지도에서 배수구 위치를 클릭하세요.
           </p>
         )}
       </div>

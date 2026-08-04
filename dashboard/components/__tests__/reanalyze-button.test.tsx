@@ -8,6 +8,7 @@ vi.mock('@/lib/supabase/client', () => ({ createClient: vi.fn() }));
 import { createClient } from '@/lib/supabase/client';
 import { ReanalyzeButton } from '../reanalyze-button';
 import { DUPLICATE_JOB_MESSAGE } from '@/lib/domain/jobs';
+import type { CriteriaRow } from '@/lib/domain/types';
 
 // unit-confirm-form과 동일한 형태의 로컬 스텁(insert().select().single() 체인 +
 // fn_enqueue_job rpc). rpcSpy/updateSpy로 실제 호출 인자를 검증한다
@@ -137,5 +138,133 @@ describe('ReanalyzeButton (C5: 스캔 상세 다시 분석, 단계 C: kind 인�
     expect(updateSpy).toHaveBeenCalledTimes(1);
     expect(updateSpy).toHaveBeenCalledWith(expect.objectContaining({ deleted_at: expect.any(String) }));
     expect(refreshMock).not.toHaveBeenCalled();
+  });
+});
+
+// 007_slope_analysis.sql:118-133의 5개 구배 기준을 그대로 옮긴 픽스처.
+// slope-indoor-level만 is_default=true이고 방향 비대상(design_pct=0, dir_pass_deg=180)이다.
+const slopeCriteriaRows: CriteriaRow[] = [
+  {
+    id: 'c-roof-exposed', site_id: null, surface: 'floor', name: 'slope-roof-exposed',
+    source_text: 'KCS 41 40 01 방수공사일반 §3.1.3(1) 노출방수', is_default: false, is_active: true,
+    version: 1, supersedes_id: null, created_at: '', kind: 'slope',
+    thresholds: [{ use: '옥상 슬래브(노출방수)', design_pct: 3.5, pass_pct: 1.5, re_pct: 4.5, dir_pass_deg: 30 }] as never,
+  },
+  {
+    id: 'c-bathroom', site_id: null, surface: 'floor', name: 'slope-bathroom',
+    source_text: 'KCS 41 48 01 타일공사', is_default: false, is_active: true,
+    version: 1, supersedes_id: null, created_at: '', kind: 'slope',
+    thresholds: [{ use: '욕실·화장실 바닥', design_pct: 0.5, pass_pct: 0.5, re_pct: 1.5, dir_pass_deg: 30 }] as never,
+  },
+  {
+    id: 'c-indoor-level', site_id: null, surface: 'floor', name: 'slope-indoor-level',
+    source_text: '설계 구배 0%(의도적 구배 없음)', is_default: true, is_active: true,
+    version: 1, supersedes_id: null, created_at: '', kind: 'slope',
+    thresholds: [{ use: '실내 평바닥', design_pct: 0.0, pass_pct: 1.0, re_pct: 3.0, dir_pass_deg: 180 }] as never,
+  },
+];
+
+function stubSupabaseSlope(
+  criteriaRows: CriteriaRow[] | null,
+  enqueueError: { code?: string; message: string } | null = null,
+  rpcSpy: (fn: string, params: unknown) => void = () => {},
+  insertSpy: (fields: unknown) => void = () => {},
+) {
+  return {
+    from: (table: string) => {
+      if (table === 'analyses') {
+        return {
+          insert: (fields: unknown) => {
+            insertSpy(fields);
+            return { select: () => ({ single: async () => ({ data: { id: 'a2' }, error: null }) }) };
+          },
+          update: () => ({ eq: async () => ({ error: null }) }),
+        };
+      }
+      throw new Error(`예상치 못한 테이블: ${table}`);
+    },
+    rpc: async (fn: string, params: unknown) => {
+      rpcSpy(fn, params);
+      if (fn === 'fn_resolve_criteria') {
+        return criteriaRows === null ? { data: null, error: { message: 'RPC 오류' } } : { data: criteriaRows, error: null };
+      }
+      if (fn === 'fn_enqueue_job') return { error: enqueueError };
+      throw new Error(`예상치 못한 rpc: ${fn}`);
+    },
+  };
+}
+
+// ★ 코드리뷰(4차) N1(Blocker): 예전에는 rows[0](=is_default)을 무조건 썼는데,
+// 007의 유일한 is_default 구배 기준(slope-indoor-level)이 방향 비대상이라
+// 대시보드로는 다른 기준을 절대 못 골랐다 - 배수구 클릭 -> slope_judge 잡으로
+// 이어지는 단계 D 전체 경로가 UI로 도달 불가능했다. 이 describe가 그 수정을 고정한다.
+describe('ReanalyzeButton kind=slope 기준 선택 (코드리뷰(4차) N1)', () => {
+  it('마운트 시 후보 기준을 불러와 라디오 목록으로 보여주고, is_default를 기본 선택으로 둔다', async () => {
+    vi.mocked(createClient).mockReturnValue(stubSupabaseSlope(slopeCriteriaRows) as never);
+    render(<ReanalyzeButton scanId="s1" userId="u1" surface="floor" kind="slope" siteId="site1"
+      isImport={false} />);
+
+    await waitFor(() => expect(screen.getByText('옥상 슬래브(노출방수)')).toBeInTheDocument());
+    expect(screen.getByText('욕실·화장실 바닥')).toBeInTheDocument();
+    expect(screen.getByText('실내 평바닥')).toBeInTheDocument();
+
+    // is_default(slope-indoor-level = "실내 평바닥")가 기본 선택이어야 한다.
+    const indoorRadio = screen.getByText('실내 평바닥').closest('label')!.querySelector('input')!;
+    expect(indoorRadio).toBeChecked();
+  });
+
+  it('방향 비대상 기준에는 "방향 판정 안 함" 힌트를 보여준다', async () => {
+    vi.mocked(createClient).mockReturnValue(stubSupabaseSlope(slopeCriteriaRows) as never);
+    render(<ReanalyzeButton scanId="s1" userId="u1" surface="floor" kind="slope" siteId="site1"
+      isImport={false} />);
+    await waitFor(() => expect(screen.getByText('실내 평바닥')).toBeInTheDocument());
+    expect(screen.getByText(/방향 판정 안 함/)).toBeInTheDocument();
+  });
+
+  it('사용자가 다른 기준을 선택하면 그 기준으로 분석을 시작한다(rows[0] 고정 아님)', async () => {
+    const insertSpy = vi.fn();
+    vi.mocked(createClient).mockReturnValue(stubSupabaseSlope(slopeCriteriaRows, null, () => {}, insertSpy) as never);
+    render(<ReanalyzeButton scanId="s1" userId="u1" surface="floor" kind="slope" siteId="site1"
+      isImport={false} />);
+    await waitFor(() => expect(screen.getByText('옥상 슬래브(노출방수)')).toBeInTheDocument());
+
+    // 기본 선택(실내 평바닥, 방향 비대상)이 아니라 방향 판정이 되는 기준으로 바꾼다.
+    const roofRadio = screen.getByText('옥상 슬래브(노출방수)').closest('label')!.querySelector('input')!;
+    fireEvent.click(roofRadio);
+
+    fireEvent.click(screen.getByRole('button', { name: '구배 분석' }));
+    await waitFor(() => expect(refreshMock).toHaveBeenCalled());
+    // rows[0]이 아니라 사용자가 고른 c-roof-exposed가 실려야 한다.
+    expect(insertSpy).toHaveBeenCalledWith(expect.objectContaining({ criteria_id: 'c-roof-exposed' }));
+  });
+
+  it('기본 선택 그대로 시작하면 is_default 기준(c-indoor-level)이 실린다', async () => {
+    const insertSpy = vi.fn();
+    vi.mocked(createClient).mockReturnValue(stubSupabaseSlope(slopeCriteriaRows, null, () => {}, insertSpy) as never);
+    render(<ReanalyzeButton scanId="s1" userId="u1" surface="floor" kind="slope" siteId="site1"
+      isImport={false} />);
+    await waitFor(() => expect(screen.getByText('실내 평바닥')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: '구배 분석' }));
+    await waitFor(() => expect(refreshMock).toHaveBeenCalled());
+    expect(insertSpy).toHaveBeenCalledWith(expect.objectContaining({ criteria_id: 'c-indoor-level' }));
+  });
+
+  it('후보 기준을 못 찾으면(마이그레이션 007 미적용 등) 오류를 보여주고 버튼을 비활성화한다', async () => {
+    vi.mocked(createClient).mockReturnValue(stubSupabaseSlope([]) as never);
+    render(<ReanalyzeButton scanId="s1" userId="u1" surface="floor" kind="slope" siteId="site1"
+      isImport={false} />);
+    await waitFor(() => {
+      expect(screen.getByText(/구배 판정 기준을 찾을 수 없습니다/)).toBeInTheDocument();
+    });
+    expect(screen.getByRole('button', { name: '구배 분석' })).toBeDisabled();
+  });
+
+  it('후보가 로딩되기 전에는 버튼이 비활성 상태다(빈 criteria_id로 분석을 시작하지 않음)', () => {
+    vi.mocked(createClient).mockReturnValue(stubSupabaseSlope(slopeCriteriaRows) as never);
+    render(<ReanalyzeButton scanId="s1" userId="u1" surface="floor" kind="slope" siteId="site1"
+      isImport={false} />);
+    // 비동기 useEffect가 아직 안 끝난 첫 렌더 시점.
+    expect(screen.getByRole('button', { name: '구배 분석' })).toBeDisabled();
   });
 });

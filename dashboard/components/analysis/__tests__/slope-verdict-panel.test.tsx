@@ -80,6 +80,28 @@ describe('SlopeVerdictPanel 재판정 진행 배너 (브리프 D5 상태표)', (
     expect(screen.queryByText(/지도에서 배수구 위치를 클릭하세요/)).not.toBeInTheDocument();
   });
 
+  // ★ 코드리뷰(4차) N3: "오염된" 분석 - 방향 비대상 기준인데 과거에(이 기능
+  // 배포 전) 배수구를 클릭해 direction_judged=true로 역구배·재시공이 노이즈로
+  // 찍혀 있는 상태. 예전 조건(!direction_judged)이었다면 이 경우 경고가 전혀
+  // 안 떴다 - directionAware 기준으로 바뀌었으니 여기서도 떠야 한다.
+  it('direction_judged=true인데 directionAware=false면(오염된 분석) 노이즈 경고까지 보여준다', () => {
+    render(
+      <SlopeVerdictPanel stats={{ ...stats, direction_judged: true }} judge={null} drainPoints={[]}
+        directionAware={false} />,
+    );
+    expect(screen.getByText(/방향\(역구배\)을 판정 대상으로 삼지 않습니다/)).toBeInTheDocument();
+    expect(screen.getByText(/역구배·재시공 표시가 노이즈일 수 있습니다/)).toBeInTheDocument();
+  });
+
+  it('direction_judged=false·directionAware=false면(정상 - 아직 클릭 안 함) 노이즈 경고는 없다', () => {
+    render(
+      <SlopeVerdictPanel stats={{ ...stats, direction_judged: false }} judge={null} drainPoints={[]}
+        directionAware={false} />,
+    );
+    expect(screen.getByText(/방향\(역구배\)을 판정 대상으로 삼지 않습니다/)).toBeInTheDocument();
+    expect(screen.queryByText(/노이즈일 수 있습니다/)).not.toBeInTheDocument();
+  });
+
   it('현재 배수구·직전 배수구를 보여준다', () => {
     const judge: JudgeInfo = {
       state: 'done', at: 't0', previous_drain_points: [{ x: 1, y: 2 }],

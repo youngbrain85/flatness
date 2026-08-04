@@ -106,8 +106,24 @@ describe('isDirectionAwareCriteria (코드리뷰 I1: 등급 계산 아님, UI �
       .toBe(false);
   });
 
-  it('threshold가 없으면(결측) 기존 동작대로 방향 판정 대상으로 취급한다', () => {
-    expect(isDirectionAwareCriteria(null)).toBe(true);
-    expect(isDirectionAwareCriteria(undefined)).toBe(true);
+  // ★ 코드리뷰(4차) N2: 결측 시 기본값을 "모르면 차단"으로 통일한다(이전엔
+  // 통째 결측=허용, 부분 결측=차단으로 서로 달랐다).
+  it('threshold가 통째로 없으면(결측) 방향 판정 대상이 아닌 것으로 취급한다(모르면 차단)', () => {
+    expect(isDirectionAwareCriteria(null)).toBe(false);
+    expect(isDirectionAwareCriteria(undefined)).toBe(false);
+  });
+
+  it('dir_pass_deg만 빠져도(부분 결측) 통째 결측과 같은 답(차단)을 낸다', () => {
+    const broken = { use: 't', design_pct: 2, pass_pct: 0.5, re_pct: 1.5 } as unknown as Parameters<
+      typeof isDirectionAwareCriteria
+    >[0];
+    expect(isDirectionAwareCriteria(broken)).toBe(false);
+  });
+
+  it('design_pct만 빠져도(부분 결측) 차단한다', () => {
+    const broken = { use: 't', pass_pct: 0.5, re_pct: 1.5, dir_pass_deg: 30 } as unknown as Parameters<
+      typeof isDirectionAwareCriteria
+    >[0];
+    expect(isDirectionAwareCriteria(broken)).toBe(false);
   });
 });
