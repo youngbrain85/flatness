@@ -277,6 +277,60 @@ def test_render_height_view_marks_high_area():
     assert abs(y - 1.5) < 0.3
 
 
+def test_render_height_view_png_puts_low_y_bump_at_bottom_of_image(tmp_path, monkeypatch):
+    """장식 PNG도 세로 방향이 뒤집히면 잡힌다(2차 리뷰 Important 2).
+
+    바로 위 test_render_height_view_marks_high_area는 **렌더 입력 격자**만 본다 -
+    render_height_view의 origin="lower"를 "upper"로 바꿔도 격자값은 그대로라
+    engine 전체가 초록이었다(실측). 즉 화면에 뜨는 그림이 상하 반전돼도 자동
+    방어가 없었다.
+
+    왜 중요한가: 단위 확정 자체는 축 눈금이 살아 있어 영향이 없지만, 단계 F에서
+    사용자가 이 E 화면으로 공간 방향을 익힌 뒤 F 화면(플레인 PNG)에서 클릭하면
+    두 그림의 상하가 어긋난다. 두 렌더가 같은 세로 관례를 쓴다는 것이 계약이다
+    (플레인 쪽은 위 test_..._plain_pixel_to_world_formula_matches_bump_location이
+    실제 픽셀로 못 박는다).
+
+    스파이(imshow의 origin 인자 단언) 대신 실제 PNG 픽셀을 읽는 쪽을 골랐다 -
+    플레인 PNG 테스트와 같은 블랙박스 방식이라야 "인자는 맞는데 결과가 다르다"는
+    경우까지 덮고, 이 저장소가 반복해서 데인 "코드는 맞는데 테스트가 회귀를 못
+    잡는" 양식에서 벗어난다.
+
+    판독 방법: 컬러바를 무력화해(컬러바에도 같은 viridis 노랑이 들어 있어
+    argmax가 그쪽으로 샌다) 노랑이 축 안에만 남게 한 뒤, R+G-2B로 노랑을
+    집는다 - 흰 여백(255,255,255)과 NaN 회색(#e8e8e8)은 둘 다 0, 검은 글씨도 0,
+    viridis 어두운 보라는 음수라 융기 정점(253,231,37 -> 410)이 압도적이다.
+    단순 밝기(R+G)를 쓰면 흰 여백이 노랑을 이겨 못 쓴다.
+
+    범프는 반드시 비대칭 위치여야 한다 - bbox 중심 (2.0, 1.5)는 세로·가로
+    뒤집기 양쪽의 고정점이라 아무것도 검증하지 못한다.
+    """
+    monkeypatch.setattr(matplotlib.figure.Figure, "colorbar", lambda self, *a, **k: None)
+
+    pts = add_bump(flat_floor(size=(4.0, 3.0), spacing=0.02, noise_sd=0.0002),
+                   (1.2, 0.7), 0.4, 0.5)
+    info = _info(pts.min(axis=0), pts.max(axis=0), n_points=len(pts))
+    s = subcell_m_for_bbox(info, target_long_side=80)
+    grid = build_subcell_grid([pts.astype(np.float32)], info, scale_to_m=1.0, subcell_m=s)
+
+    out = tmp_path / "decorated.png"
+    render_height_view(grid, out)
+
+    with PIL.Image.open(out) as im:
+        arr = np.asarray(im.convert("RGB"), dtype=np.int32)
+    height, width = arr.shape[:2]
+
+    yellowness = arr[:, :, 0] + arr[:, :, 1] - 2 * arr[:, :, 2]
+    py, px = np.unravel_index(np.argmax(yellowness), yellowness.shape)
+
+    # 월드 y=0.7은 bbox(0~3)의 아래쪽 23% - origin="lower"면 이미지에서도 아래쪽에
+    # 찍힌다. "upper"로 뒤집히면 위쪽 절반으로 올라가 이 단언이 깨진다.
+    assert py > height / 2, f"융기가 이미지 위쪽 절반에 찍혔다(py={py}, height={height}) - 세로가 뒤집혔다"
+    # 가로는 origin의 영향을 받지 않지만, 좌우 뒤집기 회귀도 같은 비용으로 함께 막는다.
+    # 월드 x=1.2는 bbox(0~4)의 왼쪽 30%다.
+    assert px < width / 2, f"융기가 이미지 오른쪽 절반에 찍혔다(px={px}, width={width}) - 좌우가 뒤집혔다"
+
+
 def test_render_height_view_uses_data_range_not_symmetric_normalization(tmp_path, monkeypatch):
     """설계 결정 E4의 핵심 검증: vmin/vmax는 데이터의 실제 최솟값·최댓값이어야
     한다.
@@ -448,9 +502,19 @@ def test_render_height_view_plain_pixel_to_world_formula_matches_bump_location(t
     디코드하는 블랙박스 검증이다 - render_height_view_plain의 좌표 계약
     독스트링이 실제 렌더 결과와 어긋나면(예: 세로 뒤집기를 빠뜨리면) 이
     테스트가 잡는다.
+
+    ★ 범프를 bbox 중심에 두면 안 된다(2차 리뷰 Critical). flat_floor(size=(4,3))는
+    x in [0,4] * y in [0,3]을 만든다 - 중심 (2.0, 1.5)는 세로 뒤집기(y -> 3-y)에도
+    가로 뒤집기(x -> 4-x)에도 **불변인 고정점**이라, origin="lower"를 "upper"로
+    바꿔도 이 단언이 그대로 통과했다(실측: 무변이 21 passed, 변이도 21 passed).
+    좌표 계약의 유일한 자동 방어가 항등식이 되는 것이며, 이 저장소가 이번
+    단계에서만 세 번 겪은 픽스처 형태다(Task 1 subcell_m_file, Task 3 src).
+    그래서 (1.2, 0.7)처럼 두 축 모두 중심에서 벗어난 점을 쓴다 - 실측으로
+    변이 시 world_y가 0.7이 아니라 2.2~2.3대로 나와 단언이 깨진다.
+    이 좌표를 중심 쪽으로 되돌리면 테스트가 다시 공허해지니 옮기지 말 것.
     """
     pts = add_bump(flat_floor(size=(4.0, 3.0), spacing=0.02, noise_sd=0.0002),
-                   (2.0, 1.5), 0.4, 0.5)
+                   (1.2, 0.7), 0.4, 0.5)
     info = _info(pts.min(axis=0), pts.max(axis=0), n_points=len(pts))
     s = subcell_m_for_bbox(info, target_long_side=80)
     grid = build_subcell_grid([pts.astype(np.float32)], info, scale_to_m=1.0, subcell_m=s)
@@ -472,8 +536,8 @@ def test_render_height_view_plain_pixel_to_world_formula_matches_bump_location(t
     ix, iy = px, ny - 1 - py
     world_x = grid.origin[0] + (ix + 0.5) * grid.size_m
     world_y = grid.origin[1] + (iy + 0.5) * grid.size_m
-    assert abs(world_x - 2.0) < 0.3
-    assert abs(world_y - 1.5) < 0.3
+    assert abs(world_x - 1.2) < 0.3
+    assert abs(world_y - 0.7) < 0.3
 
 
 def test_render_height_view_plain_has_no_colorbar_or_text_chrome(tmp_path, monkeypatch):

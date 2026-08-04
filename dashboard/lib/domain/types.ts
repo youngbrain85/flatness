@@ -47,8 +47,14 @@ export interface ScanRow {
   // 010_scan_height_view.sql. precheck 잡이 남기는 높이 뷰 PNG의 버킷-상대 "전체"
   // 경로다(artifacts/scans/{scan_id}/height_view.png) - artifacts_dir 같은 디렉터리
   // 조각이 아니므로 소비할 때 dataUrl()에 그대로 넘긴다(artifactUrl 금지).
-  // nullable인 이유는 두 가지이고 둘 다 정상이다: (1) precheck를 돈 적이 없는 기존
-  // 스캔(임포트 등), (2) 점이 너무 성겨 워커가 렌더를 건너뛴 경우.
+  // nullable인 이유는 두 가지다: (1) precheck를 돈 적이 없는 스캔(임포트 등),
+  // (2) 렌더·업로드가 실패한 경우(worker/flatworker/jobs.py의 handle_precheck가
+  // except로 삼키고 상태 승격만 진행한다 - 흔적은 `[flatworker] 높이 뷰 생성 실패`
+  // 로그 한 줄뿐이다).
+  // "점이 성기면 워커가 렌더를 건너뛴다"는 더 이상 사실이 아니다 - Task 2 리뷰에서
+  // 그 스킵 분기가 제거됐다(components/unit-confirm-form.tsx의 같은 설명 참고).
+  // 전부-NaN 그림이어도 축 눈금은 진짜 bbox 값이라 단위 질문의 답이 나오기 때문에,
+  // 성긴 스캔은 이제 "그림 없음"이 아니라 "거의 빈 그림 + 빨간 경고"로 온다.
   height_view_path: string | null;
   deleted_at: string | null; created_at: string; updated_at: string;
 }
