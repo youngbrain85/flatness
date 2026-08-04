@@ -41,8 +41,9 @@ def slope_drain_points(params):
 
 
 def drain_points_from_stats(stats):
-    """judge_slope_cells가 낸 stats["drain_points"](예: [[3.2, 5.1], ...] - 정렬된
-    좌표쌍) -> 스펙 §3.5 표준 형태([{"x":3.2,"y":5.1}, ...])로 되돌린다.
+    """judge_slope_cells가 낸 stats["drain_points"](예: [[3.2, 5.1], ...] - 호출자가
+    넘긴 순서 그대로인 좌표쌍, 정렬되지 않음) -> 스펙 §3.5 표준 형태
+    ([{"x":3.2,"y":5.1}, ...])로 되돌린다.
 
     Task 3 리뷰 Important-3: 재판정의 previous_drain_points는 params가 아니라
     이 stats에서 가져와야 한다 - params.drain_points는 D4의 "엔큐 먼저, 성공하면

@@ -208,7 +208,10 @@ Vercel(대시보드) + Railway(워커, Docker) + Supabase(DB·Auth·Storage) 구
       위치를 클릭하세요" 안내 문구(`slope-result.tsx:184-187`)와 함께 등급별 색
       히트맵(Canvas)·셀별 결과표·판정 요약 패널이 뜬다. 방금 이 배포에서 새로
       돌린 분석이므로 `slope_cells.json`/`slope_judged.json`이 항상 함께
-      생성돼(`engine/flatness/core/pipeline.py:306-308`이 무조건 호출) 이 상태로
+      생성돼(`analyze_slope`가 먼저 `dump_slope_cells`로 `slope_cells.json`을
+      쓰고 - `engine/flatness/core/pipeline.py:306-308` - 곧바로 `judge_slope_cells`를
+      호출하는데, 그 안에서 `dump_slope_judged`가 `slope_judged.json`을 쓴다 -
+      `pipeline.py:250-251`. 최초 분석 한 번으로 둘 다 만들어진다) 이 상태로
       뜨는 것이 정상이다 - "이 분석은 재판정할 수 없습니다" 안내 박스
       (`slope-result.tsx:139-181`)가 보이면 그건 이번 배포(단계 D 엔진) 이전에
       만들어진 **오래된** 구배 분석을 열었다는 뜻이므로, 방금 새로 돌린 분석의
@@ -242,12 +245,21 @@ Vercel(대시보드) + Railway(워커, Docker) + Supabase(DB·Auth·Storage) 구
         `analyses.status`가 아니라 `analyses.params.judge.state`에서 오므로
         (설계 결정 D5) 화면 상단의 분석 상태 표시는 계속 "완료"로 남아 있는
         것이 정상이다
-      - 이미 처리 중인 잡이 있는데 다시 클릭하면(중복 엔큐) 배너 대신
-        `clickError` 메시지 "이미 같은 대상의 작업이 대기 중이거나 실행
-        중입니다..."가 뜬다(`dashboard/lib/domain/jobs.ts:9-15`의
-        `isDuplicateJobError`/`DUPLICATE_JOB_MESSAGE`, PostgREST 23505를
-        판별). 이때는 `params`가 갱신되지 않는다(브리프 D4 - 엔큐 먼저,
-        성공해야 params를 쓴다)
+      - **재판정이 진행 중일 때 지도를 다시 클릭하면 아무 반응이 없는 것이
+        정상이다(결함이 아니다).** `judgeBusy`(=`judge.state`가 `processing`
+        또는 `queued`)일 때 `SlopeHeatmapView`는 `clickable=false`로 받아
+        커서가 금지 표시(`cursor-not-allowed`)로 바뀌고 클릭 핸들러 자체가
+        조기 반환한다(`dashboard/lib/domain/slope-heatmap-view.tsx:67`의
+        `if (!clickable || !transform) return;`, `slope-result.tsx:112`의
+        `if (busy || judgeBusy) return;`, `slope-result.tsx:197`의
+        `clickable={!busy && !judgeBusy}`). "이미 같은 대상의 작업이 대기
+        중이거나 실행 중입니다..." 중복 엔큐 메시지(`dashboard/lib/domain/
+        jobs.ts:9-15`의 `isDuplicateJobError`/`DUPLICATE_JOB_MESSAGE`,
+        PostgREST 23505 판별)는 이 차단을 뚫고 클릭이 실제로 들어갔을 때만
+        뜬다 - `judge` 상태가 아직 Realtime/폴링으로 반영되기 전인 첫 클릭
+        직후의 짧은 경합 창(수 초 이내)에서만 재현되는 부수 경로이지,
+        일반적인 재현 절차가 아니다. 이때도 `params`는 갱신되지 않는다
+        (브리프 D4 - 엔큐 먼저, 성공해야 params를 쓴다)
    8. 워커 로그에서 `slope_judge` 잡 처리를 확인한다(수 초 안에 끝나야 한다 -
       점군을 다시 읽지 않으므로, `worker/flatworker/jobs.py:171-254`의
       `handle_slope_judge`). 완료되면:
@@ -258,16 +270,62 @@ Vercel(대시보드) + Railway(워커, Docker) + Supabase(DB·Auth·Storage) 구
         뜬다. "현재 배수구" 아래 "직전 배수구" 좌표도 함께 보이면
         (`slope-verdict-panel.tsx:75-79`) `params.judge.previous_drain_points`가
         정상적으로 남은 것이다
-   9. **재판정 실패 경로도 한 번은 확인한다** - 가장 쉬운 재현은 008만 적용하고
-      009는 적용하지 않은 상태(또는 criteria 행을 일시적으로 지워 워커가
-      예외를 던지게 만드는 것)에서 클릭해 보는 것이다. 재시도가 소진되면
-      판정 요약 패널에 빨간 박스 "재판정에 실패했습니다. 이전 판정 결과가
-      표시되고 있습니다."가 뜨고 그 아래 실패 사유가 보여야 한다
-      (`slope-verdict-panel.tsx:31-39`, `state==='failed'`일 때만 `judge.error`를
-      노출하는 것이 009의 계약이다 - "재큐 중인 재시도"의 `state==='queued'`+`error`
-      조합에서는 이 박스가 뜨면 안 된다). 이때도 위 4~6번에서 확인한 이전 판정
-      결과(등급·히트맵)는 그대로 남아 있어야 한다 - `analyses.status`가 재판정
-      실패로 `failed`가 되지 않는 것(D5)이 이 스모크의 핵심이다
+   9. **재판정 실패 경로도 한 번은 확인한다.** 008·009가 **둘 다** 적용된
+      상태에서만 의미 있는 스모크다 - **008만 적용한 상태로는 이 절차가
+      "실패"가 아니라 정상 완료로 끝난다.** 이유:
+      `handle_slope_judge`(`worker/flatworker/jobs.py:171-254`)의 성공 경로는
+      `build_slope_judge_fields`(`worker/flatworker/slope.py:161-165`)가
+      `params.judge.state='done'`을 **워커 파이썬 코드가 직접** 써
+      `db.update_analysis`로 PATCH하는 것이라 009의 SQL 함수를 전혀 거치지
+      않는다 - 009가 확장하는 건 `queued→processing`(클레임)과
+      `*→failed/queued`(실패) 전이뿐이다. 즉 판정 자체를 실패시키지 않는 한
+      008만으로도 재판정은 끝까지 정상 진행되고 완료 배너가 뜬다(대시보드가
+      클릭 시점에 이미 `params.judge.state='queued'`를 낙관적으로 써 두므로
+      진행 배너도 정상적으로 보인다). 실패를 보려면 **실제로 워커가 예외를
+      던지게 만들어야 한다.**
+
+      **criteria 행을 지우는 방법은 쓰지 않는다** - `analyses.criteria_id`
+      FK가 `on delete restrict`다(`supabase/migrations/001_schema.sql:174`).
+      이미 분석이 참조 중인 criteria 행은 DELETE 자체가 외래키 위반으로
+      거부되어 아무것도 지워지지 않는다(SQL Editor에 오류만 뜨고 재판정은
+      평소처럼 성공한다 - 이 방법으로는 애초에 실패를 재현할 수 없다).
+
+      대신 **이 분석 하나의 `slope_cells.json`만 Storage에서 잠시 치운다**
+      (criteria처럼 여러 분석이 공유하는 데이터가 아니라 이 분석 전용 객체라
+      다른 분석에 영향이 없다):
+      1. 지금 보고 있는 `/analyses/[id]`의 `id`를 적어둔다.
+      2. Supabase 대시보드 **Storage > `artifacts` 버킷 > `{id}/`** 폴더에서
+         `slope_cells.json`을 찾아 이름을 바꾼다(예: `slope_cells.json.bak`
+         - **삭제하지 않는다**, 끝나면 되돌려야 한다).
+      3. 화면으로 돌아와 배수구를 다시 클릭한다.
+         `stats.artifacts.cells_json`에 적힌 경로 문자열 자체는 그대로라
+         워커는 정상적으로 `slope_judge_context`를 통과하지만, 그 경로로
+         `storage.download_to`를 시도하면 객체가 없어 404 → `None` →
+         `False`를 돌려받고(`worker/flatworker/storage.py:40-51`의
+         `_download_to`), 정확히 이 두 줄에서 예외가 난다:
+         `worker/flatworker/jobs.py:221-222`의
+         `raise ValueError(f"셀 데이터 파일을 저장소에서 찾을 수 없습니다: {cells_json_key}")`.
+      4. `worker/flatworker/runner.py:120-121`이 이 예외를 잡아
+         `db.fail_job`을 부르고, 009의 `fn_job_fail` `slope_judge` 분기
+         (`supabase/migrations/009_slope_judge_functions.sql:118-125`)가
+         재시도 소진 시 `params.judge.state='failed'`를 쓴다.
+         `jobs.max_attempts` 기본값 3에 재시도 간격이 `10초 * 시도 횟수`로
+         늘어나므로(`009_slope_judge_functions.sql:127-129`), **실패가
+         확정될 때까지 1~2분 정도 걸릴 수 있다** - 그사이 배너는 "대기
+         중..."을 반복해서 보여줄 뿐 빨간 박스는 아직 뜨지 않는 것이
+         정상이다(재시도 중 `error`는 저장되지만 `state==='queued'`일 때는
+         화면에 노출하지 않는 것이 009의 계약).
+      5. 최종적으로 판정 요약 패널에 빨간 박스 "재판정에 실패했습니다. 이전
+         판정 결과가 표시되고 있습니다."와 그 아래 "사유: 셀 데이터 파일을
+         저장소에서 찾을 수 없습니다: ..."가 뜨는지 확인한다
+         (`slope-verdict-panel.tsx:31-39`, `state==='failed'`일 때만
+         `judge.error`를 노출하는 것이 009의 계약이다). 이때도 위 4~6번에서
+         확인한 이전 판정 결과(등급·히트맵)는 그대로 남아 있어야 한다 -
+         `analyses.status`가 재판정 실패로 `failed`가 되지 않는 것(D5)이 이
+         스모크의 핵심이다.
+      6. **확인이 끝나면 2번에서 바꾼 이름을 반드시 `slope_cells.json`으로
+         되돌린다** - 그대로 두면 이 분석은 이후 영구히 재판정할 수 없게
+         된다(티켓 75와 같은 상태가 인위적으로 남는다).
    10. **세부과업 4 단계 C 이전(007만 적용한 시점)에 만들어진 구배 분석으로는
        위 7~9번을 시도하지 않는다.** 그런 분석에는 `slope_cells.json`이 없어
        (백로그 티켓 75) 4번 화면 자체가 "이 분석은 재판정할 수 없습니다.

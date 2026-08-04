@@ -356,7 +356,7 @@ w_fit = a * center_x + b * center_y + c   # a,b,c = walls[i].plane_abc
 | `threshold` | object | 적용 기준 원본(`{use, design_pct, pass_pct, re_pct, dir_pass_deg}`, `criteria.thresholds[0]` 그대로). floor/wall/import의 `applied_criteria`(§1)와 달리 `name`/`source`가 없다 - 그 둘은 `analyses.applied_criteria` DB 컬럼(워커가 별도로 채움, 8.7 참고)에만 있다 |
 | `summary` | object | §8.1.1 |
 | `direction_judged` | boolean | 배수구 좌표가 있어 방향(역구배) 판정까지 했는지. `false`면 크기만 판정된 것 - 화면은 이 값으로 역구배 강조를 켤지 정한다 |
-| `drain_points` | `[number, number][] \| null` | 판정에 쓰인 배수구 좌표(정렬됨, 소수 3자리 반올림). §3.5의 `{"x":..,"y":..}` 형태가 아니라 좌표쌍 배열이다 - 워커의 `drain_points_from_stats`(`worker/flatworker/slope.py:43-59`)가 §3.5 형태로 역변환한다 |
+| `drain_points` | `[number, number][] \| null` | 판정에 쓰인 배수구 좌표(호출자가 넘긴 순서 그대로, 소수 3자리 반올림만 됨 - `core/pipeline.py:265-266`에 `sorted(`는 쓰이지 않는다). §3.5의 `{"x":..,"y":..}` 형태가 아니라 좌표쌍 배열이다 - 워커의 `drain_points_from_stats`(`worker/flatworker/slope.py:43-59`)가 §3.5 형태로 역변환한다 |
 | `warnings` | string[] | **완성된 한국어 문장**이다(floor/wall/import의 ASCII 슬러그 + `WARNING_LABEL` 번역 관례와 다르다 - 코드 기반 필터링 불가, 백로그 기록됨) |
 | `artifacts` | object | §8.1.2 |
 
@@ -375,7 +375,7 @@ w_fit = a * center_x + b * center_y + c   # a,b,c = walls[i].plane_abc
 
 | 키 | 필수 | 설명 |
 |---|---|---|
-| `cells_json` | 조건부 | `slope_cells.json` 경로(§8.2). **세부과업 4 단계 C까지 만들어진 분석에는 이 키 자체가 없다** - `judge_slope_cells`가 이 값을 새로 쓰지 않고 호출자가 넘긴 경로를 그대로 싣기 때문이다(`core/pipeline.py:187-196`). 대시보드는 이 키의 부재로 "재판정 불가"를 판별한다(`dashboard/lib/domain/slope-cells.ts:41-44`의 `slopeCellsJsonUrl`이 `null` 반환) |
+| `cells_json` | 조건부 | `slope_cells.json` 경로(§8.2). **현재 엔진은 이 키를 항상 채운다** - `judge_slope_cells`는 `cells_json_path` 인자가 없으면 `out_dir/slope_cells.json` 관례로 채워 넣는다(`core/pipeline.py:215-216`). **세부과업 4 단계 C까지 만들어진 분석에는 이 키 자체가 없는데**, 그건 이 값이 조건부로 비는 코드 분기가 있어서가 아니라 **그 시점 엔진 자체가 이 산출물을 아예 만들지 않았기 때문**이다(`slope_cells.json`은 D1에서 신설된 산출물). 대시보드는 이 키의 부재로 "재판정 불가"를 판별한다(`dashboard/lib/domain/slope-cells.ts:41-44`의 `slopeCellsJsonUrl`이 `null` 반환) |
 | `judged_json` | 조건부 | `slope_judged.json` 경로(§8.3). `cells_json`과 항상 함께 있거나 함께 없다(같은 판정 호출에서 나온다) |
 | `cells_csv` | 항상 | `slope_cells.csv` 경로(§8.5). **기계 판독 금지** - 아래 참고 |
 | `map_png` | 항상 | `slope_map.png` 경로. matplotlib이 그린 정적 이미지(§8.6). 대시보드는 재판정 가능한 분석(`cells_json`/`judged_json`이 있는 분석)에서는 이 이미지를 화면에 전혀 노출하지 않는다 - Canvas로 다시 그린 히트맵만 보여준다(`components/analysis/slope-result.tsx`, D3 설계 결정). `cells_json`이 없는(재판정 불가) 분석의 안내 화면에서만 이 PNG를 폴백으로 보여준다(`slope-result.tsx:168-176`) |
