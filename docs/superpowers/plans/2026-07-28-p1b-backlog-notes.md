@@ -345,8 +345,9 @@
     `x-upsert: true`(`worker/flatworker/storage.py:122-129`)로 무조건 덮어써
     이전 판정의 `slope_stats.json`/`slope_judged.json`/`slope_map.png`/
     `slope_cells.csv`가 전부 사라진다. 배수구를 잘못 찍은 뒤 되돌릴 수 있는 유일한
-    단서는 `params.judge.previous_drain_points`(좌표만, `worker/flatworker/slope.py:136-165`가
-    씀) — 좌표는 남지만 그 좌표로 냈던 **판정 결과**(등급·편차·보정량)는 복원할
+    단서는 `params.judge.previous_drain_points`(좌표만, `worker/flatworker/slope.py`의
+    `build_slope_judge_fields` 함수가 씀) — 좌표는 남지만 그 좌표로 냈던
+    **판정 결과**(등급·편차·보정량)는 복원할
     방법이 없다. 되돌리려면 좌표를 다시 클릭해 재판정을 한 번 더 돌리는 수밖에 없고,
     그마저도 원래의 판정과 완전히 같다는 보장은 없다(기준이 그 사이 바뀌었다면
     티켓 76과 같은 사유로 달라진다)
@@ -354,10 +355,10 @@
 75. **세부과업 4 단계 C까지 만들어진 구배 분석은 재판정할 수 없다** —
     `slope_cells.json`이 없기 때문이다(그 분석들은 이 파일이 생기기 전에 만들어졌다,
     티켓 64와 연결). 화면은 이 상태를 `stats.artifacts.cells_json` 부재로 판별해
-    명시적으로 막는다(`dashboard/lib/domain/slope-cells.ts:41-44`의
-    `slopeCellsJsonUrl`이 `null` 반환 → `slope-result.tsx:50`의 `canRejudge=false`
-    → "이 분석은 재판정할 수 없습니다" 안내, `slope-result.tsx:179`). 워커도
-    같은 상태를 독립적으로 방어한다(`worker/flatworker/jobs.py:207-209`,
+    명시적으로 막는다(`dashboard/lib/domain/slope-cells.ts:70-73`의
+    `slopeCellsJsonUrl`이 `null` 반환 → `slope-result.tsx`의 `canRejudge=false`
+    → "이 분석은 재판정할 수 없습니다" 안내, `slope-result.tsx`의 `!canRejudge`
+    분기). 워커도 같은 상태를 독립적으로 방어한다(`worker/flatworker/jobs.py:207-209`,
     "이 분석에는 셀 데이터 파일이 없습니다"). 백필 스크립트(과거 `slope_cells.csv`나
     원본 점군에서 `slope_cells.json`을 사후 생성)가 대안으로 보이지만, CSV는
     D1이 실측으로 배제한 반올림·열 손실 경로이고 점군에서 다시 만들려면 결국
@@ -365,12 +366,12 @@
     사실상 "재분석"이라 별도 기능으로서의 가치가 없다
 
 76. **재판정이 `analyses.applied_criteria`·`analyses.engine_version` 두 컬럼을
-    갱신하지 않는다** — `build_slope_judge_fields`(`worker/flatworker/slope.py:136-172`)가
-    반환하는 필드 dict에는 `stats`·`coverage_pct`·`overall_verdict`·`warnings`·
-    `params`만 있고 `applied_criteria`/`engine_version`이 없다. `update_analysis`의
-    PATCH(`worker/flatworker/db.py:296-297`)는 넘긴 필드만 갱신하는 부분 PATCH라,
-    두 컬럼은 최초 분석(`analyze` 잡, `run_slope_analysis`가 채움 —
-    `worker/flatworker/slope.py:200-203`) 시점 값이 재판정 이후에도 그대로 남는다.
+    갱신하지 않는다** — `worker/flatworker/slope.py`의 `build_slope_judge_fields`
+    함수가 반환하는 필드 dict에는 `stats`·`coverage_pct`·`overall_verdict`·
+    `warnings`·`params`만 있고 `applied_criteria`/`engine_version`이 없다.
+    `update_analysis`의 PATCH(`worker/flatworker/db.py:296-297`)는 넘긴 필드만
+    갱신하는 부분 PATCH라, 두 컬럼은 최초 분석(`analyze` 잡, 같은 파일의
+    `run_slope_analysis` 함수가 채움) 시점 값이 재판정 이후에도 그대로 남는다.
     재판정은 기준을 다시 읽으므로 `slope_stats.json.threshold`(§8.1)는 최신인데
     `analyses.applied_criteria`는 옛 값 — **두 진실이 갈린다.** 실측 사례:
     `applied_criteria.design_pct=99.0`인데 `stats.threshold.design_pct=1.0`(리뷰어
@@ -379,7 +380,7 @@
     보여주느냐에 따라 서로 다른 숫자를 사용자에게 노출하게 된다
 
 77. **재판정이 `params`를 형제 키까지 통째로 교체(PATCH)한다** —
-    `build_slope_judge_fields`(`worker/flatworker/slope.py:158-165`)는 `old_params`를
+    `worker/flatworker/slope.py`의 `build_slope_judge_fields` 함수는 `old_params`를
     복사해 `drain_points`·`judge` 두 키만 갱신한 **새 dict 전체**를 반환하고,
     `update_analysis`는 이걸 `params` 컬럼 하나로 그대로 PATCH한다(jsonb 컬럼은
     부분 병합이 아니라 값 전체 교체). 재판정 잡이 처리되는 동안 대시보드나 다른
@@ -389,8 +390,9 @@
     추가되면 이 경합이 그 즉시 활성화된다. 안전한 형태는 서버 측에서
     `jsonb_set(params, '{drain_points}', ...) || jsonb_set(..., '{judge}', ...)`처럼
     두 키만 부분 갱신하는 것(009의 잡 큐 함수들이 `judge` 키 자체에는 이미 이
-    관례를 쓰고 있다 — `supabase/migrations/009_slope_judge_functions.sql:94-97`
-    참고) — 워커의 `update_analysis` PATCH 경로를 부분 병합으로 바꾸는 별도 작업
+    관례를 쓰고 있다 — `supabase/migrations/009_slope_judge_functions.sql`의
+    `fn_job_claim` 함수, `judge` jsonb 병합 블록 참고) — 워커의 `update_analysis`
+    PATCH 경로를 부분 병합으로 바꾸는 별도 작업
 
 78. **`compute_slope_cells`가 `grid.bimodal`(유령층 서브셀)을 무시한다** —
     평활도는 `build_zones`(`core/zones.py:103`)에서 `residuals[grid.bimodal] = nan`으로
@@ -408,8 +410,10 @@
     `analyze_slope`/`judge_slope_cells` 분리 이후에도 그대로 남아 있다(현재 호출부:
     `core/pipeline.py:239`, try/except로 감싸지 않음). 다만 정확한 결과 경로는
     65의 서술과 다르다 — `storage.upload_dir`은 `judge_slope_cells`가 **반환한
-    뒤에만** 호출된다(`worker/flatworker/jobs.py:140`의 최초 분석,
-    `worker/flatworker/jobs.py:240`의 재판정 둘 다 같은 구조). 즉 렌더가 실패하면
+    뒤에만** 호출된다(`worker/flatworker/jobs.py`의 `_handle_analyze_slope`
+    함수 - 최초 분석 -, `handle_slope_judge` 함수 - 재판정 - 둘 다 같은 구조로
+    `storage.upload_dir(...)` 호출이 `judge_slope_cells`/`run_slope_analysis`
+    반환 다음 줄에 있다). 즉 렌더가 실패하면
     로컬 스테이징 디렉터리에는 `slope_cells.csv`까지만 쓰인 반쪽 상태가 남지만,
     이건 **업로드되지 않고** 잡 전체가 예외로 실패한다(`worker/flatworker/runner.py:120-121`의
     `db.fail_job`). 결과: 최초 분석에서는 무거운 점군 처리 전체가 헛수고로
@@ -420,13 +424,60 @@
     않는다) `params.judge.state='failed'`로만 남는다 — 이 경로는 65가 우려한
     "반쪽 산출물이 스토리지에 남는" 시나리오가 실제로는 발생하지 않음을 뜻한다
 
-80. **[부수 발견] 재판정 가능한 분석 화면에는 `slope_map.png` 다운로드 링크가
-    없다** — 설계 결정 D3는 "PNG를 화면에 함께 두지 않는 이유"를 설명하며 "산출물로는
-    계속 만들되 화면에서는 다운로드 링크로만 둔다"고 적었지만, 실제 구현
-    (`dashboard/components/analysis/slope-result.tsx`)에서 `mapPng`
-    (`slope-result.tsx:44`)은 `!canRejudge` 분기(재판정 **불가능**한, 단계 C까지의
-    분석)에서만 `<img>`로 쓰인다(`slope-result.tsx:168-176`). `canRejudge===true`인
-    정상 경로(단계 D 이후 분석)에는 PNG로도, 다른 형태의 다운로드 링크로도 `map_png`
-    URL이 화면 어디에도 노출되지 않는다 — 산출물 자체는 계속 만들어지고 Storage
-    서명 URL로 접근 가능하지만, 그 URL을 얻을 방법이 화면에 없다. 기능 결함이라기보다
-    설계 문서와 구현 사이의 사소한 괴리이므로 우선순위는 낮다
+80. [해결: 커밋 `8fca7bb`] **재판정 가능한 분석 화면에는 `slope_map.png` 다운로드
+    링크가 없었다** — 처음 이 백로그를 쓴 시점(커밋 `a34a9c4`)에는 설계 결정 D3가
+    "산출물로는 계속 만들되 화면에서는 다운로드 링크로만 둔다"고 적어 놓고도
+    `slope-result.tsx`의 `canRejudge===true` 정상 경로에는 `mapPng`를 쓰는 곳이
+    `!canRejudge` 폴백 분기(`<img>`) 하나뿐이라 다운로드 링크가 실제로는 없었다.
+    이후 `8fca7bb`("코드리뷰 M5")가 `canRejudge===true` 분기의 "배수구 위치를
+    클릭하세요" 문단에 `<a href={dataUrl(mapPng)} download>구배 판정 지도(PNG)
+    다운로드</a>`를 추가해 D3 설계와 실제 구현이 일치하게 됐다(`slope-result.tsx`
+    - 정확한 줄 번호는 대시보드 픽스가 계속 진행 중이라 여기 박제하지 않는다,
+    화면에서 "구배 판정 지도(PNG) 다운로드" 링크 문구로 확인). 재검증(2026-08-04
+    완결성 비평): `canRejudge=true` 픽스처로 `SlopeResult`를 렌더해 다운로드 링크
+    문구가 실제로 나오고 `<img>`는 0개임을 확인
+
+## 세부과업 4 단계 D 완결성 비평이 새로 찾은 것 (2026-08-04)
+
+- 출처: 단계 G(용역 결과 보고서) 착수 전 백로그 정본성 완결성 비평. 단계 G가
+  이 파일에서 미이행 항목을 뽑아 발주처 제출 문서에 반영하므로, 실제로
+  아직 남아 있는 결함만 여기 남긴다
+
+81. **엔진이 만드는 `slope_map.png`에는 배수구 마커가 없다** —
+    `render_slope_map(graded, out_path, cell_m=2.0)`
+    (`engine/flatness/outputs/slope_map.py`의 함수 시그니처)에 `drain_points`
+    인자 자체가 없어 배수구 위치를 그릴 방법이 없다. 대시보드 Canvas 화면
+    (`dashboard/components/analysis/slope-heatmap-view.tsx`)에는 배수구 위치에
+    파란 원 마커가 찍히는데(`DRAIN_COLOR`로 그리는 블록), 엔진이 만드는 정적
+    PNG에는 이 마커가 없다 - 같은 판정 결과를 그리는 두 렌더러가 배수구
+    표시 여부에서 갈린다.
+
+    **왜 지금 넣는 게 싼가**: `judge_slope_cells`(`engine/flatness/core/pipeline.py:171`)는
+    `render_slope_map`을 호출하는 시점(`core/pipeline.py:239`)에 이미 지역
+    변수로 `drain_points`를 갖고 있다(함수 자신의 인자, `grade_slope_cells`
+    호출에도 이미 같은 값을 넘긴다) - `render_slope_map` 호출에 인자 하나만
+    추가하면 되는 규모다. 반면 **단계 G가 이 PNG를 용역 결과 보고서 자산으로
+    박제하고 나면** 비용이 완전히 달라진다: 발행된 보고서는 산출물을 생성
+    시점에 복사해 스냅샷으로 굳히므로(설계 결정 D8), 나중에 PNG를 고쳐도 이미
+    발행된 보고서 안의 그림은 그대로 남아 새 분석과 옛 발행본의 그림이
+    서로 다른 정보를 담게 된다.
+
+    **왜 문제인가**: 판정표에서 "이 셀이 왜 역구배(재시공)인가"의 답은
+    "배수구가 어디 있고 물이 그 반대로 흐르기 때문"인데, 그림 자체에는
+    배수구 위치가 없어 이 그림 하나만 보고는 원인을 알 수 없다.
+    `stats.drain_points`(§8.1)를 별도로 읽어야 하는데, 종이(PDF) 보고서를
+    받는 발주처는 그 jsonb 값을 볼 방법이 없다 - 그림이 스스로 완결된
+    설명이 되지 못한다.
+
+82. **Canvas 히트맵 범례에 "화살표 = 내리막 방향" 설명이 없다** — 엔진 PNG는
+    제목 자체에 이 설명을 박아 둔다(`engine/flatness/outputs/slope_map.py`의
+    `ax.set_title("구배 판정 지도 (화살표는 내리막 방향)")`). 반면 Canvas
+    범례(`dashboard/components/analysis/slope-heatmap-view.tsx`의 범례
+    영역, `LEGEND` 등급 목록 + 배수구 마커 설명 다음 줄)는 "굵은 화살표 =
+    역구배(물이 배수구 반대로 흐름)"만 적어 두었을 뿐, 화살표 자체가
+    무엇을 뜻하는지(내리막 방향)는 어디에도 설명하지 않는다. 처음 이
+    화면을 보는 사람은 "역구배가 아닌 화살표"가 방위 표시인지, 유속인지,
+    다른 무엇인지 그림만으로는 알 수 없다. 화면 코드(`slope-heatmap-view.tsx`)
+    자체에 이 설명 텍스트가 없음을 직접 확인했다(2026-08-04) - 대시보드
+    픽스가 계속 진행 중이므로, 이 항목을 다시 열어보는 시점에 이미
+    추가돼 있을 수도 있다(먼저 코드를 확인하고, 이미 있으면 이 티켓을 닫는다)

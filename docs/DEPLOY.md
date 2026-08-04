@@ -205,7 +205,8 @@ Vercel(대시보드) + Railway(워커, Docker) + Supabase(DB·Auth·Storage) 구
       `dashboard/lib/domain/stats.ts:9-12`의 `stats.format === 'slope-stats-v1'`)가
       `SlopeResult`로 보낸다(`dashboard/components/analysis/slope-result.tsx`).
       **세부과업 4 단계 D 배포 이후로는 이 화면이 상세 결과 화면이다** - "배수구
-      위치를 클릭하세요" 안내 문구(`slope-result.tsx:184-187`)와 함께 등급별 색
+      위치를 클릭하세요" 안내 문구(`slope-result.tsx`의 `canRejudge` 분기 첫
+      문단)와 함께 등급별 색
       히트맵(Canvas)·셀별 결과표·판정 요약 패널이 뜬다. 방금 이 배포에서 새로
       돌린 분석이므로 `slope_cells.json`/`slope_judged.json`이 항상 함께
       생성돼(`analyze_slope`가 먼저 `dump_slope_cells`로 `slope_cells.json`을
@@ -213,15 +214,17 @@ Vercel(대시보드) + Railway(워커, Docker) + Supabase(DB·Auth·Storage) 구
       호출하는데, 그 안에서 `dump_slope_judged`가 `slope_judged.json`을 쓴다 -
       `pipeline.py:250-251`. 최초 분석 한 번으로 둘 다 만들어진다) 이 상태로
       뜨는 것이 정상이다 - "이 분석은 재판정할 수 없습니다" 안내 박스
-      (`slope-result.tsx:139-181`)가 보이면 그건 이번 배포(단계 D 엔진) 이전에
+      (`slope-result.tsx`의 `!canRejudge` 분기)가 보이면 그건 이번 배포(단계 D 엔진) 이전에
       만들어진 **오래된** 구배 분석을 열었다는 뜻이므로, 방금 새로 돌린 분석의
       URL이 맞는지 다시 확인한다(아래 10번 참고 - 오래된 분석으로는 7~9번을
       시도할 수 없다)
    5. **지도 PNG는 이 화면에 뜨지 않는 것이 정상이다.** `slope_map.png`는 계속
       산출되지만(`stats.artifacts.map_png`), 재판정 가능한 분석(방금 만든 분석이
       해당)의 화면 코드에는 이 이미지를 보여주는 경로 자체가 없다
-      (`slope-result.tsx`에서 `mapPng`는 44행에서 읽지만 168-176행의
-      `!canRejudge` 분기 - 재판정 **불가능**한 옛 분석의 폴백 - 안에서만 쓰인다).
+      (`slope-result.tsx`에서 `mapPng`는 컴포넌트 상단에서
+      `const mapPng = artifacts?.map_png;`로 읽지만, `<img>`로 실제 렌더하는
+      코드는 `!canRejudge` 분기 - 재판정 **불가능**한 옛 분석의 폴백 - 안에만
+      있다).
       대신 **Canvas 히트맵**(등급별 색 사각형 + 검은 화살표)이 결과표 위에
       뜨는지 확인한다 - 이게 뜬다면 `slope_cells.json`·`slope_judged.json`이
       Storage에 정상 업로드되고 서명 URL로 fetch까지 됐다는 뜻이라, PNG보다 더
@@ -239,7 +242,8 @@ Vercel(대시보드) + Railway(워커, Docker) + Supabase(DB·Auth·Storage) 구
       (`slope-heatmap-view.tsx`가 클릭 좌표를 미터로 환산해 `onDrainClick`을
       부른다). 클릭 즉시:
       - 잡이 성공적으로 등록되면 배수구 마커가 그 자리에 낙관적으로 찍히고
-        (`slope-result.tsx:122-128`), 판정 요약 패널 맨 위에 파란색 "재판정
+        (`slope-result.tsx`의 `handleDrainClick`이 `params` PATCH 성공 직후
+        부르는 `setDrainPoints([pt])`), 판정 요약 패널 맨 위에 파란색 "재판정
         진행 중... / 대기 중..." 배너가 뜬다(`slope-verdict-panel.tsx:21-30`의
         `JudgeBanner`, `state==='processing'|'queued'`). 이 상태는
         `analyses.status`가 아니라 `analyses.params.judge.state`에서 오므로
@@ -249,10 +253,11 @@ Vercel(대시보드) + Railway(워커, Docker) + Supabase(DB·Auth·Storage) 구
         정상이다(결함이 아니다).** `judgeBusy`(=`judge.state`가 `processing`
         또는 `queued`)일 때 `SlopeHeatmapView`는 `clickable=false`로 받아
         커서가 금지 표시(`cursor-not-allowed`)로 바뀌고 클릭 핸들러 자체가
-        조기 반환한다(`dashboard/lib/domain/slope-heatmap-view.tsx:67`의
-        `if (!clickable || !transform) return;`, `slope-result.tsx:112`의
-        `if (busy || judgeBusy) return;`, `slope-result.tsx:197`의
-        `clickable={!busy && !judgeBusy}`). "이미 같은 대상의 작업이 대기
+        조기 반환한다(`dashboard/components/analysis/slope-heatmap-view.tsx`의
+        `onClick` 함수 첫 줄 `if (!clickable || !transform) return;`,
+        `slope-result.tsx`의 `handleDrainClick` 함수 첫 줄
+        `if (busy || judgeBusy) return;`, 같은 파일이 `SlopeHeatmapView`에
+        내려주는 `clickable={!busy && !judgeBusy}` prop). "이미 같은 대상의 작업이 대기
         중이거나 실행 중입니다..." 중복 엔큐 메시지(`dashboard/lib/domain/
         jobs.ts:9-15`의 `isDuplicateJobError`/`DUPLICATE_JOB_MESSAGE`,
         PostgREST 23505 판별)는 이 차단을 뚫고 클릭이 실제로 들어갔을 때만
@@ -261,11 +266,11 @@ Vercel(대시보드) + Railway(워커, Docker) + Supabase(DB·Auth·Storage) 구
         일반적인 재현 절차가 아니다. 이때도 `params`는 갱신되지 않는다
         (브리프 D4 - 엔큐 먼저, 성공해야 params를 쓴다)
    8. 워커 로그에서 `slope_judge` 잡 처리를 확인한다(수 초 안에 끝나야 한다 -
-      점군을 다시 읽지 않으므로, `worker/flatworker/jobs.py:171-254`의
+      점군을 다시 읽지 않으므로, `worker/flatworker/jobs.py:171-268`의
       `handle_slope_judge`). 완료되면:
       - 화면이 자동 갱신된다(`use-judge-status.ts`의 Realtime 구독 + 5초 폴링이
-        `params.judge.state`를 감지 → `slope-result.tsx:73-78`이 `done`/`failed`에서
-        `router.refresh()`를 부른다)
+        `params.judge.state`를 감지 → `slope-result.tsx`의 judge 상태 변화를
+        지켜보는 `useEffect`가 `done`/`failed`에서 `router.refresh()`를 부른다)
       - 배너가 사라지고 히트맵·결과표·판정 요약이 새 배수구 기준으로 다시
         뜬다. "현재 배수구" 아래 "직전 배수구" 좌표도 함께 보이면
         (`slope-verdict-panel.tsx:75-79`) `params.judge.previous_drain_points`가
@@ -273,8 +278,8 @@ Vercel(대시보드) + Railway(워커, Docker) + Supabase(DB·Auth·Storage) 구
    9. **재판정 실패 경로도 한 번은 확인한다.** 008·009가 **둘 다** 적용된
       상태에서만 의미 있는 스모크다 - **008만 적용한 상태로는 이 절차가
       "실패"가 아니라 정상 완료로 끝난다.** 이유:
-      `handle_slope_judge`(`worker/flatworker/jobs.py:171-254`)의 성공 경로는
-      `build_slope_judge_fields`(`worker/flatworker/slope.py:161-165`)가
+      `handle_slope_judge`(`worker/flatworker/jobs.py:171-268`)의 성공 경로는
+      `build_slope_judge_fields`(`worker/flatworker/slope.py:162-166`)가
       `params.judge.state='done'`을 **워커 파이썬 코드가 직접** 써
       `db.update_analysis`로 PATCH하는 것이라 009의 SQL 함수를 전혀 거치지
       않는다 - 009가 확장하는 건 `queued→processing`(클레임)과
@@ -307,10 +312,10 @@ Vercel(대시보드) + Railway(워커, Docker) + Supabase(DB·Auth·Storage) 구
          `raise ValueError(f"셀 데이터 파일을 저장소에서 찾을 수 없습니다: {cells_json_key}")`.
       4. `worker/flatworker/runner.py:120-121`이 이 예외를 잡아
          `db.fail_job`을 부르고, 009의 `fn_job_fail` `slope_judge` 분기
-         (`supabase/migrations/009_slope_judge_functions.sql:118-125`)가
+         (`supabase/migrations/009_slope_judge_functions.sql:129-136`)가
          재시도 소진 시 `params.judge.state='failed'`를 쓴다.
          `jobs.max_attempts` 기본값 3에 재시도 간격이 `10초 * 시도 횟수`로
-         늘어나므로(`009_slope_judge_functions.sql:127-129`), **실패가
+         늘어나므로(`009_slope_judge_functions.sql:138-140`), **실패가
          확정될 때까지 1~2분 정도 걸릴 수 있다** - 그사이 배너는 "대기
          중..."을 반복해서 보여줄 뿐 빨간 박스는 아직 뜨지 않는 것이
          정상이다(재시도 중 `error`는 저장되지만 `state==='queued'`일 때는
@@ -330,7 +335,7 @@ Vercel(대시보드) + Railway(워커, Docker) + Supabase(DB·Auth·Storage) 구
        위 7~9번을 시도하지 않는다.** 그런 분석에는 `slope_cells.json`이 없어
        (백로그 티켓 75) 4번 화면 자체가 "이 분석은 재판정할 수 없습니다.
        구배 분석을 다시 실행하면 배수구를 지정할 수 있습니다."로 클릭을 막는다
-       (`slope-result.tsx:179`) - 히트맵도, 배수구 클릭도 뜨지 않는 것이 정상
+       (`slope-result.tsx`의 `!canRejudge` 분기 안내문) - 히트맵도, 배수구 클릭도 뜨지 않는 것이 정상
        동작이며 결함이 아니다. 재판정을 확인하려면 반드시 이 배포 이후 새로
        실행한 구배 분석을 써야 한다
 
