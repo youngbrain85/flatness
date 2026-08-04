@@ -6,11 +6,11 @@
 // Next.js 공식 문서(node_modules/next/dist/docs/01-app/02-guides/testing/vitest.md)는
 // "Vitest는 async 서버 컴포넌트 렌더링을 지원하지 않는다"고 명시한다. 그래서 render()로
 // DOM까지 그리지 않고, await로 얻은 이미 resolve된 React 엘리먼트 트리(그냥 일반
-// JS 객체 그래프다)를 재귀 탐색해 SlopePlaceholder/AnalysisResult 중 어느 컴포넌트
-// 타입이 쓰였는지만 확인한다 - AnalysisResult 분기는 클라이언트 훅(useEffect fetch)을
+// JS 객체 그래프다)를 재귀 탐색해 SlopeResult/AnalysisResult 중 어느 컴포넌트
+// 타입이 쓰였는지만 확인한다 - 두 분기 모두 클라이언트 훅(useEffect fetch)을
 // 갖고 있어 DOM 렌더까지 하려면 fetch 스텁이 별도로 더 필요해진다(이미
-// analysis-result.test.tsx가 그 렌더 자체는 별도로 덮고 있다 - 여기서는 "분기 배선"만
-// 확인하면 충분하다).
+// analysis-result.test.tsx/slope-result.test.tsx가 그 렌더 자체는 별도로 덮고 있다 -
+// 여기서는 "분기 배선"만 확인하면 충분하다).
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/lib/supabase/server', () => ({ createClient: vi.fn() }));
@@ -18,7 +18,7 @@ vi.mock('@/lib/supabase/server', () => ({ createClient: vi.fn() }));
 import { createClient } from '@/lib/supabase/server';
 import AnalysisPage from '../page';
 import { AnalysisResult } from '@/components/analysis/analysis-result';
-import { SlopePlaceholder } from '@/components/analysis/slope-placeholder';
+import { SlopeResult } from '@/components/analysis/slope-result';
 
 function chain(result: { data: unknown; error: null }) {
   const obj: Record<string, unknown> = {
@@ -90,21 +90,21 @@ const flatnessStats = {
 };
 
 describe('AnalysisPage isSlopeStats 가드 배선 (단계 C 회귀 차단: I1)', () => {
-  it('구배 stats(format: slope-stats-v1)면 SlopePlaceholder로 분기한다', async () => {
+  it('구배 stats(format: slope-stats-v1)면 SlopeResult로 분기한다', async () => {
     vi.mocked(createClient).mockResolvedValue(stubSupabase(slopeStats) as never);
 
     const el = await AnalysisPage({ params: Promise.resolve({ id: 'a1' }) });
 
-    expect(containsType(el, SlopePlaceholder)).toBe(true);
+    expect(containsType(el, SlopeResult)).toBe(true);
     expect(containsType(el, AnalysisResult)).toBe(false);
   });
 
-  it('평활도 stats면 AnalysisResult로 분기한다(SlopePlaceholder 아님)', async () => {
+  it('평활도 stats면 AnalysisResult로 분기한다(SlopeResult 아님)', async () => {
     vi.mocked(createClient).mockResolvedValue(stubSupabase(flatnessStats) as never);
 
     const el = await AnalysisPage({ params: Promise.resolve({ id: 'a1' }) });
 
     expect(containsType(el, AnalysisResult)).toBe(true);
-    expect(containsType(el, SlopePlaceholder)).toBe(false);
+    expect(containsType(el, SlopeResult)).toBe(false);
   });
 });

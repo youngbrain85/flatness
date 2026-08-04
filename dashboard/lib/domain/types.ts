@@ -141,9 +141,10 @@ export interface SlopeStats {
   drain_points: [number, number][] | null;
   warnings: string[];
   // cells_json은 재판정(§7.3) 입력이자 이 태스크(브라우저 히트맵)의 데이터 소스다.
-  // 단계 C까지 만들어진 분석에는 이 키가 없다(브리프 D7) - 옵셔널로 둬서 화면이
+  // judged_json은 셀별 판정 결과(§7.2 결과표·히트맵 등급)의 데이터 소스다. 단계
+  // C까지 만들어진 분석에는 두 키 모두 없다(브리프 D7) - 옵셔널로 둬서 화면이
   // 그 부재를 명시적으로 다루게 강제한다(CSV 근사 복원 금지).
-  artifacts: { cells_json?: string; cells_csv: string; map_png: string };
+  artifacts: { cells_json?: string; judged_json?: string; cells_csv: string; map_png: string };
 }
 
 // ---- slope_cells.json (engine/flatness/outputs/slope_cells.py 왕복 직렬화, schema_version=2)
@@ -160,6 +161,39 @@ export interface SlopeCellRow {
 export interface SlopeCellsFile {
   schema_version: number; engine_version: string; cell_m: number; subcell_m: number;
   cells: SlopeCellRow[];
+}
+
+// ---- slope_judged.json (engine/flatness/outputs/slope_judged.py, schema_version=1)
+// 셀별 판정 결과 전용 산출물. slope_cells.json(기하)에는 이 값들이 없다(브리프 D1) -
+// 재판정 때마다 다시 계산되는 파생값이라 입력 파일에 같이 담으면 이중 진실이 되기
+// 때문이다. 화면은 반드시 (cx, cy) 키로 두 파일을 조인해야 한다(lib/domain/
+// slope-judged.ts joinSlopeCells) - 배열 순서가 같다는 가정에 기대면 안 된다.
+export interface SlopeJudgedRow {
+  cx: number; cy: number; grade: SlopeGrade; reason: string;
+  dev_pct: number | null; dir_err_deg: number | null; correction_mm: number | null;
+}
+
+export interface SlopeJudgedFile {
+  schema_version: number; direction_judged: boolean; cells: SlopeJudgedRow[];
+}
+
+// ---- 재판정 상태 (analyses.params, 스펙 §3.5 + 마이그레이션 009 계약 - 브리프 D4/D5/D8)
+export type JudgeState = 'queued' | 'processing' | 'done' | 'failed';
+
+export interface DrainPoint { x: number; y: number; }
+
+export interface JudgeInfo {
+  state: JudgeState; at: string;
+  // 대시보드 계약(009 주석): state==='failed'일 때만 사용자에게 노출한다.
+  // state==='queued'일 때도 남아 있을 수 있으나(재큐 중인 재시도의 직전 실패
+  // 사유) 최종 실패가 아니므로 화면에 실패로 보이면 안 된다.
+  error?: string;
+  previous_drain_points?: DrainPoint[] | null;
+}
+
+export interface SlopeParams {
+  drain_points?: DrainPoint[];
+  judge?: JudgeInfo;
 }
 
 // ---- 보고서 (001_schema.sql reports + 004_report_support.sql) ----
