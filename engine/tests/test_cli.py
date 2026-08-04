@@ -124,6 +124,9 @@ def test_analyze_slope_wiring_produces_cells_json_and_intact_csv(tmp_path):
     assert judged_json_path.exists()
     judged_payload = json.loads(judged_json_path.read_text(encoding="utf-8"))
     assert len(judged_payload["cells"]) == len(cells_payload["cells"])
+    # 2차 리뷰 M1: --drain 없이 돌렸으므로 direction_judged가 False로 실제
+    # 계산돼 나가는지 고정한다(True 하드코딩이면 이 단언만 걸린다).
+    assert judged_payload["direction_judged"] is False
     judged_ids = {(row["cx"], row["cy"]) for row in judged_payload["cells"]}
     cells_ids = {(row["cx"], row["cy"]) for row in cells_payload["cells"]}
     assert judged_ids == cells_ids   # 두 산출물이 (cx, cy) 키로 정확히 짝지어진다

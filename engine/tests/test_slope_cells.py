@@ -12,9 +12,13 @@ cell_m/subcell_m을 함께 실어 load_slope_cells가 (cells, meta) 튜플로 �
 했으므로, 여기서도 cell_m을 원 분석 값과 다르게 잘못 넘기면 무엇이 깨지는지
 직접 검증한다(test_wrong_cell_m_flips_fragment_reason_but_meta_prevents_it).
 """
+import json
 import math
 from dataclasses import fields
 
+import pytest
+
+from flatness.core.pipeline import judge_slope_cells
 from flatness.core.slope import (SlopeCell, compute_slope_cells,
                                  grade_slope_cells)
 from flatness.core.subcell import build_subcell_grid
@@ -196,3 +200,57 @@ def test_wrong_cell_m_flips_fragment_reason_but_meta_prevents_it(tmp_path):
         "cell_m을 잘못 넘겨도 사유가 안 바뀌면 이 회귀 자체가 재현이 안 된 것이다"
     assert all("격자 가장자리 조각 셀" in r for r in reasons_correct)
     assert all("유효 서브셀 부족" in r for r in reasons_wrong)
+
+
+def test_judge_slope_cells_requires_cell_m(tmp_path):
+    """Task 1 리뷰 I1이 cell_m 기본값을 없앤 장치 자체를 고정한다(2차 리뷰 M2).
+
+    이 단언이 없으면 core/pipeline.py의 judge_slope_cells(cell_m=2.0)으로
+    기본값을 되돌려도 엔진 스위트 전체가 통과해 버린다 - "장치는 있는데
+    아무 테스트도 그 장치가 실제로 작동하는지 확인하지 않는" 상태였다.
+    """
+    cell = SlopeCell(0, 0, 1.0, 1.0, 1600, 2.0, math.pi, 0.001, 0.01, 2.0, 2.0, True)
+    with pytest.raises(TypeError):
+        judge_slope_cells([cell], TH, str(tmp_path / "out"))   # cell_m 누락
+
+
+def test_load_slope_cells_rejects_missing_keys_with_korean_message(tmp_path):
+    """schema_version 1(=cell_m/subcell_m 키가 아예 없던 옛 형식) 파일을 만나면
+    KeyError가 아니라 한국어 ValueError로 거부해야 한다(2차 리뷰 M3).
+
+    검증이 없으면 payload["cell_m"]을 대괄호로 읽다가 raw KeyError: 'cell_m'로
+    죽는데, 그 메시지는 운영자에게 아무것도 알려주지 않는다. 워커(jobs.py)가
+    "cell_m 없는 파일은 명시적으로 막는다"고 주석에 적어 둔 것도, 이 함수가
+    그런 파일을 먼저 명확한 사유로 거부해야 실제로 성립한다.
+    """
+    path = tmp_path / "slope_cells_v1.json"
+    # schema_version 1 형식을 그대로 흉내(cell_m/subcell_m 키가 없다)
+    path.write_text(json.dumps({
+        "schema_version": 1,
+        "engine_version": "test-0.9",
+        "cells": [{"cx": 0, "cy": 0, "center_x": 1.0, "center_y": 1.0,
+                   "n_subcells": 1600, "slope_pct": 2.0, "downhill_rad": math.pi,
+                   "rmse_m": 0.001, "se_pct": 0.01, "width_m": 2.0, "height_m": 2.0,
+                   "ok": True, "zone_id": None}],
+    }), encoding="utf-8")
+
+    with pytest.raises(ValueError) as exc_info:
+        load_slope_cells(str(path))
+    msg = str(exc_info.value)
+    assert "cell_m" in msg   # 무엇이 없는지 구체적으로 알려준다
+    assert not isinstance(exc_info.value, KeyError)
+
+
+def test_load_slope_cells_rejects_unsupported_schema_version(tmp_path):
+    """schema_version이 이 엔진이 아는 값(2)이 아니면 한국어 ValueError로 거부한다."""
+    path = tmp_path / "slope_cells_future.json"
+    path.write_text(json.dumps({
+        "schema_version": 99,
+        "engine_version": "test-9.9",
+        "cell_m": 2.0, "subcell_m": 0.05,
+        "cells": [],
+    }), encoding="utf-8")
+
+    with pytest.raises(ValueError) as exc_info:
+        load_slope_cells(str(path))
+    assert "schema_version" in str(exc_info.value)

@@ -116,9 +116,34 @@ def load_slope_cells(path):
     engine_version의 한계(버전 간 grade_slope_cells 변경은 감지하지 못함)는
     dump_slope_cells 독스트링 참고 - 여기서 meta로 노출하는 것으로 그 판단을
     호출부(judge_slope_cells 포함)에서도 볼 수 있게 한다.
+
+    필수 키 결측·버전 불일치는 여기서 한국어 ValueError로 거부한다(2차 리뷰 M3).
+    검증 없이 payload["cell_m"] 등을 대괄호로 바로 읽으면 옛 스키마(cell_m/
+    subcell_m이 없던 schema_version 1) 파일에서 raw KeyError가 나는데, 그
+    메시지는 운영자에게 아무것도 알려주지 않는다. 워커(jobs.py)가 "cell_m 없는
+    셀 데이터 파일은 명시적으로 막는다"고 주석에 적어 뒀는데, 그 방어가 실제로
+    작동하려면 이 함수가 먼저 그런 파일을 명확한 사유와 함께 거부해야 한다 -
+    안 그러면 워커의 guard(meta.get("cell_m") is None)에 도달하기도 전에 여기서
+    정체불명의 KeyError로 죽는다.
     """
     with open(path, encoding="utf-8") as f:
         payload = json.load(f)
+
+    required = ("schema_version", "engine_version", "cell_m", "subcell_m", "cells")
+    missing = [k for k in required if k not in payload]
+    if missing:
+        raise ValueError(
+            f"셀 데이터 파일 형식이 올바르지 않습니다({path}): "
+            f"필수 항목 누락 {missing}. schema_version {SCHEMA_VERSION} 형식의 "
+            "slope_cells.json이어야 재판정할 수 있습니다."
+        )
+    if payload["schema_version"] != SCHEMA_VERSION:
+        raise ValueError(
+            f"지원하지 않는 셀 데이터 파일 버전입니다({path}): "
+            f"schema_version={payload['schema_version']!r} "
+            f"(이 엔진이 지원하는 버전은 {SCHEMA_VERSION}입니다)."
+        )
+
     cells = [_row_to_cell(row) for row in payload["cells"]]
     meta = {
         "schema_version": payload["schema_version"],
