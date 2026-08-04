@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { AnalysisResult } from '@/components/analysis/analysis-result';
-import { SlopePlaceholder } from '@/components/analysis/slope-placeholder';
+import { SlopeResult } from '@/components/analysis/slope-result';
 import { ANALYSIS_STATUS_LABEL, SURFACE_LABEL } from '@/lib/domain/labels';
 import { isSlopeStats } from '@/lib/domain/stats';
 import type { AnalysisRow, LocationRow, PhotoRow, ScanRow } from '@/lib/domain/types';
@@ -50,8 +50,8 @@ export default async function AnalysisPage({ params }: { params: Promise<{ id: s
         // 단계 C 회귀 차단: analyses/[id]는 .eq('id', id)뿐이라 어떤 쿼리 필터로도
         // URL 직접 접근을 막을 수 없다. stats.format 내용 기반으로 갈라 AnalysisResult로
         // 흘려보내면 lib/domain/stats.ts의 coverageLabel이 stats.meta를 옵셔널 체이닝
-        // 없이 읽어 TypeError로 페이지가 죽는다 - 구배 결과는 안내 화면(단계 D까지)으로.
-        <SlopePlaceholder stats={a.stats} />
+        // 없이 읽어 TypeError로 페이지가 죽는다 - 구배 결과(단계 D)는 SlopeResult로.
+        <SlopeResult analysis={a} />
       ) : (
         <AnalysisResult analysis={a} scan={s} photos={(photosRes.data ?? []) as PhotoRow[]} />
       )}

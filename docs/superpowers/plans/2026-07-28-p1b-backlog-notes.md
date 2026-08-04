@@ -306,3 +306,231 @@
     배수구 클릭이 단계 D의 몫이라, 지금 돌리는 모든 구배 분석은 방향 판정이 꺼진 채
     크기만 판정한다. stats의 `warnings`에 그 사실이 남는다(정상 동작이지만 단계 D
     전까지의 한계로 기록)
+
+## 세부과업 4 단계 D 최종 이연 티켓 (2026-08-04)
+
+- 출처: 단계 D(구배 결과 화면·배수구 클릭·재판정, 태스크 1~5) 완료 후 태스크 6
+  (문서·백로그 마감) 작성 중 사전 결정 기록 및 각 태스크 리뷰가 실제로 찾아낸 것들
+
+73. **[사용자 결정] 구역별 통계(§5.4) 미구현** — 기존 구역화(`core/zones.py`의
+    `detect_levels`+`build_zones`)가 경사 바닥에서 작동하지 않는다는 실측 근거로
+    이번 단계 스코프에서 뺐다. 16m×16m **단차 없는 단일 평면**에 돌린 결과:
+
+    | 경사 | 검출 레벨 | 생성 구역 |
+    |---|---|---|
+    | 0.5% | 1 | 1 |
+    | 1.0% | 2 | 2 |
+    | 1.5% | 3 | 3 |
+    | 2.0% | 2 | 2 |
+    | 3.0% | 0 | **0** |
+
+    원인은 `detect_levels`(`core/levels.py:5`)가 높이 히스토그램의 봉우리를 찾는데
+    **경사면은 높이가 균일 분포라 봉우리가 없다는 것**이다 — 노이즈로 생긴 우연한
+    봉우리를 레벨로 잡거나(0.5~2.0%), 어떤 빈도도 `min_frac`을 못 넘어 레벨이
+    0개가 된다(3.0%). **구배 분석의 대상이 바로 설계상 기울어진 배수 바닥이므로
+    이 실패가 정상 케이스다** — 붙이면 화면이 존재하지 않는 "구역 1/2/3"의
+    통계를 내거나 전 셀 `zone_id=null`이 된다.
+
+    대안은 평면 계수 `(a,b,c)`의 불연속으로 구역을 가르는 판별식(레벨 히스토그램이
+    아니라 `compute_slope_cells`가 이미 셀마다 산출하는 평면 기울기 자체를 군집화
+    기준으로 쓰는 방향). 덧붙여 스펙 §5.4의 "레벨이 다른 구역은 설계 구배도 다를
+    수 있으므로"는 현재 엔진에서 성립하지 않는다 — `grade_slope_cells`
+    (`core/slope.py:132-133`)는 `design_pct` 스칼라 하나만 받으므로, 구역별 설계
+    구배를 지원하려면 `criteria.thresholds` 스키마 자체를 배열/맵 구조로 바꿔야
+    한다. `SlopeCell.zone_id`(`core/slope.py:33`)는 필드만 뚫려 있고
+    `compute_slope_cells`(`core/slope.py:36-110`) 어디에서도 값을 채우지 않아
+    항상 `None`이다(`slope_cells.json`에는 `null`로 직렬화됨, §8.2 참고)
+
+74. **재판정 이력 비교가 불가능하다** — `SupabaseStorage.upload`가
+    `x-upsert: true`(`worker/flatworker/storage.py:122-129`)로 무조건 덮어써
+    이전 판정의 `slope_stats.json`/`slope_judged.json`/`slope_map.png`/
+    `slope_cells.csv`가 전부 사라진다. 배수구를 잘못 찍은 뒤 되돌릴 수 있는 유일한
+    단서는 `params.judge.previous_drain_points`(좌표만, `worker/flatworker/slope.py`의
+    `build_slope_judge_fields` 함수가 씀) — 좌표는 남지만 그 좌표로 냈던
+    **판정 결과**(등급·편차·보정량)는 복원할
+    방법이 없다. 되돌리려면 좌표를 다시 클릭해 재판정을 한 번 더 돌리는 수밖에 없고,
+    그마저도 원래의 판정과 완전히 같다는 보장은 없다(기준이 그 사이 바뀌었다면
+    티켓 76과 같은 사유로 달라진다)
+
+75. **세부과업 4 단계 C까지 만들어진 구배 분석은 재판정할 수 없다** —
+    `slope_cells.json`이 없기 때문이다(그 분석들은 이 파일이 생기기 전에 만들어졌다,
+    티켓 64와 연결). 화면은 이 상태를 `stats.artifacts.cells_json` 부재로 판별해
+    명시적으로 막는다(`dashboard/lib/domain/slope-cells.ts:70-73`의
+    `slopeCellsJsonUrl`이 `null` 반환 → `slope-result.tsx`의 `canRejudge=false`
+    → "이 분석은 재판정할 수 없습니다" 안내, `slope-result.tsx`의 `!canRejudge`
+    분기). 워커도 같은 상태를 독립적으로 방어한다(`worker/flatworker/jobs.py:207-209`,
+    "이 분석에는 셀 데이터 파일이 없습니다"). 백필 스크립트(과거 `slope_cells.csv`나
+    원본 점군에서 `slope_cells.json`을 사후 생성)가 대안으로 보이지만, CSV는
+    D1이 실측으로 배제한 반올림·열 손실 경로이고 점군에서 다시 만들려면 결국
+    무거운 `analyze_slope` 전체를 다시 돌리는 것과 비용이 같다 — 즉 "백필"이
+    사실상 "재분석"이라 별도 기능으로서의 가치가 없다
+
+76. **재판정이 `analyses.applied_criteria`·`analyses.engine_version` 두 컬럼을
+    갱신하지 않는다** — `worker/flatworker/slope.py`의 `build_slope_judge_fields`
+    함수가 반환하는 필드 dict에는 `stats`·`coverage_pct`·`overall_verdict`·
+    `warnings`·`params`만 있고 `applied_criteria`/`engine_version`이 없다.
+    `update_analysis`의 PATCH(`worker/flatworker/db.py:296-297`)는 넘긴 필드만
+    갱신하는 부분 PATCH라, 두 컬럼은 최초 분석(`analyze` 잡, 같은 파일의
+    `run_slope_analysis` 함수가 채움) 시점 값이 재판정 이후에도 그대로 남는다.
+    재판정은 기준을 다시 읽으므로 `slope_stats.json.threshold`(§8.1)는 최신인데
+    `analyses.applied_criteria`는 옛 값 — **두 진실이 갈린다.** 실측 사례:
+    `applied_criteria.design_pct=99.0`인데 `stats.threshold.design_pct=1.0`(리뷰어
+    확인). 기준이 재판정 사이에 개정되지 않는 한 두 값이 우연히 같아 드러나지
+    않지만, 기준 개정 후 재판정하면 화면·보고서가 "적용 기준"으로 어느 쪽을
+    보여주느냐에 따라 서로 다른 숫자를 사용자에게 노출하게 된다
+
+77. **재판정이 `params`를 형제 키까지 통째로 교체(PATCH)한다** —
+    `worker/flatworker/slope.py`의 `build_slope_judge_fields` 함수는 `old_params`를
+    복사해 `drain_points`·`judge` 두 키만 갱신한 **새 dict 전체**를 반환하고,
+    `update_analysis`는 이걸 `params` 컬럼 하나로 그대로 PATCH한다(jsonb 컬럼은
+    부분 병합이 아니라 값 전체 교체). 재판정 잡이 처리되는 동안 대시보드나 다른
+    경로가 `params`의 **다른** 형제 키를 썼다면 그 변경이 재판정 완료 시 조용히
+    사라진다. **현재 스키마에서는 `params`에 `drain_points`·`judge` 외의 키가 없어
+    무해하다** — 다만 향후 `params`에 세 번째 형제 키(예: 메모, 다른 설정)가
+    추가되면 이 경합이 그 즉시 활성화된다. 안전한 형태는 서버 측에서
+    `jsonb_set(params, '{drain_points}', ...) || jsonb_set(..., '{judge}', ...)`처럼
+    두 키만 부분 갱신하는 것(009의 잡 큐 함수들이 `judge` 키 자체에는 이미 이
+    관례를 쓰고 있다 — `supabase/migrations/009_slope_judge_functions.sql`의
+    `fn_job_claim` 함수, `judge` jsonb 병합 블록 참고) — 워커의 `update_analysis`
+    PATCH 경로를 부분 병합으로 바꾸는 별도 작업
+
+78. **`compute_slope_cells`가 `grid.bimodal`(유령층 서브셀)을 무시한다** —
+    평활도는 `build_zones`(`core/zones.py:103`)에서 `residuals[grid.bimodal] = nan`으로
+    쌍봉(이중 표면) 서브셀의 잔차를 지워 판정에서 제외하는데, `compute_slope_cells`
+    (`core/slope.py:36-110`)는 `grid.median_z`를 그대로 읽을 뿐 `grid.bimodal`을
+    한 번도 참조하지 않는다(파일 전체에 `bimodal` 문자열이 등장하지 않음, 확인
+    완료). 유령층(가구 위 반사 등으로 생기는 이중 표면) 서브셀의 중앙값이 구배
+    평면 피팅에 그대로 섞여, 평활도라면 배제됐을 노이즈가 구배 판정에는 살아
+    들어간다. 영향 범위는 유령층이 존재하는 스캔(평활도 쪽 `ghost_layer_rescan`
+    경고가 뜨는 스캔)으로 한정되고, 등급을 어느 방향으로 얼마나 왜곡하는지는
+    별도 실측이 필요하다
+
+79. **`render_slope_map` 실패가 여전히 격리되지 않았다(티켓 65 재확인, 위치는
+    `judge_slope_cells`로 바뀜)** — 단계 C 시점 티켓 65가 지적한 결함이 D1의
+    `analyze_slope`/`judge_slope_cells` 분리 이후에도 그대로 남아 있다(현재 호출부:
+    `core/pipeline.py:239`, try/except로 감싸지 않음). 다만 정확한 결과 경로는
+    65의 서술과 다르다 — `storage.upload_dir`은 `judge_slope_cells`가 **반환한
+    뒤에만** 호출된다(`worker/flatworker/jobs.py`의 `_handle_analyze_slope`
+    함수 - 최초 분석 -, `handle_slope_judge` 함수 - 재판정 - 둘 다 같은 구조로
+    `storage.upload_dir(...)` 호출이 `judge_slope_cells`/`run_slope_analysis`
+    반환 다음 줄에 있다). 즉 렌더가 실패하면
+    로컬 스테이징 디렉터리에는 `slope_cells.csv`까지만 쓰인 반쪽 상태가 남지만,
+    이건 **업로드되지 않고** 잡 전체가 예외로 실패한다(`worker/flatworker/runner.py:120-121`의
+    `db.fail_job`). 결과: 최초 분석에서는 무거운 점군 처리 전체가 헛수고로
+    끝나고 사용자는 처음부터 다시 분석을 돌려야 한다(평활도는 `render_heatmap`을
+    try/except로 감싸 렌더 실패에도 판정 결과를 살린다 — 그 원칙이 구배에는
+    여전히 적용되지 않는다는 점에서 65의 지적은 유효하다). 재판정에서는 업로드가
+    아예 일어나지 않으므로 이전 산출물이 보존된 채(x-upsert 자체가 발동하지
+    않는다) `params.judge.state='failed'`로만 남는다 — 이 경로는 65가 우려한
+    "반쪽 산출물이 스토리지에 남는" 시나리오가 실제로는 발생하지 않음을 뜻한다
+
+80. [해결: 커밋 `8fca7bb`] **재판정 가능한 분석 화면에는 `slope_map.png` 다운로드
+    링크가 없었다** — 처음 이 백로그를 쓴 시점(커밋 `a34a9c4`)에는 설계 결정 D3가
+    "산출물로는 계속 만들되 화면에서는 다운로드 링크로만 둔다"고 적어 놓고도
+    `slope-result.tsx`의 `canRejudge===true` 정상 경로에는 `mapPng`를 쓰는 곳이
+    `!canRejudge` 폴백 분기(`<img>`) 하나뿐이라 다운로드 링크가 실제로는 없었다.
+    이후 `8fca7bb`("코드리뷰 M5")가 `canRejudge===true` 분기의 "배수구 위치를
+    클릭하세요" 문단에 `<a href={dataUrl(mapPng)} download>구배 판정 지도(PNG)
+    다운로드</a>`를 추가해 D3 설계와 실제 구현이 일치하게 됐다(`slope-result.tsx`
+    - 정확한 줄 번호는 대시보드 픽스가 계속 진행 중이라 여기 박제하지 않는다,
+    화면에서 "구배 판정 지도(PNG) 다운로드" 링크 문구로 확인). 재검증(2026-08-04
+    완결성 비평): `canRejudge=true` 픽스처로 `SlopeResult`를 렌더해 다운로드 링크
+    문구가 실제로 나오고 `<img>`는 0개임을 확인
+
+## 세부과업 4 단계 D 완결성 비평이 새로 찾은 것 (2026-08-04)
+
+- 출처: 단계 G(용역 결과 보고서) 착수 전 백로그 정본성 완결성 비평. 단계 G가
+  이 파일에서 미이행 항목을 뽑아 발주처 제출 문서에 반영하므로, 실제로
+  아직 남아 있는 결함만 여기 남긴다
+
+81. **엔진이 만드는 `slope_map.png`에는 배수구 마커가 없다** —
+    `render_slope_map(graded, out_path, cell_m=2.0)`
+    (`engine/flatness/outputs/slope_map.py`의 함수 시그니처)에 `drain_points`
+    인자 자체가 없어 배수구 위치를 그릴 방법이 없다. 대시보드 Canvas 화면
+    (`dashboard/components/analysis/slope-heatmap-view.tsx`)에는 배수구 위치에
+    파란 원 마커가 찍히는데(`DRAIN_COLOR`로 그리는 블록), 엔진이 만드는 정적
+    PNG에는 이 마커가 없다 - 같은 판정 결과를 그리는 두 렌더러가 배수구
+    표시 여부에서 갈린다.
+
+    **왜 지금 넣는 게 싼가**: `judge_slope_cells`(`engine/flatness/core/pipeline.py:171`)는
+    `render_slope_map`을 호출하는 시점(`core/pipeline.py:239`)에 이미 지역
+    변수로 `drain_points`를 갖고 있다(함수 자신의 인자, `grade_slope_cells`
+    호출에도 이미 같은 값을 넘긴다) - `render_slope_map` 호출에 인자 하나만
+    추가하면 되는 규모다. 반면 **단계 G가 이 PNG를 용역 결과 보고서 자산으로
+    박제하고 나면** 비용이 완전히 달라진다: 발행된 보고서는 산출물을 생성
+    시점에 복사해 스냅샷으로 굳히므로(설계 결정 D8), 나중에 PNG를 고쳐도 이미
+    발행된 보고서 안의 그림은 그대로 남아 새 분석과 옛 발행본의 그림이
+    서로 다른 정보를 담게 된다.
+
+    **왜 문제인가**: 판정표에서 "이 셀이 왜 역구배(재시공)인가"의 답은
+    "배수구가 어디 있고 물이 그 반대로 흐르기 때문"인데, 그림 자체에는
+    배수구 위치가 없어 이 그림 하나만 보고는 원인을 알 수 없다.
+    `stats.drain_points`(§8.1)를 별도로 읽어야 하는데, 종이(PDF) 보고서를
+    받는 발주처는 그 jsonb 값을 볼 방법이 없다 - 그림이 스스로 완결된
+    설명이 되지 못한다.
+
+82. [해결: 커밋 `90e0949`] **Canvas 히트맵 범례에 "화살표 = 내리막 방향" 설명이
+    없었다** — 엔진 PNG는 제목 자체에 이 설명을 박아 두는데
+    (`engine/flatness/outputs/slope_map.py`의
+    `ax.set_title("구배 판정 지도 (화살표는 내리막 방향)")`) 처음 이 티켓을 쓴
+    시점에는 Canvas 범례에 "굵은 화살표 = 역구배"만 있고 화살표 자체의
+    의미(내리막 방향)를 설명하는 문구가 없었다. 이후 `90e0949`("Task 5 리뷰(3차)
+    Critical/Important 반영")가
+    `dashboard/components/analysis/slope-heatmap-view.tsx`의 범례에 "얇은
+    화살표 = 내리막(물이 흐르는) 방향"을 추가해 해소됐다(직접 파일을 열어
+    확인, 2026-08-04). 티켓을 쓸 때 "코드를 먼저 확인하고 이미 있으면 닫는다"고
+    남겨 둔 조건 그대로 닫는다
+
+## 커밋 `90e0949`·`5fcb599`(구배 기준 선택 UI 등) 반영 후 이연 티켓 (2026-08-04)
+
+- 출처: 위 두 커밋이 재판정 스모크를 실행 가능하게 만들면서(구배 기준 선택
+  UI 신설, `judgeBusy`가 `queued`를 더 이상 막지 않음) 같은 변경이 남긴
+  새 관찰. 코드를 직접 열어 확인한 것만 기록한다
+
+83. **워커가 실제로 정지해 있고 잡이 `queued` 상태로 살아 있으면, 배수구를
+    다시 클릭해도 매번 23505(중복 엔큐)로 되돌아온다** — `judgeBusy`가
+    `processing`만 보도록 바뀐 것(커밋 `90e0949`)은 "잡이 없는데
+    `params.judge.state='queued'`만 남은 고아 상태"(예: 과거 버그로 PATCH는
+    성공했는데 엔큐가 실패로 되돌려진 경우 등)에서는 사용자가 다시 클릭해
+    진짜로 새 판정을 시도할 수 있게 해 준다. 하지만 **잡이 실제로
+    `jobs` 테이블에 `queued`로 존재하는 정상적인 경우**(워커가 잠깐
+    내려가 아직 아무도 claim하지 않은 것뿐인 경우)는 다르다 - `jobs_dedup`
+    부분 유니크(`payload->>'analysis_id'` 기준)가 같은 analysis_id의 새
+    엔큐를 계속 막으므로, 사용자가 몇 번을 다시 클릭해도 23505만 반복해서
+    받는다. `fn_reap_stuck_jobs`(`supabase/migrations/009_slope_judge_functions.sql`의
+    해당 함수)는 `status = 'processing' and locked_at < now() - timeout`
+    조건만 검사한다(같은 파일에서 직접 확인) - `status='queued'`인 채로
+    아무도 claim하지 않은 잡에는 타임아웃·회수 장치가 아예 없다. 즉 이번
+    수정은 **가시성 개선**(막연히 막히는 대신 명확한 오류 메시지를 준다)이지
+    **진짜 탈출 경로**는 아니다 - 워커가 실제로 다시 떠서 그 잡을 처리(성공
+    또는 3회 실패로 `failed`)할 때까지는 사용자 쪽에서 할 수 있는 게
+    없다. 운영 절차에 "재판정이 몇 분째 대기 중이면 워커 프로세스 상태부터
+    확인하라"를 넣거나, 관리자가 SQL로 오래된 `queued` `slope_judge` 잡을
+    직접 취소하는 절차를 마련하는 것이 다음 단계 후보다
+
+84. **[정보용, 조치 불요] `useJudgeStatus`가 5초마다 새 객체로 `setJudge`해
+    `slope-result.tsx`의 refresh `useEffect`가 매 틱 재평가된다** —
+    `dashboard/lib/hooks/use-judge-status.ts`의 폴링 타이머가 서버에서 받은
+    `params.judge`를 값 비교 없이 그대로 `setJudge`하므로, 내용이 안 바뀌어도
+    5초마다 새 객체 참조가 나와 `judge`를 의존성으로 둔 `useEffect`(같은
+    파일의 `router.refresh()` 호출부)가 매번 재실행된다. 실제로 문제가
+    되려면 그 effect가 매번 `router.refresh()`를 부르는 무한 루프가 나와야
+    하는데, 조건이 `judge.at !== initialJudgeAt`이라 `refresh()` 이후에는
+    prop이 갱신되어 조건이 거짓으로 수렴한다(직접 코드 대조로 확인) - 5초
+    폴링 주기 자체가 자연스러운 속도 제한이기도 하다. 정상 경로에서는
+    무해하므로 지금 고칠 필요는 없지만, 폴링 주기를 더 촘촘히 당기거나
+    다른 화면이 같은 훅을 재사용할 때는 재확인할 가치가 있다
+
+85. **[정보용, 조치 불요] `isDirectionAwareCriteria`의 `design_pct !== 0`
+    조건이 007 시드 5행 전부에 대해 잉여 방어다** —
+    `dashboard/lib/domain/slope-direction.ts`의
+    `dir_pass_deg < 180 && design_pct !== 0` 중 뒤 조건은, 007이 시드하는
+    구배 기준 5종(`007_slope_analysis.sql`) 어느 행에서도 앞 조건과
+    다른 답을 내지 않는다 - 배수 목적 4종(옥상 노출·비노출, 욕실, 주차장)은
+    전부 `dir_pass_deg=30`(<180)이면서 `design_pct`도 0이 아니고,
+    "실내 평바닥" 1종만 `dir_pass_deg=180`이면서 `design_pct=0`이라 앞
+    조건 하나만으로도 이미 걸러진다. 즉 현재 시드에서는 죽은 분기다. 다만
+    이건 결함이 아니라 **미래를 위한 방어**다 - 예컨대 "설계 구배는 0%지만
+    방향은 여전히 확인하고 싶다"는 새 현장 기준(design_pct=0,
+    dir_pass_deg<180)이 추가되면 이 조건이 그 즉시 의미를 갖는다. 조치
+    불요, 기록만 남긴다

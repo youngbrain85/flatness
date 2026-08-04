@@ -24,6 +24,19 @@ max_attempts에 도달하면 'failed'로 종결, 그렇지 않으면
   fn_job_fail은 재시도 여지가 있으면 'queued'/소진이면 'failed'로 하고 양쪽 모두
   gen_error에 오류 메시지를 남긴다. fn_job_complete는 reports를 건드리지 않는다
   (gen_status='done'은 워커가 update_report로 직접 쓴다).
+- type이 'slope_judge'이고 payload.analysis_id가 있으면 연결된 analyses.params.judge
+  (jsonb)를 전이한다(009_slope_judge_functions.sql, 세부과업 4 단계 D, Task 2
+  리뷰 대응 이후 최신본) - fn_job_claim은 'processing'(+기존 error 제거),
+  fn_job_fail은 재시도 여지가 있으면 'queued'(+error)/소진이면 'failed'(+error),
+  fn_reap_stuck_jobs는 judge.state가 'processing'인 행만 골라 'queued'로
+  되돌린다. **analyses.status는 slope_judge 때문에 절대 건드리지 않는다** -
+  이미 done인 구배 결과 화면을 감추면 안 된다(설계 결정 D5). fn_job_complete는
+  params를 건드리지 않는다 - judge.state='done'은 워커 핸들러(handle_slope_judge)가
+  stats 등 다른 파생 컬럼과 함께 직접 쓴다.
+  **judge는 전면 교체가 아니라 병합이다**(`coalesce(params->'judge','{}') ||
+  jsonb_build_object(...)`) - Task 3(D8)이 남기는 judge.previous_drain_points를
+  네 분기 모두 보존해야 한다. 클레임만 예외적으로 기존 'error' 키를 먼저
+  지운다(004의 gen_error=null 클레임 관례와 동일).
 """
 from datetime import datetime, timedelta, timezone
 from itertools import count
@@ -103,6 +116,38 @@ class FakeDB(DBClient):
         report["gen_status"] = status
         report["gen_error"] = error
 
+    def _sync_slope_judge_state(self, job, overlay, strip_error=False):
+        """type='slope_judge' + payload.analysis_id 잡의 analyses.params.judge
+        부수효과.
+
+        009_slope_judge_functions.sql(Task 2 리뷰 대응 이후 최신본)의
+        `jsonb_set(params, '{judge}', (coalesce(params->'judge','{}'::jsonb)
+        [- 'error']) || jsonb_build_object(...), true)`를 그대로 옮긴 것 -
+        **전면 교체가 아니라 병합**이다. 기존 judge 객체(특히 Task 3(D8)가 남기는
+        previous_drain_points) 위에 overlay만 덮어쓰고, overlay에 없는 기존 키는
+        그대로 보존한다. 형제 키인 'drain_points'는 여전히 건드리지 않는다
+        (jsonb_set이 'judge' 키만 갈아끼움). analyses.status도 여기서 절대
+        건드리지 않는다.
+
+        strip_error=True는 fn_job_claim 전용 - 병합 전에 기존 'error' 키를 먼저
+        지운다(004의 gen_error=null 클레임 관례와 동일한 의도). fn_job_fail·
+        fn_reap_stuck_jobs는 지우지 않는다(SQL 원문에 `- 'error'`가 없다) - 다만
+        reap의 가드(judge.state=='processing')는 claim이 이미 error를 지운
+        상태에서만 성립하므로 실질적으로는 항상 비어 있다.
+        """
+        if job["type"] != "slope_judge" or "analysis_id" not in job["payload"]:
+            return
+        analysis = self.analyses.get(job["payload"]["analysis_id"])
+        if analysis is None:
+            return
+        params = dict(analysis.get("params") or {})
+        judge = dict(params.get("judge") or {})
+        if strip_error:
+            judge.pop("error", None)
+        judge.update(overlay)
+        params["judge"] = judge
+        analysis["params"] = params
+
     # -- 잡 큐 -----------------------------------------------------------
     def reap_stuck_jobs(self, timeout_minutes=30):
         """fn_reap_stuck_jobs(004_report_support.sql, 002_functions_seed.sql을 티켓
@@ -148,6 +193,22 @@ class FakeDB(DBClient):
             report = self.reports.get(job["payload"]["report_id"])
             if report is not None and report["gen_status"] == "processing":
                 report["gen_status"] = "queued"
+        # slope_judge: analyses.status는 항상 'done'이라 위 analyze/import 조건
+        # (a.status == 'processing')으로는 걸리지 않는다(009_slope_judge_functions.sql).
+        # 대신 judge 채널이 'processing'이던 행만 골라 되돌린다 - analyses.status는
+        # 여기서도 건드리지 않는다. 병합(||)이므로 previous_drain_points 등 judge의
+        # 다른 키는 그대로 보존한다(_sync_slope_judge_state에 위임).
+        for job in self.jobs.values():
+            if job["status"] != "queued" or job["type"] != "slope_judge":
+                continue
+            if "analysis_id" not in job["payload"]:
+                continue
+            analysis = self.analyses.get(job["payload"]["analysis_id"])
+            if analysis is None:
+                continue
+            judge = (analysis.get("params") or {}).get("judge") or {}
+            if judge.get("state") == "processing":
+                self._sync_slope_judge_state(job, {"state": "queued", "at": _now().isoformat()})
         return reaped_count
 
     def enqueue_job(self, type_, payload):
@@ -186,6 +247,8 @@ class FakeDB(DBClient):
         job["started_at"] = job["started_at"] or now
         self._sync_linked_analysis_status(job, "processing")
         self._sync_linked_report_status(job, "processing", None)
+        self._sync_slope_judge_state(job, {"state": "processing", "at": now.isoformat()},
+                                     strip_error=True)
         return dict(job)
 
     def complete_job(self, job_id):
@@ -204,12 +267,16 @@ class FakeDB(DBClient):
             self._sync_linked_analysis_status(job, "failed")
             self._sync_linked_scan_status_on_fail(job, "failed")
             self._sync_linked_report_status(job, "failed", error)
+            self._sync_slope_judge_state(
+                job, {"state": "failed", "at": _now().isoformat(), "error": error})
         else:
             job["status"] = "queued"
             job["run_after"] = _now() + timedelta(seconds=10 * job["attempts"])
             self._sync_linked_analysis_status(job, "queued")
             self._sync_linked_scan_status_on_fail(job, "uploaded")
             self._sync_linked_report_status(job, "queued", error)
+            self._sync_slope_judge_state(
+                job, {"state": "queued", "at": _now().isoformat(), "error": error})
         job["locked_at"] = None
         job["locked_by"] = None
 

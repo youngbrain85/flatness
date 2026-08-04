@@ -168,27 +168,52 @@ def analyze_wall(path, scale_to_m, criterion, u_mm, out_dir,
     return stats
 
 
-def analyze_slope(path, scale_to_m, threshold, out_dir, subcell_m=0.05,
-                  cell_m=2.0, chunk_size=2_000_000, drain_points=None):
-    """점군 -> 2m 격자 구배 -> 판정 -> 산출물(csv/png/json).
+def judge_slope_cells(cells, threshold, out_dir, cell_m, drain_points=None,
+                      subcell_m=0.05, cells_json_path=None):
+    """이미 산출된 셀 벡터 + 배수구 좌표로 판정만 다시 한다(점군 미열람, 스펙 §7.3).
 
-    평활도(analyze_floor)와 같은 스캔을 쓰지만 집계 단위와 판정 철학이 다르다.
-    평활도는 "평면에서 얼마나 벗어났나", 구배는 "설계한 경사대로인가"다.
+    analyze_slope의 판정~산출물 단계(grade -> summary -> csv -> png -> stats.json)를
+    그대로 옮긴 것이다 - 재판정 잡(slope_judge)이 slope_cells.json에서 복원한
+    cells를 이 함수에 바로 넘기면 점군을 다시 읽지 않고 몇 초 안에 끝난다.
+
+    cell_m은 기본값 없는 필수 인자다(Task 1 리뷰 I1). grade_slope_cells의 조각
+    셀 판정불가 사유 분기(`width_m < cell_m/2`)와 render_slope_map의 화살표
+    길이가 전부 cell_m에 의존하는데, 기본값이 있으면 재판정 호출부가 원 분석과
+    다른 cell_m(예: --cell 4.0으로 분석한 것을 fallback 2.0으로 재판정)을 조용히
+    쓸 수 있다 - CSV 근사 복원을 배제한 바로 그 결함(D1)이 JSON 경로에서
+    재현되는 것이다. 필수 인자로 만들면 잊었을 때 즉시 TypeError로 드러난다.
+    호출부는 `load_slope_cells`가 돌려주는 meta["cell_m"]을 그대로 넘기면 된다.
+
+    slope_cells.json은 이 함수가 새로 쓰지 않는다. 호출자(analyze_slope 또는
+    재판정 잡)가 이미 그 파일에서 cells를 얻었거나 직접 만들었으므로 여기서 다시
+    쓸 이유가 없다 - 재판정마다 무손실 원본을 덮어쓰면 입력 자체가 흔들릴 위험만
+    생긴다. cells_json_path를 주면 artifacts.cells_json에 그 경로를 그대로
+    싣는다(analyze_slope가 dump_slope_cells에 쓴 경로와 동일한 값을 넘긴다).
+    안 주면 out_dir 관례(slope_cells.json)로 추정하지만, 이 함수 자신은 그
+    파일을 로컬에서 열어 보지 않으므로 실제로 거기 있다는 보장은 호출자 책임이다
+    (Task 1 리뷰 M4 - 재판정의 out_dir에는 로컬에 csv/png/stats만 새로 생기고
+    slope_cells.json은 스토리지에서 온 것일 수 있어, 경로를 호출자가 알면
+    그대로 넘기는 편이 관례 추정보다 안전하다).
+
+    slope_judged.json은 이 함수가 매 호출마다 새로 쓴다(2차 리뷰 대응) - 화면이
+    §7.2를 그리는 데 필요한 셀별 판정 결과(grade/dev_pct/correction_mm/
+    dir_err_deg/reason)를 담는 산출물이다. slope_cells.json은 D1에 따라 이
+    값들을 담지 않으므로(재판정 때 다시 계산되는 파생값이라 입력에 같이 담으면
+    이중 진실이 된다) 결과 전용 파일을 분리했다. 자세한 설계 근거는
+    outputs/slope_judged.py 모듈 독스트링 참고.
     """
     import csv
     import json
     import os
     from collections import Counter
 
-    from flatness.core.slope import (GRADE_NA, compute_slope_cells,
-                                     grade_slope_cells, slope_summary)
+    from flatness.core.slope import GRADE_NA, grade_slope_cells, slope_summary
     from flatness.outputs.slope_map import render_slope_map
+    from flatness.outputs.slope_judged import dump_slope_judged
 
     os.makedirs(out_dir, exist_ok=True)
-    info = read_info(path, chunk_size=chunk_size)
-    grid = build_subcell_grid(iter_chunks(path, chunk_size=chunk_size),
-                              info, scale_to_m, subcell_m)
-    cells = compute_slope_cells(grid, cell_m=cell_m)
+    if cells_json_path is None:
+        cells_json_path = os.path.join(out_dir, "slope_cells.json")
     graded = grade_slope_cells(cells, threshold, drain_points=drain_points,
                                cell_m=cell_m)
     summary = slope_summary(graded)
@@ -196,16 +221,20 @@ def analyze_slope(path, scale_to_m, threshold, out_dir, subcell_m=0.05,
     csv_path = os.path.join(out_dir, "slope_cells.csv")
     with open(csv_path, "w", newline="", encoding="utf-8-sig") as f:
         w = csv.writer(f)
+        # width_m/height_m은 열 끝에만 추가한다(D1 CSV 보강) - 기존 사용자가
+        # 엑셀로 열었을 때 앞쪽 열 위치가 바뀌면 안 된다.
         w.writerow(["cx", "cy", "center_x_m", "center_y_m", "n_subcells",
                     "slope_pct", "downhill_deg", "dev_pct", "dir_err_deg",
-                    "correction_mm", "rmse_mm", "se_pct", "grade", "reason"])
+                    "correction_mm", "rmse_mm", "se_pct", "grade", "reason",
+                    "width_m", "height_m"])
         for g in graded:
             c = g["cell"]
             w.writerow([c.cx, c.cy, round(c.center_x, 3), round(c.center_y, 3),
                         c.n_subcells, _r(c.slope_pct), _deg(c.downhill_rad),
                         _r(g["dev_pct"]), _r(g["dir_err_deg"]),
                         _r(g["correction_mm"]), _r(c.rmse_m * 1000 if c.ok else float("nan")),
-                        _r(c.se_pct), g["grade"], g["reason"]])
+                        _r(c.se_pct), g["grade"], g["reason"],
+                        round(c.width_m, 3), round(c.height_m, 3)])
 
     png_path = render_slope_map(graded, os.path.join(out_dir, "slope_map.png"),
                                 cell_m=cell_m)
@@ -214,6 +243,13 @@ def analyze_slope(path, scale_to_m, threshold, out_dir, subcell_m=0.05,
     # 유무에 따라 적합<->재시공으로 뒤집힐 수 있다). stats에 명시적으로 남겨야 보고서
     # 받는 사람이 "coverage_pct 100%"를 "방향까지 다 봤다"로 오해하지 않는다.
     direction_judged = bool(drain_points)
+
+    # 화면이 셀별 판정 결과(grade/dev_pct/correction_mm/dir_err_deg/reason)를
+    # 읽을 기계 판독 산출물. slope_cells.json(입력)에는 D1에 따라 이 값들을
+    # 넣지 않았으므로 별도 파일로 낸다 - 두 번째 리뷰 대응.
+    judged_json_path = dump_slope_judged(
+        graded, os.path.join(out_dir, "slope_judged.json"), direction_judged)
+
     warnings = []
     if not direction_judged:
         warnings.append("배수구 위치를 지정하지 않아 방향(역구배)을 판정하지 않았습니다. "
@@ -229,7 +265,9 @@ def analyze_slope(path, scale_to_m, threshold, out_dir, subcell_m=0.05,
              "drain_points": ([[round(float(x), 3), round(float(y), 3)]
                                for x, y in drain_points] if drain_points else None),
              "warnings": warnings,
-             "artifacts": {"cells_csv": csv_path, "map_png": png_path}}
+             "artifacts": {"cells_json": cells_json_path,
+                           "judged_json": judged_json_path,
+                           "cells_csv": csv_path, "map_png": png_path}}
     stats_path = os.path.join(out_dir, "slope_stats.json")
     with open(stats_path, "w", encoding="utf-8") as f:
         # allow_nan=False: 위 summary가 nan을 흘리면(회귀) 여기서 즉시 터진다.
@@ -237,3 +275,38 @@ def analyze_slope(path, scale_to_m, threshold, out_dir, subcell_m=0.05,
         # 조용히 거부하므로, 조용히 통과시키느니 여기서 바로 예외로 잡는 편이 낫다.
         json.dump(stats, f, ensure_ascii=False, indent=2, allow_nan=False)
     return stats
+
+
+def analyze_slope(path, scale_to_m, threshold, out_dir, subcell_m=0.05,
+                  cell_m=2.0, chunk_size=2_000_000, drain_points=None):
+    """점군 -> 2m 격자 구배 산출 -> slope_cells.json 저장 -> 판정 -> 산출물(csv/png/json).
+
+    평활도(analyze_floor)와 같은 스캔을 쓰지만 집계 단위와 판정 철학이 다르다.
+    평활도는 "평면에서 얼마나 벗어났나", 구배는 "설계한 경사대로인가"다.
+
+    공개 시그니처는 유지한다 - CLI·워커·테스트 4곳이 이 함수를 그대로 호출하므로
+    바뀌면 전부 영향을 받는다. 판정 단계만 judge_slope_cells로 분리해 재판정
+    잡이 점군을 다시 읽지 않고도 재사용할 수 있게 한다(스펙 §7.3).
+    """
+    import os
+
+    from flatness.core.slope import compute_slope_cells
+    from flatness.outputs.slope_cells import dump_slope_cells
+
+    os.makedirs(out_dir, exist_ok=True)
+    info = read_info(path, chunk_size=chunk_size)
+    grid = build_subcell_grid(iter_chunks(path, chunk_size=chunk_size),
+                              info, scale_to_m, subcell_m)
+    cells = compute_slope_cells(grid, cell_m=cell_m)
+
+    # 재판정(§7.3) 입력. 점군을 다시 읽지 않고 이 파일만 읽어 판정하려면
+    # 반올림 없는 원본 셀 벡터가 그대로 남아 있어야 한다(브리프 D1). cell_m·
+    # subcell_m도 함께 싣는다 - 재판정이 이 값을 다시 몰라서 기본값으로
+    # 조용히 어긋나는 것을 막기 위해서다(Task 1 리뷰 I1).
+    cells_json_path = os.path.join(out_dir, "slope_cells.json")
+    dump_slope_cells(cells, cells_json_path, engine_version=ENGINE_VERSION,
+                     cell_m=cell_m, subcell_m=subcell_m)
+
+    return judge_slope_cells(cells, threshold, out_dir, cell_m,
+                             drain_points=drain_points, subcell_m=subcell_m,
+                             cells_json_path=cells_json_path)
