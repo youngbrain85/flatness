@@ -194,6 +194,13 @@ def judge_slope_cells(cells, threshold, out_dir, cell_m, drain_points=None,
     (Task 1 리뷰 M4 - 재판정의 out_dir에는 로컬에 csv/png/stats만 새로 생기고
     slope_cells.json은 스토리지에서 온 것일 수 있어, 경로를 호출자가 알면
     그대로 넘기는 편이 관례 추정보다 안전하다).
+
+    slope_judged.json은 이 함수가 매 호출마다 새로 쓴다(2차 리뷰 대응) - 화면이
+    §7.2를 그리는 데 필요한 셀별 판정 결과(grade/dev_pct/correction_mm/
+    dir_err_deg/reason)를 담는 산출물이다. slope_cells.json은 D1에 따라 이
+    값들을 담지 않으므로(재판정 때 다시 계산되는 파생값이라 입력에 같이 담으면
+    이중 진실이 된다) 결과 전용 파일을 분리했다. 자세한 설계 근거는
+    outputs/slope_judged.py 모듈 독스트링 참고.
     """
     import csv
     import json
@@ -202,6 +209,7 @@ def judge_slope_cells(cells, threshold, out_dir, cell_m, drain_points=None,
 
     from flatness.core.slope import GRADE_NA, grade_slope_cells, slope_summary
     from flatness.outputs.slope_map import render_slope_map
+    from flatness.outputs.slope_judged import dump_slope_judged
 
     os.makedirs(out_dir, exist_ok=True)
     if cells_json_path is None:
@@ -235,6 +243,13 @@ def judge_slope_cells(cells, threshold, out_dir, cell_m, drain_points=None,
     # 유무에 따라 적합<->재시공으로 뒤집힐 수 있다). stats에 명시적으로 남겨야 보고서
     # 받는 사람이 "coverage_pct 100%"를 "방향까지 다 봤다"로 오해하지 않는다.
     direction_judged = bool(drain_points)
+
+    # 화면이 셀별 판정 결과(grade/dev_pct/correction_mm/dir_err_deg/reason)를
+    # 읽을 기계 판독 산출물. slope_cells.json(입력)에는 D1에 따라 이 값들을
+    # 넣지 않았으므로 별도 파일로 낸다 - 두 번째 리뷰 대응.
+    judged_json_path = dump_slope_judged(
+        graded, os.path.join(out_dir, "slope_judged.json"), direction_judged)
+
     warnings = []
     if not direction_judged:
         warnings.append("배수구 위치를 지정하지 않아 방향(역구배)을 판정하지 않았습니다. "
@@ -251,6 +266,7 @@ def judge_slope_cells(cells, threshold, out_dir, cell_m, drain_points=None,
                                for x, y in drain_points] if drain_points else None),
              "warnings": warnings,
              "artifacts": {"cells_json": cells_json_path,
+                           "judged_json": judged_json_path,
                            "cells_csv": csv_path, "map_png": png_path}}
     stats_path = os.path.join(out_dir, "slope_stats.json")
     with open(stats_path, "w", encoding="utf-8") as f:

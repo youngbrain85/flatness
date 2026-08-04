@@ -117,6 +117,16 @@ def test_analyze_slope_wiring_produces_cells_json_and_intact_csv(tmp_path):
     # 2) stats.artifacts가 그 파일을 가리키는가
     stats = json.loads((out / "slope_stats.json").read_text(encoding="utf-8"))
     assert "cells_json" in stats["artifacts"]
+
+    # 2-1) 판정 결과 전용 산출물(slope_judged.json)도 함께 나왔는가(2차 리뷰 대응)
+    assert "judged_json" in stats["artifacts"]
+    judged_json_path = out / "slope_judged.json"
+    assert judged_json_path.exists()
+    judged_payload = json.loads(judged_json_path.read_text(encoding="utf-8"))
+    assert len(judged_payload["cells"]) == len(cells_payload["cells"])
+    judged_ids = {(row["cx"], row["cy"]) for row in judged_payload["cells"]}
+    cells_ids = {(row["cx"], row["cy"]) for row in cells_payload["cells"]}
+    assert judged_ids == cells_ids   # 두 산출물이 (cx, cy) 키로 정확히 짝지어진다
     assert stats["artifacts"]["cells_json"] == str(cells_json_path)
 
     # 3) CSV 헤더가 16열 정확한 순서로 살아있는가(BOM·기존 열 순서 보존, D1/Step5)
