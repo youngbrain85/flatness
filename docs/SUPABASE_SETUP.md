@@ -86,22 +86,47 @@
    소프트 삭제용 `reports.deleted_at` 컬럼을 추가한다(발행본은 내용 컬럼이 잠겨 있어도
    삭제는 통과하도록 설계됨). 재실행해도 안전하다(멱등, `add column if not exists`).
    검증: `select deleted_at from reports limit 1;`이 오류 없이 실행되면 성공.
-7. `supabase/migrations/007_slope_analysis.sql` 전체 내용을 붙여넣고 **Run**.
-   > **경고 - 007 다음에 002를 다시 실행하지 않는다.** 007은 002가 만든
-   > `fn_resolve_criteria(uuid, surface_type)`를 **drop한 뒤 3인자로 새로 만든다**
-   > (인자를 추가하려면 create or replace로는 안 되기 때문이다). 007을 실행한 뒤
-   > 002를 다시 실행하면 `create or replace`가 **kind 필터가 없는 2인자 함수를
-   > 되살려** 3인자 함수와 나란히 놓인다. 그러면 대시보드가 `{p_site_id, p_surface}`
-   > 두 키로 호출할 때 후보가 둘이 되어 기준 목록 조회가 깨진다. "시드를 되살리려면
-   > 002를 다시 돌리면 되겠지"가 자연스러운 판단이라 실제로 밟기 쉬운 경로다.
-   > 재실행이 필요하면 반드시 002 -> 007 순서로 **둘 다** 다시 실행한다. 구배 분석(세부
-   과업 4) 지원을 추가한다: `analysis_kind` enum과 `analyses.kind`·`criteria.kind` 컬럼,
-   현재 분석·기본 기준 유니크 인덱스 재정의(`analyses_current`·`criteria_global_default`·
-   `criteria_site_default`), `fn_resolve_criteria`를 `p_kind` 인자가 추가된 3인자
-   시그니처로 교체, `registrations` 테이블(정합 이력, 단계 F에서 사용), 구배 판정 기준
-   5종 시드. 재실행해도 안전하다(멱등). **주의 - `fn_resolve_criteria`는 인자 개수가
-   바뀌어 drop 후 재생성되므로, 이 파일이 함수 실행 권한(revoke/grant)도 함께 재발급한다.
+7. `supabase/migrations/007_slope_analysis.sql` 전체 내용을 붙여넣고 **Run**. 구배
+   분석(세부과업 4) 지원을 추가한다: `analysis_kind` enum과 `analyses.kind`·
+   `criteria.kind` 컬럼, 현재 분석·기본 기준 유니크 인덱스 재정의
+   (`analyses_current`·`criteria_global_default`·`criteria_site_default`),
+   `fn_resolve_criteria`를 `p_kind` 인자가 추가된 3인자 시그니처로 교체,
+   `registrations` 테이블(정합 이력, 단계 F에서 사용), 구배 판정 기준 5종 시드.
+   재실행해도 안전하다(멱등). **주의 - `fn_resolve_criteria`는 인자 개수가 바뀌어
+   drop 후 재생성되므로, 이 파일이 함수 실행 권한(revoke/grant)도 함께 재발급한다.
    반드시 파일 전체를 한 번에 실행한다.** 검증: 아래 3단계 (1)·(3)번 참고.
+
+   > **경고 - 재실행이 필요하면 007만 다시 실행한다. 002는 어떤 경우에도 다시
+   > 실행하지 않는다.**
+   >
+   > **002를 재실행하면 안 되는 이유 둘:**
+   > 1. `criteria` 시드 INSERT(002:176)에는 `on conflict` 절이 없다(app_settings
+   >    시드(002:169)는 `on conflict (key) do nothing`, 005·006·007의 시드는 전부
+   >    `on conflict`가 있는 것과 다르다). 001이 건 `criteria_global_name` 부분
+   >    유니크(전역 `(surface, name)`, 001:93)를 두 번째 실행이 그대로 위반해
+   >    **23505로 죽는다.**
+   > 2. 002가 정의한 `fn_job_claim`(002:50)·`fn_job_fail`(002:80)·
+   >    `fn_reap_stuck_jobs`(002:119)는 이후 003(:63·:83)과 004(:55·:78·:109)가
+   >    `create or replace`로 이미 확장한 함수들이다. 002를 다시 실행하면 이 셋이
+   >    **P2 시절 정의로 조용히 강등된다**(오류 없음).
+   >
+   > 두 사실을 합치면 복구가 성립하지 않는다. SQL 에디터가 스크립트 전체를 한
+   > 트랜잭션으로 실행하면 시드에서 23505가 나 **전체가 롤백**된다(아무것도
+   > 복구되지 않았는데 복구했다고 믿기 쉽다). 문(statement)별로 커밋되면 함수
+   > 3종이 강등된 채로 남는다 - `fn_job_fail`이 002 버전으로 돌아가면 import 잡
+   > 실패가 `analyses.status`를 더 이상 갱신하지 않아 분석이 `queued`에 영구
+   > 고착되고, precheck 실패가 `scans.status='failed'`로 전이되지 않아 "사전
+   > 검사에 실패했습니다" 박스가 영영 안 뜨고, report의 `gen_status` 전이가
+   > 사라져 "생성 중" 표시가 폴링을 영원히 지속한다. **세 회귀 모두 오류 없이
+   > 조용하다** - 화면이 "진행 중"에 머물 뿐이다.
+   >
+   > **007만 재실행하면 충분하다.** `fn_resolve_criteria`의 drop(007:50-51)이
+   > `fn_resolve_criteria(uuid, surface_type)`(2인자)와
+   > `fn_resolve_criteria(uuid, surface_type, analysis_kind)`(3인자) **양쪽을 모두**
+   > 겨냥하므로, 어떤 이유로든 옛 2인자 오버로드가 남아 있어도 007 재실행 한 번으로
+   > 제거되고 3인자가 정본으로 재생성된다(권한 revoke/grant도 007:69-71이 함께
+   > 재발급한다). 이 저장소의 원칙(위 "실행 중 오류가 나면..." 문단 - "새 프로젝트에서
+   > 순서대로 한 번씩만 실행하면 정상")은 007에도 그대로 적용된다.
 
 ## 3. 검증 쿼리
 

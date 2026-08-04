@@ -29,13 +29,40 @@ Vercel(대시보드) + Railway(워커, Docker) + Supabase(DB·Auth·Storage) 구
    > 먼저 배포하면 `analyses` 테이블에 `kind` 컬럼이 없어 모든 분석 목록·상세 조회가
    > 실패한다.
    >
+   > **워커를 007보다 먼저 배포하면 더 심각한 문제가 생긴다 - 이미 검수를 통과한
+   > 평활도·임포트 분석까지 전부 실패한다.** `worker/flatworker/db.py`의
+   > `set_current_analysis`(모든 analyze/import 잡의 마지막 단계)는 두 PATCH 모두에
+   > `kind` 필터를 무조건 건다. 007 미적용 DB에는 `analyses.kind` 컬럼 자체가 없어
+   > PostgREST가 400(`42703 undefined_column`)을 돌려준다. 엔진은 이미 다 돌고
+   > stats까지 만들어진 뒤 **마지막 PATCH에서만** 실패하므로, 3회 재시도로 엔진이
+   > 세 번 돌아 자원을 태우고 `analyses.status='failed'`인데 `stats`·
+   > `overall_verdict`·`coverage_pct`는 정상적으로 채워진 **모순 상태**가 남는다.
+   > **증상**: Railway 로그에 `[flatworker] 복구 불가능한 DB 오류로 종료합니다
+   > (status=400)` 계열의 한 줄만 남고, 화면에는 "사전 검사에 실패했습니다" 대신
+   > 그냥 "분석 실패"만 뜬다 - 워커를 의심할 단서가 로그의 400 하나뿐이다.
+   > **실질적 조치**: Railway가 GitHub push 자동 재배포로 설정돼 있다면, **push하기
+   > 전에** Supabase SQL Editor에서 007을 먼저 적용한다(push와 SQL 실행 사이에 워커가
+   > 옛 상태로 먼저 뜨는 시간차를 만들지 않는다). 이미 이 창에서 `failed`로 굳은
+   > 분석은 007을 뒤늦게 적용해도 **자동으로 복구되지 않는다** - 스캔 상세 화면에서
+   > "분석" 버튼을 다시 눌러 재분석해야 한다.
+   >
    > **007 자체는 재실행해도 안전하다**(`007_slope_analysis.sql`이 스스로 "재실행
    > 안전(멱등)"이라 선언하며, `drop function if exists`가 2인자·3인자 시그니처를 모두
-   > 겨냥한 뒤 재생성한다). **위험한 것은 007 이후에 002를 다시 실행하는 것이다** -
-   > `create or replace`가 kind 필터 없는 옛 2인자 `fn_resolve_criteria`를 되살려 3인자
-   > 함수와 나란히 놓이면, 대시보드가 `{p_site_id, p_surface}` 두 키로 호출할 때 후보가
-   > 둘이 되어 기준 목록 조회가 깨진다. 재실행이 필요하면 반드시 002 -> 007 순서로
-   > **둘 다** 다시 실행한다(자세한 사고 시나리오는 `docs/SUPABASE_SETUP.md` §2-7 참고)
+   > 겨냥한 뒤 재생성한다). **`002_functions_seed.sql`은 어떤 경우에도 다시 실행하지
+   > 않는다** - (1) `criteria` 시드 INSERT(002:176)에 `on conflict` 절이 없어(005·006·
+   > 007의 시드는 전부 있다) 001이 건 `criteria_global_name` 부분 유니크 위반으로
+   > 재실행이 그 자리에서 23505로 죽는다. (2) 002가 003·004에서 이미 확장한 잡 큐
+   > 함수 3종(`fn_job_claim`·`fn_job_fail`·`fn_reap_stuck_jobs`)을 P2 시절 정의로
+   > `create or replace`한다 - 오류 없이 조용히 되돌아가며, import 잡 실패가
+   > `analyses.status`를 더 이상 갱신하지 않아 분석이 `queued`에 영구 고착되거나,
+   > precheck 실패가 `scans.status`에 반영되지 않아 실패 안내 박스가 영영 안 뜨거나,
+   > report의 `gen_status` 전이가 사라져 생성 중 표시가 폴링을 영원히 지속하는 회귀
+   > 3종이 되살아난다. **007이 필요한 상황이면 007만 다시 실행한다** -
+   > `fn_resolve_criteria`의 drop(007:50-51)이 2인자·3인자 시그니처를 모두 겨냥하므로,
+   > 002 재실행으로 되살아난 옛 2인자 오버로드가 있더라도 007 재실행 한 번으로
+   > 제거되고 3인자가 정본으로 재생성된다(권한 revoke/grant도 007:69-71이 함께
+   > 재발급한다). 이 원칙은 `docs/SUPABASE_SETUP.md`의 "새 프로젝트에서 순서대로
+   > 한 번씩만 실행하면 정상"과 일치한다 - 예외는 007 하나뿐이다
 2. Storage 화면에서 `raw-scans`·`artifacts`·`reports` 버킷 3개 생성 확인
    (정책 생성이 `42501`로 실패하면 백로그 티켓 42대로 Storage > Policies UI에서 수동 생성)
 3. **[필수] 회원가입(Sign Ups) 차단** - **Authentication** > **Providers** > **Email**에서
