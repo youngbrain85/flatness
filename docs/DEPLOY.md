@@ -10,6 +10,9 @@ Vercel(대시보드) + Railway(워커, Docker) + Supabase(DB·Auth·Storage) 구
 ## 0. 코드로 준비된 것 (추가 작업 없음)
 
 - `supabase/migrations/005_storage_buckets.sql` - 버킷 3종(`raw-scans`·`artifacts`·`reports`) + RLS
+- `supabase/migrations/008_slope_judge_enum.sql`·`009_slope_judge_functions.sql` - 재판정
+  (구배 배수구 재클릭) 잡 타입. 이 배포 절차의 필수 최소 범위(007까지)에는 포함되지
+  않지만, 재판정 기능을 켤 계획이면 §1의 1번에서 함께 적용한다
 - 저장소 루트 `Dockerfile` - 워커 이미지(Chromium·`Noto Sans CJK KR` 포함 - Debian
   `fonts-noto-cjk`가 실제로 등록하는 폰트 패밀리명이며 `Noto Sans KR`이 아니다)
 - 워커 `STORAGE_BACKEND=supabase` 기본값(Dockerfile `ENV`)
@@ -22,6 +25,19 @@ Vercel(대시보드) + Railway(워커, Docker) + Supabase(DB·Auth·Storage) 구
    진행한다). 006(`006_report_soft_delete.sql`)은 보고서 소프트 삭제, 007
    (`007_slope_analysis.sql`)은 구배 분석(`analyses.kind` 컬럼·구배 판정 기준 시드)을
    추가한다 - 둘 다 재실행 안전(멱등)하다
+
+   **재판정(구배 배수구 재클릭) 기능을 쓸 계획이면 007 다음에 008·009도 이어서
+   적용한다**: `008_slope_judge_enum.sql`(job_type에 `slope_judge` 값 추가) →
+   `009_slope_judge_functions.sql`(잡 큐 함수 3종에 slope_judge 분기 확장). **008과
+   009는 절대 한 번에 이어 붙여 실행하면 안 되고 반드시 두 번 나눠 Run 한다** -
+   PostgreSQL이 같은 트랜잭션 안에서 방금 추가한 enum 값의 사용을 "unsafe use of new
+   value"로 막고, Supabase SQL Editor는 붙여넣은 내용 전체를 한 트랜잭션으로 실행하기
+   때문이다. 008 Run → `Success` 확인 → 에디터 비우기 → 009 Run 순서를 지킨다. 둘 다
+   재실행 안전(멱등)하며, `analyses.status`는 slope_judge 분기에서 절대 바뀌지 않는다
+   (재판정 진행 상태는 `analyses.params.judge`에만 반영된다 - 자세한 이유와 상태
+   스키마는 `docs/SUPABASE_SETUP.md` 2단계 8·9번 참고). 이 저장소가 아직 세부과업 4
+   단계 D의 워커·대시보드를 배포하지 않은 상태라면 008·009를 지금 당장 적용하지
+   않아도 기존 기능에는 영향이 없다.
 
    > **[필수] 배포 순서 경고**: **007 적용 -> 엔진·워커 배포(저장소 루트 `Dockerfile`이
    > `engine/`·`worker/`를 한 이미지로 함께 빌드하므로 Railway 재배포 1회로 둘이 자동으로
@@ -68,8 +84,10 @@ Vercel(대시보드) + Railway(워커, Docker) + Supabase(DB·Auth·Storage) 구
    >
    > **이미 002를 재실행해 버렸다면 007만으로는 복구되지 않는다.** 007이 정의하는
    > 함수는 `fn_resolve_criteria` 하나뿐이라, 위 (2)의 잡 큐 함수 3종 강등은 그대로
-   > 남는다. 그 경우의 복구 순서는 **003 → 004 → 007**이다(003·004는 전부
-   > `create or replace`라 재실행이 안전하고, 004가 003의 상위집합이라 순서가 중요하다).
+   > 남는다. 그 경우의 복구 순서는 **003 → 004 → 007 → 009**이다(003·004는 전부
+   > `create or replace`라 재실행이 안전하고, 004가 003의 상위집합이라 순서가
+   > 중요하다. 009까지 이미 적용해 둔 프로젝트에 한하며, 008·009를 아직 쓰지 않는다면
+   > 007에서 멈춰도 된다 - 008은 enum 값 추가일 뿐이라 002 재실행의 영향을 받지 않는다).
 
    > 재발급한다). 이 원칙은 `docs/SUPABASE_SETUP.md`의 "새 프로젝트에서 순서대로
    > 한 번씩만 실행하면 정상"과 일치한다 - 예외는 007 하나뿐이다
@@ -197,7 +215,9 @@ Vercel(대시보드) + Railway(워커, Docker) + Supabase(DB·Auth·Storage) 구
 
 1. Supabase SQL Editor에서 `001_schema.sql` ~ `007_slope_analysis.sql`을 순서대로 실행
    (**[필수] 007까지 반드시**, 007 없이 대시보드를 먼저 올리면 분석 조회 전체가 깨진다),
-   버킷 3종 생성 확인(정책 42501 실패 시 UI 수동 생성)
+   버킷 3종 생성 확인(정책 42501 실패 시 UI 수동 생성). 재판정 기능을 쓸 계획이면
+   `008_slope_judge_enum.sql`→`009_slope_judge_functions.sql`을 **반드시 두 번 나눠**
+   이어서 실행(§1의 1번 참고, 필수 최소 범위는 아니다)
 2. **[필수]** Supabase Authentication > Providers > Email에서 회원가입(Sign Ups) 차단 -
    이유는 위 §1의 3번 참고
 3. **[필수]** Supabase Authentication > **Add user**로 로그인 계정 생성(**Auto Confirm
