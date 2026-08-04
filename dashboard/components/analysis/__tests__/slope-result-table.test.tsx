@@ -41,6 +41,27 @@ describe('SlopeResultTable (스펙 §7.2·§5.3: 구배 %, 설계 대비 편차,
     expect(screen.queryByText('역구배')).not.toBeInTheDocument();
   });
 
+  // ★ 코드리뷰 Important-1: 역구배 셀은 크기 기준 보정 문구("0.0mm 높임" 등)를
+  // 내면 안 된다 - 크기가 설계와 거의 같아 correction_mm이 0에 가까우면
+  // "고칠 것 없음"으로 오독된다(스펙 §7.2가 경계한 실패가 보정란에서 재현).
+  it('reverse=true면 correction_mm이 0에 가까워도 방향 재시공 문구를 낸다(크기 문구 아님)', () => {
+    const rows = [result({
+      grade: '재시공', reason: '역구배(물이 배수구 반대로 흐름)', reverse: true, correction_mm: 0.0,
+    })];
+    render(<SlopeResultTable results={rows} designPct={2.0} />);
+    expect(screen.queryByText(/0\.0mm/)).not.toBeInTheDocument();
+    expect(screen.getByText(/방향 전면 재시공 필요/)).toBeInTheDocument();
+  });
+
+  // ★ 코드리뷰 M1: jsonb 무결성 미보장 - grade가 SLOPE_GRADE_COLOR에 없는
+  // 문자열이어도 배지 배경색이 안 붙어 조용히 안 보이면 안 된다.
+  it('SLOPE_GRADE_COLOR에 없는 미지 등급 문자열도 판정불가 색으로 폴백해 배지를 보여준다', () => {
+    const rows = [result({ grade: '알수없음' as unknown as SlopeCellResult['grade'] })];
+    render(<SlopeResultTable results={rows} designPct={2.0} />);
+    const badge = screen.getByText('알수없음');
+    expect(badge).toHaveStyle({ backgroundColor: 'rgb(158, 158, 158)' }); // #9e9e9e = 판정불가
+  });
+
   it('측정 불가(ok=false) 셀은 구배·보정에 "-"를 보여준다', () => {
     const rows = [result({
       cell: cell({ ok: false, slope_pct: null, downhill_rad: null }),

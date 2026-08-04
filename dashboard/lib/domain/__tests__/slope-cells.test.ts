@@ -26,6 +26,33 @@ describe('isSlopeCellsFile (slope_cells.json 판별 - stats.ts isSlopeStats와 �
     expect(isSlopeCellsFile({ schema_version: 2 })).toBe(false); // cells 없음
     expect(isSlopeCellsFile({ cells: [] })).toBe(false); // schema_version 없음
   });
+
+  // ★ 코드리뷰 M4: 최상위 키만 보면 cells 원소가 깨져도 통과한다 - 배열
+  // 원소 하나하나가 SlopeCellRow 형태인지까지 확인해야 한다.
+  it('cells 원소 중 하나라도 width_m이 없으면 거부한다', () => {
+    const { width_m, ...broken } = cell();
+    void width_m;
+    const payload = {
+      schema_version: 2, engine_version: 'p4-0.5.0', cell_m: 2.0, subcell_m: 0.05,
+      cells: [cell(), broken],
+    };
+    expect(isSlopeCellsFile(payload)).toBe(false);
+  });
+
+  it('좌표가 문자열인 셀은 거부한다(조용한 숫자 강제변환 방지)', () => {
+    const payload = {
+      schema_version: 2, engine_version: 'p4-0.5.0', cell_m: 2.0, subcell_m: 0.05,
+      cells: [{ ...cell(), center_x: '0.975' }],
+    };
+    expect(isSlopeCellsFile(payload)).toBe(false);
+  });
+
+  it('빈 cells 배열은 통과한다(원소 검증은 vacuous truth)', () => {
+    const payload: SlopeCellsFile = {
+      schema_version: 2, engine_version: 'p4-0.5.0', cell_m: 2.0, subcell_m: 0.05, cells: [],
+    };
+    expect(isSlopeCellsFile(payload)).toBe(true);
+  });
 });
 
 describe('slopeCellsJsonUrl (경로 함정: artifactUrl 쓰면 artifacts/{id}가 중복된다)', () => {

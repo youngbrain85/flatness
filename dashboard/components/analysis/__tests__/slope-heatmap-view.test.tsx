@@ -74,3 +74,55 @@ describe('SlopeHeatmapView 클릭 -> 월드 좌표 변환 (브리프 D4: 배수�
     expect(getByText(/역구배/)).toBeInTheDocument();
   });
 });
+
+// jsdom은 getContext('2d')를 지원하지 않는다(slope-heatmap.test.ts와 같은 사정) -
+// 여기서는 진짜 CanvasRenderingContext2D 대신 호출을 기록하는 가짜로 스텁해
+// drawSlopeHeatmap이 "실제로" 이 컴포넌트에서 호출되고, results[].reverse가
+// 끊기지 않고 그대로 전달되는지(코드리뷰 R-19) 확인한다. slope-heatmap.test.ts는
+// drawSlopeHeatmap 함수 자체의 단위 동작만 보고, 이 뷰가 그 함수에 무엇을
+// 넘기는지는 검증하지 않는다 - 배선 자체가 이 테스트의 목적이다.
+function fakeCtx() {
+  const strokeWidths: number[] = [];
+  const ctx = {
+    fillStyle: '', strokeStyle: '', lineWidth: 0,
+    fillRect: () => {}, strokeRect: () => {}, beginPath: () => {}, moveTo: () => {}, lineTo: () => {},
+    stroke() { strokeWidths.push(this.lineWidth); },
+  };
+  return { ctx: ctx as unknown as CanvasRenderingContext2D, strokeWidths };
+}
+
+describe('SlopeHeatmapView -> drawSlopeHeatmap 배선 (코드리뷰 R-19: reverse 미전달 회귀 방지)', () => {
+  it('results[].reverse=true가 실제 렌더 경로에서 굵은 화살표(lineWidth 2.2)로 이어진다', () => {
+    const { ctx, strokeWidths } = fakeCtx();
+    const getContextSpy = vi.spyOn(HTMLCanvasElement.prototype, 'getContext')
+      .mockReturnValue(ctx as unknown as RenderingContext);
+
+    render(
+      <SlopeHeatmapView results={[result({ reverse: true })]} cellM={2.0} drainPoints={[]} clickable
+        onDrainClick={vi.fn()} />,
+    );
+
+    // 셀 배경(strokeRect, 여기서 기록 안 함) + 화살표(stroke) - 화살표 stroke만
+    // lineWidth를 기록하므로, 2.2(굵게)가 실제로 찍혔는지 본다.
+    expect(strokeWidths).toContain(2.2);
+    expect(strokeWidths).not.toContain(0.9); // 이 픽스처는 셀이 하나뿐이라 얇은 화살표는 없어야 함
+
+    getContextSpy.mockRestore();
+  });
+
+  it('results[].reverse=false는 얇은 화살표(lineWidth 0.9)로 이어진다', () => {
+    const { ctx, strokeWidths } = fakeCtx();
+    const getContextSpy = vi.spyOn(HTMLCanvasElement.prototype, 'getContext')
+      .mockReturnValue(ctx as unknown as RenderingContext);
+
+    render(
+      <SlopeHeatmapView results={[result({ reverse: false })]} cellM={2.0} drainPoints={[]} clickable
+        onDrainClick={vi.fn()} />,
+    );
+
+    expect(strokeWidths).toContain(0.9);
+    expect(strokeWidths).not.toContain(2.2);
+
+    getContextSpy.mockRestore();
+  });
+});

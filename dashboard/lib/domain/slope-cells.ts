@@ -13,10 +13,38 @@
 import { dataUrl } from './paths';
 import type { SlopeCellRow, SlopeCellsFile, SlopeStats } from './types';
 
+function isFiniteNumber(v: unknown): v is number {
+  return typeof v === 'number' && Number.isFinite(v);
+}
+
+function isNumberOrNull(v: unknown): v is number | null {
+  return v === null || isFiniteNumber(v);
+}
+
+/** 코드리뷰 M4: 최상위 키만 보고 cells 배열 원소는 검증하지 않으면, width_m
+ * 누락이나 좌표가 문자열인 행도 그대로 통과해 이후 산술(slope-heatmap.ts의
+ * worldToPx 등)에서 문자열이 조용히 숫자로 강제변환되거나 NaN이 퍼진다 - 이
+ * 저장소가 가장 경계하는 조용한 실패다. SlopeCell 13필드를 전부 타입 수준까지
+ * 확인한다. */
+function isValidSlopeCellRow(row: unknown): row is SlopeCellRow {
+  if (!row || typeof row !== 'object') return false;
+  const r = row as Record<string, unknown>;
+  return isFiniteNumber(r.cx) && isFiniteNumber(r.cy)
+    && isFiniteNumber(r.center_x) && isFiniteNumber(r.center_y)
+    && isFiniteNumber(r.n_subcells)
+    && isNumberOrNull(r.slope_pct) && isNumberOrNull(r.downhill_rad)
+    && isNumberOrNull(r.rmse_m) && isNumberOrNull(r.se_pct)
+    && isFiniteNumber(r.width_m) && isFiniteNumber(r.height_m)
+    && typeof r.ok === 'boolean'
+    && (r.zone_id === null || isFiniteNumber(r.zone_id));
+}
+
 /** slope_cells.json으로 파싱된 원시 객체가 실제로 그 형태인지 내용으로 판별한다.
  *
  * stats.json의 isSlopeStats(stats.ts)와 같은 관례 - 별도 스키마 라이브러리 없이
- * 이 저장소는 최상위 판별 키를 직접 확인하는 가벼운 타입가드를 쓴다.
+ * 이 저장소는 최상위 판별 키를 직접 확인하는 가벼운 타입가드를 쓴다. 다만
+ * cells 배열은 원소 하나하나가 SlopeCellRow 형태인지까지 확인한다(코드리뷰 M4 -
+ * 배열 존재 여부만 보면 원소가 깨져도 통과한다).
  */
 export function isSlopeCellsFile(raw: unknown): raw is SlopeCellsFile {
   if (!raw || typeof raw !== 'object') return false;
@@ -25,7 +53,8 @@ export function isSlopeCellsFile(raw: unknown): raw is SlopeCellsFile {
     && typeof r.engine_version === 'string'
     && typeof r.cell_m === 'number'
     && typeof r.subcell_m === 'number'
-    && Array.isArray(r.cells);
+    && Array.isArray(r.cells)
+    && r.cells.every(isValidSlopeCellRow);
 }
 
 /** stats.artifacts.cells_json -> /api/data 경로.

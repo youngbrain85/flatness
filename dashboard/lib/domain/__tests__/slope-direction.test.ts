@@ -41,29 +41,44 @@ describe('compassLabel (8방위 환산 - 임계값 비교 없음, 리트머스 �
 describe('correctionDirectionLabel (스펙 §5.3 "북동쪽 끝을 10mm 낮춤" 형태)', () => {
   it('실측이 설계보다 완만하면(경사 부족) 낮춤으로 표기한다', () => {
     const c = cell({ slope_pct: 1.5, downhill_rad: 0 }); // 동쪽, design 2.0%보다 완만
-    const label = correctionDirectionLabel(c, 10.0, 2.0);
+    const label = correctionDirectionLabel(c, 10.0, 2.0, false);
     expect(label).toBe('동쪽 끝을 10.0mm 낮춤');
   });
 
   it('실측이 설계보다 가파르면(경사 초과) 높임으로 표기한다', () => {
     const c = cell({ slope_pct: 2.5, downhill_rad: Math.PI / 2 }); // 북쪽, design 2.0%보다 가파름
-    const label = correctionDirectionLabel(c, 10.0, 2.0);
+    const label = correctionDirectionLabel(c, 10.0, 2.0, false);
     expect(label).toBe('북쪽 끝을 10.0mm 높임');
   });
 
   it('slope_pct === design_pct(경계)는 높임으로 취급한다(부호 없는 0 처리)', () => {
     const c = cell({ slope_pct: 2.0, downhill_rad: 0 });
-    const label = correctionDirectionLabel(c, 0.0, 2.0);
+    const label = correctionDirectionLabel(c, 0.0, 2.0, false);
     expect(label).toBe('동쪽 끝을 0.0mm 높임');
   });
 
   it('ok=false(측정 불가) 셀은 null', () => {
     const c = cell({ ok: false, slope_pct: null, downhill_rad: null });
-    expect(correctionDirectionLabel(c, null, 2.0)).toBeNull();
+    expect(correctionDirectionLabel(c, null, 2.0, false)).toBeNull();
   });
 
   it('correction_mm이 null(판정불가 등)이면 null', () => {
     const c = cell({ ok: true });
-    expect(correctionDirectionLabel(c, null, 2.0)).toBeNull();
+    expect(correctionDirectionLabel(c, null, 2.0, false)).toBeNull();
+  });
+
+  // ★ 코드리뷰 Important-1: 역구배는 크기 문구가 아니라 방향 결함 문구를 낸다.
+  // correction_mm이 0에 가까워도(크기는 거의 맞음) "고칠 것 없음"으로 읽히면
+  // 안 된다 - 물이 반대로 흐르는 것 자체가 문제이므로.
+  it('reverse=true면 correction_mm 값과 무관하게 방향 재시공 문구를 낸다', () => {
+    const c = cell({ slope_pct: 2.0, downhill_rad: 0 }); // 설계와 거의 같은 크기
+    const label = correctionDirectionLabel(c, 0.0, 2.0, true);
+    expect(label).toBe('역구배 - 방향 전면 재시공 필요(크기 보정으로 해결 안 됨)');
+    expect(label).not.toContain('0.0mm');
+  });
+
+  it('reverse=true여도 측정 불가 셀(ok=false)은 여전히 null', () => {
+    const c = cell({ ok: false, slope_pct: null, downhill_rad: null });
+    expect(correctionDirectionLabel(c, null, 2.0, true)).toBeNull();
   });
 });

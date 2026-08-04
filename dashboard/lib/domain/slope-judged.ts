@@ -8,14 +8,38 @@
 import { dataUrl } from './paths';
 import type { SlopeCellRow, SlopeGrade, SlopeJudgedFile, SlopeJudgedRow, SlopeStats } from './types';
 
+function isFiniteNumber(v: unknown): v is number {
+  return typeof v === 'number' && Number.isFinite(v);
+}
+
+function isNumberOrNull(v: unknown): v is number | null {
+  return v === null || isFiniteNumber(v);
+}
+
+const VALID_GRADES: ReadonlySet<string> = new Set<SlopeGrade>(['적합', '경계', '보수', '재시공', '판정불가']);
+
+/** 코드리뷰 M4: slope-cells.ts의 isValidSlopeCellRow와 같은 이유 - cells 배열
+ * 존재 여부만 보면 grade가 알 수 없는 문자열이거나 dev_pct가 문자열이어도
+ * 통과해 화면(등급 배지 색·산술)에서 조용히 잘못 표시된다. */
+function isValidSlopeJudgedRow(row: unknown): row is SlopeJudgedRow {
+  if (!row || typeof row !== 'object') return false;
+  const r = row as Record<string, unknown>;
+  return isFiniteNumber(r.cx) && isFiniteNumber(r.cy)
+    && typeof r.grade === 'string' && VALID_GRADES.has(r.grade)
+    && typeof r.reason === 'string'
+    && isNumberOrNull(r.dev_pct) && isNumberOrNull(r.dir_err_deg) && isNumberOrNull(r.correction_mm);
+}
+
 /** slope_judged.json으로 파싱된 원시 객체가 실제로 그 형태인지 내용으로 판별한다.
- * isSlopeCellsFile(slope-cells.ts)·isSlopeStats(stats.ts)와 같은 관례다. */
+ * isSlopeCellsFile(slope-cells.ts)·isSlopeStats(stats.ts)와 같은 관례다. cells
+ * 배열 원소까지 검증한다(코드리뷰 M4). */
 export function isSlopeJudgedFile(raw: unknown): raw is SlopeJudgedFile {
   if (!raw || typeof raw !== 'object') return false;
   const r = raw as Record<string, unknown>;
   return typeof r.schema_version === 'number'
     && typeof r.direction_judged === 'boolean'
-    && Array.isArray(r.cells);
+    && Array.isArray(r.cells)
+    && r.cells.every(isValidSlopeJudgedRow);
 }
 
 /** stats.artifacts.judged_json -> /api/data 경로. slopeCellsJsonUrl(slope-cells.ts)과

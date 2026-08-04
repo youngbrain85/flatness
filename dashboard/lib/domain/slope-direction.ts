@@ -29,15 +29,24 @@ export function compassLabel(rad: number): string {
 
 /** 보정 방향 문구. 계산에 필요한 값(slope_pct·downhill_rad·correction_mm) 중
  * 하나라도 없으면(측정 불가 셀 - ok=false 또는 판정불가) null이다. 호출부가
- * '-'로 대체한다. */
+ * '-'로 대체한다.
+ *
+ * ★ 코드리뷰 Important-1: reverse(역구배) 셀은 크기 기준 문구를 내지 않는다.
+ * 역구배는 물이 배수구 반대로 흐르는 방향 결함이라 크기 편차(correction_mm)와
+ * 무관하다 - 크기가 설계와 거의 같으면 correction_mm이 0에 가까워 "동쪽 끝을
+ * 0.0mm 높임"처럼 "고칠 것 없음"으로 읽히는 문구가 나온다. 스펙 §7.2가 "역구배는
+ * 색만으로 안 드러난다"고 경계한 바로 그 셀에서 이번엔 보정란이 결함을 가리는
+ * 셈이므로, reverse면 방향 자체가 틀렸다는 별도 문구로 완전히 대체한다. */
 export function correctionDirectionLabel(
   cell: SlopeCellRow,
   correctionMm: number | null,
   designPct: number,
+  reverse: boolean,
 ): string | null {
   if (!cell.ok || cell.slope_pct === null || cell.downhill_rad === null || correctionMm === null) {
     return null;
   }
+  if (reverse) return '역구배 - 방향 전면 재시공 필요(크기 보정으로 해결 안 됨)';
   const dir = compassLabel(cell.downhill_rad);
   const action = cell.slope_pct >= designPct ? '높임' : '낮춤';
   return `${dir}쪽 끝을 ${correctionMm.toFixed(1)}mm ${action}`;

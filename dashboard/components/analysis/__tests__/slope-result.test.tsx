@@ -1,9 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import type { JudgeInfo } from '@/lib/domain/types';
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 
-const { useJudgeStatusMock } = vi.hoisted(() => ({ useJudgeStatusMock: vi.fn(() => null) }));
+const { useJudgeStatusMock } = vi.hoisted(() => ({
+  useJudgeStatusMock: vi.fn((): JudgeInfo | null => null),
+}));
 vi.mock('@/lib/hooks/use-judge-status', () => ({ useJudgeStatus: useJudgeStatusMock }));
 
 const { supabaseStub, rpcMock, updateMock, eqMock } = vi.hoisted(() => {
@@ -154,11 +157,13 @@ const judgedFilePayload = {
 };
 
 function stubFetch() {
-  vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+  const fetchMock = vi.fn(async (url: string) => {
     if (url.includes('slope_cells.json')) return { ok: true, json: async () => cellsFilePayload } as Response;
     if (url.includes('slope_judged.json')) return { ok: true, json: async () => judgedFilePayload } as Response;
     return { ok: false } as Response;
-  }));
+  });
+  vi.stubGlobal('fetch', fetchMock);
+  return fetchMock;
 }
 
 describe('SlopeResult - cells_json/judged_json 있는 분석: 히트맵/결과표/클릭', () => {
@@ -200,12 +205,51 @@ describe('SlopeResult - cells_json/judged_json 있는 분석: 히트맵/결과�
 
     await waitFor(() => expect(rpcMock).toHaveBeenCalledTimes(1));
     expect(rpcMock.mock.calls[0][0]).toBe('fn_enqueue_job');
-    expect(rpcMock.mock.calls[0][1]).toMatchObject({ p_type: 'slope_judge' });
+    // 코드리뷰가 지적한 미탐지 변이 2종을 함께 막는다: (R-8) payload에서
+    // drain_points가 빠지면 워커가 매번 ValueError를 낸다 - 키 존재를 확인한다.
+    // (R-9) 좌표를 [[x,y]] 배열로 실으면 워커의 float(p["x"]) 인덱싱이
+    // TypeError를 낸다(§3.5 표준 형태는 {x,y} 객체) - 정확한 형태까지 확인한다.
+    const enqueueArg = rpcMock.mock.calls[0][1] as {
+      p_type: string; p_payload: { analysis_id: string; drain_points: unknown };
+    };
+    expect(enqueueArg.p_type).toBe('slope_judge');
+    expect(enqueueArg.p_payload.analysis_id).toBe('a1');
+    expect(enqueueArg.p_payload.drain_points).toEqual([{ x: expect.any(Number), y: expect.any(Number) }]);
     await waitFor(() => expect(eqMock).toHaveBeenCalledTimes(1));
     // rpc(엔큐)가 update(params PATCH)보다 먼저 호출됐어야 한다(호출 순서).
     expect(rpcMock.mock.invocationCallOrder[0]).toBeLessThan(updateMock.mock.invocationCallOrder[0]);
     const patchArg = updateMock.mock.calls[0][0] as { params: { judge: { state: string } } };
     expect(patchArg.params.judge.state).toBe('queued');
+  });
+
+  // ★ 코드리뷰가 지적한 미탐지 변이(R-13): judgeBusy를 무시하면 재판정 진행
+  // 중에도 클릭이 새 엔큐를 만들어 D5(진행 중 클릭 비활성)를 위반하고 중복
+  // 엔큐로 이어진다.
+  it('재판정 진행 중(processing)에는 클릭해도 엔큐하지 않는다(judgeBusy 가드)', async () => {
+    stubFetch();
+    rpcMock.mockClear();
+    // mockReturnValueOnce가 아니라 mockReturnValue다 - 훅은 리렌더마다 새로
+    // 호출되므로(fetch 완료 후 setCells가 최소 한 번 더 리렌더를 일으킨다),
+    // 첫 호출에만 processing을 주면 클릭 시점엔 이미 기본값(null)으로 돌아가
+    // 가드가 시험되지 않는다.
+    useJudgeStatusMock.mockReturnValue({ state: 'processing', at: 't0' });
+    render(<SlopeResult analysis={analysisWith(rejudgeableStats)} />);
+    await waitFor(() => expect(document.querySelector('canvas')).not.toBeNull());
+
+    const canvas = document.querySelector('canvas')!;
+    Object.defineProperty(canvas, 'getBoundingClientRect', {
+      value: () => ({
+        left: 0, top: 0, right: canvas.width, bottom: canvas.height,
+        width: canvas.width, height: canvas.height, x: 0, y: 0, toJSON() {},
+      }),
+    });
+    fireEvent.click(canvas, { clientX: canvas.width / 2, clientY: canvas.height / 2 });
+
+    // 비동기 엔큐가 있었다면 뜰 시간을 준 뒤에도 호출되지 않았음을 확인한다.
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(rpcMock).not.toHaveBeenCalled();
+
+    useJudgeStatusMock.mockReturnValue(null); // 다음 테스트를 위해 기본값으로 복원
   });
 
   it('배수구 클릭: 엔큐가 23505로 실패하면 params를 건드리지 않고 안내 메시지를 보여준다', async () => {
@@ -231,5 +275,39 @@ describe('SlopeResult - cells_json/judged_json 있는 분석: 히트맵/결과�
     await waitFor(() => {
       expect(screen.getByText(/이미 같은 대상의 작업이 대기 중이거나 실행 중입니다/)).toBeInTheDocument();
     });
+  });
+
+  // ★ 코드리뷰가 지적한 미탐지 변이(R-11): judge?.at을 fetch effect 의존성에서
+  // 빼면, 재판정이 같은 경로를 제자리에서 덮어써도(D8) URL 문자열이 그대로라
+  // 재fetch가 안 일어나 히트맵·결과표가 옛 판정 그대로 남는다.
+  it('judge.at이 바뀌면(재판정 완료) 셀 데이터를 다시 fetch한다', async () => {
+    const fetchMock = stubFetch();
+    useJudgeStatusMock.mockReturnValue({ state: 'processing', at: 't0' });
+    const { rerender } = render(<SlopeResult analysis={analysisWith(rejudgeableStats)} />);
+    await waitFor(() => expect(document.querySelector('canvas')).not.toBeNull());
+    const callsBefore = fetchMock.mock.calls.length;
+    expect(callsBefore).toBeGreaterThan(0);
+
+    // 재판정 완료: judge.at이 바뀐다(analysis.params/URL 문자열 자체는 안 바뀜).
+    useJudgeStatusMock.mockReturnValue({ state: 'done', at: 't1' });
+    rerender(<SlopeResult analysis={analysisWith(rejudgeableStats)} />);
+
+    await waitFor(() => expect(fetchMock.mock.calls.length).toBeGreaterThan(callsBefore));
+
+    useJudgeStatusMock.mockReturnValue(null); // 다음 테스트를 위해 기본값으로 복원
+  });
+
+  // ★ 코드리뷰가 지적한 미탐지 변이(R-20): designPct 배선이 stats.threshold.
+  // design_pct 대신 항상 0을 쓰면, slope_pct(항상 >=0)가 사실상 언제나 design_pct
+  // 이상이 되어 전 셀이 "낮춤"이어야 할 것까지 "높임"으로 뒤집힌다.
+  it('결과표의 보정 문구가 stats.threshold.design_pct를 실제로 사용한다(설계 구배 2%, 실측 1.5% -> 낮춤)', async () => {
+    stubFetch();
+    render(<SlopeResult analysis={analysisWith(rejudgeableStats)} />);
+    await waitFor(() => expect(document.querySelector('canvas')).not.toBeNull());
+    // rejudgeableStats.threshold.design_pct=2, cellsFilePayload의 셀 slope_pct=1.5
+    // -> 1.5 < 2이므로 "낮춤"이어야 한다. designPct가 0으로 배선됐다면
+    // 1.5>=0이라 "높임"으로 뒤집힌다.
+    await waitFor(() => expect(screen.getByText(/낮춤/)).toBeInTheDocument());
+    expect(screen.queryByText(/높임/)).not.toBeInTheDocument();
   });
 });

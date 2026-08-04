@@ -34,7 +34,7 @@ export function SlopeResultTable({ results, designPct }: {
         </thead>
         <tbody>
           {rows.map((r) => {
-            const correction = correctionDirectionLabel(r.cell, r.correction_mm, designPct);
+            const correction = correctionDirectionLabel(r.cell, r.correction_mm, designPct, r.reverse);
             return (
               <tr key={`${r.cell.cx},${r.cell.cy}`} className="border-t">
                 <td className="p-2 font-medium">({r.cell.cx}, {r.cell.cy})</td>
@@ -42,8 +42,11 @@ export function SlopeResultTable({ results, designPct }: {
                 <td className="p-2">{fmtPct(r.dev_pct)}</td>
                 <td className="p-2">{correction ?? '-'}</td>
                 <td className="p-2">
+                  {/* 코드리뷰 M1: jsonb는 무결성을 보장하지 않는다 - grade가 알 수 없는
+                      문자열이어도 배지가 안 보이는 조용한 오표시 대신 판정불가 회색으로
+                      강제한다(slopeCellFillColor의 ok=false 강제와 같은 관례). */}
                   <span className="rounded px-1.5 text-xs text-white"
-                    style={{ backgroundColor: SLOPE_GRADE_COLOR[r.grade] }}>
+                    style={{ backgroundColor: SLOPE_GRADE_COLOR[r.grade] ?? SLOPE_GRADE_COLOR.판정불가 }}>
                     {r.grade}
                   </span>
                 </td>

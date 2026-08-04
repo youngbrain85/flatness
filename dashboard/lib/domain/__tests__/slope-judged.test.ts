@@ -31,6 +31,33 @@ describe('isSlopeJudgedFile (slope_judged.json 판별 - isSlopeCellsFile과 같�
     expect(isSlopeJudgedFile({ schema_version: 1 })).toBe(false); // cells·direction_judged 없음
     expect(isSlopeJudgedFile({ cells: [], direction_judged: true })).toBe(false); // schema_version 없음
   });
+
+  // ★ 코드리뷰 M4: cells 원소가 깨져도 배열 존재만 보면 통과했다.
+  it('grade가 5등급에 없는 미지 문자열이면 거부한다', () => {
+    const payload = {
+      schema_version: 1, direction_judged: true,
+      cells: [{ ...judgedRow(), grade: '알수없음' }],
+    };
+    expect(isSlopeJudgedFile(payload)).toBe(false);
+  });
+
+  it('dev_pct가 문자열이면 거부한다(조용한 숫자 강제변환 방지)', () => {
+    const payload = {
+      schema_version: 1, direction_judged: true,
+      cells: [{ ...judgedRow(), dev_pct: '0.24' }],
+    };
+    expect(isSlopeJudgedFile(payload)).toBe(false);
+  });
+
+  it('cx/cy 중 하나라도 없는 행이 섞이면 전체를 거부한다', () => {
+    const { cx, ...broken } = judgedRow();
+    void cx;
+    const payload = {
+      schema_version: 1, direction_judged: true,
+      cells: [judgedRow(), broken],
+    };
+    expect(isSlopeJudgedFile(payload)).toBe(false);
+  });
 });
 
 describe('slopeJudgedJsonUrl (경로 함정: artifactUrl 쓰면 artifacts/{id}가 중복된다)', () => {

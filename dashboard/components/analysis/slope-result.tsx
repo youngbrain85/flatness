@@ -54,6 +54,9 @@ export function SlopeResult({ analysis }: { analysis: AnalysisRow }) {
   const [clickError, setClickError] = useState<string | null>(null);
   const [cells, setCells] = useState<SlopeCellResult[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  // 코드리뷰 M3: slope_cells.json/slope_judged.json 중 한쪽에만 있어 조인에서
+  // 빠진 셀 수. 0이면 배너를 그리지 않는다.
+  const [unmatchedCount, setUnmatchedCount] = useState(0);
   // 배수구는 낙관적 갱신 대상이다(클릭 즉시 지도에 반영) - 폴링이 아니라 클릭
   // 핸들러가 직접 쓰는 값이므로 judge와 분리된 별도 state로 둔다.
   const [drainPoints, setDrainPoints] = useState<DrainPoint[]>(initialParams.drain_points ?? []);
@@ -80,27 +83,43 @@ export function SlopeResult({ analysis }: { analysis: AnalysisRow }) {
   // slope_cells.json + slope_judged.json fetch. judge?.at을 의존성에 넣는 이유:
   // 재판정은 같은 경로를 제자리에서 덮어쓴다(x-upsert:true, 브리프 D8) - URL
   // 문자열 자체는 재판정 전후로 동일하므로, URL만 의존성에 두면 재판정 완료 후
-  // 새로 덮어써진 내용을 다시 받아오지 못한다.
+  // 새로 덮어써진 내용을 다시 받아오지 못한다(코드리뷰 R-11 회귀 방지 대상).
   useEffect(() => {
     if (!canRejudge || !cellsJsonUrl || !judgedJsonUrl) return;
     let cancelled = false;
     (async () => {
       setLoadError(null);
-      const [cellsRes, judgedRes] = await Promise.all([fetch(cellsJsonUrl), fetch(judgedJsonUrl)]);
-      if (!cellsRes.ok || !judgedRes.ok) {
-        if (!cancelled) {
-          setLoadError('셀 데이터를 저장소에서 찾을 수 없습니다. 파일이 삭제되었거나 아직 업로드되지 않았을 수 있습니다. 스캔 상세에서 재분석을 시도하세요.');
+      // 코드리뷰 Important-3: fetch/json() 모두 reject할 수 있다(네트워크 오류,
+      // 또는 200인데 본문이 HTML 오류 페이지라 json 파싱이 실패하는 경우). try/catch
+      // 없이 두면 unhandled rejection으로 조용히 죽고 화면은 "로딩 중..."에 영구히
+      // 멈춘다 - 이 저장소가 가장 경계하는 실패 양식이므로 반드시 잡아 사용자에게
+      // 보여준다.
+      try {
+        const [cellsRes, judgedRes] = await Promise.all([fetch(cellsJsonUrl), fetch(judgedJsonUrl)]);
+        if (!cellsRes.ok || !judgedRes.ok) {
+          if (!cancelled) {
+            setLoadError('셀 데이터를 저장소에서 찾을 수 없습니다. 파일이 삭제되었거나 아직 업로드되지 않았을 수 있습니다. 스캔 상세에서 재분석을 시도하세요.');
+          }
+          return;
         }
-        return;
+        const cellsData: unknown = await cellsRes.json();
+        const judgedData: unknown = await judgedRes.json();
+        if (!isSlopeCellsFile(cellsData) || !isSlopeJudgedFile(judgedData)) {
+          if (!cancelled) setLoadError('셀 데이터 형식이 올바르지 않습니다.');
+          return;
+        }
+        const joined = joinSlopeCells(cellsData.cells, judgedData.cells, judgedData.direction_judged);
+        // 코드리뷰 M3: 두 파일 중 한쪽에만 있는 셀은 joinSlopeCells가 조용히
+        // 빼므로(브리프 D1 관례), 여기서 손실 개수를 세어 사용자에게 알린다 -
+        // "조용한 실패를 만들지 마라"는 이 저장소의 가장 강한 경계다.
+        const lost = Math.max(cellsData.cells.length, judgedData.cells.length) - joined.length;
+        if (!cancelled) { setCells(joined); setUnmatchedCount(lost); }
+      } catch (e) {
+        if (!cancelled) {
+          const detail = e instanceof Error ? e.message : String(e);
+          setLoadError(`셀 데이터를 불러오는 중 오류가 발생했습니다: ${detail}`);
+        }
       }
-      const cellsData: unknown = await cellsRes.json();
-      const judgedData: unknown = await judgedRes.json();
-      if (!isSlopeCellsFile(cellsData) || !isSlopeJudgedFile(judgedData)) {
-        if (!cancelled) setLoadError('셀 데이터 형식이 올바르지 않습니다.');
-        return;
-      }
-      const joined = joinSlopeCells(cellsData.cells, judgedData.cells, judgedData.direction_judged);
-      if (!cancelled) setCells(joined);
     })();
     return () => { cancelled = true; };
   }, [canRejudge, cellsJsonUrl, judgedJsonUrl, judge?.at]);
@@ -184,8 +203,35 @@ export function SlopeResult({ analysis }: { analysis: AnalysisRow }) {
           <p className="text-sm text-slate-700">
             배수구 위치를 클릭하세요. 클릭하면 그 지점을 기준으로 재판정 작업이 시작되고, 완료되면
             화면이 자동으로 갱신됩니다.
+            {/* 코드리뷰 M5: 브리프 D3 - 엔진 PNG는 화면에 다시 그리지 않되(Canvas와
+                색표가 다를 수 있음) 다운로드 링크로는 둔다. */}
+            {mapPng && (
+              <>
+                {' '}
+                <a href={dataUrl(mapPng)} download className="text-blue-700 hover:underline">
+                  구배 판정 지도(PNG) 다운로드
+                </a>
+              </>
+            )}
           </p>
           {clickError && <p className="text-xs text-red-600">{clickError}</p>}
+          {/* 코드리뷰 Important-2: cells가 채워진 뒤(성공적으로 로드된 뒤) 재판정으로
+              재fetch가 실패하면, 아래 히트맵/결과표는 옛 cells를 계속 보여주므로
+              loadError가 else 분기에 묻혀 전혀 안 보였다 - "화면은 최신, 데이터는
+              구식"이라는 조용한 실패를 막기 위해 cells 유무와 무관하게 여기서도
+              띄운다. */}
+          {loadError && cells && (
+            <p className="rounded border border-amber-300 bg-amber-50 p-2 text-xs text-amber-800">
+              최신 판정을 불러오지 못해 이전 판정 결과가 표시되고 있습니다. {loadError}
+            </p>
+          )}
+          {/* 코드리뷰 M3: 조용한 셀 누락 방지. */}
+          {unmatchedCount > 0 && (
+            <p className="rounded border border-amber-300 bg-amber-50 p-2 text-xs text-amber-800">
+              셀 데이터 파일과 판정 결과 파일이 어긋나 {unmatchedCount}개 셀이 화면에서 빠졌습니다.
+              구배 분석을 다시 실행하는 것을 권장합니다.
+            </p>
+          )}
 
           <div className="grid gap-4 lg:grid-cols-3">
             <section className="lg:col-span-2">
