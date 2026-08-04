@@ -340,6 +340,31 @@ def test_reap_stuck_jobs_requeues_slope_judge_only_when_judge_processing():
     assert db.analyses["a1"]["status"] == "done"  # 절대 안 바뀜
 
 
+def test_reap_stuck_jobs_does_not_strip_error_from_slope_judge_judge():
+    """2차 리뷰 M4 - 009의 fn_reap_stuck_jobs는 병합 시 error를 지우지 않는다
+    (claim만 `coalesce(...) - 'error'`를 쓴다 - 004의 gen_error=null 클레임
+    관례를 따르는 것은 claim뿐이다). reap이 만드는 jsonb_build_object에는
+    error 키 자체가 없으므로, 병합(||) 결과에 기존 error가 있었다면 그대로
+    남는다. FakeDB의 reap 3단계가 실수로 strip_error=True를 넘기면 이 테스트가
+    잡는다 - job.status를 직접 'queued'로 세팅해(claim_job을 거치지 않고)
+    reap 3단계만 단독으로 트리거한다.
+    """
+    db = FakeDB()
+    db.analyses["a1"] = {
+        "id": "a1", "status": "done",
+        "params": {"judge": {"state": "processing", "at": "2026-01-01T00:00:00Z",
+                             "error": "직전 소진 실패 사유"}},
+    }
+    jid = db.enqueue_job("slope_judge", {"analysis_id": "a1"})
+    db.jobs[jid]["status"] = "queued"  # reap 3단계 조건(job.status=='queued')만 재현
+
+    db.reap_stuck_jobs()
+
+    judge = db.analyses["a1"]["params"]["judge"]
+    assert judge["state"] == "queued"
+    assert judge["error"] == "직전 소진 실패 사유"  # 지워지지 않아야 한다
+
+
 def test_reap_stuck_jobs_leaves_slope_judge_untouched_when_judge_not_processing():
     """이미 done/failed로 종결된 judge 채널은 reap이 건드리면 안 된다 - 성공한
     재판정 결과를 이유 없이 'queued'로 되돌리는 조용한 회귀를 막는다."""
