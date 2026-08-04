@@ -3,7 +3,7 @@
 ## 수직·수평면 평활도 분석 결과 자동 보고서 생성 기능 개발 (세부과업 1)
 
 - 제출 문서 구분: 과업지시서 세부과업 1 최종 성과물 "라. 용역 결과 보고서"
-- 작성일: 2026-07-31
+- 작성일: 2026-08-04 (수치 갱신)
 - 관련 성과물 문서: [`scan-guideline.md`](scan-guideline.md) (현장 스캔 가이드라인),
   [`criteria-sources.md`](criteria-sources.md) (판정 기준 원문 대조표),
   [`contracts/stats-schema.md`](contracts/stats-schema.md) (데이터 계약 정본)
@@ -51,10 +51,10 @@
 
 | 항목 | 값 |
 |---|---|
-| 개발 이력 기간 | 2026-07-27 (설계 문서) ~ 2026-07-31 (최종 문서) |
-| 커밋 수 | 143 |
-| 코드 규모 | Python 6,781행 / TypeScript·TSX 5,035행 / SQL 774행 / HTML 템플릿 312행 |
-| 문서 규모 | Markdown 16,185행 |
+| 개발 이력 기간 | 2026-07-27 (설계 문서) ~ 2026-08-04 (본 수치 갱신 시점) |
+| 커밋 수 | 224 |
+| 코드 규모 | Python 10,316행 / TypeScript·TSX 9,685행 / SQL 1,157행 / HTML 템플릿 313행 |
+| 문서 규모 | Markdown 21,970행 |
 
 > 계약상 용역 기간은 발주처 계약 문서를 따른다. 위 기간은 본 저장소의 개발 이력 기간이다.
 >
@@ -226,6 +226,31 @@ JSON 임포트 파서는 구현이 완료되어(2.1·2.4절) 부분 이행 항�
 분석·판정·산출물 생성이 완결된다(`flatness analyze <파일> --out <디렉터리> --units m`.
 `engine/pyproject.toml`의 `[project.scripts]`가 등록하는 콘솔 스크립트다. 임포트는
 `flatness import-colab` / `flatness import-json`).
+
+**주요 라이브러리 채택 현황에 대한 설명**: 과업지시서 세부과업 4(11쪽 "나. 알고리즘 사양")는
+주요 라이브러리로 Open3D·PCL(Point Cloud Library)·NumPy·scikit-learn(RANSAC 평면 피팅)을
+명시한다. 세부과업 1 자체의 기술 요구사항(3쪽)에는 별도 라이브러리 지정이 없으나, 세부과업 4의
+엔진이 세부과업 1과 같은 Python 패키지(`engine/`)를 공유하므로 이 채택 여부를 여기서 함께
+밝힌다. 본 시스템은 이 중 **NumPy만 채택**했고 **Open3D·PCL·scikit-learn은 쓰지 않는다.**
+
+- **평면 피팅(RANSAC)**: scikit-learn이 아니라 NumPy로 직접 구현했다(`engine/flatness/core/plane.py`).
+  세부과업 1의 구역별 평면 재피팅(4.2절)이 이미 이 구현을 쓰고 있었고, 잘 동작하는 코드를
+  라이브러리로 교체하면 회귀 위험만 생기고 얻는 것이 없다고 판단했다
+- **Open3D**: 채택하지 않았다. Linux wheel이 400MB대이고 libGL·libgomp 등 무거운 시스템
+  의존성을 끌고 들어와, Playwright Chromium이 이미 들어간 워커 컨테이너의 이미지 크기와
+  빌드 시간에 부담이 크다
+- **PCL**: C++ 라이브러리라 Python 스택에 넣지 않았다
+
+현재 엔진 의존성은 **numpy·scipy·laspy·matplotlib 4개**뿐이다(`engine/pyproject.toml`). 워커는
+여기에 httpx·python-dotenv·jinja2·playwright를 더한다(`worker/pyproject.toml`). 루트
+`Dockerfile`도 Open3D·PCL 관련 시스템 패키지(libGL 등)를 설치하지 않는다.
+
+**이는 미이행이 아니라 의도적 이탈이며 발주처가 승인한 사항이다.** 사용자가 "과업지시서에 있는
+라이브러리들은 무시해도 괜찮다. 무슨 소프트웨어를 쓰고 어떤 언어로 할지는 상관 없다. 뭐로 하든
+결과만 나오면 되는거야"라고 명시적으로 승인했다(2026-08-02,
+[`superpowers/specs/2026-08-02-slope-analysis-design.md`](superpowers/specs/2026-08-02-slope-analysis-design.md)
+§1.3). 세부과업 1이 실제로 요구한 처리 환경(Python)과 결과 파일 형식(CSV·JSON·PNG·PDF, 2.4절)은
+전부 그대로 준수한다.
 
 ### 3.3 데이터 흐름
 
@@ -434,13 +459,13 @@ MAX_UPLOAD_BYTES]`. 로컬 디스크에 저장하던 시절에는 대용량 파�
 
 | 대상 | 명령 | 결과 |
 |---|---|---|
-| 분석 엔진 | `cd engine && python -m pytest` | **139 passed**, 1 deselected |
-| 워커 (기본) | `cd worker && PYTHONPATH=../engine python -m pytest` | **73 passed**, 1 deselected |
-| 워커 (브라우저 스모크) | `python -m pytest -m browser` | **1 passed**, 73 deselected |
-| 대시보드 | `cd dashboard && npm run test -- --run` | **127 passed** (35 파일) |
+| 분석 엔진 | `cd engine && python -m pytest` | **181 passed**, 1 deselected |
+| 워커 (기본) | `cd worker && PYTHONPATH=../engine python -m pytest` | **137 passed**, 1 deselected |
+| 워커 (브라우저 스모크) | `python -m pytest -m browser` | **1 passed**, 137 deselected |
+| 대시보드 | `cd dashboard && npm run test -- --run` | **309 passed** (53 파일) |
 | 엔진 성능 (기본 제외) | `cd engine && python -m pytest -m perf` | **1 passed** (5.3절) |
 
-합계 **340건** (엔진 139 + 워커 73 + 브라우저 스모크 1 + 대시보드 127). 기본 스위트에서 제외되는
+합계 **628건** (엔진 181 + 워커 137 + 브라우저 스모크 1 + 대시보드 309). 기본 스위트에서 제외되는
 2건(엔진 perf, 워커 browser)은 별도 실행해 모두 통과를 확인했다.
 
 브라우저 스모크는 실제 Chromium을 띄워 PDF를 렌더링하는 테스트로, 보고서 생성 경로가 실물
@@ -665,9 +690,8 @@ MAX_UPLOAD_BYTES]`. 로컬 디스크에 저장하던 시절에는 대용량 파�
 | 29 | `set_current_analysis` 2단계 PATCH 비원자성 | 데모 단일 워커 환경에서는 수용. 정식 배포 시 단일 RPC로 원자화 필요 |
 
 전체 백로그는 [`superpowers/plans/2026-07-28-p1b-backlog-notes.md`](superpowers/plans/2026-07-28-p1b-backlog-notes.md)에
-52개 티켓으로 관리되고 있다. 최근 추가된 46~52번 중 발주처 판정 결과에 직접 영향을 주는 것은
-위 표의 46·47번이며, 나머지(48~52)는 업로드 검증 분리·링크 컨텍스트·타입 오류 정리 등 내부
-정비 항목이다.
+85번까지의 티켓으로 관리되고 있다. 그중 발주처 판정 결과에 직접 영향을 주는 것은 위 표의
+46·47번이다.
 
 ### 6.7 후속 과제 우선순위 제안
 
@@ -742,7 +766,7 @@ MAX_UPLOAD_BYTES]`. 로컬 디스크에 저장하던 시절에는 대용량 파�
 ## 8. 결론
 
 과업지시서 세부과업 1이 요구한 성과물 가·나·다 항목을 **미이행 0건**으로 구현했고, 본 문서로
-라 항목을 제출한다. 자동화 테스트 340건이 통과하며, 합성 데이터에서 ±1mm 정확도 게이트와
+라 항목을 제출한다. 자동화 테스트 628건이 통과하며, 합성 데이터에서 ±1mm 정확도 게이트와
 3천만 점 성능 게이트를 모두 충족한다.
 
 동시에 다음을 분명히 밝힌다.
