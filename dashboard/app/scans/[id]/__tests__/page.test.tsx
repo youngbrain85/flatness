@@ -101,6 +101,65 @@ describe('ScanPage 종류별 분석 섹션 배선 (단계 C 회귀 차단)', () 
 
     expect(buttons).toHaveLength(1);
     expect(buttons[0].props.kind).toBe('flatness');
+    // 리뷰 Important(I2): 버튼 개수만 세면 isImport 배선 자체는 검증되지 않는다.
+    // 이 값이 틀어지면 임포트 스캔 재분석이 'analyze' 잡으로 나가 Colab 편차값이
+    // 통째로 무시되고 전 셀이 조용히 "적합"이 된다(C1 사고 계열).
+    expect(buttons[0].props.isImport).toBe(true);
+  });
+
+  // 리뷰 Important(I1): isExternalImport는 engine_version/stats.meta.source로만
+  // 판별하는데, 워커는 이 값들을 잡이 '성공 완료'했을 때만 채운다
+  // (worker/flatworker/jobs.py). done이 아닌 임포트 분석에서는 isImport가 항상
+  // false로 오판되므로, showSlopeSection이 status==='done'까지 함께 보지 않으면
+  // 구배 버튼이 새고 게다가 재시도 소진 후에는 영구히 새는 상태가 된다
+  // (fn_job_fail은 잡 타입이 'analyze'일 때만 analyses.status를 건드린다 -
+  // 002_functions_seed.sql:88-90 - 이므로 import 잡이 실패해도 분석 행은 queued에
+  // 영구히 머문다).
+  it('I1 실험군 A: 임포트 분석이 queued(엔진 미착수)면 구배 버튼을 숨긴다', async () => {
+    const flatness = mkAnalysis({ id: 'f1', kind: 'flatness', status: 'queued', engine_version: null });
+    vi.mocked(createClient).mockResolvedValue(
+      stubSupabase(mkScan(), [flatness]) as never);
+
+    const el = await ScanPage({ params: Promise.resolve({ id: 'sc1' }) });
+    const buttons = findAll(el, ReanalyzeButton);
+
+    expect(buttons).toHaveLength(1);
+    expect(buttons[0].props.kind).toBe('flatness');
+  });
+
+  it('I1 실험군 B: 임포트 분석이 failed면 구배 버튼을 숨긴다', async () => {
+    const flatness = mkAnalysis({ id: 'f1', kind: 'flatness', status: 'failed', engine_version: null });
+    vi.mocked(createClient).mockResolvedValue(
+      stubSupabase(mkScan(), [flatness]) as never);
+
+    const el = await ScanPage({ params: Promise.resolve({ id: 'sc1' }) });
+    const buttons = findAll(el, ReanalyzeButton);
+
+    expect(buttons).toHaveLength(1);
+    expect(buttons[0].props.kind).toBe('flatness');
+  });
+
+  it('I1 실험군 C: 완료된 임포트 분석을 재분석해 새 행이 queued로 latest가 되면 구배 버튼을 숨긴다', async () => {
+    // 재분석(ReanalyzeButton)이 만드는 새 analyses 행은 status='queued'·
+    // engine_version=null로 시작한다(워커가 잡을 집어야 채워진다). 옛 완료 행이
+    // engine_version='external-colab-v1'을 갖고 있어도, latestFlatness는 created_at이
+    // 더 최근인 이 queued 행이 된다.
+    const requeued = mkAnalysis({
+      id: 'f2', kind: 'flatness', status: 'queued', engine_version: null,
+      created_at: '2026-07-25T00:00:00Z',
+    });
+    const doneImport = mkAnalysis({
+      id: 'f1', kind: 'flatness', status: 'done', engine_version: 'external-colab-v1',
+      created_at: '2026-07-20T00:00:00Z',
+    });
+    vi.mocked(createClient).mockResolvedValue(
+      stubSupabase(mkScan(), [requeued, doneImport]) as never);
+
+    const el = await ScanPage({ params: Promise.resolve({ id: 'sc1' }) });
+    const buttons = findAll(el, ReanalyzeButton);
+
+    expect(buttons).toHaveLength(1);
+    expect(buttons[0].props.kind).toBe('flatness');
   });
 
   it('평활도 첫 분석이 아직 없으면(analyses 없음) 구배 버튼도 함께 숨긴다', async () => {
@@ -137,7 +196,26 @@ describe('ScanPage 종류별 분석 섹션 배선 (단계 C 회귀 차단)', () 
     expect(slopeBtn?.props.siteId).toBe('site1');
   });
 
-  it('이전 분석 목록이 종류별로 나뉜다(섞이지 않는다)', async () => {
+  // 리뷰 Important(I4): 코드리뷰 M3("판정 기준 변경 후 다시 돌리기" 취지)의 핵심이다.
+  // 회귀하면 사용자가 스캔의 적용 기준을 바꿔도 재분석이 옛(분석 시점에 스냅샷된)
+  // 기준을 그대로 따라간다.
+  it('I4: 평활도 버튼의 criteriaId는 latestFlatness.criteria_id가 아니라 scan.selected_criteria_id를 우선한다', async () => {
+    const flatness = mkAnalysis({ id: 'f1', kind: 'flatness', criteria_id: 'old-snapshot-cr' });
+    vi.mocked(createClient).mockResolvedValue(
+      stubSupabase(mkScan({ selected_criteria_id: 'current-cr' }), [flatness]) as never);
+
+    const el = await ScanPage({ params: Promise.resolve({ id: 'sc1' }) });
+    const buttons = findAll(el, ReanalyzeButton);
+    const flatnessBtn = buttons.find((b) => b.props.kind === 'flatness');
+
+    expect(flatnessBtn?.props.criteriaId).toBe('current-cr');
+  });
+
+  // 리뷰 Important(M1): 링크 href의 평평한 집합만 보면 "평활도 섹션에 구배 이전
+  // 이력이, 구배 섹션에 평활도 이전 이력이 뜨는" 상태(확정 3이 막으려던 바로 그
+  // 상태)를 구별하지 못한다. <section> 요소별로 스코프를 나눠 검사한다 - 코드가
+  // 항상 평활도 섹션을 먼저, 구배 섹션을 나중에 그린다(app/scans/[id]/page.tsx).
+  it('이전 분석 목록이 종류별로 나뉜다(섞이지 않는다, 섹션별 귀속까지 확인)', async () => {
     const flatness2 = mkAnalysis({ id: 'flatness2', kind: 'flatness', created_at: '2026-07-28T00:00:00Z' });
     const slope2 = mkAnalysis({ id: 'slope2', kind: 'slope', created_at: '2026-07-27T00:00:00Z' });
     const flatness1 = mkAnalysis({ id: 'flatness1', kind: 'flatness', created_at: '2026-07-10T00:00:00Z' });
@@ -147,13 +225,13 @@ describe('ScanPage 종류별 분석 섹션 배선 (단계 C 회귀 차단)', () 
       stubSupabase(mkScan(), [flatness2, slope2, flatness1, slope1]) as never);
 
     const el = await ScanPage({ params: Promise.resolve({ id: 'sc1' }) });
-    const links = findAll(el, Link).map((l) => l.props.href);
+    const sections = findAll(el, 'section');
+    expect(sections).toHaveLength(2); // [0] 평활도, [1] 구배 (렌더 순서 고정)
+    const flatnessLinks = findAll(sections[0], Link).map((l) => l.props.href);
+    const slopeLinks = findAll(sections[1], Link).map((l) => l.props.href);
 
-    // 이전 분석 목록(각 종류의 latest를 제외한 나머지)에만 등장해야 한다.
-    expect(links).toContain('/analyses/flatness1');
-    expect(links).toContain('/analyses/slope1');
     // latest(가장 최근 1건)는 "이전 분석" 목록이 아니라 AnalysisProgress로만 표시된다.
-    expect(links).not.toContain('/analyses/flatness2');
-    expect(links).not.toContain('/analyses/slope2');
+    expect(flatnessLinks).toEqual(['/analyses/flatness1']);
+    expect(slopeLinks).toEqual(['/analyses/slope1']);
   });
 });

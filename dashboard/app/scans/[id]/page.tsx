@@ -54,7 +54,18 @@ export default async function ScanPage({ params }: { params: Promise<{ id: strin
   // 아직 준비되지 않았으면(단위 미확정 등) 애초에 첫 분석조차 없어 raw_file_path/
   // unit_scale이 갖춰지지 않았을 수 있으므로, 평활도 첫 분석이 이미 존재할 때만
   // 보여준다(latestFlatness가 이 화면에서 "분석 가능 상태"의 유일한 신호다).
-  const showSlopeSection = !!latestFlatness && s.surface === 'floor' && !isImport && !!loc;
+  //
+  // 리뷰 Important(I1): latestFlatness.status === 'done'도 반드시 함께 확인해야 한다.
+  // isExternalImport는 engine_version/stats.meta.source로 판별하는데, 워커는 이 값들을
+  // 잡이 성공적으로 끝났을 때만 채운다(worker/flatworker/jobs.py). 그래서 queued·
+  // processing·failed 상태의 임포트 분석에서는 isImport가 항상 false로 오판된다.
+  // 게다가 import 잡이 재시도 끝에 실패해도 fn_enqueue_job이 건 잡 타입이 'analyze'가
+  // 아니면 fn_job_fail이 analyses.status를 건드리지 않으므로(002_functions_seed.sql)
+  // 그 임포트 분석 행은 queued에 영구히 머문다 - status==='done' 체크 없이는 구배
+  // 버튼이 영구히 노출된 채 눌리면, 엔진이 편차 목록 CSV를 점군 리더로 잘못 읽어
+  // 형식만 멀쩡한 구배 결과를 만든다(C1과 같은 사고 계열).
+  const showSlopeSection = !!latestFlatness && latestFlatness.status === 'done'
+    && s.surface === 'floor' && !isImport && !!loc;
 
   return (
     <main className="mx-auto max-w-6xl space-y-4 p-6">

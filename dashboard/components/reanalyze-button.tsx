@@ -12,7 +12,8 @@
 //
 // is_current 전환은 여기서 손대지 않는다: 새 행은 기본값 is_current=false로
 // 들어가 analyses_current 부분 유니크(scan_id당 kind별 is_current=true 1개,
-// 001_schema.sql:177)와 충돌하지 않고, 분석이 완료되면 워커의
+// 007_slope_analysis.sql:28-30 - (scan_id) 단독이던 001_schema.sql:177의 인덱스를
+// (scan_id, kind)로 재정의했다)와 충돌하지 않고, 분석이 완료되면 워커의
 // handle_analyze/handle_import -> _finalize -> db.set_current_analysis가 기존
 // 현재 분석을 해제하고 새 분석을 현재로 세운다(worker/flatworker/jobs.py) -
 // 대시보드가 중복으로 처리할 필요가 없다.

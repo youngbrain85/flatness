@@ -23,7 +23,10 @@ function stubSupabase(opts: {
   insertSpy?: (fields: unknown) => void;
 } = {}) {
   const {
-    criteriaRows = [{ id: 'slope-crit-1', is_default: true }],
+    // 리뷰 Important(I3): 행이 하나뿐이면 rows[0]이든 rows[rows.length-1]이든 같은
+    // 값이 나와 "첫 행(is_default 기준)을 쓴다"는 요구사항(컨트롤러 보강 확정 1)이
+    // 검증되지 않는다. 두 번째 행을 더해 인덱싱 자체를 테스트 대상으로 만든다.
+    criteriaRows = [{ id: 'slope-crit-1', is_default: true }, { id: 'slope-crit-2', is_default: false }],
     criteriaError = null,
     enqueueError = null,
     rpcSpy = () => {},
