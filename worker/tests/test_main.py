@@ -10,6 +10,7 @@ import 체인이 `__main__.py -> flatworker.runner -> flatworker.jobs -> flatnes
 흉내낼 수 있게 한다 - 진짜 ImportError를 재현하려면 sys.modules 조작이 필요해
 취약하므로, 주입 가능한 콜러블로 대체해 결정론적으로 검증한다(브리프 "테스트 방향" 절).
 """
+from flatness import ENGINE_VERSION
 from flatworker.__main__ import main
 
 
@@ -32,7 +33,7 @@ def test_main_prints_engine_version_local_backend(monkeypatch, tmp_path, capsys)
     assert "[flatworker] 시작:" in out
     assert "storage_backend=local" in out
     assert "data_dir=" in out
-    assert "engine_version=" in out
+    assert f"engine_version={ENGINE_VERSION}" in out
 
 
 def test_main_prints_engine_version_supabase_backend(monkeypatch, tmp_path, capsys):
@@ -42,7 +43,7 @@ def test_main_prints_engine_version_supabase_backend(monkeypatch, tmp_path, caps
     out = capsys.readouterr().out
     assert code == 0
     assert "storage_backend=supabase" in out
-    assert "engine_version=" in out
+    assert f"engine_version={ENGINE_VERSION}" in out
     # 기존 동작 유지: supabase 백엔드는 data_dir를 출력하지 않는다
     assert "data_dir=" not in out
 

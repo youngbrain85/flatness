@@ -6,7 +6,10 @@
 >
 > **대상 독자**: 엔진 내부 구현을 모르는 프론트엔드(P3 대시보드)·보고서(P4)·워커 개발자.
 > **ENGINE_VERSION**: `engine/flatness/__init__.py`의 `ENGINE_VERSION` 상수(현재 `p4-0.5.0`). `stats.meta.engine_version`이
-> 이 값을 그대로 담는다(단, §2의 "임포트 경로" 예외 참고).
+> 이 값을 그대로 담는다(단, §2의 "임포트 경로" 예외 참고). **이 문서는 floor/wall/import 세 경로만 다룬다** -
+> 구배(slope) stats는 `meta` 키 자체가 없어 `stats.meta.engine_version` 경로가 존재하지 않는다. 구배 분석의
+> 엔진 버전은 오직 `analyses.engine_version` 컬럼으로만 흐른다(`dashboard/components/analysis/slope-placeholder.tsx`
+> 상단 주석 참고).
 >
 > 이 문서의 모든 표는 아래 소스를 라인 단위로 대조해 작성했다(대조 방법·결과는 커밋 메시지 본문 참고):
 > `engine/flatness/outputs/stats.py`, `engine/flatness/core/pipeline.py`, `engine/flatness/core/cells.py`,

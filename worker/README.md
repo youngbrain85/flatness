@@ -44,10 +44,15 @@ cd worker
 python -m flatworker
 ```
 
-정상 기동 시 `[flatworker] 시작: worker_id=..., storage_backend=..., poll_interval=...s` 로그가
-찍히고, 이후 잡 큐를 폴링한다. `data_dir=...`는 `STORAGE_BACKEND=local`일 때만 함께 찍힌다
-(supabase 백엔드는 이 경로를 쓰지 않는다). 종료는 Ctrl+C(SIGINT) — 처리 중인 잡을 끝까지 마친
-뒤 다음 클레임 직전에 멈춘다(잡을 반쯤 처리한 상태로 죽지 않는다).
+정상 기동 시 `[flatworker] 시작: worker_id=..., storage_backend=..., poll_interval=...s,
+engine_version=...` 로그가 찍히고, 이후 잡 큐를 폴링한다. `data_dir=...`는
+`STORAGE_BACKEND=local`일 때만 함께 찍힌다(supabase 백엔드는 이 경로를 쓰지 않는다).
+종료는 Ctrl+C(SIGINT) — 처리 중인 잡을 끝까지 마친 뒤 다음 클레임 직전에 멈춘다(잡을
+반쯤 처리한 상태로 죽지 않는다).
+
+엔진에 `analyze_slope`가 없는 상태(엔진보다 워커를 먼저 배포한 경우)로 기동하면 위 로그
+대신 `[flatworker] 엔진 모듈을 불러올 수 없습니다: ...`가 찍히고 종료 코드 1로 죽는다 -
+`pip install -e ../engine`으로 최신 엔진이 이 워커와 같은 가상환경에 설치됐는지 확인한다.
 
 ## 테스트
 

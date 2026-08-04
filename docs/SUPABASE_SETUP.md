@@ -239,7 +239,7 @@ select id, file_size_limit from storage.buckets;
 4. 시작 로그 확인:
 
    ```
-   [flatworker] 시작: worker_id=local-1, storage_backend=local, data_dir=..\data, poll_interval=3.0s
+   [flatworker] 시작: worker_id=local-1, storage_backend=local, data_dir=..\data, poll_interval=3.0s, engine_version=p4-0.5.0
    ```
 
    이 로그가 찍히고 프로세스가 종료되지 않은 채 대기 중이면 설정·연결이 정상이다(잡

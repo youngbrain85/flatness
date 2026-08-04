@@ -266,7 +266,7 @@
     남기는 부채다
 
 63. **`slope_cells.csv`가 `utf-8-sig`(BOM)인데 평활도 `results.csv`는 `utf-8`이다** —
-    단계 D에서 CSV를 파싱하면 첫 열 이름이 `﻿cx`로 읽힌다
+    단계 D에서 CSV를 파싱하면 첫 열 이름이 `\ufeffcx`로 읽힌다
 
 64. **구배에는 `cells.json`에 해당하는 파일이 없다** — 단계 D의 셀 표는
     `slope_cells.csv` 파싱이 필요하다
