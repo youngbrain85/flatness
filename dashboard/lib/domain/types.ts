@@ -117,14 +117,17 @@ export interface CellRow {
   worst_x: number | null; worst_y: number | null; zone_id: number | null;
 }
 
+// 엔진이 한국어 등급 문자열을 그대로 키로 쓴다(engine/flatness/core/slope.py GRADE_*).
+// slope-heatmap.ts의 색 매핑과 SlopeSummary.counts가 이 타입을 공유한다.
+export type SlopeGrade = '적합' | '경계' | '보수' | '재시공' | '판정불가';
+
 // ---- 구배(slope) stats.json (engine/flatness/core/pipeline.py analyze_slope 반환값과 동일한 형태.
 // 워커가 artifacts 경로만 버킷-상대로 치환해 저장한다) ----
 export interface SlopeSummary {
   mean_dev_pct: number | null;
   std_dev_pct: number | null;
   max_dev_pct: number | null;
-  // 엔진이 한국어 등급 문자열을 그대로 키로 쓴다(engine/flatness/core/slope.py GRADE_*)
-  counts: Record<'적합' | '경계' | '보수' | '재시공' | '판정불가', number>;
+  counts: Record<SlopeGrade, number>;
   coverage_pct: number;
 }
 
@@ -137,7 +140,26 @@ export interface SlopeStats {
   direction_judged: boolean;
   drain_points: [number, number][] | null;
   warnings: string[];
-  artifacts: { cells_csv: string; map_png: string };
+  // cells_json은 재판정(§7.3) 입력이자 이 태스크(브라우저 히트맵)의 데이터 소스다.
+  // 단계 C까지 만들어진 분석에는 이 키가 없다(브리프 D7) - 옵셔널로 둬서 화면이
+  // 그 부재를 명시적으로 다루게 강제한다(CSV 근사 복원 금지).
+  artifacts: { cells_json?: string; cells_csv: string; map_png: string };
+}
+
+// ---- slope_cells.json (engine/flatness/outputs/slope_cells.py 왕복 직렬화, schema_version=2)
+// 재판정 입력이자 화면 히트맵 재구성 입력. 판정 결과(grade 등)는 담지 않는다(브리프 D1) -
+// SlopeCell 13필드(기하 정보)만 반올림 없이 담긴다. slope_pct/downhill_rad/rmse_m/se_pct는
+// ok=false 셀에서 엔진이 NaN -> null로 치환해 낸다(_NAN_FIELDS).
+export interface SlopeCellRow {
+  cx: number; cy: number; center_x: number; center_y: number; n_subcells: number;
+  slope_pct: number | null; downhill_rad: number | null;
+  rmse_m: number | null; se_pct: number | null;
+  width_m: number; height_m: number; ok: boolean; zone_id: number | null;
+}
+
+export interface SlopeCellsFile {
+  schema_version: number; engine_version: string; cell_m: number; subcell_m: number;
+  cells: SlopeCellRow[];
 }
 
 // ---- 보고서 (001_schema.sql reports + 004_report_support.sql) ----
