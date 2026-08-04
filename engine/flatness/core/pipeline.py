@@ -168,19 +168,32 @@ def analyze_wall(path, scale_to_m, criterion, u_mm, out_dir,
     return stats
 
 
-def judge_slope_cells(cells, threshold, out_dir, drain_points=None, cell_m=2.0,
-                      subcell_m=0.05):
+def judge_slope_cells(cells, threshold, out_dir, cell_m, drain_points=None,
+                      subcell_m=0.05, cells_json_path=None):
     """이미 산출된 셀 벡터 + 배수구 좌표로 판정만 다시 한다(점군 미열람, 스펙 §7.3).
 
     analyze_slope의 판정~산출물 단계(grade -> summary -> csv -> png -> stats.json)를
     그대로 옮긴 것이다 - 재판정 잡(slope_judge)이 slope_cells.json에서 복원한
     cells를 이 함수에 바로 넘기면 점군을 다시 읽지 않고 몇 초 안에 끝난다.
 
+    cell_m은 기본값 없는 필수 인자다(Task 1 리뷰 I1). grade_slope_cells의 조각
+    셀 판정불가 사유 분기(`width_m < cell_m/2`)와 render_slope_map의 화살표
+    길이가 전부 cell_m에 의존하는데, 기본값이 있으면 재판정 호출부가 원 분석과
+    다른 cell_m(예: --cell 4.0으로 분석한 것을 fallback 2.0으로 재판정)을 조용히
+    쓸 수 있다 - CSV 근사 복원을 배제한 바로 그 결함(D1)이 JSON 경로에서
+    재현되는 것이다. 필수 인자로 만들면 잊었을 때 즉시 TypeError로 드러난다.
+    호출부는 `load_slope_cells`가 돌려주는 meta["cell_m"]을 그대로 넘기면 된다.
+
     slope_cells.json은 이 함수가 새로 쓰지 않는다. 호출자(analyze_slope 또는
     재판정 잡)가 이미 그 파일에서 cells를 얻었거나 직접 만들었으므로 여기서 다시
     쓸 이유가 없다 - 재판정마다 무손실 원본을 덮어쓰면 입력 자체가 흔들릴 위험만
-    생긴다. artifacts.cells_json은 out_dir 안에 이미 있는 파일을 참조만 한다
-    (파일명은 analyze_slope와 공유하는 고정 관례: slope_cells.json).
+    생긴다. cells_json_path를 주면 artifacts.cells_json에 그 경로를 그대로
+    싣는다(analyze_slope가 dump_slope_cells에 쓴 경로와 동일한 값을 넘긴다).
+    안 주면 out_dir 관례(slope_cells.json)로 추정하지만, 이 함수 자신은 그
+    파일을 로컬에서 열어 보지 않으므로 실제로 거기 있다는 보장은 호출자 책임이다
+    (Task 1 리뷰 M4 - 재판정의 out_dir에는 로컬에 csv/png/stats만 새로 생기고
+    slope_cells.json은 스토리지에서 온 것일 수 있어, 경로를 호출자가 알면
+    그대로 넘기는 편이 관례 추정보다 안전하다).
     """
     import csv
     import json
@@ -191,6 +204,8 @@ def judge_slope_cells(cells, threshold, out_dir, drain_points=None, cell_m=2.0,
     from flatness.outputs.slope_map import render_slope_map
 
     os.makedirs(out_dir, exist_ok=True)
+    if cells_json_path is None:
+        cells_json_path = os.path.join(out_dir, "slope_cells.json")
     graded = grade_slope_cells(cells, threshold, drain_points=drain_points,
                                cell_m=cell_m)
     summary = slope_summary(graded)
@@ -235,7 +250,7 @@ def judge_slope_cells(cells, threshold, out_dir, drain_points=None, cell_m=2.0,
              "drain_points": ([[round(float(x), 3), round(float(y), 3)]
                                for x, y in drain_points] if drain_points else None),
              "warnings": warnings,
-             "artifacts": {"cells_json": os.path.join(out_dir, "slope_cells.json"),
+             "artifacts": {"cells_json": cells_json_path,
                            "cells_csv": csv_path, "map_png": png_path}}
     stats_path = os.path.join(out_dir, "slope_stats.json")
     with open(stats_path, "w", encoding="utf-8") as f:
@@ -269,9 +284,13 @@ def analyze_slope(path, scale_to_m, threshold, out_dir, subcell_m=0.05,
     cells = compute_slope_cells(grid, cell_m=cell_m)
 
     # 재판정(§7.3) 입력. 점군을 다시 읽지 않고 이 파일만 읽어 판정하려면
-    # 반올림 없는 원본 셀 벡터가 그대로 남아 있어야 한다(브리프 D1).
-    dump_slope_cells(cells, os.path.join(out_dir, "slope_cells.json"),
-                     engine_version=ENGINE_VERSION)
+    # 반올림 없는 원본 셀 벡터가 그대로 남아 있어야 한다(브리프 D1). cell_m·
+    # subcell_m도 함께 싣는다 - 재판정이 이 값을 다시 몰라서 기본값으로
+    # 조용히 어긋나는 것을 막기 위해서다(Task 1 리뷰 I1).
+    cells_json_path = os.path.join(out_dir, "slope_cells.json")
+    dump_slope_cells(cells, cells_json_path, engine_version=ENGINE_VERSION,
+                     cell_m=cell_m, subcell_m=subcell_m)
 
-    return judge_slope_cells(cells, threshold, out_dir, drain_points=drain_points,
-                             cell_m=cell_m, subcell_m=subcell_m)
+    return judge_slope_cells(cells, threshold, out_dir, cell_m,
+                             drain_points=drain_points, subcell_m=subcell_m,
+                             cells_json_path=cells_json_path)
