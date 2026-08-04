@@ -208,3 +208,93 @@ def test_reap_stuck_jobs_covers_import_and_report():
     assert db.reap_stuck_jobs(timeout_minutes=30) == 2
     assert db.analyses["a1"]["status"] == "queued"
     assert db.reports["r1"]["gen_status"] == "queued"
+
+
+def test_slope_judge_job_status_propagates_to_params_judge_without_touching_status():
+    """009_slope_judge_functions.sql의 fn_job_claim/fn_job_fail이 type='slope_judge'
+    이고 payload.analysis_id가 있으면 analyses.params.judge(jsonb)만 전이하는
+    부수효과를 FakeDB도 그대로 모사해야 한다: 클레임 -> processing, 재시도 여지
+    있는 실패 -> queued(+error), max_attempts 소진 실패 -> failed(+error).
+
+    **analyses.status는 이 잡 타입 때문에 절대 바뀌면 안 된다**(설계 결정 D5) -
+    analyze/import와 달리 이미 done인 구배 결과 화면을 감춰선 안 되기 때문이다.
+    매 단계마다 status가 'done' 그대로인지 함께 확인한다.
+    """
+    db = FakeDB()
+    db.analyses["a1"] = {"id": "a1", "status": "done",
+                         "params": {"drain_points": [{"x": 1.0, "y": 2.0}]}}
+    jid = db.enqueue_job("slope_judge", {"analysis_id": "a1"})
+
+    # 1·2번째 클레임+실패: 재시도 여지가 있어 queued(+error)로 복귀
+    for i in range(2):
+        job = db.claim_job(ignore_backoff=True)
+        assert job is not None, f"{i+1}번째 클레임 실패"
+        assert db.analyses["a1"]["params"]["judge"]["state"] == "processing"
+        assert "error" not in db.analyses["a1"]["params"]["judge"]  # 클레임엔 error가 없다
+        assert db.analyses["a1"]["status"] == "done"  # 절대 안 바뀜
+        db.fail_job(jid, f"판정 실패{i}")
+        assert db.analyses["a1"]["params"]["judge"]["state"] == "queued"
+        assert db.analyses["a1"]["params"]["judge"]["error"] == f"판정 실패{i}"
+        assert db.analyses["a1"]["status"] == "done"
+
+    # drain_points(형제 키)는 judge 전이와 무관하게 유지돼야 한다(jsonb_set이
+    # 'judge' 키만 갈아끼운다 - 009 SQL 주석 원문 그대로).
+    assert db.analyses["a1"]["params"]["drain_points"] == [{"x": 1.0, "y": 2.0}]
+
+    # 3번째(마지막) 클레임+실패: max_attempts(3) 소진 -> judge만 failed, status는 그대로
+    job = db.claim_job(ignore_backoff=True)
+    assert job is not None
+    assert db.analyses["a1"]["params"]["judge"]["state"] == "processing"
+    db.fail_job(jid, "판정 실패2")
+    assert db.jobs[jid]["status"] == "failed"
+    assert db.analyses["a1"]["params"]["judge"]["state"] == "failed"
+    assert db.analyses["a1"]["params"]["judge"]["error"] == "판정 실패2"
+    assert db.analyses["a1"]["status"] == "done"
+
+
+def test_slope_judge_complete_job_does_not_touch_params_judge():
+    """fn_job_complete는 params를 건드리지 않는다 - judge.state='done'은 워커
+    핸들러(handle_slope_judge)가 stats 등 다른 파생 컬럼과 함께 직접 쓴다
+    (analyses/reports와 동일한 책임 분담 관례)."""
+    db = FakeDB()
+    db.analyses["a1"] = {"id": "a1", "status": "done", "params": {}}
+    jid = db.enqueue_job("slope_judge", {"analysis_id": "a1"})
+    db.claim_job(ignore_backoff=True)
+    db.complete_job(jid)
+    assert db.jobs[jid]["status"] == "done"
+    assert db.analyses["a1"]["params"]["judge"]["state"] == "processing"  # complete_job은 손대지 않음
+
+
+def test_reap_stuck_jobs_requeues_slope_judge_only_when_judge_processing():
+    """fn_reap_stuck_jobs(009_slope_judge_functions.sql)의 slope_judge 3단계
+    시맨틱: analyses.status는 항상 'done'이라 analyze/import 조건(a.status==
+    'processing')으로는 걸리지 않는다 - 대신 judge.state가 'processing'인 행만
+    골라 'queued'로 되돌린다. analyses.status는 여기서도 절대 건드리지 않는다.
+    """
+    db = FakeDB()
+    db.analyses["a1"] = {"id": "a1", "status": "done", "params": {}}
+    jid = db.enqueue_job("slope_judge", {"analysis_id": "a1"})
+    db.claim_job()  # judge.state -> processing
+    db.jobs[jid]["locked_at"] = datetime.now(timezone.utc) - timedelta(minutes=31)  # 고착 재현
+
+    n = db.reap_stuck_jobs()  # 기본 timeout_minutes=30
+
+    assert n == 1
+    assert db.jobs[jid]["status"] == "queued"
+    assert db.analyses["a1"]["params"]["judge"]["state"] == "queued"
+    assert db.analyses["a1"]["status"] == "done"  # 절대 안 바뀜
+
+
+def test_reap_stuck_jobs_leaves_slope_judge_untouched_when_judge_not_processing():
+    """이미 done/failed로 종결된 judge 채널은 reap이 건드리면 안 된다 - 성공한
+    재판정 결과를 이유 없이 'queued'로 되돌리는 조용한 회귀를 막는다."""
+    db = FakeDB()
+    db.analyses["a1"] = {"id": "a1", "status": "done",
+                         "params": {"judge": {"state": "done", "at": "2026-01-01T00:00:00Z"}}}
+    # queued 잡 하나를 남겨 reap의 3단계(quued·slope_judge 잡 순회) 대상에 놓는다.
+    db.enqueue_job("slope_judge", {"analysis_id": "a1"})
+
+    n = db.reap_stuck_jobs()
+
+    assert n == 0
+    assert db.analyses["a1"]["params"]["judge"]["state"] == "done"  # 그대로 유지

@@ -24,6 +24,14 @@ max_attempts에 도달하면 'failed'로 종결, 그렇지 않으면
   fn_job_fail은 재시도 여지가 있으면 'queued'/소진이면 'failed'로 하고 양쪽 모두
   gen_error에 오류 메시지를 남긴다. fn_job_complete는 reports를 건드리지 않는다
   (gen_status='done'은 워커가 update_report로 직접 쓴다).
+- type이 'slope_judge'이고 payload.analysis_id가 있으면 연결된 analyses.params.judge
+  (jsonb)를 전이한다(009_slope_judge_functions.sql 신규, 세부과업 4 단계 D) -
+  fn_job_claim은 'processing', fn_job_fail은 재시도 여지가 있으면 'queued'(+error)/
+  소진이면 'failed'(+error), fn_reap_stuck_jobs는 judge.state가 'processing'인
+  행만 골라 'queued'로 되돌린다. **analyses.status는 slope_judge 때문에 절대
+  건드리지 않는다** - 이미 done인 구배 결과 화면을 감추면 안 된다(설계 결정 D5).
+  fn_job_complete는 params를 건드리지 않는다 - judge.state='done'은 워커
+  핸들러(handle_slope_judge)가 stats 등 다른 파생 컬럼과 함께 직접 쓴다.
 """
 from datetime import datetime, timedelta, timezone
 from itertools import count
@@ -103,6 +111,31 @@ class FakeDB(DBClient):
         report["gen_status"] = status
         report["gen_error"] = error
 
+    def _sync_slope_judge_state(self, job, state, error=None):
+        """type='slope_judge' + payload.analysis_id 잡의 analyses.params.judge
+        부수효과.
+
+        fn_job_claim/fn_job_fail(009_slope_judge_functions.sql)의
+        `elsif v_job.type = 'slope_judge' ... jsonb_set(params, '{judge}',
+        jsonb_build_object(...), true)`를 그대로 옮긴 것 - 형제 키인
+        'drain_points'는 건드리지 않고(jsonb_set이 'judge' 키만 갈아끼움),
+        analyses.status는 여기서도 절대 건드리지 않는다. error가 없으면(클레임·
+        재큐 성공 경로) SQL의 jsonb_build_object처럼 'error' 키 자체를 생략한다 -
+        무조건 None을 넣으면 실제 jsonb_set이 만드는 2키 객체({state, at})와
+        모양이 달라져 "error 키가 항상 존재하는가"를 잘못 검증하게 된다.
+        """
+        if job["type"] != "slope_judge" or "analysis_id" not in job["payload"]:
+            return
+        analysis = self.analyses.get(job["payload"]["analysis_id"])
+        if analysis is None:
+            return
+        params = dict(analysis.get("params") or {})
+        judge = {"state": state, "at": _now().isoformat()}
+        if error is not None:
+            judge["error"] = error
+        params["judge"] = judge
+        analysis["params"] = params
+
     # -- 잡 큐 -----------------------------------------------------------
     def reap_stuck_jobs(self, timeout_minutes=30):
         """fn_reap_stuck_jobs(004_report_support.sql, 002_functions_seed.sql을 티켓
@@ -148,6 +181,23 @@ class FakeDB(DBClient):
             report = self.reports.get(job["payload"]["report_id"])
             if report is not None and report["gen_status"] == "processing":
                 report["gen_status"] = "queued"
+        # slope_judge: analyses.status는 항상 'done'이라 위 analyze/import 조건
+        # (a.status == 'processing')으로는 걸리지 않는다(009_slope_judge_functions.sql).
+        # 대신 judge 채널이 'processing'이던 행만 골라 되돌린다 - analyses.status는
+        # 여기서도 건드리지 않는다.
+        for job in self.jobs.values():
+            if job["status"] != "queued" or job["type"] != "slope_judge":
+                continue
+            if "analysis_id" not in job["payload"]:
+                continue
+            analysis = self.analyses.get(job["payload"]["analysis_id"])
+            if analysis is None:
+                continue
+            judge = (analysis.get("params") or {}).get("judge") or {}
+            if judge.get("state") == "processing":
+                params = dict(analysis.get("params") or {})
+                params["judge"] = {"state": "queued", "at": _now().isoformat()}
+                analysis["params"] = params
         return reaped_count
 
     def enqueue_job(self, type_, payload):
@@ -186,6 +236,7 @@ class FakeDB(DBClient):
         job["started_at"] = job["started_at"] or now
         self._sync_linked_analysis_status(job, "processing")
         self._sync_linked_report_status(job, "processing", None)
+        self._sync_slope_judge_state(job, "processing")
         return dict(job)
 
     def complete_job(self, job_id):
@@ -204,12 +255,14 @@ class FakeDB(DBClient):
             self._sync_linked_analysis_status(job, "failed")
             self._sync_linked_scan_status_on_fail(job, "failed")
             self._sync_linked_report_status(job, "failed", error)
+            self._sync_slope_judge_state(job, "failed", error)
         else:
             job["status"] = "queued"
             job["run_after"] = _now() + timedelta(seconds=10 * job["attempts"])
             self._sync_linked_analysis_status(job, "queued")
             self._sync_linked_scan_status_on_fail(job, "uploaded")
             self._sync_linked_report_status(job, "queued", error)
+            self._sync_slope_judge_state(job, "queued", error)
         job["locked_at"] = None
         job["locked_by"] = None
 

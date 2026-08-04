@@ -6,9 +6,10 @@ analyze/import/report는 실패 시 예외를 그대로 전파한다: 잡 상태
 from pathlib import Path
 
 from flatness.criteria import Criterion
-from flatness.core.pipeline import analyze_floor, analyze_wall
+from flatness.core.pipeline import analyze_floor, analyze_wall, judge_slope_cells
 from flatness.importer.colab_csv import import_colab_csv
 from flatness.importer.json_import import import_json
+from flatness.outputs.slope_cells import load_slope_cells
 
 from flatworker import slope
 from flatworker.artifacts import staging_dir
@@ -165,6 +166,63 @@ def handle_analyze(db, cfg, payload):
     # 걸러짐), 세 번째 kind가 추가되면 이 자리에서 _finalize의 기본값
     # 'flatness'로 조용히 떨어져 kind 불일치 0행 매칭을 일으킬 수 있다.
     _finalize(db, analysis_id, analysis["scan_id"], stats, kind=kind)
+
+
+def handle_slope_judge(db, cfg, payload):
+    """재판정 잡 처리 (스펙 §7.3, §6.4) - 이미 산출된 slope_cells.json만 읽어
+    판정을 다시 한다. 점군을 열지 않으므로 가볍다(수 초).
+
+    브리프 함정 1: 배수구 좌표는 `analyses.params`가 아니라 이 payload에서 읽는다.
+    잡 처리 시점에 params를 읽으면, 이 잡이 클레임된 뒤 사용자가 다른 배수구를
+    다시 클릭해 params가 갱신된 경합 상황에서 "방금 클릭한 좌표"가 아니라 "그
+    사이에 바뀐 좌표"로 판정해 버릴 수 있다(태스크 브리프 D4 실측 시나리오).
+
+    브리프 함정 2: `_finalize`를 쓰지 않는다(위 주석 참고) - set_current_analysis를
+    부르면 과거(is_current=false) 구배 분석을 재판정했을 때 현재 분석이 바뀐다.
+    analyses.status도 건드리지 않는다 - 009가 이미 잡 큐 함수 3종(fn_job_claim/
+    fn_job_fail/fn_reap_stuck_jobs)에서 진행 상태를 params.judge로만 옮기는
+    규약을 세웠다(설계 결정 D5) - 워커도 같은 규약을 따라야 진행 상태 표시가
+    어긋나지 않는다.
+
+    브리프 함정 3: 단계 C까지 만들어진 구배 분석에는 slope_cells.json이 없다
+    (재판정 입력이 이번 단계에 새로 생긴 산출물이므로). 화면이 이 경우를 미리
+    막지만(설계 결정 D7) 워커도 명확한 한국어 예외로 방어한다.
+    """
+    analysis_id = payload["analysis_id"]
+    analysis, criteria_row, threshold = slope.slope_judge_context(db, analysis_id)
+
+    stats_prev = analysis.get("stats") or {}
+    cells_json_key = (stats_prev.get("artifacts") or {}).get("cells_json")
+    if not cells_json_key:
+        raise ValueError("이 분석에는 셀 데이터 파일이 없습니다. 구배 분석을 다시 실행하세요.")
+
+    # 원 analyze_slope가 쓴 격자 크기를 그대로 물려받는다 - 재판정마다 다른 cell_m을
+    # 쓰면 이미 산출된 셀(고정된 width_m/height_m)과 렌더·판정 단위가 어긋난다.
+    cell_m = stats_prev.get("cell_m", 2.0)
+    subcell_m = stats_prev.get("subcell_m", 0.05)
+
+    drain_points_raw = payload.get("drain_points") or []
+    drain_points = slope.slope_drain_points({"drain_points": drain_points_raw})
+
+    storage = get_storage(cfg, db)
+    with staging_dir() as work:
+        out_dir = work / "out"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        # slope_cells.json을 out_dir 안에 내려받는다 - judge_slope_cells가 이
+        # 파일을 새로 쓰지 않고 참조만 하므로(artifacts.cells_json), 여기서 미리
+        # 자리를 잡아둬야 뒤이은 upload_dir로 함께 올라가 다음 재판정도 이어진다.
+        cells_path = out_dir / "slope_cells.json"
+        if not storage.download_to(cells_json_key, cells_path):
+            raise ValueError(f"셀 데이터 파일을 저장소에서 찾을 수 없습니다: {cells_json_key}")
+        cells = load_slope_cells(cells_path)
+        judged_stats = judge_slope_cells(cells, threshold, out_dir,
+                                         drain_points=drain_points,
+                                         cell_m=cell_m, subcell_m=subcell_m)
+        storage.upload_dir(f"artifacts/{analysis_id}", out_dir)
+
+    fields = slope.build_slope_judge_fields(
+        judged_stats, analysis_id, analysis.get("params"), drain_points_raw)
+    db.update_analysis(analysis_id, fields)
 
 
 # 확장자 -> 임포터 함수. 두 임포터 모두 (path, criterion, u_mm, out_dir) 시그니처와

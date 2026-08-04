@@ -3,7 +3,13 @@
 평활도와 잡 타입을 공유한다(analyze). 워커가 analysis_id로 행을 읽으므로 종류가
 그 안에 들어 있고, 잡 타입을 새로 만들 이유가 없다. 다만 엔진 입력·stats 스키마·
 판정 어휘가 전부 달라서 경로를 분리한다.
+
+재판정(slope_judge, 스펙 §7.3)도 이 모듈이 함께 다룬다 - analyze와 조회/변환
+로직(criteria kind 검사·drain_points 변환·stats 정규화·overall_verdict 매핑)을
+그대로 공유하기 때문이다.
 """
+from datetime import datetime, timezone
+
 from flatness import ENGINE_VERSION
 from flatness.core.pipeline import analyze_slope
 
@@ -53,6 +59,22 @@ def normalize_slope_stats(stats, analysis_id):
     return out
 
 
+def _require_slope_criteria(criteria_row, analysis_id, criteria_id):
+    """criteria_row.kind가 'slope'가 아니면 명시적으로 거부한다(공유 검사).
+
+    코드리뷰 재검토(M4): 여기서 막지 않으면 평활도 기준 행이 잘못 연결됐을 때
+    grade_slope_cells 안쪽 깊은 곳에서 KeyError: 'design_pct'로 죽어 원인
+    파악이 어렵다. 여기서 명시적으로 거부하면 진단이 쉬워진다. slope_context
+    (analyze)와 slope_judge_context(재판정) 양쪽이 공유한다.
+    """
+    if criteria_row.get("kind") != "slope":
+        raise ValueError(
+            f"구배 분석(analysis_id={analysis_id})에 kind='slope'가 아닌 기준이 "
+            f"연결되어 있습니다: criteria_id={criteria_id}, "
+            f"criteria.kind={criteria_row.get('kind')!r}"
+        )
+
+
 def slope_context(db, analysis_id):
     """analysis -> scan -> criteria 순으로 로드해 구배 엔진 입력을 만들어 반환.
 
@@ -65,18 +87,62 @@ def slope_context(db, analysis_id):
     analysis = db.get_analysis(analysis_id)
     scan = db.get_scan(analysis["scan_id"])
     criteria_row = db.get_criteria(analysis["criteria_id"])
-    if criteria_row.get("kind") != "slope":
-        # 코드리뷰 재검토(M4): 여기서 막지 않으면 평활도 기준 행이 잘못 연결됐을 때
-        # grade_slope_cells 안쪽 깊은 곳에서 KeyError: 'design_pct'로 죽어 원인
-        # 파악이 어렵다. 여기서 명시적으로 거부하면 진단이 쉬워진다.
-        raise ValueError(
-            f"구배 분석(analysis_id={analysis_id})에 kind='slope'가 아닌 기준이 "
-            f"연결되어 있습니다: criteria_id={analysis['criteria_id']}, "
-            f"criteria.kind={criteria_row.get('kind')!r}"
-        )
+    _require_slope_criteria(criteria_row, analysis_id, analysis["criteria_id"])
     threshold = criteria_row["thresholds"][0]
     drain_points = slope_drain_points(analysis.get("params"))
     return analysis, scan, criteria_row, threshold, drain_points
+
+
+def slope_judge_context(db, analysis_id):
+    """재판정(slope_judge) 잡의 analysis -> criteria -> threshold 로딩.
+
+    slope_context와 달리 scan을 읽지 않는다 - 재판정은 점군을 다시 열지 않으므로
+    (스펙 §7.3) scan 행이 필요 없다. drain_points도 여기서 읽지 않는다 - 브리프
+    함정 1: 잡 처리 시점에 analyses.params를 읽으면, 이 잡이 클레임된 뒤 사용자가
+    다른 배수구를 다시 클릭해 params가 갱신된 경우 그 새 좌표로 판정해 버리는
+    경합이 생긴다. 좌표는 반드시 호출자가 payload에서 읽어 넘겨야 한다.
+    """
+    analysis = db.get_analysis(analysis_id)
+    criteria_row = db.get_criteria(analysis["criteria_id"])
+    _require_slope_criteria(criteria_row, analysis_id, analysis["criteria_id"])
+    threshold = criteria_row["thresholds"][0]
+    return analysis, criteria_row, threshold
+
+
+def _iso_now():
+    """UTC 현재 시각을 초 단위 ISO-8601('...Z')로. report/snapshot.py와 같은 관례."""
+    return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+
+
+def build_slope_judge_fields(stats, analysis_id, old_params, drain_points_raw):
+    """재판정 결과(judge_slope_cells의 stats) -> analyses 갱신 필드 dict.
+
+    브리프 함정 2: `_finalize`를 쓰지 않는다 - 그 함수는 set_current_analysis를
+    불러 과거(is_current=false) 구배 분석을 재판정해도 현재 분석 포인터를
+    바꿔버린다. 갱신 대상은 stats·coverage_pct·overall_verdict·warnings·params
+    뿐이다 - status는 여기서도 절대 건드리지 않는다(009가 잡 큐 함수 3종에서
+    이미 그 규약을 세웠다 - 설계 결정 D5).
+
+    params는 PATCH가 전체 컬럼을 통째로 대체하므로(부분 병합이 아님) 기존
+    params를 복사해 drain_points·judge 두 키만 갱신한 새 dict를 만들어 돌려준다.
+    직전 drain_points는 judge.previous_drain_points에 남긴다(설계 결정 D8) -
+    산출물이 x-upsert:true로 무조건 덮이므로 이전 판정을 되돌릴 유일한 단서다.
+    """
+    old_params = dict(old_params or {})
+    new_params = dict(old_params)
+    new_params["drain_points"] = drain_points_raw
+    new_params["judge"] = {
+        "state": "done",
+        "at": _iso_now(),
+        "previous_drain_points": old_params.get("drain_points"),
+    }
+    return {
+        "stats": normalize_slope_stats(stats, analysis_id),
+        "coverage_pct": stats["summary"]["coverage_pct"],
+        "overall_verdict": slope_overall_verdict(stats),
+        "warnings": stats["warnings"],
+        "params": new_params,
+    }
 
 
 def run_slope_analysis(path, scale_to_m, threshold, out_dir, drain_points,
