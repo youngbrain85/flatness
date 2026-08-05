@@ -22,7 +22,7 @@ const { supabaseStub, removeChannelMock, channelStub } = vi.hoisted(() => {
 vi.mock('@/lib/supabase/client', () => ({ createClient: () => supabaseStub }));
 
 function Harness({ table, id, initial, column }: {
-  table: 'scans' | 'analyses' | 'reports'; id: string; initial: string;
+  table: 'scans' | 'analyses' | 'reports' | 'registrations'; id: string; initial: string;
   column?: 'status' | 'gen_status';
 }) {
   useRowStatus(table, id, initial, column);
@@ -81,6 +81,32 @@ describe('useRowStatus reports 폴링 유지 (저비용 개선 m1)', () => {
     expect(supabaseStub.from).toHaveBeenCalledTimes(1);
 
     await vi.advanceTimersByTimeAsync(15000); // scans·analyses였다면 멈췄을 구간 - reports는 계속 폴링해야 함
+    expect(supabaseStub.from).toHaveBeenCalledTimes(4);
+
+    unmount();
+    vi.useRealTimers();
+  });
+});
+
+// 단계 F: registrations.status도 순환 상태다(사용자가 대응점을 다시 찍으면
+// done/failed -> awaiting_points). 여기서 폴링이 멈추면 그 뒤 정합의 진행 상태를
+// 영영 못 본다 - 잡은 도는데 화면만 '대응점 지정 대기'에 남는다.
+describe('useRowStatus registrations 폴링 유지 (단계 F)', () => {
+  it('registrations는 done을 감지해도 폴링을 멈추지 않는다', async () => {
+    supabaseStub.from.mockClear();
+    supabaseStub.from.mockImplementation(() => ({
+      select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { status: 'done' } }) }) }),
+    }));
+    vi.useFakeTimers();
+
+    const { unmount } = render(
+      createElement(Harness, { table: 'registrations', id: 'r1', initial: 'processing' }),
+    );
+
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(supabaseStub.from).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(15000);
     expect(supabaseStub.from).toHaveBeenCalledTimes(4);
 
     unmount();

@@ -9,8 +9,16 @@ import { createClient } from '@/lib/supabase/client';
 // reports(done/failed) 종결 상태를 합쳐 감지되는 즉시 폴링 타이머를 멈춘다.
 const TERMINAL_STATUSES = new Set(['ready', 'archived', 'failed', 'done']);
 
+// 종결 상태가 되돌아갈 수 있는 테이블 - 여기서는 폴링을 멈추면 안 된다.
+// - reports: 재생성이 done/failed -> queued로 되돌린다(저비용 개선 m1).
+// - registrations: 사용자가 대응점을 다시 찍으면 done/failed -> awaiting_points로
+//   되돌아간다(단계 F). useEffect 의존성이 [table,id,column]이라 컴포넌트가
+//   재마운트되지 않는 한 타이머는 재무장되지 않는다 - 한번 멈추면 그 뒤의 정합
+//   진행 상태를 영영 못 본다.
+const CYCLIC_TABLES = new Set(['reports', 'registrations']);
+
 export function useRowStatus<T extends string>(
-  table: 'scans' | 'analyses' | 'reports',
+  table: 'scans' | 'analyses' | 'reports' | 'registrations',
   id: string,
   initial: T,
   // reports는 업무 상태(status)와 생성 상태(gen_status)가 분리돼 있어 컬럼을 지정받는다
@@ -33,13 +41,9 @@ export function useRowStatus<T extends string>(
       if (data) {
         const next = (data as Record<string, string>)[column];
         setStatus(next as T);
-        // 저비용 개선 m1: reports는 재생성이 종결 상태(done/failed)를 다시
-        // 비종결(queued/processing)로 되돌릴 수 있는데, useEffect 의존성이
-        // [table,id,column]이라 컴포넌트가 재마운트되지 않는 한 이 타이머는
-        // 재무장되지 않는다 - 한번 멈추면 보조 폴링이 영구 정지한다. scans·
-        // analyses는 종결 상태에서 되돌아가지 않으므로 기존처럼 정지하고,
-        // reports만 정지 대상에서 제외한다.
-        if (table !== 'reports' && TERMINAL_STATUSES.has(next)) clearInterval(timer);
+        // scans·analyses는 종결 상태에서 되돌아가지 않으므로 정지하고,
+        // 되돌아갈 수 있는 테이블(CYCLIC_TABLES)만 정지 대상에서 제외한다.
+        if (!CYCLIC_TABLES.has(table) && TERMINAL_STATUSES.has(next)) clearInterval(timer);
       }
     }, 5000);
     return () => {

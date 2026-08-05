@@ -4,7 +4,11 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 // slope_judge(브리프 D4): 배수구 재판정. payload에 좌표를 실어야 하므로(경합
 // 방지 - 잡 처리 시점에 params를 읽으면 그 사이 다른 클릭으로 값이 바뀔 수 있다)
 // 아래 payload 타입을 문자열 전용에서 넓혔다.
-export type JobType = 'precheck' | 'analyze' | 'import' | 'report' | 'slope_judge';
+// register(단계 F): 두 스캔 정합. payload는 {registration_id}이며, 012가 jobs_dedup을
+// 재정의해 이 키까지 coalesce에 넣었으므로 중복 엔큐가 23505로 막힌다(설계 결정 F5).
+// 011/012를 적용하지 않은 DB에서는 fn_enqueue_job이 enum 오류로 실패한다 - 그 실패는
+// enqueueJob이 한국어 메시지로 화면에 올린다.
+export type JobType = 'precheck' | 'analyze' | 'import' | 'report' | 'slope_judge' | 'register';
 
 // jobs_dedup 부분 유니크 위반은 PostgREST가 409 + Postgres 코드 23505로 돌려준다
 export function isDuplicateJobError(error: { code?: string } | null | undefined): boolean {

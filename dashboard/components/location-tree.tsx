@@ -37,6 +37,13 @@ export function LocationTree({ tree, scansByLocation, siteId }: {
                               className="rounded bg-blue-700 px-2 py-1 text-xs font-medium text-white hover:bg-blue-800">
                               스캔 업로드
                             </Link>
+                            {/* 단계 F: 같은 위치를 나눠 찍은 두 스캔을 하나로 합치는
+                                진입점. 후보 스캔이 2개 미만이면 그 화면이 이유를
+                                안내하므로 여기서는 조건 없이 보여준다(스캔 개수를
+                                세려면 목록 쿼리에 조건을 더해야 하고, 정합 가능
+                                조건은 개수만이 아니다 - 높이 뷰·단위 확정도 본다). */}
+                            <Link href={`/registrations/new?location=${l.id}`}
+                              className="text-xs text-blue-700 hover:underline">스캔 정합</Link>
                             <Link href={`/reports?location=${l.id}`}
                               className="text-xs text-blue-700 hover:underline">보고서</Link>
                           </span>

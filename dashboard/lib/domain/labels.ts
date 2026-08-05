@@ -1,6 +1,7 @@
 // 표시 매핑 정본 (stats-schema.md 부록 A, 스펙 §9)
 import type {
-  AnalysisKind, AnalysisStatus, Grade, Lineage, ReportGenStatus, ReportStatus, ScanStatus, Surface,
+  AnalysisKind, AnalysisStatus, Grade, Lineage, RegistrationStatus, ReportGenStatus, ReportStatus,
+  ScanStatus, Surface,
 } from './types';
 
 export const ANALYSIS_KIND_LABEL: Record<AnalysisKind, string> = {
@@ -26,8 +27,18 @@ export const ANALYSIS_STATUS_LABEL: Record<AnalysisStatus, string> = {
 
 export const SURFACE_LABEL: Record<Surface, string> = { floor: '바닥', wall: '벽면' };
 
+// registered는 단계 F의 정합 병합 스캔이다(설계 결정 F9). 워커 report/labels.py와
+// 등가여야 하며(worker/tests/test_report_labels.py가 이 파일을 파싱해 대조한다)
+// 업로드 화면의 선택지에는 넣지 않는다 - 시스템이 만드는 값이다.
 export const LINEAGE_LABEL: Record<Lineage, string> = {
-  raw: '원시 점군', fused_mesh: '융합 메시', unknown: '모름',
+  raw: '원시 점군', fused_mesh: '융합 메시', unknown: '모름', registered: '정합 병합',
+};
+
+// registration_status enum(007_slope_analysis.sql). 정합 진행 상태는 반드시 이
+// 테이블에서 읽는다 - jobs는 RLS 정책이 0개라 대시보드가 못 읽는다(설계 결정 F10).
+export const REGISTRATION_STATUS_LABEL: Record<RegistrationStatus, string> = {
+  awaiting_points: '대응점 지정 대기', queued: '정합 대기 중', processing: '정합 중',
+  done: '정합 완료', failed: '정합 실패',
 };
 
 export const ZONE_STATUS_LABEL: Record<'ok' | 'ghost' | 'furniture', string> = {

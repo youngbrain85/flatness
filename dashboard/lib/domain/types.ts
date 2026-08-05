@@ -4,7 +4,12 @@ export type Grade = 'pass' | 'borderline' | 'repair' | 'rework' | 'na';
 export type Verdict = 'pass' | 'borderline' | 'repair' | 'rework';
 export type ScanStatus = 'uploaded' | 'awaiting_unit_confirm' | 'ready' | 'archived' | 'failed';
 export type AnalysisStatus = 'queued' | 'processing' | 'done' | 'failed';
-export type Lineage = 'raw' | 'fused_mesh' | 'unknown';
+// 011_register_enums.sql이 data_lineage에 'registered'를 더했다(설계 결정 F9).
+// 정합 병합으로 만들어진 스캔의 계보이며 **시스템만 쓴다** - 업로드 화면의 선택지에는
+// 넣지 않는다(components/upload-form.tsx는 세 값을 명시적으로 나열한다).
+// fused_mesh를 재사용하면 업로드 화면이 그 값에 붙인 "앱이 스무딩한 데이터" 경고가
+// 거짓이 된다 - 정합 병합은 원시 점군 두 개의 서브셀 중앙값이다.
+export type Lineage = 'raw' | 'fused_mesh' | 'unknown' | 'registered';
 // 007: analyses.kind/criteria.kind (기본값 'flatness'). 단계 C가 이 값으로 조회를 분기한다.
 export type AnalysisKind = 'flatness' | 'slope';
 
@@ -222,4 +227,38 @@ export interface ReportRow {
 
 export interface ReportAnalysisRow {
   report_id: string; analysis_id: string; sort_order: number;
+}
+
+// ---- 정합 (007_slope_analysis.sql registrations + 012_register_support.sql) ----
+// status는 registration_status **enum**이다(text가 아니다). 007이 만든 다섯 값이
+// 단계 F가 쓰는 상태와 정확히 일치한다.
+export type RegistrationStatus = 'awaiting_points' | 'queued' | 'processing' | 'done' | 'failed';
+
+/** 대응점 한 쌍. a = source_scan_ids[0], b = [1]이며 값은 **각 스캔 파일 단위의
+ * 월드 좌표**다(설계 결정 F7). 워커(registration.align_sources)가 각 소스의
+ * unit_scale을 곱해 미터로 맞추므로 화면이 미리 미터로 바꾸면 두 번 곱해진다. */
+export interface Correspondence {
+  a: { x: number; y: number; z: number };
+  b: { x: number; y: number; z: number };
+}
+
+export interface RegistrationRow {
+  id: string;
+  /** [기준 스캔, 맞출 스캔]. 배열이라 FK가 없어 죽은 id가 남을 수 있다(007 주석). */
+  source_scan_ids: string[];
+  correspondences: Correspondence[];
+  /** 4x4 동차 변환(B를 A에 맞춘다). 단위는 **미터**다. */
+  transform: number[][] | null;
+  rmse_mm: number | null;
+  iterations: number | null;
+  /** ★ 참 중첩이 아니다 - trim_ratio(0.8)가 상한이다(스펙 §9.3.4).
+   *  화면에 쓰려면 lib/domain/registration.ts의 trueOverlapPct를 거쳐야 한다. */
+  overlap_ratio: number | null;
+  status: RegistrationStatus;
+  /** 실패 사유. jobs 테이블은 RLS 정책이 0개라(설계 결정 F10) 여기가 유일한 통로다. */
+  error_text: string | null;
+  result_scan_id: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
 }
