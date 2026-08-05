@@ -465,14 +465,14 @@ def test_correspondences_clustered_in_a_small_patch_are_rejected():
         register_clouds(b, a, _apply(near, _KNOWN_YAW_DEG, _KNOWN_SHIFT_M), near)
 
 
-def test_z_gate_holds_across_the_documented_slope_range():
-    """구배 2% 램프에서도 z 게이트(<=1mm)가 성립한다 — 적용 범위의 상한 근처.
+def _plane_gradient(pts):
+    """점군의 전역 평면 기울기 (dz/dx, dz/dy). 픽스처에 구배가 실제로 들어갔는지 잰다."""
+    coef, *_ = np.linalg.lstsq(np.c_[pts[:, 0], pts[:, 1], np.ones(len(pts))], pts[:, 2], rcond=None)
+    return float(coef[0]), float(coef[1])
 
-    픽스처 바닥은 국소 경사 median 0.10%로 사실상 평탄이라, 구배가 붙었을 때를
-    따로 재지 않으면 "구배 측정 용역인데 구배에서 검증한 적이 없는" 상태가 된다.
-    실측 적용 범위는 스펙 §9.3.1 표에 있다(3%까지 z<=1mm, 16%까지 ±5mm 안).
-    """
-    slope = 0.02
+
+def _ramp_scan_pair(slope):
+    """구배 램프를 얹은 표본 독립 스캔 쌍 + 표면에서 뽑은 대응점."""
     rng = np.random.default_rng(7)
     a = bumpy_floor(size=_SIZE, seed=_SURF_SEED, sample_jitter=0.025, sample_seed=101, slope=(slope, 0.0))
     b_local = bumpy_floor(size=_SIZE, seed=_SURF_SEED, sample_jitter=0.025, sample_seed=202, slope=(slope, 0.0))
@@ -481,10 +481,100 @@ def test_z_gate_holds_across_the_documented_slope_range():
                                                           size=_SIZE, seed=_SURF_SEED)
                                 + slope * _CORR_XY[:, 0]])
     corr_src = _apply(corr_dst, _KNOWN_YAW_DEG, _KNOWN_SHIFT_M) + rng.normal(0, _CLICK_SD_M, corr_dst.shape)
-    res = register_clouds(b, a, corr_src, corr_dst)
+    return a, b, corr_src, corr_dst
+
+
+def test_z_gate_holds_across_the_documented_slope_range():
+    """구배 2% 램프에서도 z 게이트(<=1mm)가 성립한다 — 적용 범위의 상한 근처.
+
+    ★ **구배가 실제로 걸렸다는 것을 먼저 단언한다.** 게이트만 보면 안 된다:
+    구배 2%의 z 오차는 0.611mm, 0%는 0.008mm로 **둘 다 <=1mm에 들어가서** 픽스처에서
+    구배를 조용히 떨어뜨려도 통과해 버린다. 이 프로젝트가 일곱 번 겪은 형태이고,
+    하필 "게이트가 실질 평탄 바닥에서만 검증됐다"를 닫으려고 만든 테스트다.
+    그래서 (1) 픽스처 기울기를 직접 재고 (2) 0% 대비 z 오차가 자릿수로 커지는지도 본다.
+    """
+    slope = 0.02
+    a, b, cs, cd = _ramp_scan_pair(slope)
+
+    gx, gy = _plane_gradient(a)
+    assert abs(gx - slope) <= 0.002, f"픽스처 x 기울기가 {gx * 100:.3f}% (기대 {slope * 100:.1f}%)"
+    assert abs(gy) <= 0.005, f"y 기울기가 의도치 않게 {gy * 100:.3f}%"
+
+    res = register_clouds(b, a, cs, cd)
     assert res.converged, res.failure_reason
     _yaw, _inplane, z_err = _errors(res)
     assert abs(z_err) <= 0.001, f"구배 {slope * 100:.0f}%에서 z 오차 {z_err * 1000:.3f}mm"
+
+    fa, fb, fcs, fcd = _ramp_scan_pair(0.0)
+    _y0, _ip0, z0 = _errors(register_clouds(fb, fa, fcs, fcd))
+    assert abs(z_err) >= 10 * abs(z0), (
+        f"구배 2%의 z 오차({z_err * 1000:.4f}mm)가 0%({z0 * 1000:.4f}mm)와 자릿수가 같다 "
+        "— 픽스처에 구배가 실제로 반영되지 않았을 수 있다")
+
+
+def test_long_corridor_correspondences_are_accepted():
+    """150m x 2.5m 복도처럼 **가늘고 긴** 현장을 거부하면 안 된다.
+
+    무차원 비(sv1/sv0)로 판별하면 이 배치가 0.016으로 걸려 거부된다. 그런데 실제로
+    정합하면 면내 오차가 37.5mm로 정상 4점 배치(44.7mm)보다 **오히려 좋다** —
+    측방 퍼짐이 1.0m로 클릭 오차(5cm)의 20배이기 때문이다. 스케일 의존 판별식이
+    물리적으로 더 나쁜 배치를 통과시키고 더 좋은 배치를 거부한 셈이다.
+    """
+    size = (150.0, 2.5)
+    rng = np.random.default_rng(7)
+    a = bumpy_floor(size=size, spacing=0.05, seed=_SURF_SEED, sample_jitter=0.025, sample_seed=101)
+    b_local = bumpy_floor(size=size, spacing=0.05, seed=_SURF_SEED, sample_jitter=0.025, sample_seed=202)
+    b = _apply(b_local, _KNOWN_YAW_DEG, _KNOWN_SHIFT_M) + rng.normal(0, _NOISE_SD_M, b_local.shape)
+    cxy = np.array([[4.5, 0.20], [139.5, 0.30], [19.5, 2.30], [130.5, 2.20]])
+    corr_dst = np.column_stack([cxy, bumpy_surface_z(cxy[:, 0], cxy[:, 1], size=size, seed=_SURF_SEED)])
+    corr_src = _apply(corr_dst, _KNOWN_YAW_DEG, _KNOWN_SHIFT_M) + rng.normal(0, _CLICK_SD_M, corr_dst.shape)
+
+    lateral, sv = reg.correspondence_lateral_spread(corr_dst)
+    assert lateral > 0.5, f"측방 퍼짐 {lateral:.3f}m"
+    assert sv[1] / sv[0] < 0.02, (
+        f"이 픽스처는 무차원 비가 작아야 회귀 가드로 쓸모가 있다: {sv[1] / sv[0]:.4f}")
+
+    res = register_clouds(b, a, corr_src, corr_dst)
+    assert res.converged, res.failure_reason
+    _yaw, inplane, z_err = _errors(res)
+    assert abs(z_err) <= 0.001, f"z 오차 {z_err * 1000:.3f}mm"
+    assert inplane <= 0.050, f"면내 오차 {inplane * 1000:.1f}mm"
+
+
+def test_horizontal_sensitivity_flags_a_featureless_plane():
+    """수평 방향으로 **검증 불가**한 장면을 신호로 알린다 (스펙 §9.3.2).
+
+    완전 평면은 몇 미터가 어긋나도 point-to-plane 잔차가 그대로다. 사각을 막지는
+    못하지만 사각임을 보고할 수는 있다 — 지금까지는 아무 신호 없이 성공으로 나갔다.
+    범프가 있으면 감도가 올라간다는 대비까지 함께 고정한다.
+    """
+    fa, fb, fcs, fcd = _scan_pair(click_sd=0.0, flat=True)
+    flat = register_clouds(fb, fa, fcs, fcd)
+    ba, bb, bcs, bcd = _scan_pair(click_sd=0.0)
+    bumpy = register_clouds(bb, ba, bcs, bcd)
+
+    assert flat.horizontal_sensitivity < reg.HORIZONTAL_SENSITIVITY_MIN, (
+        f"완전 평면 감도 {flat.horizontal_sensitivity:.3f} — 검증 불가로 표시돼야 한다")
+    assert bumpy.horizontal_sensitivity >= reg.HORIZONTAL_SENSITIVITY_MIN, (
+        f"범프 바닥 감도 {bumpy.horizontal_sensitivity:.3f} — 정상으로 표시돼야 한다")
+    # 사각은 rmse_m으로는 전혀 드러나지 않는다: 두 장면의 RMSE가 사실상 같다
+    assert abs(flat.rmse_m - bumpy.rmse_m) < 0.0002, "RMSE만으로는 두 장면이 구분되지 않는다"
+
+
+def test_iteration_budget_exhaustion_is_reported_as_failure():
+    """반복을 다 못 쓰면 실패로 보고한다 — 수렴 게이트가 유일한 방어선인 구간.
+
+    반복 3회에서 RMSE·중첩·발산 게이트는 전부 통과하므로, 수렴 사유를 지우면
+    `converged`가 조용히 True로 뒤집힌다. 다른 사유가 없다는 것까지 단언한다.
+    """
+    a, b, cs, cd = _scan_pair(click_sd=_CLICK_SD_M)
+    res = register_clouds(b, a, cs, cd, max_iterations=3)
+    assert not res.converged
+    reason = res.failure_reason or ""
+    assert "수렴" in reason, reason
+    assert "RMSE" not in reason, reason
+    assert "중첩" not in reason, reason
+    assert "발산" not in reason, reason
 
 
 def test_result_reports_point_rmse_and_sample_spacing():

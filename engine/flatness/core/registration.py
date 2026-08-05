@@ -24,14 +24,29 @@ MAX_RMSE_M = 0.002          # 스펙 §4.4: 최종 RMSE <= 2mm (point-to-plane �
 NORMAL_K = 16               # 법선 추정 k-근방
 # 발산 가드 — point-to-point 잔차가 표본 간격의 몇 배를 넘으면 실패로 본다.
 # 근거(실측): 같은 표면을 독립 표본한 두 점군을 **정확히** 정합하면 이 비가 0.61이고,
-# 수평으로 3m 어긋뜨려도 0.70을 넘지 않는다. 반면 src가 dst 가장자리 **밖**에
-# 떠 있으면 5.6~8.5배가 된다. 1.5는 최악의 정상값(0.70) 대비 2.1배 여유이고,
-# 노이즈가 표본 간격의 1.4배가 될 때까지 오탐하지 않는다.
+# 수평으로 3m 어긋뜨려도 0.70을 넘지 않는다. src가 dst 가장자리 **밖**에 놓인
+# 자세에서는 1.5를 넘는다(회귀 픽스처 실측 1.60. 자세만 평가하면 5.6~8.5배까지
+# 나오지만 ICP를 한 번만 돌려도 1.5~1.7로 내려온다).
+# ★ 탐지 측 여유가 얇다 — 회귀 픽스처가 1.60으로 임계 바로 위(6%)다. 임계를
+#   올리면 그 픽스처가 먼저 빠져나간다. 정상 측 여유(0.70 대비 2.1배)와 비대칭이다.
 DIVERGENCE_SPACING_RATIO = 1.5
-# 스펙 §8: 대응점 공선·퇴화 거부. 실측 — 정상 4점 sv1/sv0=0.6695·퍼짐 7.3m,
-# 완전 공선 3점 0.0000, 근접 3점(2cm 안) 퍼짐 0.020m.
-MIN_CORR_SV_RATIO = 0.02    # 2번째/1번째 특이값 비. 이 아래면 공선으로 본다
-MIN_CORR_SPREAD_M = 1.0     # 대응점 최대 거리. 이 아래면 회전이 전혀 안 잡힌다
+# 스펙 §8: 대응점 공선·퇴화 거부. **절대량으로 판별한다.**
+# 무차원 비(sv1/sv0)는 현장이 길수록 같은 물리적 폭에서 작아져 스케일 의존적이다 —
+# 실측으로 150m x 2.5m 복도(sv1/sv0=0.0163)가 거부되는데, 정작 그 복도를 가드 없이
+# 정합하면 면내 오차가 정상 4점 배치(44.7mm)보다 **더 좋다**. 물리적으로 옳은 질문은
+# "측방 퍼짐이 클릭 오차 대비 충분한가"다.
+CORR_CLICK_SD_M = 0.05          # 화면 클릭 정확도 ±5cm (스펙 §9.3)
+# 측방 RMS 퍼짐 = sv1/sqrt(N). 이것이 클릭 오차보다 작으면 회전을 전혀 정할 수 없다.
+# 실측: 정상 4점 1.925m / 복도 150x2.5 1.001m / 좁은 띠 중첩 0.108m / 작은 방
+# 0.8x0.6 0.236m / 근접 3점 0.008m / 완전 공선 0.000m.
+MIN_CORR_LATERAL_SPREAD_M = CORR_CLICK_SD_M
+_COLLINEAR_SV_RATIO = 0.05      # 사유 문구를 "공선"으로 쓸지 고르는 용도(게이트 아님)
+# 감도 프로브 — 정합을 수평으로 밀었을 때 point-to-plane 잔차가 오르는 비.
+# 1.0이면 이 정합은 수평 오정합을 **원리적으로 검출할 수 없다**(스펙 §9.3.2).
+# 실측(min over ±x,±y): 완전 평면 1.000 / 바닥+벽 1.248 / 범프 바닥 1.710 /
+# 구배 램프 1.86~1.87. 1.1은 유일한 사각(완전 평면)만 걸러낸다.
+HORIZONTAL_SENSITIVITY_MIN = 1.1
+PROBE_STEP_M = 0.10
 
 
 @dataclass
@@ -49,6 +64,15 @@ class RegistrationResult:
     # --- 아래는 추가 필드다(기존 필드명·타입은 그대로 둔다) ---
     point_rmse_m: float = float("nan")     # point-to-point 잔차 RMSE. 발산 가드의 근거값
     sample_spacing_m: float = float("nan")  # dst 표본 간격 추정(최근접 이웃 거리 중앙값)
+    horizontal_sensitivity: float = float("nan")
+    """수평 오정합을 **검출할 수 있는 정도**. 정합을 ±10cm 수평으로 밀었을 때
+    point-to-plane 잔차가 오르는 비의 최솟값(±x·±y 4방향 중 최악).
+
+    1.0에 가까우면 이 장면은 수평 방향으로 **검증 불가**다 — 몇 미터가 어긋나도
+    잔차가 그대로라 `rmse_m`이 안전을 보장하지 못한다(스펙 §9.3.2). 실패로
+    처리하지는 않는다(±5mm 평탄 바닥이 이 용역의 정상 대상이라 전부 막히면
+    기능이 성립하지 않는다). 대신 화면(§7.4)이 `HORIZONTAL_SENSITIVITY_MIN`
+    미만일 때 "수평 방향 검증 불가"를 경고하고 겹친 그림을 함께 보여야 한다."""
 
 
 def _as_points(arr, what):
@@ -139,9 +163,33 @@ def _plane_rmse(cur, dst, idx, keep, normals):
     return float(np.sqrt(np.mean(along ** 2)))
 
 
+def _horizontal_sensitivity(cur, dst, tree, normals, trim_ratio, max_pair_dist_m, step):
+    """정합을 수평으로 ±step 밀어 보고 point-to-plane 잔차가 오르는 비의 최솟값.
+
+    "수평 정보가 데이터에 있는가"를 직접 잰다. 사각을 막지는 못하지만 **사각임을
+    보고**할 수는 있다 — 지금은 3m 어긋난 정합도 아무 신호 없이 성공으로 나간다.
+    KD트리·법선이 이미 있으므로 추가 비용은 질의 4회뿐이다.
+    """
+    def plane_rmse_at(pts):
+        keep, idx, _pp = _pairs(pts, tree, dst, trim_ratio, max_pair_dist_m)
+        return _plane_rmse(pts, dst, idx, keep, normals)
+
+    base = plane_rmse_at(cur)
+    if not np.isfinite(base):
+        return float("nan")
+    ratios = []
+    for v in ([step, 0.0, 0.0], [-step, 0.0, 0.0], [0.0, step, 0.0], [0.0, -step, 0.0]):
+        moved = plane_rmse_at(cur + np.asarray(v))
+        if not np.isfinite(moved):
+            return float("nan")
+        ratios.append(moved / max(base, 1e-5))
+    return float(min(ratios))
+
+
 def icp_refine(src_pts, dst_pts, init_transform, *,
                max_iterations=50, rmse_rel_tol=1e-4,
-               trim_ratio=0.8, max_pair_dist_m=0.5, normal_k=NORMAL_K):
+               trim_ratio=0.8, max_pair_dist_m=0.5, normal_k=NORMAL_K,
+               probe_step_m=PROBE_STEP_M):
     """trimmed ICP. cKDTree로 대응 탐색.
 
     **대응·최소화·수렴 판정은 point-to-point, 보고값(`rmse_m`)과 성공 임계는
@@ -204,10 +252,24 @@ def icp_refine(src_pts, dst_pts, init_transform, *,
                        "대응점을 다시 찍어 주세요.")
     if not np.isfinite(rmse) or rmse > MAX_RMSE_M:
         reasons.append(f"최종 RMSE {rmse * 1000:.2f}mm가 허용치 {MAX_RMSE_M * 1000:.2f}mm를 넘습니다.")
+    sensitivity = _horizontal_sensitivity(cur, dst, tree, normals, trim_ratio,
+                                          max_pair_dist_m, probe_step_m)
     return RegistrationResult(transform=transform, rmse_m=rmse, iterations=iters,
                               converged=not reasons, overlap_ratio=overlap_ratio,
                               failure_reason=" ".join(reasons) if reasons else None,
-                              point_rmse_m=point_rmse, sample_spacing_m=spacing)
+                              point_rmse_m=point_rmse, sample_spacing_m=spacing,
+                              horizontal_sensitivity=sensitivity)
+
+
+def correspondence_lateral_spread(pts):
+    """대응점의 **측방 RMS 퍼짐**(미터) = 2번째 특이값 / sqrt(N).
+
+    회전을 정하는 것은 주축이 아니라 **주축에 수직인 퍼짐**이다. 절대량이라
+    현장 크기에 휘둘리지 않는다 — 150m 복도든 0.8m 방이든 같은 잣대로 잰다.
+    """
+    sv = np.linalg.svd(pts - pts.mean(axis=0), compute_uv=False)
+    sv = np.concatenate([sv, np.zeros(3)])[:3]
+    return float(sv[1] / np.sqrt(len(pts))), sv
 
 
 def check_correspondence_geometry(pts, what="대응점"):
@@ -215,18 +277,21 @@ def check_correspondence_geometry(pts, what="대응점"):
 
     개수만 세면 안 된다. 근접 3점(2cm 안)을 찍으면 초기 Umeyama가 이미 yaw 89도·
     면내 5.3m로 틀어지고 ICP가 못 고친다 — 가드는 대응점 단계에 있어야 한다.
-    중심화한 대응점의 특이값으로 판별한다(실측: 정상 4점 sv1/sv0=0.6695·퍼짐 7.3m,
-    완전 공선 3점 0.0000, 근접 3점 퍼짐 0.020m).
+
+    **판별은 절대량(측방 RMS 퍼짐)으로 한다.** 무차원 비 sv1/sv0을 쓰면 스케일에
+    끌려가 150m 복도를 거부하면서 6m에 12cm 편차인 배치는 통과시킨다(전자가
+    물리적으로 더 좋은데도). 측방 퍼짐이 클릭 오차(±5cm)보다 작으면 회전을
+    정할 수 없다 — 그것이 유일한 게이트다. 특이값 비는 사유 문구를 고르는 데만 쓴다.
     """
-    spread = float(np.linalg.norm(pts[:, None, :] - pts[None, :, :], axis=-1).max())
-    if spread < MIN_CORR_SPREAD_M:
-        raise ValueError(f"{what}이 한곳에 몰려 있습니다(가장 먼 두 점이 {spread * 100:.1f}cm). "
-                         f"{MIN_CORR_SPREAD_M:.0f}m 이상 떨어진 지점들을 고르세요.")
-    sv = np.linalg.svd(pts - pts.mean(axis=0), compute_uv=False)
-    sv = np.concatenate([sv, np.zeros(3)])[:3]
-    if sv[0] <= 0 or sv[1] / sv[0] < MIN_CORR_SV_RATIO:
-        raise ValueError(f"{what}이 한 직선 위에 있습니다(공선). "
-                         "일직선을 벗어난 지점을 하나 이상 포함하세요.")
+    lateral, sv = correspondence_lateral_spread(pts)
+    if lateral >= MIN_CORR_LATERAL_SPREAD_M:
+        return
+    if sv[0] > 0 and sv[1] / sv[0] < _COLLINEAR_SV_RATIO:
+        raise ValueError(f"{what}이 한 직선 위에 있습니다(공선, 측방 퍼짐 "
+                         f"{lateral * 100:.1f}cm). 일직선을 벗어난 지점을 하나 이상 포함하세요.")
+    raise ValueError(f"{what}이 한곳에 몰려 있습니다(측방 퍼짐 {lateral * 100:.1f}cm가 "
+                     f"클릭 오차 {CORR_CLICK_SD_M * 100:.0f}cm보다 작습니다). "
+                     "서로 멀리 떨어진 지점들을 고르세요.")
 
 
 def register_clouds(src_pts, dst_pts, correspondences_src, correspondences_dst, **icp_kwargs):
