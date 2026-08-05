@@ -183,9 +183,15 @@ export function RegistrationWorkbench({ registration, scanA, scanB }: {
         return;
       }
     }
+    // ★ 리뷰 Minor(m2): horizontal_sensitivity도 반드시 함께 지운다. 이 값만 남기면
+    // 다음 시도가 조기 검사(prepare_correspondences 등)에서 실패했을 때 옛 감도가 DB에
+    // 그대로 남아, 완료 화면이 아닌 곳에서도 낡은 "수평 검증 가능성" 값이 살아 있게
+    // 된다 - 결과 수치 넷(rmse_mm·iterations·overlap_ratio·transform)을 지우는 이유와
+    // 정확히 같다. 셋만 지우고 하나를 빠뜨리면 그 하나만 다른 정합의 값이 된다.
     const { error: upErr } = await supabase.from('registrations').update({
       status: 'awaiting_points', result_scan_id: null, transform: null,
-      rmse_mm: null, iterations: null, overlap_ratio: null, error_text: null,
+      rmse_mm: null, iterations: null, overlap_ratio: null,
+      horizontal_sensitivity: null, error_text: null,
     }).eq('id', registration.id);
     if (upErr) setError(`상태를 되돌리지 못했습니다: ${upErr.message}`);
     setAskRepick(false);
@@ -361,8 +367,9 @@ export function RegistrationWorkbench({ registration, scanA, scanB }: {
           <p className="text-xs text-slate-500">
             병합 스캔은 정합이 성공한 시점에 이미 만들어져 있습니다(데이터 계보 &quot;정합 병합&quot;).
             위 확인은 이 화면의 안내 장치일 뿐 시스템 차원의 승인 절차가 아닙니다.
-            체크하지 않아도 병합 스캔은 측정위치 목록과 스캔 상세에 이미 나타나 있고
-            거기서 바로 분석할 수 있습니다. 그러니 이 정합을 쓰지 않기로 했다면
+            체크하지 않아도 병합 스캔은 측정위치 목록과 스캔 상세에 이미 나타나 있고,
+            스캔 상세의 &quot;평활도 분석&quot; 버튼을 누르면 이 겹쳐보기를 한 번도 보지 않은
+            채로 분석이 시작됩니다. 그러니 이 정합을 쓰지 않기로 했다면
             아래 &quot;대응점 다시 찍기&quot;로 병합 스캔을 정리하세요.
           </p>
           {error && <p className="text-sm text-red-600">{error}</p>}

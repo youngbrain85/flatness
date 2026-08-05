@@ -235,8 +235,9 @@ export interface ReportAnalysisRow {
 export type RegistrationStatus = 'awaiting_points' | 'queued' | 'processing' | 'done' | 'failed';
 
 /** 대응점 한 쌍. a = source_scan_ids[0], b = [1]이며 값은 **각 스캔 파일 단위의
- * 월드 좌표**다(설계 결정 F7). 워커(registration.align_sources)가 각 소스의
- * unit_scale을 곱해 미터로 맞추므로 화면이 미리 미터로 바꾸면 두 번 곱해진다. */
+ * 월드 좌표**다(설계 결정 F7). 워커의 registration.prepare_correspondences가 각
+ * 소스의 unit_scale을 곱해 미터로 맞춘 뒤 align_sources에 넘기므로(align_sources는
+ * 이미 미터인 것을 전제한다), 화면이 미리 미터로 바꾸면 두 번 곱해진다. */
 export interface Correspondence {
   a: { x: number; y: number; z: number };
   b: { x: number; y: number; z: number };
@@ -262,7 +263,7 @@ export interface RegistrationRow {
    *  null인 경우가 정상 경로에 둘 있다: (1) 감도 프로브 이전에 만들어진 정합 이력,
    *  (2) 마이그레이션 012의 이 컬럼을 아직 적용하지 않은 DB(select('*')에 컬럼 자체가
    *  없어 undefined로 온다). 둘 다 "알 수 없음"이지 "위험함"이 아니므로 화면은
-   *  조용히 넘어간다(lib/domain/registration.ts isHorizontalUnverifiable). */
+   *  조용히 넘어간다(lib/domain/registration.ts horizontalCheck가 'unknown'을 낸다). */
   horizontal_sensitivity: number | null;
   status: RegistrationStatus;
   /** 실패 사유. jobs 테이블은 RLS 정책이 0개라(설계 결정 F10) 여기가 유일한 통로다. */

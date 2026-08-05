@@ -394,6 +394,38 @@ describe('RegistrationWorkbench 결과 표시 (스펙 §9.3.2·§9.3.4)', () => 
     await screen.findByText(/1\.01/);
     expect(screen.getByText(/시스템 차원의 승인 절차가 아닙니다/)).toBeInTheDocument();
   });
+
+  // ★ 단계 F 최종 리뷰 Critical: 옛 문구는 "거기서 바로 분석할 수 있습니다"였는데
+  //   그때 병합 스캔에는 분석 진입점이 **하나도 없었다**(막다른 골목). 진입점을 만든
+  //   지금도 문구는 정확해야 한다 - 어느 화면의 어느 버튼인지 이름을 대고, 그 경로가
+  //   겹쳐보기를 건너뛴다는(=이 체크가 게이트가 아니라는) 사실까지 말해야 한다.
+  it('병합 스캔을 어디서 어떻게 분석하는지 이름을 대어 알린다', async () => {
+    mount(done);
+    await screen.findByText(/1\.01/);
+
+    const note = screen.getByText(/시스템 차원의 승인 절차가 아닙니다/);
+    expect(note).toHaveTextContent('스캔 상세');
+    expect(note).toHaveTextContent('평활도 분석');
+    expect(note).toHaveTextContent('겹쳐보기를 한 번도 보지 않은 채로');
+  });
+
+  // ★ 리뷰 Minor(m2): 결과 수치를 지우면서 horizontal_sensitivity만 남기면, 다음 시도가
+  //   조기 검사(prepare_correspondences 등)에서 실패했을 때 옛 정합의 감도가 DB에 그대로
+  //   살아남는다 - 다른 정합의 값 하나가 섞여 든다.
+  it('다시 찍기가 결과 수치를 하나도 남기지 않는다(수평 감도 포함)', async () => {
+    const updateSpy = vi.fn();
+    mount(reg({ ...done, horizontal_sensitivity: 1.71 }), { updateSpy });
+    await screen.findByText(/1\.01/);
+
+    fireEvent.click(screen.getByRole('button', { name: /대응점 다시 찍기/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /삭제하고 다시 찍기/ }));
+
+    await vi.waitFor(() => expect(updateSpy).toHaveBeenCalled());
+    expect(updateSpy).toHaveBeenCalledWith(expect.objectContaining({
+      transform: null, rmse_mm: null, iterations: null, overlap_ratio: null,
+      horizontal_sensitivity: null, result_scan_id: null, status: 'awaiting_points',
+    }));
+  });
 });
 
 // 엔진 감도 프로브가 유일한 자동 신호인 사각(평탄 바닥 + 수평 오클릭)을 화면이 알린다.

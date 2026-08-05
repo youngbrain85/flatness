@@ -356,10 +356,16 @@ describe('ScanPage 메타·안내 문구 (단계 E)', () => {
     expect(text).toContain('1,234,567');
   });
 
-  // ★ 리뷰 I1(단계 F): 병합 스캔은 정합 성공 즉시 status='ready'로 목록에 뜨고 여기서
-  // 바로 분석할 수 있다. 정합 화면으로 돌아가는 길이 없으면 이 경로로 들어온 사용자는
-  // 겹쳐보기(RMSE가 원리적으로 못 보는 수평 어긋남을 확인하는 유일한 수단)를 찾을
-  // 방법이 없다.
+  // ★ 리뷰 I1(단계 F): 병합 스캔은 정합 성공 즉시 status='ready'로 목록에 뜬다.
+  // 정합 화면으로 돌아가는 길이 없으면 이 경로로 들어온 사용자는 겹쳐보기(RMSE가
+  // 원리적으로 못 보는 수평 어긋남을 확인하는 유일한 수단)를 찾을 방법이 없다.
+  //
+  // ★★ 정정(단계 F 최종 리뷰 Critical): 이 주석은 원래 "여기서 바로 분석할 수 있다"고
+  // 적혀 있었는데 **거짓이었다.** 병합 스캔은 analyses 행 없이 ready로 만들어지므로
+  // (worker의 _merged_scan_fields) 당시 이 화면의 분석 진입점 셋이 전부 비껴갔고,
+  // 바로 아래 테스트가 `analyses: []`인 병합 스캔을 실제로 렌더하면서도 정합 링크만
+  // 확인하고 넘어가 반증을 놓쳤다. 분석 진입점은 아래 별도 describe가 단언한다 -
+  // 주석이 사실을 대신하지 못한다.
   it('정합 병합 스캔이면 정합 화면으로 돌아가는 링크를 단다', async () => {
     vi.mocked(createClient).mockResolvedValue(
       stubSupabase(mkScan({ lineage: 'registered' }), [], location, { id: 'reg-9' }) as never);
@@ -404,5 +410,97 @@ describe('ScanPage 메타·안내 문구 (단계 E)', () => {
     const text = collectText(el).join('');
 
     expect(text).toContain('점 개수');
+  });
+});
+
+// ★ 단계 F 최종 리뷰 Critical: status='ready'인데 평활도 analyses 행이 없는 스캔은
+// **분석을 시작할 방법이 아예 없었다.** 이 화면의 진입점 셋이 전부 이 상태를 비껴간다:
+// 단위 확인 링크는 awaiting_unit_confirm 전용, 평활도 ReanalyzeButton은 기존 analyses
+// 행을 요구, 구배 버튼은 완료된 평활도 분석을 요구. 그런데 상태 칸과 측정위치 트리는
+// SCAN_STATUS_LABEL.ready("분석 준비됨")를 달아 할 수 있다고 말한다 - 막다른 골목이다.
+//
+// 이 상태에 도달하는 경로가 둘이라 진입점을 계보로 좁히지 않았다:
+//   (1) 정합 성공이 만드는 병합 스캔(worker의 _merged_scan_fields - ready·행 없음),
+//   (2) unit-confirm-form.tsx의 되돌리기까지 실패해 남은 고아 스캔(그 파일 52-56행
+//       주석이 이 골목을 그대로 적어 놓고 "관리자에게 알리세요"로 끝난다).
+describe('ScanPage 분석 시작 진입점 (단계 F 최종 리뷰 Critical)', () => {
+  it('병합 스캔(ready·분석 행 없음)에 평활도 분석 시작 버튼이 있다', async () => {
+    vi.mocked(createClient).mockResolvedValue(
+      stubSupabase(
+        mkScan({ lineage: 'registered', selected_criteria_id: 'cr-merged' }), [],
+        location, { id: 'reg-9' },
+      ) as never);
+
+    const el = await ScanPage({ params: Promise.resolve({ id: 'sc1' }) });
+    const flatnessBtn = findAll(el, ReanalyzeButton).find((b) => b.props.kind === 'flatness');
+
+    expect(flatnessBtn).toBeDefined();
+    // 기준은 스캔이 원본 A에서 물려받은 selected_criteria_id다.
+    expect(flatnessBtn?.props.criteriaId).toBe('cr-merged');
+    // 병합 점군은 워커가 만든 ply다 - 'import' 잡을 걸면 안 된다(C1 사고 계열).
+    expect(flatnessBtn?.props.isImport).toBe(false);
+    // 직전 상태가 없어야 버튼이 활성이다. 값이 새면 첫 분석 버튼이 비활성으로 굳는다.
+    expect(flatnessBtn?.props.latestStatus).toBeUndefined();
+  });
+
+  // 병합 점군은 unit_scale이 이미 1.0(미터)이다. confirm-unit은 "파일 좌표가 m·cm·mm 중
+  // 무엇인지 확정하는 단계"라 틀린 안내이고, 거기서 mm를 고르면 멀쩡한 좌표가 1/1000이
+  // 된다. 우회로였던 그 화면으로 되돌리는 것은 해법이 아니다.
+  it('병합 스캔을 단위 확인 화면으로 되돌리지 않고 그 이유를 밝힌다', async () => {
+    vi.mocked(createClient).mockResolvedValue(
+      stubSupabase(mkScan({ lineage: 'registered' }), [], location, { id: 'reg-9' }) as never);
+
+    const el = await ScanPage({ params: Promise.resolve({ id: 'sc1' }) });
+    const hrefs = findAll(el, Link).map((l) => String(l.props.href));
+
+    expect(hrefs.some((h) => h.includes('confirm-unit'))).toBe(false);
+    expect(collectText(el).join('')).toContain('이미 미터로 환산돼 있어');
+  });
+
+  it('단위 확정 직후 실패로 남은 고아 스캔(raw·ready·분석 없음)도 같은 진입점을 얻는다', async () => {
+    vi.mocked(createClient).mockResolvedValue(
+      stubSupabase(mkScan({ lineage: 'raw', status: 'ready' }), []) as never);
+
+    const el = await ScanPage({ params: Promise.resolve({ id: 'sc1' }) });
+    const flatnessBtn = findAll(el, ReanalyzeButton).find((b) => b.props.kind === 'flatness');
+
+    expect(flatnessBtn).toBeDefined();
+    expect(flatnessBtn?.props.criteriaId).toBe('cr1');
+  });
+
+  // ★ 기존 흐름(awaiting_unit_confirm -> ready) 회귀 방지. 새 진입점이 단위 미확정
+  // 스캔까지 삼키면 단위를 확정하지 않은 채 분석이 돌아 결과 전체가 왜곡된다.
+  it('단위 미확정 스캔은 여전히 단위 확인 링크로 보내고 직행 버튼은 띄우지 않는다', async () => {
+    vi.mocked(createClient).mockResolvedValue(
+      stubSupabase(mkScan({ status: 'awaiting_unit_confirm' }), []) as never);
+
+    const el = await ScanPage({ params: Promise.resolve({ id: 'sc1' }) });
+    const hrefs = findAll(el, Link).map((l) => String(l.props.href));
+
+    expect(hrefs).toContain('/scans/sc1/confirm-unit');
+    expect(collectText(el).join('')).toContain('단위 확인하고 분석 시작');
+    expect(findAll(el, ReanalyzeButton)).toHaveLength(0);
+  });
+
+  // 사전 검사 대기 중인 스캔에는 아직 raw 좌표도 단위도 없다.
+  it('사전 검사 대기(uploaded) 스캔에는 분석 시작 버튼을 띄우지 않는다', async () => {
+    vi.mocked(createClient).mockResolvedValue(
+      stubSupabase(mkScan({ status: 'uploaded' }), []) as never);
+
+    const el = await ScanPage({ params: Promise.resolve({ id: 'sc1' }) });
+
+    expect(findAll(el, ReanalyzeButton)).toHaveLength(0);
+  });
+
+  it('평활도 분석이 이미 있으면 진입점이 겹쳐 뜨지 않는다(재분석 버튼 하나뿐)', async () => {
+    const flatness = mkAnalysis({ id: 'f1', kind: 'flatness' });
+    vi.mocked(createClient).mockResolvedValue(
+      stubSupabase(mkScan({ status: 'ready' }), [flatness]) as never);
+
+    const el = await ScanPage({ params: Promise.resolve({ id: 'sc1' }) });
+    const flatnessBtns = findAll(el, ReanalyzeButton).filter((b) => b.props.kind === 'flatness');
+
+    expect(flatnessBtns).toHaveLength(1);
+    expect(flatnessBtns[0].props.latestStatus).toBe('done');
   });
 });

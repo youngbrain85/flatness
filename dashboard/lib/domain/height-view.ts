@@ -18,7 +18,7 @@
 //   build_subcell_grid가 median_z를 **bbox_min[2] 기준 상대 높이**로 저장한다
 //   (`z - lo[2]`). 워커 registration.load_source_points는 점군에 bbox_min[2]를
 //   더해 절대 높이로 되돌린 뒤 정합하고, 대응점에는 unit_scale만 곱한다
-//   (align_sources). 그러므로 화면이 보내는 z도 bbox_min[2]를 더한 값이어야
+//   (prepare_correspondences). 그러므로 화면이 보내는 z도 bbox_min[2]를 더한 값이어야
 //   한다 - 빠뜨리면 두 스캔의 bbox 최저 z 차이만큼 대응점 z가 통째로 어긋난다.
 //
 // 클릭 대상은 **무장식 PNG**다(설계 결정 F7). 화면에 크게 보이는 장식 PNG는

@@ -87,6 +87,33 @@ export default async function ScanPage({ params }: { params: Promise<{ id: strin
   const showSlopeButton = s.surface === 'floor' && !isImportUnknownOrTrue && !!loc;
   const showSlopeSection = !!latestSlope || showSlopeButton;
 
+  // ★ 리뷰 Critical(단계 F 최종): status='ready'인데 평활도 analyses 행이 없는 스캔은
+  // 지금까지 **분석을 시작할 방법이 아예 없었다.** 이 화면의 분석 진입점 셋이 전부
+  // 이 상태를 비껴간다: 단위 확인 링크는 awaiting_unit_confirm 전용이고, 평활도
+  // ReanalyzeButton은 latestFlatness(=기존 analyses 행)를 요구하며, 구배 버튼은 완료된
+  // 평활도 분석(doneFlatness)을 요구한다. 그런데 측정위치 트리와 이 화면의 상태 칸은
+  // SCAN_STATUS_LABEL.ready("분석 준비됨")를 달아 할 수 있다고 말한다 - 막다른 골목이다.
+  //
+  // 범위를 lineage==='registered'(병합 스캔)로 좁히지 않는다. 결함의 본질은 계보가
+  // 아니라 **"ready인데 분석 행이 없다"는 상태 자체**이고, 이 저장소에는 그 상태에
+  // 도달하는 경로가 둘 있다:
+  //   (1) 정합 성공이 만드는 병합 스캔(worker의 _merged_scan_fields - ready·행 없음),
+  //   (2) unit-confirm-form.tsx의 되돌리기까지 실패한 경우. 그 파일 주석(52-56행)이
+  //       이미 이 막다른 골목을 그대로 적어 놓고 "관리자에게 알리세요"로 끝난다.
+  // 계보로 좁히면 (1)만 고치고 (2)는 죽은 채로 남는다.
+  //
+  // 단위 확인 화면으로 보내지 않는 이유: 이 상태의 스캔은 unit_scale이 이미 확정돼
+  // 있다(병합 점군은 1.0 = 미터, (2)는 확정 직후 실패한 것이다). confirm-unit은
+  // "파일 좌표가 m·cm·mm 중 무엇인지 확정하는 단계"라 이미 미터인 점군에는 틀린
+  // 안내이고, 거기서 mm를 고르면 멀쩡한 좌표가 1/1000로 망가진다.
+  //
+  // isImport=false로 고정해도 안전하다(C1 사고 계열 재확인): 임포트 스캔은 이 상태에
+  // 존재할 수 없다. upload-form.tsx가 mode='import'에서 status='ready' 승격과 analyses
+  // 행 생성을 같은 제출 안에서 하고, 그 행 생성·엔큐가 실패하면 discardScan이 스캔
+  // 자체를 soft delete 한다(125-136행). 즉 "ready + 평활도 행 0개"인 임포트 스캔은
+  // 어느 경로로도 만들어지지 않는다.
+  const showFirstFlatness = s.status === 'ready' && !latestFlatness;
+
   return (
     <main className="mx-auto max-w-6xl space-y-4 p-6">
       <h1 className="text-xl font-bold">
@@ -158,6 +185,27 @@ export default async function ScanPage({ params }: { params: Promise<{ id: strin
             워커 실행 창의 로그에 남습니다(3회 자동 재시도 후에도 실패한 상태입니다).
           </p>
         </div>
+      )}
+      {showFirstFlatness && (
+        <section className="space-y-2">
+          <div className="flex items-center justify-between">
+            <h2 className="font-semibold">{ANALYSIS_KIND_LABEL.flatness} 분석</h2>
+            {user && (
+              // latestStatus를 넘기지 않는다 - 이 종류의 분석이 한 번도 없었다는 뜻이므로
+              // ReanalyzeButton은 이를 "진행 중 아님"으로 보고 버튼을 활성 상태로 둔다
+              // (구배 첫 분석과 같은 취급). criteriaId는 스캔에 현재 적용된 기준이다;
+              // 병합 스캔은 이 값을 원본 A에서 물려받는다(worker의 _merged_scan_fields).
+              <ReanalyzeButton scanId={id} userId={user.id} surface={s.surface} kind="flatness"
+                criteriaId={s.selected_criteria_id ?? undefined}
+                isImport={false} />
+            )}
+          </div>
+          <p className="text-sm text-slate-600">
+            {s.lineage === 'registered'
+              ? '병합 점군은 이미 미터로 환산돼 있어 단위 확인 없이 바로 분석할 수 있습니다. 다만 정합이 실제로 맞았는지는 위 겹쳐보기로 먼저 확인하세요 - 분석은 어긋난 정합도 그대로 받아 수치를 냅니다.'
+              : '단위가 확정된 스캔인데 아직 분석이 없습니다. 위 버튼으로 첫 분석을 시작하세요.'}
+          </p>
+        </section>
       )}
       {latestFlatness && (
         <section className="space-y-2">
