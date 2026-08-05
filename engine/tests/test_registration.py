@@ -23,6 +23,7 @@ from tests.fixtures.synthetic import bumpy_floor, bumpy_surface_z
 # 스펙 §4.4의 임계를 **리터럴로** 고정한다. 구현 상수(reg.MAX_RMSE_M)를 그대로 쓰면
 # 상수를 바꾸는 변이가 게이트를 무력화해도 단언이 함께 움직여 잡히지 않는다.
 _SPEC_MAX_RMSE_M = 0.002
+_SPEC_HORIZ_SENS_MIN = 1.1
 
 _NOISE_SD_M = 0.001          # 노이즈 1mm (스펙 §9.3)
 _KNOWN_YAW_DEG = 7.0
@@ -384,6 +385,16 @@ def test_spec_rmse_threshold_is_two_millimetres():
     """
     assert reg.MAX_RMSE_M == _SPEC_MAX_RMSE_M
     assert reg.MIN_OVERLAP_RATIO == 0.1
+    # 설계 상수는 전부 리터럴로 못 박는다. 구현 상수를 참조하면 상수를 바꾸는
+    # 변이에 단언이 함께 끌려가 무탐지 구간이 생긴다(실측: 감도 임계 3.5배,
+    # 프로브 보폭 25배, 대응점 퍼짐 13배 구간이 아무 테스트도 울리지 않았다).
+    assert reg.HORIZONTAL_SENSITIVITY_MIN == _SPEC_HORIZ_SENS_MIN
+    assert reg.PROBE_STEP_M == 0.10
+    assert reg.DIVERGENCE_SPACING_RATIO == 1.5
+    assert reg.MIN_CORR_SPREAD_FRACTION == 0.12
+    assert reg.CORR_CLICK_SD_M == 0.05
+    assert abs(np.degrees(reg.MAX_CORR_ROTATION_SIGMA_RAD) - 60.0) < 1e-9
+    assert reg.NORMAL_K == 16
 
 
 def test_one_metre_horizontal_misalignment_is_reported_as_failure():
@@ -499,6 +510,11 @@ def test_z_gate_holds_across_the_documented_slope_range():
     gx, gy = _plane_gradient(a)
     assert abs(gx - slope) <= 0.002, f"픽스처 x 기울기가 {gx * 100:.3f}% (기대 {slope * 100:.1f}%)"
     assert abs(gy) <= 0.005, f"y 기울기가 의도치 않게 {gy * 100:.3f}%"
+    # 점군만 기울이고 대응점을 안 기울이면 대응점이 표면에서 떠서 다른 실험이 된다
+    on_surface = bumpy_surface_z(cd[:, 0], cd[:, 1], size=_SIZE, seed=_SURF_SEED) + slope * cd[:, 0]
+    assert np.abs(cd[:, 2] - on_surface).max() <= 1e-9, "대응점이 램프 표면 위에 있지 않다"
+    assert np.abs(cd[:, 2] - (on_surface - slope * cd[:, 0])).max() > 0.01, (
+        "대응점 z에 구배 성분이 없다 — 구배를 대응점에서만 뺀 상태다")
 
     res = register_clouds(b, a, cs, cd)
     assert res.converged, res.failure_reason
@@ -529,16 +545,113 @@ def test_long_corridor_correspondences_are_accepted():
     corr_dst = np.column_stack([cxy, bumpy_surface_z(cxy[:, 0], cxy[:, 1], size=size, seed=_SURF_SEED)])
     corr_src = _apply(corr_dst, _KNOWN_YAW_DEG, _KNOWN_SHIFT_M) + rng.normal(0, _CLICK_SD_M, corr_dst.shape)
 
-    lateral, sv = reg.correspondence_lateral_spread(corr_dst)
-    assert lateral > 0.5, f"측방 퍼짐 {lateral:.3f}m"
+    sv, spread, sigma = reg.correspondence_geometry(corr_dst)
+    assert np.degrees(sigma) < 5.0, f"회전 불확도 {np.degrees(sigma):.2f}도"
     assert sv[1] / sv[0] < 0.02, (
         f"이 픽스처는 무차원 비가 작아야 회귀 가드로 쓸모가 있다: {sv[1] / sv[0]:.4f}")
+    assert spread > 0.12 * 150.0, f"퍼짐 {spread:.1f}m"
 
     res = register_clouds(b, a, corr_src, corr_dst)
     assert res.converged, res.failure_reason
     _yaw, inplane, z_err = _errors(res)
     assert abs(z_err) <= 0.001, f"z 오차 {z_err * 1000:.3f}mm"
     assert inplane <= 0.050, f"면내 오차 {inplane * 1000:.1f}mm"
+
+
+def _patch_corr(side, cx=3.1, cy=2.3):
+    """정합 영역 안 좁은 구역에만 몰린 3점(정삼각형)."""
+    ang = np.array([0.0, 2.0944, 4.1888])
+    return _surface(np.column_stack([cx + side / 2 * np.cos(ang), cy + side / 2 * np.sin(ang)]))
+
+
+def _zigzag_corr(n, dev, base=6.0, x0=1.0, y0=2.0):
+    """긴 기저선 위 지그재그 — 거의 공선이지만 퍼짐은 넓다."""
+    xs = np.linspace(x0, x0 + base, n)
+    return _surface(np.column_stack([xs, y0 + dev * (np.arange(n) % 2)]))
+
+
+def test_small_patch_correspondences_are_rejected():
+    """정합 영역 8x6m 위 **0.9m 패치**는 거부한다.
+
+    회전 불확도만 보면 5.2도로 멀쩡하다. 그런데 회전 오차가 정합 영역 전체로
+    외삽되어 면내 오차가 정상 배치의 1.5~4.7배로 벌어지는데도 `converged=True`로
+    조용히 나간다. 스펙 자신의 `국소경사 x 면내변위` 공식으로 구배 3%면 요구
+    정밀도 ±5mm를 넘긴다. 최대 거리 절대 기준을 없앤 것이 안전하지 않았다.
+    """
+    a, b, _cs, _cd = _scan_pair(click_sd=0.0)
+    cd = _patch_corr(0.9)
+    sv, spread, sigma = reg.correspondence_geometry(cd)
+    assert np.degrees(sigma) < 30.0, (
+        f"회전 불확도 {np.degrees(sigma):.1f}도 — 이 픽스처는 회전 기준으로는 "
+        "멀쩡해야 퍼짐 기준의 존재 이유가 증명된다")
+    with pytest.raises(ValueError, match="정합 영역"):
+        register_clouds(b, a, _apply(cd, _KNOWN_YAW_DEG, _KNOWN_SHIFT_M), cd)
+
+
+def test_wide_patch_correspondences_are_accepted():
+    """같은 형태라도 2.0m로 벌리면 통과한다 — 퍼짐 기준이 과하지 않음을 고정."""
+    a, b, _cs, _cd = _scan_pair(click_sd=0.0)
+    cd = _patch_corr(2.0)
+    res = register_clouds(b, a, _apply(cd, _KNOWN_YAW_DEG, _KNOWN_SHIFT_M), cd)
+    assert res.converged, res.failure_reason
+
+
+def test_near_collinear_zigzag_with_a_long_baseline_is_accepted():
+    """6m 기저선 위 10cm 지그재그는 통과해야 한다.
+
+    측방 RMS 편차(4.8cm)만 보면 거부되지만, 실제로는 면내 11.3mm로 **전체 실험
+    중 가장 좋은** 정합을 낸다. 무차원 비로도, 측방 RMS로도 거부되던 배치다.
+    """
+    a, b, _cs, _cd = _scan_pair(click_sd=0.0)
+    cd = _zigzag_corr(6, dev=0.10)
+    res = register_clouds(b, a, _apply(cd, _KNOWN_YAW_DEG, _KNOWN_SHIFT_M), cd)
+    assert res.converged, res.failure_reason
+    _yaw, inplane, z_err = _errors(res)
+    assert abs(z_err) <= 0.001, f"z 오차 {z_err * 1000:.3f}mm"
+    assert inplane <= 0.050, f"면내 오차 {inplane * 1000:.1f}mm"
+
+
+def test_more_correspondence_points_relax_the_rotation_gate():
+    """★ 점을 더 찍으면 거부가 풀린다 — 회전 불확도는 sqrt(N)으로 좋아진다.
+
+    같은 기하(6m 기저선·4cm 지그재그)에서 N=3은 거부, N=12는 통과여야 한다.
+    측방 **RMS 편차**(sv1/sqrt(N))로 판별하면 이 값이 정의상 N에 불변이라 점을
+    아무리 더 찍어도 거부가 안 풀린다 — 물리와 어긋나고, 사용자가 할 수 있는
+    올바른 대처(더 찍기)를 막는다.
+    """
+    a, b, _cs, _cd = _scan_pair(click_sd=0.0)
+    few, many = _zigzag_corr(3, dev=0.04), _zigzag_corr(12, dev=0.04)
+    sv_few, _s1, _g1 = reg.correspondence_geometry(few)
+    sv_many, _s2, _g2 = reg.correspondence_geometry(many)
+    # 측방 RMS 편차는 두 배치가 사실상 같다 — 그래서 그것으로는 구분할 수 없다
+    lat_few = sv_few[1] / np.sqrt(len(few))
+    lat_many = sv_many[1] / np.sqrt(len(many))
+    assert abs(lat_few - lat_many) < 0.01, (
+        f"측방 RMS가 {lat_few:.4f} vs {lat_many:.4f}로 달라 이 테스트가 sqrt(N)을 증명하지 못한다")
+
+    # 사유 문구는 "공선"/"몰려 있"으로 갈리지만 게이트는 둘 다 회전 불확도다
+    with pytest.raises(ValueError, match="회전"):
+        register_clouds(b, a, _apply(few, _KNOWN_YAW_DEG, _KNOWN_SHIFT_M), few)
+    res = register_clouds(b, a, _apply(many, _KNOWN_YAW_DEG, _KNOWN_SHIFT_M), many)
+    assert res.converged, res.failure_reason
+
+
+def test_correspondence_check_runs_against_each_cloud_own_region():
+    """src·dst 양쪽 모두 **자기 정합 영역**과 대조한다.
+
+    두 점군의 범위가 다르면 판정도 달라진다. 여기서는 dst 기준으로는 충분히 넓은
+    대응점이 src(훨씬 넓은 점군) 기준으로는 좁은 구역이 된다 — src 쪽 검사를
+    지우면 이 배치가 통과해 버린다. 다른 픽스처는 전부 `cs = 강체(cd)`라 좌우
+    대칭이어서 src 검사가 도달 불가였다.
+    """
+    dst = bumpy_floor(size=(8.0, 6.0), seed=_SURF_SEED, sample_jitter=0.025, sample_seed=101)
+    src = bumpy_floor(size=(60.0, 45.0), spacing=0.25, seed=_SURF_SEED,
+                      sample_jitter=0.025, sample_seed=202)
+    cd = _surface(_CORR_XY)                       # dst 영역(대각 10m)의 73% — 통과
+    cs = cd.copy()                                # src 영역(대각 75m)의 10% — 거부
+    assert reg._region_diag(src) > 5 * reg._region_diag(dst)
+    with pytest.raises(ValueError, match="정합 영역"):
+        register_clouds(src, dst, cs, cd)
 
 
 def test_horizontal_sensitivity_flags_a_featureless_plane():
@@ -553,12 +666,66 @@ def test_horizontal_sensitivity_flags_a_featureless_plane():
     ba, bb, bcs, bcd = _scan_pair(click_sd=0.0)
     bumpy = register_clouds(bb, ba, bcs, bcd)
 
-    assert flat.horizontal_sensitivity < reg.HORIZONTAL_SENSITIVITY_MIN, (
+    assert flat.horizontal_sensitivity < _SPEC_HORIZ_SENS_MIN, (
         f"완전 평면 감도 {flat.horizontal_sensitivity:.3f} — 검증 불가로 표시돼야 한다")
-    assert bumpy.horizontal_sensitivity >= reg.HORIZONTAL_SENSITIVITY_MIN, (
+    assert bumpy.horizontal_sensitivity >= _SPEC_HORIZ_SENS_MIN, (
         f"범프 바닥 감도 {bumpy.horizontal_sensitivity:.3f} — 정상으로 표시돼야 한다")
     # 사각은 rmse_m으로는 전혀 드러나지 않는다: 두 장면의 RMSE가 사실상 같다
     assert abs(flat.rmse_m - bumpy.rmse_m) < 0.0002, "RMSE만으로는 두 장면이 구분되지 않는다"
+    # ★ 감도가 낮다고 실패시키면 안 된다 — ±5mm 평탄 바닥이 이 용역의 정상 대상이라
+    #   게이트로 걸면 정상 작업이 전부 실패한다. 옳은 결정일수록 못 박아 둔다.
+    assert flat.converged, flat.failure_reason
+    assert "감도" not in (flat.failure_reason or "")
+
+
+def test_horizontal_sensitivity_reports_the_worst_direction():
+    """4방향 중 **최솟값**을 쓴다 — "검증 가능한가"는 최악 방향이 답한다.
+
+    바닥+벽 장면은 벽 법선 방향(y)이 20배 넘게 반응하지만 벽을 따라가는 방향(x)은
+    거의 반응하지 않는다. 최댓값으로 집계하면 그 장면이 "완벽히 검증 가능"으로
+    보이는데, 실제로는 벽을 따라 밀린 오정합을 못 본다.
+    """
+    rng = np.random.default_rng(5)
+    a = _floor_and_wall(301)
+    b_local = _floor_and_wall(402)
+    b = _apply(b_local, _KNOWN_YAW_DEG, _KNOWN_SHIFT_M) + rng.normal(0, _NOISE_SD_M, b_local.shape)
+    corr_dst = np.vstack([_surface(_CORR_XY[:3]), np.array([[1.4, 0.0, 0.6], [6.3, 0.0, 1.9]])])
+    res = register_clouds(b, a, _apply(corr_dst, _KNOWN_YAW_DEG, _KNOWN_SHIFT_M), corr_dst)
+    assert res.converged, res.failure_reason
+    assert res.horizontal_sensitivity < 5.0, (
+        f"감도 {res.horizontal_sensitivity:.3f} — 최댓값(약 20)으로 집계하고 있다")
+    assert res.horizontal_sensitivity >= _SPEC_HORIZ_SENS_MIN
+
+
+def test_a_flat_floor_is_the_normal_case_not_an_error():
+    """±5mm 평탄 바닥(이 용역의 통상 대상)은 감도가 낮게 나오는 것이 **정상**이다.
+
+    범프 진폭을 줄여 z RMS 1.1mm(≈±2.4mm 평탄)로 만들면 감도가 1.038로 떨어지는데,
+    정합 자체는 멀쩡하다. 이 값을 게이트로 쓰면 안 된다는 근거를 고정한다.
+    """
+    rng = np.random.default_rng(7)
+
+    def flatten(seed_s):
+        p = bumpy_floor(size=_SIZE, seed=_SURF_SEED, sample_jitter=0.025, sample_seed=seed_s)
+        p = p.copy()
+        p[:, 2] *= 0.2
+        return p
+
+    a, b_local = flatten(101), flatten(202)
+    b = _apply(b_local, _KNOWN_YAW_DEG, _KNOWN_SHIFT_M) + rng.normal(0, _NOISE_SD_M, b_local.shape)
+    z_rms = float(np.sqrt(np.mean((a[:, 2] - a[:, 2].mean()) ** 2)))
+    assert z_rms < 0.0025, f"이 픽스처는 평탄해야 한다: z RMS {z_rms * 1000:.3f}mm"
+
+    corr_dst = np.column_stack([_CORR_XY, np.interp(_CORR_XY[:, 0], [0, 8], [0, 0])
+                                + bumpy_surface_z(_CORR_XY[:, 0], _CORR_XY[:, 1],
+                                                  size=_SIZE, seed=_SURF_SEED) * 0.2])
+    corr_src = _apply(corr_dst, _KNOWN_YAW_DEG, _KNOWN_SHIFT_M)
+    res = register_clouds(b, a, corr_src, corr_dst)
+    assert res.converged, res.failure_reason
+    _yaw, _ip, z_err = _errors(res)
+    assert abs(z_err) <= 0.001, f"z 오차 {z_err * 1000:.3f}mm"
+    assert res.horizontal_sensitivity < _SPEC_HORIZ_SENS_MIN, (
+        f"감도 {res.horizontal_sensitivity:.3f} — 평탄 바닥은 낮게 나오는 것이 정상이다")
 
 
 def test_iteration_budget_exhaustion_is_reported_as_failure():

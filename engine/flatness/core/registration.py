@@ -36,10 +36,19 @@ DIVERGENCE_SPACING_RATIO = 1.5
 # 정합하면 면내 오차가 정상 4점 배치(44.7mm)보다 **더 좋다**. 물리적으로 옳은 질문은
 # "측방 퍼짐이 클릭 오차 대비 충분한가"다.
 CORR_CLICK_SD_M = 0.05          # 화면 클릭 정확도 ±5cm (스펙 §9.3)
-# 측방 RMS 퍼짐 = sv1/sqrt(N). 이것이 클릭 오차보다 작으면 회전을 전혀 정할 수 없다.
-# 실측: 정상 4점 1.925m / 복도 150x2.5 1.001m / 좁은 띠 중첩 0.108m / 작은 방
-# 0.8x0.6 0.236m / 근접 3점 0.008m / 완전 공선 0.000m.
-MIN_CORR_LATERAL_SPREAD_M = CORR_CLICK_SD_M
+# 회전 불확도 sigma_theta ~= sigma_click / sv1 이다. **sv1 자체**를 쓴다.
+# sv1 = (측방 RMS 편차) x sqrt(N)이므로 점을 더 찍으면 sqrt(N)만큼 좋아진다 —
+# 측방 RMS 편차(sv1/sqrt(N))를 쓰면 정의상 N에 불변이라 "더 찍어도 거부가 안 풀리는"
+# 물리적으로 틀린 규칙이 된다. 실측으로 확인: 같은 지그재그에서 N=3,6,10,20일 때
+# sv1이 0.0817 -> 0.1172 -> 0.1557 -> 0.2228로 sqrt(N)을 따라간다.
+MAX_CORR_ROTATION_SIGMA_RAD = np.radians(60.0)
+MIN_CORR_SV1_M = CORR_CLICK_SD_M / MAX_CORR_ROTATION_SIGMA_RAD   # = 0.0477m
+# 회전 불확도만으로는 **소형 패치**를 못 거른다. 8x6m 바닥 위 0.9m 패치는 sv1이
+# 0.55(=5.2도)로 멀쩡한데도 면내 오차가 정상 배치의 1.5~4.7배로 벌어진다 —
+# 회전 오차가 정합 영역 전체로 외삽되기 때문이다. 그래서 **정합 영역 대비 퍼짐**을
+# 따로 본다. 실측(8x6m, 대각 10m): 패치 0.3m 0.026배(면내 140.9mm) /
+# 0.9m 0.077배(68.2mm) / 2.0m 0.172배(40.5mm) / 정상 4점 0.727배(44.7mm).
+MIN_CORR_SPREAD_FRACTION = 0.12
 _COLLINEAR_SV_RATIO = 0.05      # 사유 문구를 "공선"으로 쓸지 고르는 용도(게이트 아님)
 # 감도 프로브 — 정합을 수평으로 밀었을 때 point-to-plane 잔차가 오르는 비.
 # 1.0이면 이 정합은 수평 오정합을 **원리적으로 검출할 수 없다**(스펙 §9.3.2).
@@ -65,14 +74,23 @@ class RegistrationResult:
     point_rmse_m: float = float("nan")     # point-to-point 잔차 RMSE. 발산 가드의 근거값
     sample_spacing_m: float = float("nan")  # dst 표본 간격 추정(최근접 이웃 거리 중앙값)
     horizontal_sensitivity: float = float("nan")
-    """수평 오정합을 **검출할 수 있는 정도**. 정합을 ±10cm 수평으로 밀었을 때
-    point-to-plane 잔차가 오르는 비의 최솟값(±x·±y 4방향 중 최악).
+    """**수평 검증 가능성** — 이상 경고가 아니다. 정합을 ±10cm 수평으로 밀었을 때
+    point-to-plane 잔차가 오르는 비의 최솟값(±x·±y 4방향 중 **최악** 방향).
 
-    1.0에 가까우면 이 장면은 수평 방향으로 **검증 불가**다 — 몇 미터가 어긋나도
-    잔차가 그대로라 `rmse_m`이 안전을 보장하지 못한다(스펙 §9.3.2). 실패로
-    처리하지는 않는다(±5mm 평탄 바닥이 이 용역의 정상 대상이라 전부 막히면
-    기능이 성립하지 않는다). 대신 화면(§7.4)이 `HORIZONTAL_SENSITIVITY_MIN`
-    미만일 때 "수평 방향 검증 불가"를 경고하고 겹친 그림을 함께 보여야 한다."""
+    1.0에 가까우면 이 장면은 수평 방향으로 **검증할 수단이 없다**는 뜻이다 —
+    몇 미터가 어긋나도 잔차가 그대로라 `rmse_m`이 안전을 보장하지 못한다
+    (스펙 §9.3.2). 정합이 틀렸다는 뜻이 **아니다**.
+
+    ★ **낮게 나오는 것이 이 용역에서는 정상이다.** 바닥이 평탄할수록 수평 위치를
+    구속할 정보가 원래 없다. 실측(바닥 z RMS ↔ 감도): 5.53mm↔1.710 / 2.76mm↔1.218 /
+    1.66mm↔1.084 / 1.11mm↔1.038 / 0mm↔1.000. 교차점이 약 ±4.5mm 평탄도라,
+    **이 용역의 통상 대상인 ±5mm 평탄 바닥 대부분이 `HORIZONTAL_SENSITIVITY_MIN`
+    아래로 내려간다.** 구배도 구제하지 못한다 — 최악 방향 집계라 구배와 직각인
+    방향이 선택되어, 범프 없는 20% 램프에서도 1.002다.
+
+    실패로 처리하지 않는다(그렇게 하면 정상 작업이 전부 막힌다). 화면(§7.4)의
+    행동 지침은 "정합이 잘못됐다"가 아니라 **"대응점을 정합 영역 전체에 넓게
+    분산해 다시 찍고, 겹쳐 그린 그림으로 눈으로 확인하라"**이다."""
 
 
 def _as_points(arr, what):
@@ -261,37 +279,57 @@ def icp_refine(src_pts, dst_pts, init_transform, *,
                               horizontal_sensitivity=sensitivity)
 
 
-def correspondence_lateral_spread(pts):
-    """대응점의 **측방 RMS 퍼짐**(미터) = 2번째 특이값 / sqrt(N).
+def correspondence_geometry(pts):
+    """대응점 배치의 기하 지표 `(sv, 최대 퍼짐[m], 회전 불확도[rad])`.
 
-    회전을 정하는 것은 주축이 아니라 **주축에 수직인 퍼짐**이다. 절대량이라
-    현장 크기에 휘둘리지 않는다 — 150m 복도든 0.8m 방이든 같은 잣대로 잰다.
+    회전 불확도는 `sigma_click / sv1`이다. sv1(2번째 특이값)은 주축에 수직인
+    **총** 퍼짐이라 점 수에 따라 sqrt(N)으로 커진다 — 점을 더 찍을수록 회전이
+    잘 정해진다는 물리와 일치한다. sv1/sqrt(N)(측방 RMS 편차)로 나누면 그 이득이
+    사라져 "더 찍어도 소용없는" 규칙이 된다.
     """
     sv = np.linalg.svd(pts - pts.mean(axis=0), compute_uv=False)
     sv = np.concatenate([sv, np.zeros(3)])[:3]
-    return float(sv[1] / np.sqrt(len(pts))), sv
+    spread = float(np.linalg.norm(pts[:, None, :] - pts[None, :, :], axis=-1).max())
+    sigma = CORR_CLICK_SD_M / sv[1] if sv[1] > 0 else float("inf")
+    return sv, spread, float(sigma)
 
 
-def check_correspondence_geometry(pts, what="대응점"):
-    """스펙 §8: 대응점이 공선이거나 한곳에 몰려 있으면 거부한다.
+def check_correspondence_geometry(pts, region_diag_m, what="대응점"):
+    """스펙 §8: 대응점이 공선이거나 좁은 구역에 몰려 있으면 거부한다.
 
     개수만 세면 안 된다. 근접 3점(2cm 안)을 찍으면 초기 Umeyama가 이미 yaw 89도·
     면내 5.3m로 틀어지고 ICP가 못 고친다 — 가드는 대응점 단계에 있어야 한다.
 
-    **판별은 절대량(측방 RMS 퍼짐)으로 한다.** 무차원 비 sv1/sv0을 쓰면 스케일에
-    끌려가 150m 복도를 거부하면서 6m에 12cm 편차인 배치는 통과시킨다(전자가
-    물리적으로 더 좋은데도). 측방 퍼짐이 클릭 오차(±5cm)보다 작으면 회전을
-    정할 수 없다 — 그것이 유일한 게이트다. 특이값 비는 사유 문구를 고르는 데만 쓴다.
+    **두 가지를 따로 본다.**
+
+    1. 회전 불확도 `sigma_click / sv1`. 공선·근접처럼 회전이 아예 안 정해지는
+       배치를 거른다. sv1을 그대로 쓰므로 **점을 더 찍으면 sqrt(N)만큼 완화된다.**
+    2. **정합 영역 대비 최대 퍼짐.** 회전 오차는 정합 영역 전체로 외삽되므로,
+       회전 불확도가 멀쩡해도 좁은 패치면 면내 오차가 크게 벌어진다.
+
+    무차원 비 `sv1/sv0`은 쓰지 않는다 — 스케일에 끌려가 150m 복도(0.0163)를
+    거부하면서 정작 그 복도가 정상 4점 배치보다 정확한 모순이 생긴다.
     """
-    lateral, sv = correspondence_lateral_spread(pts)
-    if lateral >= MIN_CORR_LATERAL_SPREAD_M:
-        return
-    if sv[0] > 0 and sv[1] / sv[0] < _COLLINEAR_SV_RATIO:
-        raise ValueError(f"{what}이 한 직선 위에 있습니다(공선, 측방 퍼짐 "
-                         f"{lateral * 100:.1f}cm). 일직선을 벗어난 지점을 하나 이상 포함하세요.")
-    raise ValueError(f"{what}이 한곳에 몰려 있습니다(측방 퍼짐 {lateral * 100:.1f}cm가 "
-                     f"클릭 오차 {CORR_CLICK_SD_M * 100:.0f}cm보다 작습니다). "
-                     "서로 멀리 떨어진 지점들을 고르세요.")
+    sv, spread, sigma = correspondence_geometry(pts)
+    if sigma > MAX_CORR_ROTATION_SIGMA_RAD:
+        if sv[0] > 0 and sv[1] / sv[0] < _COLLINEAR_SV_RATIO:
+            raise ValueError(
+                f"{what}이 한 직선 위에 있습니다(공선). 회전을 정할 수 없습니다 — "
+                "일직선을 벗어난 지점을 포함하거나 대응점을 더 찍으세요.")
+        raise ValueError(
+            f"{what}이 한곳에 몰려 있습니다(회전 불확도 {np.degrees(sigma):.0f}도). "
+            "서로 멀리 떨어진 지점을 고르거나 대응점을 더 찍으세요.")
+    if region_diag_m > 0 and spread < MIN_CORR_SPREAD_FRACTION * region_diag_m:
+        raise ValueError(
+            f"{what}이 정합 영역의 좁은 구역에만 몰려 있습니다"
+            f"(퍼짐 {spread:.2f}m가 영역 {region_diag_m:.1f}m의 "
+            f"{spread / region_diag_m * 100:.0f}%). 회전 오차가 영역 전체로 "
+            "확대됩니다 — 정합 영역 전체에 넓게 분산해 찍으세요.")
+
+
+def _region_diag(pts):
+    """점군 xy bbox 대각 길이 — 회전 오차가 외삽되는 거리 척도."""
+    return float(np.hypot(*(pts.max(axis=0)[:2] - pts.min(axis=0)[:2])))
 
 
 def register_clouds(src_pts, dst_pts, correspondences_src, correspondences_dst, **icp_kwargs):
@@ -302,8 +340,10 @@ def register_clouds(src_pts, dst_pts, correspondences_src, correspondences_dst, 
         raise ValueError("대응점 쌍의 개수가 서로 다릅니다")
     if len(cs) < 3:
         raise ValueError(f"대응점이 3쌍 이상 필요합니다(현재 {len(cs)}쌍)")
-    check_correspondence_geometry(cd, "대응점")
-    check_correspondence_geometry(cs, "대응점")
+    # 두 프레임을 각자의 정합 영역과 대조한다. src와 dst의 범위가 다르면 판정도
+    # 달라지므로 한쪽만 검사하면 안 된다.
+    check_correspondence_geometry(cd, _region_diag(_as_points(dst_pts, "dst_pts")), "대응점")
+    check_correspondence_geometry(cs, _region_diag(_as_points(src_pts, "src_pts")), "대응점")
     return icp_refine(src_pts, dst_pts, umeyama_rigid(cs, cd), **icp_kwargs)
 
 
