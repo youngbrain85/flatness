@@ -662,8 +662,12 @@ Vercel(대시보드) + Railway(워커, Docker) + Supabase(DB·Auth·Storage) 구
       - 눌렀을 때 잡 타입이 **`analyze`** 여야 한다. `import`로 걸리면 임포트 판별이
         잘못된 것이고, 그 경우 점 단위 편차 목록을 원시 점군으로 오해해 **전 셀이
         "적합"으로 나오는 조용한 오답**이 된다.
-      - 임포트로 올린 스캔(Colab CSV/JSON)에는 이 버튼이 **뜨면 안 된다.** 같은 현장에
-        임포트 스캔이 있으면 그 상세도 한 번 열어 버튼이 없는 것을 확인한다.
+      - **임포트 스캔은 화면으로 구별하려 하지 마라.** 정상 임포트 스캔에도 "평활도
+        분석" 버튼이 보인다 - `analyses` 행이 이미 있어 재분석 버튼(`ReanalyzeButton`)이
+        렌더되고 그 라벨이 같은 문자열이다. 버튼이 **없는** 것은 업로드가 중간에 끊긴
+        고아 임포트 스캔뿐이라 일부러 재현할 수 없다. 구별은 아래 SQL로 한다.
+
+      SQL Editor에서 확인한다:
 
       ```sql
       -- 방금 만든 병합 스캔에 분석이 실제로 걸렸는지
@@ -674,6 +678,16 @@ Vercel(대시보드) + Railway(워커, Docker) + Supabase(DB·Auth·Storage) 구
        order by a.created_at desc;
       ```
       `kind='flatness'`, `job_type='analyze'`가 나와야 한다.
+
+      **같은 쿼리를 임포트 스캔(Colab CSV/JSON로 올린 것)의 `scan_id`로도 돌려
+      대조한다** - 거기서는 `job_type='import'`가 나와야 한다. 임포트 스캔에
+      `analyze`가 걸리면 점 단위 편차 목록을 원시 점군으로 오해해 **전 셀이
+      "적합"으로 나오는 조용한 오답**이 된다(`reanalyze-button.tsx` 상단 주석에
+      실제 사고 기록이 있다).
+
+      > 한 분석에 실패 잡과 재시도 잡이 쌓여 있으면 위 LEFT JOIN이 여러 행을
+      > 돌려준다(`jobs_dedup`은 `queued`·`processing`에만 걸린다). `job_type`이
+      > 전부 같은 값이면 정상이다.
 
    완료되면 SQL Editor에서 결과 행을 직접 확인한다 - **화면 문구가 아니라 이 값들이
    정합이 실제로 성립했다는 증거다**:
