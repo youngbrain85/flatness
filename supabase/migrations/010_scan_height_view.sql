@@ -7,11 +7,11 @@
 -- 그 그림으로 파일 단위(m/cm/mm)를 가늠하는 유일한 단서다(설계 결정 E1).
 --
 -- 008/009처럼 파일을 둘로 나눌 필요가 없다: 008/009 분리는 job_type enum에
--- 새 값(slope_judge)을 추가한 뒤 그 값을 "같은 트랜잭션 안에서" 즉시 SQL이
--- 참조해야 했기 때문이었다(PostgreSQL이 "unsafe use of new value"로 막는다,
--- docs/SUPABASE_SETUP.md 2단계 8번 참고). 이 마이그레이션은 enum 추가가 전혀
--- 없는 단순 컬럼 추가뿐이라 그 제약이 애초에 성립하지 않는다 - 파일 하나로
--- 안전하게 끝난다.
+-- 새 값(slope_judge)을 추가하는 문장과 그 값을 쓰는 코드를 분리해 두려는 절차상의
+-- 선택이다(지금의 009는 008과 한 트랜잭션에 합쳐도 실제로는 통과한다 - 근거와
+-- 실측은 docs/SUPABASE_SETUP.md 2단계 8번 참고). 이 마이그레이션은 enum을 아예
+-- 건드리지 않는 단순 컬럼 추가뿐이라 "unsafe use of new value" 제약과는 처음부터
+-- 무관하다 - 파일 하나로 안전하게 끝난다.
 --
 -- 멱등성(006:18·007:6 관례): add column if not exists로 재실행 안전.
 alter table scans add column if not exists height_view_path text;

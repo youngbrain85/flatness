@@ -2,9 +2,10 @@
 -- 마이그레이션 009 - slope_judge 잡 큐 함수 확장 (세부과업 4 단계 D)
 -- 선행: 008_slope_judge_enum.sql (job_type에 'slope_judge' 추가)
 --
--- ⚠ 008과 009는 반드시 두 번 나눠 Run 한다 - 같은 트랜잭션에 넣으면 PostgreSQL이
---    새 enum 값의 사용을 "unsafe use of new value"로 막는다(Supabase SQL Editor는
---    파일 전체를 한 트랜잭션으로 실행한다).
+-- 008과 009는 두 번 나눠 Run 하는 것이 정본이다. 다만 "합치면 실패한다"는 뜻은
+--    아니다 - 실측하면 008+009를 한 트랜잭션으로 실행해도 성공한다. 이 파일이 새
+--    enum 값을 top-level SQL에서 쓰지 않기 때문이다(아래 가드 주석 참고). 나누는
+--    이유와 실제로 막히는 형태는 008 주석과 docs/SUPABASE_SETUP.md 2단계 8번.
 --
 -- **008 없이 이 파일만 Run 하면 "Success"가 뜬다 - 이것이 함정이다.** plpgsql
 -- 함수 본문 안의 SQL은 CREATE 시점에는 파싱만 되고 *계획*은 첫 실행 시점에야
@@ -72,7 +73,7 @@
 -- 카탈로그 가드: 008이 먼저 적용됐는지 확인한다. job_type 값을 *사용*(캐스팅·
 -- 비교)하는 게 아니라 pg_enum 카탈로그에서 라벨 문자열(text)의 존재만 확인하는
 -- 것이므로 "unsafe use of new value" 제약에 걸리지 않는다 - 그래도 이 파일은
--- 여전히 008과 별도로 Run 하는 것이 정본이다(D6, 위 경고 참고).
+-- 여전히 008과 별도로 Run 하는 것이 정본이다(D6, 위 머리말 참고).
 do $$ begin
   if not exists (select 1 from pg_enum
                   where enumtypid = 'job_type'::regtype and enumlabel = 'slope_judge') then

@@ -1,7 +1,16 @@
 -- 008: slope_judge 잡 타입 추가 (세부과업 4 단계 D)
 --
--- ⚠ 이 파일에는 이 문장 하나만 둔다. PostgreSQL은 같은 트랜잭션 안에서 새 enum
---    값을 사용하는 것을 막는다(unsafe use of new value). Supabase SQL Editor가
---    파일 전체를 한 트랜잭션으로 실행하므로, 이 값을 쓰는 함수 확장은 009에 있다.
---    **008을 Run 한 뒤 009를 별도로 Run 해야 한다.**
+-- 이 파일에는 이 문장 하나만 둔다. 이 값을 쓰는 함수 확장은 009에 있고,
+-- **008을 Run 한 뒤 009를 별도로 Run 하는 것이 정본이다.**
+--
+-- 근거를 정확히 적는다: PostgreSQL이 같은 트랜잭션 안에서 방금 추가한 enum 값의
+-- *사용*을 막는 것("unsafe use of new value")은 사실이지만, 지금의 009는 그
+-- 제약에 실제로 걸리지 않는다 - 실측하면 008+009를 한 트랜잭션으로 실행해도
+-- 성공한다(PostgreSQL 16 확인). 009가 새 값을 top-level SQL에서 쓰지 않기
+-- 때문이다(가드는 pg_enum.enumlabel 문자열 비교이고, 새 값의 실제 사용은 전부
+-- plpgsql 함수 본문 안이라 create function 시점에는 계획이 서지 않는다).
+-- 그래도 나누는 이유는 enum 추가 마이그레이션의 절차를 하나로 통일해 두기
+-- 위해서이고, 앞으로 009에 함수 본문 밖에서 새 값을 쓰는 문장(부분 인덱스·뷰·
+-- 체크 제약·시드 INSERT 등)이 하나라도 늘면 합쳐진 파일이 그 순간 막히기
+-- 때문이다. 막히는 형태의 실측 목록은 docs/SUPABASE_SETUP.md 2단계 8번 참고.
 alter type job_type add value if not exists 'slope_judge';

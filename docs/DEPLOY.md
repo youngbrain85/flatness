@@ -75,15 +75,25 @@ Vercel(대시보드) + Railway(워커, Docker) + Supabase(DB·Auth·Storage) 구
    **재판정(구배 배수구 재클릭) 기능을 쓸 계획이면 007 다음에 008·009도 이어서
    적용한다**: `008_slope_judge_enum.sql`(job_type에 `slope_judge` 값 추가) →
    `009_slope_judge_functions.sql`(잡 큐 함수 3종에 slope_judge 분기 확장). **008과
-   009는 절대 한 번에 이어 붙여 실행하면 안 되고 반드시 두 번 나눠 Run 한다** -
-   PostgreSQL이 같은 트랜잭션 안에서 방금 추가한 enum 값의 사용을 "unsafe use of new
-   value"로 막고, Supabase SQL Editor는 붙여넣은 내용 전체를 한 트랜잭션으로 실행하기
-   때문이다. 008 Run → `Success` 확인 → 에디터 비우기 → 009 Run 순서를 지킨다. 둘 다
-   재실행 안전(멱등)하며, `analyses.status`는 slope_judge 분기에서 절대 바뀌지 않는다
-   (재판정 진행 상태는 `analyses.params.judge`에만 반영된다 - 자세한 이유와 상태
-   스키마는 `docs/SUPABASE_SETUP.md` 2단계 8·9번 참고). 이 저장소가 아직 세부과업 4
-   단계 D의 워커·대시보드를 배포하지 않은 상태라면 008·009를 지금 당장 적용하지
-   않아도 기존 기능에는 영향이 없다.
+   009는 두 번 나눠 Run 한다** - 008 Run → `Success` 확인 → 에디터 비우기 → 009 Run
+   순서를 지킨다. 둘 다 재실행 안전(멱등)하며, `analyses.status`는 slope_judge
+   분기에서 절대 바뀌지 않는다(재판정 진행 상태는 `analyses.params.judge`에만
+   반영된다 - 자세한 이유와 상태 스키마는 `docs/SUPABASE_SETUP.md` 2단계 8·9번
+   참고). 이 저장소가 아직 세부과업 4 단계 D의 워커·대시보드를 배포하지 않은
+   상태라면 008·009를 지금 당장 적용하지 않아도 기존 기능에는 영향이 없다.
+
+   > **근거를 정확히 적는다 - "합치면 실패한다"는 뜻이 아니다.** PostgreSQL이 같은
+   > 트랜잭션 안에서 방금 추가한 enum 값의 *사용*을 "unsafe use of new value"로
+   > 막는 것은 사실이고 SQL Editor가 붙여넣은 내용 전체를 한 트랜잭션으로 실행하는
+   > 것도 사실이다. 다만 **지금의 009는 그 제약에 실제로 걸리지 않는다** - 실측하면
+   > 008+009를 한 트랜잭션으로 실행해도 성공한다(PostgreSQL 16 확인). 009가 새 값을
+   > top-level SQL에서 쓰지 않기 때문이다(맨 앞 가드는 `enumlabel` 문자열 비교이고,
+   > 새 값의 실제 사용은 전부 plpgsql 함수 본문 안이라 `create function` 시점에는
+   > 계획이 서지 않는다). 그래도 나눠 Run 하는 이유는 (1) enum을 추가하는
+   > 마이그레이션의 절차를 하나로 통일해 두면 파일마다 따져 볼 필요가 없고,
+   > (2) 앞으로 009에 본문 밖에서 새 값을 쓰는 문장이 하나라도 늘면(부분 인덱스·
+   > 뷰·체크 제약·시드 INSERT 등) 합쳐진 파일이 그 순간 막히기 때문이다. 실제로
+   > 막히는 형태의 실측 목록은 `docs/SUPABASE_SETUP.md` 2단계 8번 참고.
 
    **정합(두 스캔을 대응점으로 합치기, 세부과업 4 단계 F) 기능을 쓸 계획이면 011·012도
    이어서 적용한다**: `011_register_enums.sql`(`job_type`에 `register`,
