@@ -139,3 +139,59 @@ def test_judge_slope_cells_passes_drain_points_to_map(tmp_path, monkeypatch):
     monkeypatch.setattr(pipeline, "render_slope_map", _spy)
     _run_judge_slope_cells(tmp_path, drain_points=[{"x": 3.0, "y": 5.0}])
     assert seen["drain_points"] == [{"x": 3.0, "y": 5.0}]
+
+
+def test_render_slope_map_draws_drain_markers_on_na_cell_without_arrow(tmp_path):
+    """화살표가 없는 판정불가(ok=False) 셀 위에서도 배수구 마커가 픽셀로 보여야 한다.
+
+    실측(2차 변이 실험): test_render_slope_map_draws_drain_markers는 ok=True
+    셀(내리막 화살표가 함께 그려짐) 위에 배수구를 두는데, 마커 fill·edge 색을
+    셀 배경색과 똑같이 맞춰도 그 테스트는 여전히 통과했다 - 원인은 마커가
+    화살표의 검은 픽셀 일부를 덮어써서 이미지가 달라 보였을 뿐, 마커 색 자체가
+    배경과 구별되는지는 검증하지 못했던 것이다("테스트는 통과하는데 막으려던
+    회귀는 못 잡는다"는 이 저장소의 반복된 실패 양식). 화살표가 없는 ok=False
+    셀에는 이 우연한 보호가 없으므로, 여기서 마커 자체의 가시성을 진짜로
+    검증한다. 이후 누군가 "화살표 있는 셀로도 충분한데?"라며 이 테스트를
+    지우거나 ok=True 셀로 바꾸면 안 된다 - 바로 그 우연한 보호로 되돌아가는
+    것이기 때문이다.
+
+    두 셀을 x축으로만 벌려 놓고(y는 동일) 배수구를 격자 전체의 기하 중심
+    (x=2.0, y=1.0)이 아니라 한쪽 셀에 치우친 위치에 둔다 - 이 단계에서
+    항등식·대칭 픽스처(상하·좌우 반전 변이에 불변)에 세 번 데었다.
+
+    화살표 confound를 없앴더니 두 번째 confound가 바로 나왔다: 범례
+    (drain_points가 있으면 "배수구" 항목이 하나 더 붙는다, render_slope_map의
+    legend_handles 분기)가 이미지 오른쪽 여백(실측: 960px 폭 중 x=840~941,
+    dpi=120·figsize=(8,7) 기준)에서 마커 색과 무관하게 항상 픽셀을 바꾼다.
+    마커 fill/edge를 배경과 똑같이 맞춘 변이를 실제로 돌려보면, 전체 이미지
+    비교(np.allclose)는 여전히 다르다고 나오지만(범례만 바뀌었으므로) 지도
+    영역(왼쪽 80%, x<0.8*width)만 잘라 비교하면 완전히 같아진다 - 즉 마커
+    자체는 정말로 안 보이는데 범례 때문에 테스트가 우연히 또 통과할 뻔했다.
+    그래서 비교를 지도 영역으로 한정한다(오른쪽 20%는 범례가 앉는 여백이라
+    마커가 배경에 묻혔는지와 무관하게 항상 달라진다 - 비교에 넣으면 안 된다).
+    """
+    cells = [
+        SlopeCell(0, 0, 1.0, 1.0, 5, float("nan"), float("nan"),
+                 float("nan"), float("nan"), 2.0, 2.0, False),
+        SlopeCell(1, 0, 3.0, 1.0, 5, float("nan"), float("nan"),
+                 float("nan"), float("nan"), 2.0, 2.0, False),
+    ]
+    graded = grade_slope_cells(cells, TH, cell_m=2.0)
+    # 자기검증: 이 테스트가 의미가 있으려면 두 셀 모두 화살표가 그려지지 않는
+    # ok=False여야 한다.
+    assert all(not g["cell"].ok for g in graded)
+
+    a = tmp_path / "na_no_drain.png"
+    b = tmp_path / "na_with_drain.png"
+    render_slope_map(graded, a, cell_m=2.0)
+    # (0.5, 1.6): 격자 기하 중심(2.0, 1.0)도 아니고, 상하(y->2-y) ·
+    # 좌우(x->4-x) 어느 반전에도 자기 자신으로 돌아오지 않는 비대칭 위치.
+    render_slope_map(graded, b, cell_m=2.0, drain_points=[{"x": 0.5, "y": 1.6}])
+
+    import matplotlib.image as mpimg
+    ia, ib = mpimg.imread(str(a)), mpimg.imread(str(b))
+    assert ia.shape == ib.shape, "마커 유무가 이미지 크기를 바꾸면 안 된다"
+    map_w = int(ia.shape[1] * 0.8)   # 오른쪽 20%(범례 여백) 제외 - 위 독스트링 참고
+    ia_map, ib_map = ia[:, :map_w], ib[:, :map_w]
+    assert not np.allclose(ia_map, ib_map), \
+        "화살표 없는 셀 위에서도 마커가 지도 영역 픽셀을 바꿔야 한다(범례가 아니라)"
