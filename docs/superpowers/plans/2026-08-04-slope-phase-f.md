@@ -16,11 +16,15 @@
 - **워커 테스트는 반드시 해당 워크트리의 engine을 PYTHONPATH로 준다**:
   `cd <워크트리>/worker && PYTHONPATH=<워크트리>/engine python -m pytest -q`
   `flatness`가 editable 설치(`__editable__.flatness_engine-0.1.0.pth`)로 항상 `D:\Projects\Flatness\engine`(main)를 가리키기 때문이다. 빼면 브랜치의 새 모듈이 안 보여 수집 단계에서 죽거나, 더 나쁘게는 **옛 코드로 조용히 통과**한다
-- **기준선: engine 203 / worker 168 / dashboard 328.** 모든 Task는 이 값 이상이어야 한다
-  - 계획 작성 시점 기준선은 `worker 151 / dashboard 326`이었다. 그 뒤 F9를 정하다 발견한
-    **계보 경고 미구현**(업로드 화면이 융합 메시에 "경고가 표시됩니다"라고 안내하는데 그
-    경고를 만드는 코드가 어디에도 없었다)을 고치면서 워커 +17 / 대시보드 +2가 늘었다
-    (`worker/flatworker/lineage.py`). 이 문서 안의 개별 Task 기대치도 함께 갱신했다
+- **이 계획은 실행 완료됐다**(단계 F main 머지 880b283, 계보 경고 후속 머지 58b08bc).
+  아래 기준선·Task별 기대치는 **작성 시점의 역사적 기록**이며 현재 값이 아니다.
+  **머지 후 실측 현재값: engine 244 / worker 191 / dashboard 455**(2026-08-05).
+  - 계획 작성 시점 기준선은 `engine 203 / worker 151 / dashboard 326`이었다. 그 뒤 F9를
+    정하다 발견한 **계보 경고 미구현**(업로드 화면이 융합 메시에 "경고가 표시됩니다"라고
+    안내하는데 그 경고를 만드는 코드가 어디에도 없었다)을 별도 브랜치에서 고치면서
+    워커 +17 / 대시보드 +2가 늘었고(`worker/flatworker/lineage.py`), 단계 F 본 구현이
+    나머지를 늘렸다. 두 갈래가 각자의 기준선 위에서 자랐기 때문에 이 문서의 Task별
+    덧셈("168 + 7" 등)은 서로 더할 수 있는 수가 아니다 — 현재값은 위 실측을 쓴다
 - **`002_functions_seed.sql`은 어떤 경우에도 재실행 금지**(criteria 시드에 `on conflict`가 없어 23505로 죽고, 003·004가 확장한 잡 큐 함수 3종을 P2 정의로 강등시킨다)
 - 변이 테스트에는 **무변이(no-op) 기준선을 먼저** 넣어 하네스 생존을 확인한다. `vitest --reporter=basic`은 vitest 4에 없어 **조용히 크래시**(종료코드 0)한다
 - `git add`·`git commit`에는 **항상 경로를 명시**한다. 경로 없는 `git add`·`git checkout --`·`git stash`는 같은 워크트리의 다른 작업을 파괴한다(실제 사고 2회)
