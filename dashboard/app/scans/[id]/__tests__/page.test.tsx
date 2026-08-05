@@ -537,9 +537,19 @@ describe('ScanPage 분석 시작 진입점 (단계 F 최종 리뷰 Critical)', (
 
   // ★ 기존 흐름(awaiting_unit_confirm -> ready) 회귀 방지. 새 진입점이 단위 미확정
   // 스캔까지 삼키면 단위를 확정하지 않은 채 분석이 돌아 결과 전체가 왜곡된다.
+  //
+  // ★★ 재재리뷰: 이 픽스처는 height_view_path를 **반드시** 채워야 한다. 비워 두면
+  // provenNotImport가 먼저 막아 버려서, 이 테스트가 상태 게이트가 아니라 임포트
+  // 판별자 덕분에 통과한다 - 그러면 상태 조건을 'ready || awaiting_unit_confirm'으로
+  // 넓히는 회귀를 아무도 못 잡고, 이 테스트가 스스로 내건 근거(위 문단)를 지키지
+  // 못한다. 실제로도 이 상태의 스캔은 precheck를 끝낸 뒤이므로 값이 채워져 있는
+  // 쪽이 사실에 맞다(worker의 handle_precheck가 status와 함께 한 PATCH로 넣는다).
   it('단위 미확정 스캔은 여전히 단위 확인 링크로 보내고 직행 버튼은 띄우지 않는다', async () => {
     vi.mocked(createClient).mockResolvedValue(
-      stubSupabase(mkScan({ status: 'awaiting_unit_confirm' }), []) as never);
+      stubSupabase(mkScan({
+        status: 'awaiting_unit_confirm', unit_scale: null,
+        height_view_path: 'artifacts/scans/sc1/height_view.png',
+      }), []) as never);
 
     const el = await ScanPage({ params: Promise.resolve({ id: 'sc1' }) });
     const hrefs = findAll(el, Link).map((l) => String(l.props.href));
@@ -550,9 +560,38 @@ describe('ScanPage 분석 시작 진입점 (단계 F 최종 리뷰 Critical)', (
   });
 
   // 사전 검사 대기 중인 스캔에는 아직 raw 좌표도 단위도 없다.
+  //
+  // ★★ 재재리뷰: 위와 같은 이유로 height_view_path를 채운다. uploaded 상태에서 이
+  // 값이 자연히 나오지는 않지만(handle_precheck가 status와 함께 채운다), 여기서는
+  // provenNotImport를 참으로 만들어 **상태 게이트만** 시험대에 올리려는 의도적
+  // 픽스처다. 비워 두면 임포트 판별자가 대신 막아 상태 조건 회귀가 통째로 샌다.
   it('사전 검사 대기(uploaded) 스캔에는 분석 시작 버튼을 띄우지 않는다', async () => {
     vi.mocked(createClient).mockResolvedValue(
-      stubSupabase(mkScan({ status: 'uploaded' }), []) as never);
+      stubSupabase(mkScan({
+        status: 'uploaded', unit_scale: null,
+        height_view_path: 'artifacts/scans/sc1/height_view.png',
+      }), []) as never);
+
+    const el = await ScanPage({ params: Promise.resolve({ id: 'sc1' }) });
+
+    expect(findAll(el, ReanalyzeButton)).toHaveLength(0);
+  });
+
+  // ★★ 재재리뷰: provenNotImport의 `!!` truthy 검사가 하중을 지게 한다. 근거를
+  // 주석으로만 적어 두면 `!!x` -> `x !== null` 변이가 조용히 살아남는다.
+  // 010_scan_height_view.sql을 아직 적용하지 않은 DB에서는 select('*')에 이 컬럼이
+  // 아예 없어 undefined로 온다 - `!== null`로 좁히면 **그 DB의 모든 스캔이 "임포트가
+  // 아님"으로 잘못 증명되어** Colab CSV에 'analyze' 잡이 걸린다. 형제 화면의 같은
+  // 가드(components/__tests__/unit-confirm-form.test.tsx)와 같은 패턴이지만, 저쪽의
+  // 실패 모드가 죽은 화면인 데 비해 여기는 조용한 오답이라 더 나쁘다.
+  it.each([
+    ['undefined(010 미적용 DB의 select(*))', undefined],
+    ['빈 문자열', ''],
+  ])('height_view_path가 %s면 임포트 판별 불가로 보고 버튼을 띄우지 않는다', async (_label, value) => {
+    const oddScan = {
+      ...mkScan({ status: 'ready', lineage: 'raw' }), height_view_path: value,
+    } as unknown as ScanRow;
+    vi.mocked(createClient).mockResolvedValue(stubSupabase(oddScan, []) as never);
 
     const el = await ScanPage({ params: Promise.resolve({ id: 'sc1' }) });
 
