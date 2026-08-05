@@ -9,6 +9,8 @@
 완전 평면으로 바꿔도 결과가 자릿수까지 같아진다 — 그런 픽스처는 표면 관련 결함을
 전혀 잡지 못한다. 그 퇴화 자체는 아래 두 회귀 가드로 고정해 뒀다.
 """
+import pathlib
+
 import numpy as np
 import pytest
 from scipy.spatial import cKDTree
@@ -502,7 +504,9 @@ def test_z_gate_holds_across_the_documented_slope_range():
     구배 2%의 z 오차는 0.611mm, 0%는 0.008mm로 **둘 다 <=1mm에 들어가서** 픽스처에서
     구배를 조용히 떨어뜨려도 통과해 버린다. 이 프로젝트가 일곱 번 겪은 형태이고,
     하필 "게이트가 실질 평탄 바닥에서만 검증됐다"를 닫으려고 만든 테스트다.
-    그래서 (1) 픽스처 기울기를 직접 재고 (2) 0% 대비 z 오차가 자릿수로 커지는지도 본다.
+    그래서 픽스처의 전역 기울기와 대응점 z를 직접 잰다 — 결과값(z 오차)의 크기로
+    간접 추론하지 않는다. 그렇게 하면 오차의 **하한**을 못 박게 되어 알고리즘이
+    좋아졌을 때 테스트가 깨진다.
     """
     slope = 0.02
     a, b, cs, cd = _ramp_scan_pair(slope)
@@ -520,12 +524,6 @@ def test_z_gate_holds_across_the_documented_slope_range():
     assert res.converged, res.failure_reason
     _yaw, _inplane, z_err = _errors(res)
     assert abs(z_err) <= 0.001, f"구배 {slope * 100:.0f}%에서 z 오차 {z_err * 1000:.3f}mm"
-
-    fa, fb, fcs, fcd = _ramp_scan_pair(0.0)
-    _y0, _ip0, z0 = _errors(register_clouds(fb, fa, fcs, fcd))
-    assert abs(z_err) >= 10 * abs(z0), (
-        f"구배 2%의 z 오차({z_err * 1000:.4f}mm)가 0%({z0 * 1000:.4f}mm)와 자릿수가 같다 "
-        "— 픽스처에 구배가 실제로 반영되지 않았을 수 있다")
 
 
 def test_long_corridor_correspondences_are_accepted():
@@ -742,6 +740,55 @@ def test_iteration_budget_exhaustion_is_reported_as_failure():
     assert "RMSE" not in reason, reason
     assert "중첩" not in reason, reason
     assert "발산" not in reason, reason
+
+
+def test_sample_spacing_subsample_path_matches_the_full_scan():
+    """★ 대면적에서 **항상 도는** 부분표본 분기를 직접 시험한다.
+
+    `estimate_sample_spacing`은 점이 `max_probe`를 넘을 때만 부분표본을 쓴다.
+    픽스처는 19,481점이라 기본값(20,000)에서는 **전수 분기만** 돈다 — 그런데 실제
+    정합 입력은 5cm 서브셀 기준 600m²만 돼도 약 24만 점이라 **프로덕션에서는 항상
+    부분표본 분기가 돈다.** 테스트되는 코드는 안 돌고 도는 코드는 테스트가 없는
+    상태였다. `sample_spacing_m`은 발산 가드의 **분모**라 조용히 틀리면 가드가
+    통째로 무력화된다.
+
+    부분표본 값이 전수 값과 1% 안에서 일치해야 한다(실측 0.16%). 표본을 앞에서
+    잘라 편향시키면 2.0%, 최근접 이웃 인덱스를 self로 잘못 잡으면 0mm가 되어
+    둘 다 이 단언에 걸린다.
+    """
+    a, _b, _cs, _cd = _scan_pair(click_sd=0.0)
+    assert len(a) > 1000, "이 테스트는 부분표본 분기를 타야 의미가 있다"
+    full = reg.estimate_sample_spacing(a, max_probe=len(a))
+    sub = reg.estimate_sample_spacing(a, max_probe=1000)
+    assert 0.02 < full < 0.06, f"전수 표본 간격 {full * 1000:.3f}mm"
+    assert abs(sub - full) / full < 0.01, (
+        f"부분표본 {sub * 1000:.4f}mm가 전수 {full * 1000:.4f}mm와 "
+        f"{abs(sub - full) / full * 100:.2f}% 다르다")
+
+
+def test_user_facing_strings_avoid_the_em_dash():
+    """사용자에게 도달하는 문자열에 U+2014(—)를 쓰지 않는다 (전역 제약).
+
+    `check_correspondence_geometry`의 `ValueError` 메시지는 워커가
+    `registrations.error_text`로 저장하고 정합 화면이 그대로 렌더한다.
+    독스트링·주석은 제약 대상이 아니므로, 문서로 쓰인 문자열(식 문장으로 홀로
+    놓인 문자열)은 제외하고 **코드에서 값으로 쓰이는 문자열만** 본다.
+    """
+    import ast
+    import flatness
+
+    root = pathlib.Path(flatness.__file__).parent
+    hits = []
+    for path in sorted(root.rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        doc_ids = {id(n.value) for n in ast.walk(tree)
+                   if isinstance(n, ast.Expr) and isinstance(n.value, ast.Constant)
+                   and isinstance(n.value.value, str)}
+        for node in ast.walk(tree):
+            if (isinstance(node, ast.Constant) and isinstance(node.value, str)
+                    and "—" in node.value and id(node) not in doc_ids):
+                hits.append(f"{path.relative_to(root)}:{node.lineno} {node.value[:60]!r}")
+    assert not hits, "사용자 대면 문자열에 U+2014:\n" + "\n".join(hits)
 
 
 def test_result_reports_point_rmse_and_sample_spacing():

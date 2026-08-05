@@ -314,7 +314,7 @@ def check_correspondence_geometry(pts, region_diag_m, what="대응점"):
     if sigma > MAX_CORR_ROTATION_SIGMA_RAD:
         if sv[0] > 0 and sv[1] / sv[0] < _COLLINEAR_SV_RATIO:
             raise ValueError(
-                f"{what}이 한 직선 위에 있습니다(공선). 회전을 정할 수 없습니다 — "
+                f"{what}이 한 직선 위에 있습니다(공선). 회전을 정할 수 없습니다. "
                 "일직선을 벗어난 지점을 포함하거나 대응점을 더 찍으세요.")
         raise ValueError(
             f"{what}이 한곳에 몰려 있습니다(회전 불확도 {np.degrees(sigma):.0f}도). "
@@ -324,7 +324,7 @@ def check_correspondence_geometry(pts, region_diag_m, what="대응점"):
             f"{what}이 정합 영역의 좁은 구역에만 몰려 있습니다"
             f"(퍼짐 {spread:.2f}m가 영역 {region_diag_m:.1f}m의 "
             f"{spread / region_diag_m * 100:.0f}%). 회전 오차가 영역 전체로 "
-            "확대됩니다 — 정합 영역 전체에 넓게 분산해 찍으세요.")
+            "확대됩니다. 정합 영역 전체에 넓게 분산해 찍으세요.")
 
 
 def _region_diag(pts):
