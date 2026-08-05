@@ -654,6 +654,26 @@ Vercel(대시보드) + Railway(워커, Docker) + Supabase(DB·Auth·Storage) 구
       상단에 "두 스캔을 정합해 만든 병합 스캔입니다." 배너와 **"정합 결과·겹쳐보기
       확인"** 버튼이 보여야 한다. 배너 자리에 "이 스캔을 만든 정합 이력을 찾지
       못했습니다"가 뜨면 `result_scan_id`가 비어 있다는 뜻이다(아래 쿼리로 확인).
+   7. **같은 화면에서 "평활도 분석"을 눌러 병합 스캔을 실제로 분석한다.** 정합의
+      목적이 "합쳐서 분석하는 것"이므로 여기까지 태워야 스모크가 끝난다.
+      - 병합 스캔은 `status='ready'`인데 `analyses` 행이 없는 상태로 만들어진다.
+        기존 분석 진입점 세 개(단위 확정·재분석·구배)는 전부 다른 조건을 요구하므로
+        **이 버튼이 없으면 병합 스캔은 UI에서 분석할 방법이 없다**(막다른 골목).
+      - 눌렀을 때 잡 타입이 **`analyze`** 여야 한다. `import`로 걸리면 임포트 판별이
+        잘못된 것이고, 그 경우 점 단위 편차 목록을 원시 점군으로 오해해 **전 셀이
+        "적합"으로 나오는 조용한 오답**이 된다.
+      - 임포트로 올린 스캔(Colab CSV/JSON)에는 이 버튼이 **뜨면 안 된다.** 같은 현장에
+        임포트 스캔이 있으면 그 상세도 한 번 열어 버튼이 없는 것을 확인한다.
+
+      ```sql
+      -- 방금 만든 병합 스캔에 분석이 실제로 걸렸는지
+      select a.kind, a.status, j.type as job_type
+        from analyses a
+        left join jobs j on j.payload->>'analysis_id' = a.id::text
+       where a.scan_id = '<위에서 확인한 result_scan_id>'
+       order by a.created_at desc;
+      ```
+      `kind='flatness'`, `job_type='analyze'`가 나와야 한다.
 
    완료되면 SQL Editor에서 결과 행을 직접 확인한다 - **화면 문구가 아니라 이 값들이
    정합이 실제로 성립했다는 증거다**:
