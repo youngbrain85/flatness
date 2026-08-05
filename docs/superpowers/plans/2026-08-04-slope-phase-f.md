@@ -16,7 +16,11 @@
 - **워커 테스트는 반드시 해당 워크트리의 engine을 PYTHONPATH로 준다**:
   `cd <워크트리>/worker && PYTHONPATH=<워크트리>/engine python -m pytest -q`
   `flatness`가 editable 설치(`__editable__.flatness_engine-0.1.0.pth`)로 항상 `D:\Projects\Flatness\engine`(main)를 가리키기 때문이다. 빼면 브랜치의 새 모듈이 안 보여 수집 단계에서 죽거나, 더 나쁘게는 **옛 코드로 조용히 통과**한다
-- **기준선: engine 203 / worker 151 / dashboard 326.** 모든 Task는 이 값 이상이어야 한다
+- **기준선: engine 203 / worker 168 / dashboard 328.** 모든 Task는 이 값 이상이어야 한다
+  - 계획 작성 시점 기준선은 `worker 151 / dashboard 326`이었다. 그 뒤 F9를 정하다 발견한
+    **계보 경고 미구현**(업로드 화면이 융합 메시에 "경고가 표시됩니다"라고 안내하는데 그
+    경고를 만드는 코드가 어디에도 없었다)을 고치면서 워커 +17 / 대시보드 +2가 늘었다
+    (`worker/flatworker/lineage.py`). 이 문서 안의 개별 Task 기대치도 함께 갱신했다
 - **`002_functions_seed.sql`은 어떤 경우에도 재실행 금지**(criteria 시드에 `on conflict`가 없어 23505로 죽고, 003·004가 확장한 잡 큐 함수 3종을 P2 정의로 강등시킨다)
 - 변이 테스트에는 **무변이(no-op) 기준선을 먼저** 넣어 하네스 생존을 확인한다. `vitest --reporter=basic`은 vitest 4에 없어 **조용히 크래시**(종료코드 0)한다
 - `git add`·`git commit`에는 **항상 경로를 명시**한다. 경로 없는 `git add`·`git checkout --`·`git stash`는 같은 워크트리의 다른 작업을 파괴한다(실제 사고 2회)
@@ -105,6 +109,11 @@ create unique index jobs_dedup on jobs(type, (coalesce(payload->>'analysis_id', 
 ### F9. 병합 스캔의 lineage는 새 값 `registered`다
 
 기존 `data_lineage`는 `('raw', 'fused_mesh', 'unknown')`이다. `fused_mesh`를 재사용하면 안 된다 — 업로드 화면이 그 값에 **"앱이 스무딩한 데이터라 실제보다 양호하게 나올 수 있습니다"** 라는 경고를 붙이고 있고, 보고서 라벨도 "융합 메시"다. 정합 병합은 스캐너 앱의 스무딩이 아니라 **원시 점군 두 개의 서브셀 중앙값**이라 그 서술이 거짓이 된다.
+
+> 이 근거는 계획 작성 이후 **더 강해졌다**: 그때는 안내 문구뿐이었지만, 이제 워커가
+> `scans.lineage='fused_mesh'`인 스캔의 분석에 실제로 `fused_mesh_smoothed` 경고를 붙인다
+> (`worker/flatworker/lineage.py`). `fused_mesh`를 재사용하면 병합 스캔의 모든 분석 결과와
+> 보고서에 "스캐너 앱이 다듬은 데이터"라는 **거짓 경고가 인쇄된다**.
 
 `alter type data_lineage add value 'registered'`를 011에 **함께** 넣는다(enum 추가 두 개는 서로 사용하지 않으므로 같은 트랜잭션에서 안전하다). 라벨은 **"정합 병합"**.
 
@@ -653,7 +662,7 @@ Expected: FAIL — `ImportError: cannot import name 'handle_register'`
 - [ ] **Step 4: 통과를 확인한다**
 
 Run: `cd worker && PYTHONPATH=<워크트리>/engine python -m pytest -q`
-Expected: 151 + 7 = **158 passed**
+Expected: 168 + 7 = **175 passed**  <!-- 기준선 갱신: 계보 경고 구현으로 151 -> 168 -->
 
 - [ ] **Step 5: 변이 실험**
 
@@ -749,7 +758,7 @@ Expected: FAIL — 모듈 없음
 
 - [ ] **Step 4: 통과를 확인한다**
 
-Run: `cd dashboard && npm test` → 326 + 9 이상. `npm run build`도 통과해야 한다.
+Run: `cd dashboard && npm test` → 328 + 9 이상(기준선 갱신: 326 -> 328). `npm run build`도 통과해야 한다.
 
 - [ ] **Step 5: 변이 실험 + 실화면 확인**
 

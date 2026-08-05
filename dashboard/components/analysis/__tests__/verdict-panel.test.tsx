@@ -44,6 +44,15 @@ describe('VerdictPanel (C안 우측 고정 패널)', () => {
     expect(screen.getByText(/스크리닝/)).toBeInTheDocument();       // auto_summary
     expect(screen.getByLabelText('종합의견(사용자 수정)')).toBeInTheDocument();
   });
+  it('계보 경고(fused_mesh_smoothed)를 한국어 문구로 보여준다', () => {
+    // 업로드 화면이 "결과에 경고가 표시됩니다"라고 약속한 그 화면이 여기다.
+    // 워커가 stats.warnings에 코드를 넣어도(flatworker/lineage.py) 이 패널이
+    // 라벨을 못 붙이면 사용자는 `fused_mesh_smoothed`라는 슬러그를 보게 된다.
+    const fused = { ...stats, warnings: ['low_coverage', 'fused_mesh_smoothed'] };
+    render(<VerdictPanel analysis={analysis} stats={fused} />);
+    expect(screen.getByText(/융합 메시는 스캐너 앱이/)).toBeInTheDocument();
+    expect(screen.queryByText('fused_mesh_smoothed')).not.toBeInTheDocument();
+  });
   it('임포트 결과면 외부 결과 배지를 보여준다', () => {
     const imp = {
       ...analysis, engine_version: 'external-colab-v1',

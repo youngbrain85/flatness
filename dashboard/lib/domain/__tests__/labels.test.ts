@@ -23,6 +23,10 @@ describe('warningLabel', () => {
     expect(warningLabel('uncertainty_swallows_repair')).toContain('보수 구간');
     expect(warningLabel('uncertainty_swallows_pass')).toContain('적합 판정');
     expect(warningLabel('plumbness_relative_to_z')).toContain('z축');
+    // 계보 경고 - 업로드 화면(upload-form.tsx)이 융합 메시 선택자에게 약속한 문구와
+    // 같은 사실을 말해야 한다(스캐너 앱 스무딩 -> 실제보다 양호).
+    expect(warningLabel('fused_mesh_smoothed')).toContain('융합 메시');
+    expect(warningLabel('fused_mesh_smoothed')).toContain('양호한 결과');
   });
   it('wall_{i}_skipped 개방 패턴을 매칭한다', () => {
     expect(warningLabel('wall_3_skipped')).toContain('3번 벽');

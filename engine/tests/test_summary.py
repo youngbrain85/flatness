@@ -69,7 +69,11 @@ def _documented_warning_codes():
     m = re.search(r"## 5\. warnings 코드 사전(.*?)\n## 6\.", text, re.S)
     assert m, "stats-schema.md에서 §5 warnings 코드 사전 절을 찾지 못했습니다"
     codes = re.findall(r"^\|\s*`([a-z0-9_]+)`\s*\|", m.group(1), re.M)
-    assert len(codes) == 11, "파싱 실패 의심(§5 리터럴 코드는 11개여야 함 - wall_{i}_skipped 패턴 행 제외)"
+    # 12개 중 `fused_mesh_smoothed` 하나는 엔진이 아니라 워커가 붙이는 코드다
+    # (계보는 DB 메타데이터이고 엔진은 DB를 모른다 - §5 표 아래 주석 참고).
+    # 아래 부분집합 단언은 그래도 성립한다: 엔진 _WARN_TEXT가 문서 사전의
+    # 부분집합이면 되고, 워커 전용 코드는 그 여집합에 있으면 그만이다.
+    assert len(codes) == 12, "파싱 실패 의심(§5 리터럴 코드는 12개여야 함 - wall_{i}_skipped 패턴 행 제외)"
     return set(codes)
 
 

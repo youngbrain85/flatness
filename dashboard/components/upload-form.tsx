@@ -251,7 +251,7 @@ export function UploadForm({ sites, locations, userId, initialSiteId, initialLoc
           </div>
           {lineage === 'fused_mesh' && (
             <p className="mt-1 text-xs text-amber-700">
-              융합 메시는 앱이 스무딩한 데이터라 실제보다 양호하게 나올 수 있습니다. 결과에 경고가 표시됩니다.
+              융합 메시는 앱이 스무딩한 데이터라 실제보다 양호하게 나올 수 있습니다. 분석 결과와 보고서에 경고가 표시됩니다.
             </p>
           )}
         </div>

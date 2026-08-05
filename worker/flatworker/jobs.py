@@ -20,6 +20,7 @@ from flatness.outputs.slope_cells import load_slope_cells
 
 from flatworker import registration, slope
 from flatworker.artifacts import staging_dir
+from flatworker.lineage import fields_with_lineage_warning, with_lineage_warning
 from flatworker.report.assets import build_assets
 from flatworker.report.context import load_report_context
 from flatworker.report.html import render_html
@@ -250,7 +251,9 @@ def _handle_analyze_slope(db, cfg, analysis_id):
             path, scale_to_m, threshold, out_dir, drain_points,
             analysis_id, criteria_row)
         storage.upload_dir(f"artifacts/{analysis_id}", out_dir)
-    db.update_analysis(analysis_id, fields)
+    # 계보 경고는 분석 종류와 무관하다 - 융합 메시로 스무딩된 표면은 평활도만이
+    # 아니라 구배도 실제보다 양호하게 만든다. 평활도 경로만 고치면 여기서 샌다.
+    db.update_analysis(analysis_id, fields_with_lineage_warning(fields, scan))
     db.set_current_analysis(analysis["scan_id"], analysis_id, kind="slope")
 
 
@@ -273,6 +276,11 @@ def handle_analyze(db, cfg, payload):
         else:
             stats = analyze_floor(path, scale_to_m, crit, u_mm, out_dir)
         storage.upload_dir(f"artifacts/{analysis_id}", out_dir)
+    # 엔진은 계보를 모른다(DB 개념이라 stats에 담길 수 없다) - 업로드 화면이 융합
+    # 메시 선택자에게 약속한 경고를 여기서 덧붙인다(flatworker/lineage.py 참고).
+    # 산출물(stats.json)이 아니라 DB에 저장할 stats에만 넣는다: 저장소의
+    # stats.json은 "엔진이 낸 것"이라는 계약이라야 재현·대조가 성립한다.
+    stats = with_lineage_warning(stats, scan)
     # 코드리뷰 재검토(M1): 위에서 이미 읽은 kind를 명시적으로 넘긴다. enum이
     # flatness/slope 2값뿐인 지금은 무해하지만(slope는 위에서 이미 분기해
     # 걸러짐), 세 번째 kind가 추가되면 이 자리에서 _finalize의 기본값
@@ -377,7 +385,16 @@ def handle_slope_judge(db, cfg, payload):
     fields = slope.build_slope_judge_fields(
         judged_stats, analysis_id, analysis.get("params"),
         previous_drain_points, drain_points_raw)
-    db.update_analysis(analysis_id, fields)
+    # 재판정은 warnings를 판정 결과에서 통째로 **다시 만든다**(slope.py:171) -
+    # 최초 분석 때 붙인 계보 경고가 그 순간 사라진다. 사용자가 배수구를 한 번
+    # 클릭했다는 이유만으로 "융합 메시라 실제보다 양호할 수 있다"는 사실이
+    # 화면에서 지워지면 업로드 화면의 약속이 다시 거짓이 된다.
+    #
+    # `slope_judge_context`가 scan 행을 읽지 않는 것은 의도지만(재판정은 점군을
+    # 다시 열지 않으므로 - slope.py 독스트링), 계보는 점군이 아니라 scans 행의
+    # 메타데이터라 그 이유가 적용되지 않는다. 여기서 따로 읽는다.
+    scan = db.get_scan(analysis["scan_id"])
+    db.update_analysis(analysis_id, fields_with_lineage_warning(fields, scan))
 
 
 # 확장자 -> 임포터 함수. 두 임포터 모두 (path, criterion, u_mm, out_dir) 시그니처와
@@ -413,6 +430,10 @@ def handle_import(db, cfg, payload):
         out_dir.mkdir(parents=True, exist_ok=True)
         stats = importer(path, crit, u_mm, out_dir)
         storage.upload_dir(f"artifacts/{analysis_id}", out_dir)
+    # 업로드 화면은 지금 import 모드에서 lineage를 'unknown'으로 고정하지만
+    # (upload-form.tsx:91) scans.lineage는 그 화면만의 것이 아니다 - 경로를
+    # 빠뜨리면 "임포트한 융합 메시만 조용히 경고 없음"이 된다.
+    stats = with_lineage_warning(stats, scan)
     _finalize(db, analysis_id, analysis["scan_id"], stats)
 
 
