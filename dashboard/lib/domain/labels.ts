@@ -48,6 +48,8 @@ const WARNING_LABEL: Record<string, string> = {
   uncertainty_swallows_pass:
     '측정 불확도가 허용치보다 커서 적합 판정이 나올 수 없습니다(기준 또는 불확도 재검토 필요).',
   plumbness_relative_to_z: '수직도는 스캔 좌표계 z축 기준 상대 지표입니다(중력 보정 아님).',
+  fused_mesh_smoothed:
+    '융합 메시는 스캐너 앱이 표면을 매끄럽게 다듬은 데이터라 실제 요철보다 양호한 결과가 나올 수 있습니다. 가능하면 원시 점군으로 다시 내보내 분석하세요.',
   heatmap_render_failed:
     '판정 히트맵 이미지 생성에 실패했습니다. 판정 수치·등급에는 영향이 없습니다.',
   preview3d_render_failed:

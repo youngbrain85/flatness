@@ -213,3 +213,26 @@ def test_load_report_context_reports_missing_cells_file(tmp_path):
     (cfg.data_dir / "artifacts" / "an1" / "cells.json").unlink()
     with pytest.raises(ValueError, match="cells.json"):
         load_report_context(db, _storage(tmp_path), "r1")
+
+
+def test_snapshot_carries_lineage_warning_with_label(tmp_path):
+    """계보 경고가 화면뿐 아니라 보고서(PDF)까지 간다 — 설계 정본 §5.1.1의
+    "융합 메시면 ... 경고를 결과·**보고서**에 표기" 요구.
+
+    보고서는 저장소의 stats.json이 아니라 `analyses.stats`(DB 저장본이 정본,
+    `report/context.py:15`)를 읽으므로, 워커가 DB에 넣은 계보 경고가 그대로
+    실린다. 라벨 사전(`report/labels.py`)에 코드가 빠지면 PDF에 한국어 문장
+    대신 `fused_mesh_smoothed`라는 슬러그가 그대로 인쇄된다 - 그 회귀를 잡는다.
+    """
+    db, cfg = FakeDB(), _cfg(tmp_path)
+    _seed(db, cfg)
+    db.scans["scan1"]["lineage"] = "fused_mesh"
+    db.analyses["an1"]["stats"]["warnings"] = ["reduced_span", "fused_mesh_smoothed"]
+
+    ctx = load_report_context(db, _storage(tmp_path), "r1")
+    a = build_snapshot(ctx, _EMPTY_ASSETS)["analyses"][0]
+
+    assert a["scan"]["lineage_label"] == "융합 메시"
+    text = {w["code"]: w["text"] for w in a["warnings"]}["fused_mesh_smoothed"]
+    assert "융합 메시" in text and "양호한 결과" in text
+    assert text != "fused_mesh_smoothed", "라벨 사전에 없어 슬러그가 그대로 인쇄된다"

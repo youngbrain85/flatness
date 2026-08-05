@@ -215,6 +215,15 @@ w_fit = a * center_x + b * center_y + c   # a,b,c = walls[i].plane_abc
 | `heatmap_render_failed` | 판정 히트맵(`heatmap.png`/`heatmap_wall{n}.png`) 렌더가 예외(디스크·폰트 등 인프라 사유)로 실패함. 판정 수치는 영향 없음 | floor·wall | `core/pipeline.py`(`render_heatmap` 호출부) |
 | `preview3d_render_failed` | 3D 프리뷰(`preview3d.png`) 렌더가 실패해 `preview3d_paths`가 `[]`로 저장됨. 판정 수치는 영향 없음 | floor | `core/pipeline.py`(`render_preview3d` 호출부) |
 | `deviation_render_failed` | 정밀 편차맵(`deviation.png`/`deviation_wall{n}.png`) 렌더가 실패해 해당 파일명이 `deviation_paths`에서 빠짐. 판정 수치는 영향 없음 | floor·wall | `core/pipeline.py`(`render_deviation_map` 호출부) |
+| `fused_mesh_smoothed` | 업로드 시 데이터 계보를 "융합 메시"로 선택한 스캔임 — 스캐너 앱이 표면을 다듬은 데이터라 실제 요철보다 양호한 결과가 나올 수 있음(스펙 §5.1.1) | floor·wall·import·slope 공통 — **엔진이 아니라 워커가 붙인다**(아래 참고) | `worker/flatworker/lineage.py` |
+
+> **`fused_mesh_smoothed`만 출처가 엔진이 아니다.** 계보는 점군에서 도출되는 값이 아니라 업로드할 때
+> 사람이 고른 DB 메타데이터이고(`scans.lineage`, 자동 감지는 미구현 — `docs/service-report.md` 6.5절),
+> 엔진은 DB를 모른다(`grep -rn lineage engine/`가 0건인 것이 이 경계의 증거다). 그래서 이 코드만
+> `stats.json` **산출물에는 없고** DB의 `analyses.stats.warnings`·`analyses.warnings`에만 실린다 —
+> 저장소의 `stats.json`은 "엔진이 낸 것"이라는 계약이라야 재현·대조가 성립하기 때문이다.
+> 화면(`verdict-panel.tsx` 등)과 보고서(`report/context.py`: "analyses.stats(DB 저장본이 정본)")는
+> 둘 다 DB를 읽으므로 표시에는 차이가 없다. 엔진 산출물만 대조하는 소비자는 이 코드를 보지 못한다.
 
 소비자 구현 참고: `wall_{i}_skipped`는 정규식 `^wall_\d+_skipped$`(또는 `startswith("wall_") and endswith("_skipped")`)로 매칭해야 한다
 — CLI/요약 생성기도 이 방식을 쓴다(`outputs/summary.py:51-52`).

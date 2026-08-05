@@ -194,4 +194,19 @@ describe('UploadForm 임포트 모드 파일 형식(B4: CSV/JSON 지원)', () =>
     expect(analysesInsert).toHaveBeenCalledWith(
       expect.objectContaining({ kind: 'flatness', criteria_id: 'cr1' }));
   });
+  // 이 저장소가 가장 경계하는 실패 양식(화면이 사실이 아닌 것을 주장) 차단.
+  // 이 안내문은 오래도록 거짓이었다 - `scans.lineage`는 보고서 라벨로만 쓰였고
+  // 경고를 만드는 코드가 엔진·워커·대시보드 어디에도 없었다. 이제
+  // `worker/flatworker/lineage.py`가 실제로 `fused_mesh_smoothed`를 붙이고
+  // 결과 패널(verdict-panel)과 보고서 스냅샷이 그것을 한국어로 보여준다.
+  // 문구가 약속하는 대상(분석 결과·보고서)이 바뀌면 그 구현도 함께 따라가야 한다.
+  it('융합 메시를 고르면 경고가 표시된다고 안내한다', async () => {
+    vi.mocked(createClient).mockReturnValue(stubSupabase(null) as never);
+    render(<UploadForm sites={[site]} locations={[location]} userId="u1" />);
+
+    expect(screen.queryByText(/경고가 표시됩니다/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText('융합 메시'));
+
+    expect(screen.getByText(/분석 결과와 보고서에 경고가 표시됩니다/)).toBeInTheDocument();
+  });
 });

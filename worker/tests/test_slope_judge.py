@@ -42,12 +42,15 @@ def _seed_judgeable_analysis(db, cfg, tmp_path, *, analysis_id="a1", scan_id="sc
                              params_drain_points=None, stats_drain_points=None,
                              status="done", warnings=None, coverage_pct=None,
                              file_cell_m=2.0, file_subcell_m=0.05,
-                             db_cell_m=None, db_subcell_m=None):
+                             db_cell_m=None, db_subcell_m=None, lineage="raw"):
     """slope_judge 잡이 소비할 analyses 행 + slope_cells.json 산출물을 미리 심는다.
 
-    재판정은 점군을 열지 않으므로(스펙 §7.3) raw 스캔 파일이 필요 없다 - 셀을
+    재판정은 점군을 열지 않으므로(스펙 §7.3) raw 스캔 **파일**이 필요 없다 - 셀을
     직접 만들어 slope_cells.json에 담는다(engine/tests/test_slope_cells.py와
     동일한 접근 - SlopeCell을 직접 구성해 판정 경계를 결정론적으로 통제한다).
+    다만 scans **행**은 심는다: 재판정이 warnings를 통째로 다시 쓰므로 계보 경고
+    (scans.lineage)도 여기서 다시 붙여야 하기 때문이다
+    (test_slope_judge_preserves_lineage_warning 참고).
 
     file_cell_m/file_subcell_m: slope_cells.json의 meta에 실제로 실리는 값
     (정본 - 핸들러가 유일하게 읽어야 하는 값, Task 3 리뷰 Critical-2). db_cell_m/
@@ -79,6 +82,9 @@ def _seed_judgeable_analysis(db, cfg, tmp_path, *, analysis_id="a1", scan_id="sc
                               "name": "test-slope-judge",
                               "source_text": "테스트 전용 구배 기준 - 재판정 검증용",
                               "thresholds": [_threshold()]}
+    db.scans[scan_id] = {"id": scan_id, "site_id": "site1", "surface": "floor",
+                         "raw_file_path": f"raw-scans/site1/{scan_id}/raw.ply",
+                         "unit_scale": 1.0, "lineage": lineage, "status": "ready"}
     params = {}
     if params_drain_points is not None:
         params["drain_points"] = params_drain_points
@@ -472,3 +478,39 @@ def test_slope_judge_uploads_fresh_artifacts_after_each_judge(tmp_path):
                                  "drain_points": [{"x": 10.0, "y": 1.0}]})   # 2차: 정방향
     second = json.loads(storage.download(f"artifacts/{aid}/slope_judged.json"))
     assert second["cells"][0]["grade"] == "적합"  # 저장소도 최신 판정으로 갱신됐다
+
+
+def test_slope_judge_preserves_lineage_warning(tmp_path):
+    """재판정해도 계보 경고(fused_mesh_smoothed)가 살아남아야 한다.
+
+    `build_slope_judge_fields`는 warnings를 판정 결과에서 통째로 **다시 만든다**
+    (slope.py:171) - 최초 분석 때 붙인 계보 경고는 그 순간 사라진다. 사용자가
+    배수구를 한 번 클릭했다는 이유만으로 "융합 메시라 실제보다 양호할 수 있다"는
+    사실이 화면에서 지워지면, 업로드 화면이 약속한 경고가 다시 거짓이 된다
+    (이 태스크가 없애려던 바로 그 실패 양식의 재발).
+
+    `slope_judge_context`가 scan 행을 읽지 않는 것은 의도지만(점군을 다시 열지
+    않으므로), 계보는 점군이 아니라 scans 행의 메타데이터다 - 핸들러가 따로 읽는다.
+    """
+    db, cfg = FakeDB(), _cfg(tmp_path)
+    aid = _seed_judgeable_analysis(db, cfg, tmp_path, lineage="fused_mesh")
+
+    handle_slope_judge(db, cfg, {"analysis_id": aid,
+                                 "drain_points": [{"x": 10.0, "y": 1.0}]})
+
+    row = db.analyses[aid]
+    assert "fused_mesh_smoothed" in row["warnings"]
+    assert "fused_mesh_smoothed" in row["stats"]["warnings"]
+
+
+def test_slope_judge_does_not_invent_lineage_warning_for_raw_scan(tmp_path):
+    """원시 점군 스캔에는 붙지 않는다 - "전부에 붙이면 통과"하는 변이를 막는다."""
+    db, cfg = FakeDB(), _cfg(tmp_path)
+    aid = _seed_judgeable_analysis(db, cfg, tmp_path, lineage="raw")
+
+    handle_slope_judge(db, cfg, {"analysis_id": aid,
+                                 "drain_points": [{"x": 10.0, "y": 1.0}]})
+
+    row = db.analyses[aid]
+    assert "fused_mesh_smoothed" not in row["warnings"]
+    assert "fused_mesh_smoothed" not in row["stats"]["warnings"]
