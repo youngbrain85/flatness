@@ -13,11 +13,16 @@ import numpy as np
 import pytest
 from scipy.spatial import cKDTree
 
+from flatness.core import registration as reg
 from flatness.core.registration import (
-    MAX_RMSE_M, umeyama_rigid, register_clouds, grid_to_points,
+    umeyama_rigid, register_clouds, icp_refine, grid_to_points,
 )
 from flatness.core.subcell import SubcellGrid
 from tests.fixtures.synthetic import bumpy_floor, bumpy_surface_z
+
+# 스펙 §4.4의 임계를 **리터럴로** 고정한다. 구현 상수(reg.MAX_RMSE_M)를 그대로 쓰면
+# 상수를 바꾸는 변이가 게이트를 무력화해도 단언이 함께 움직여 잡히지 않는다.
+_SPEC_MAX_RMSE_M = 0.002
 
 _NOISE_SD_M = 0.001          # 노이즈 1mm (스펙 §9.3)
 _KNOWN_YAW_DEG = 7.0
@@ -283,9 +288,9 @@ def test_point_to_plane_rmse_meets_spec_gate_where_point_to_point_cannot():
     a, b, cs, cd = _scan_pair(click_sd=_CLICK_SD_M)
     res = register_clouds(b, a, cs, cd)
     assert res.converged, res.failure_reason
-    assert res.rmse_m <= MAX_RMSE_M, f"point-to-plane RMSE {res.rmse_m * 1000:.3f}mm"
+    assert res.rmse_m <= _SPEC_MAX_RMSE_M, f"point-to-plane RMSE {res.rmse_m * 1000:.3f}mm"
     point_rmse = _trimmed_point_rmse(a, _aligned(b, res))
-    assert point_rmse > 5 * MAX_RMSE_M, (
+    assert point_rmse > 5 * _SPEC_MAX_RMSE_M, (
         f"point-to-point 잔차가 {point_rmse * 1000:.2f}mm뿐이다 — 두 스캔이 점을 "
         "공유하고 있다는 뜻이고, 그러면 이 테스트가 아무것도 증명하지 못한다")
 
@@ -309,7 +314,7 @@ def test_point_to_plane_rmse_uses_measured_normals_not_a_vertical_assumption():
     corr_src = _apply(corr_dst, _KNOWN_YAW_DEG, _KNOWN_SHIFT_M)
     res = register_clouds(b, a, corr_src, corr_dst)
     assert res.converged, res.failure_reason
-    assert res.rmse_m <= MAX_RMSE_M, f"point-to-plane RMSE {res.rmse_m * 1000:.3f}mm"
+    assert res.rmse_m <= _SPEC_MAX_RMSE_M, f"point-to-plane RMSE {res.rmse_m * 1000:.3f}mm"
 
 
 def test_half_overlap_meets_z_gate_and_reports_partial_overlap():
@@ -357,7 +362,7 @@ def test_low_overlap_fails_instead_of_pretending_success():
     b = _apply(b_world, _KNOWN_YAW_DEG, _KNOWN_SHIFT_M)
     res = register_clouds(b, a, _apply(picks, _KNOWN_YAW_DEG, _KNOWN_SHIFT_M), picks)
     assert res.overlap_ratio < 0.1, f"중첩 비율 {res.overlap_ratio:.3f}"
-    assert res.rmse_m <= MAX_RMSE_M, f"이 픽스처는 RMSE가 게이트 안이어야 한다: {res.rmse_m * 1000:.3f}mm"
+    assert res.rmse_m <= _SPEC_MAX_RMSE_M, f"이 픽스처는 RMSE가 게이트 안이어야 한다: {res.rmse_m * 1000:.3f}mm"
     assert not res.converged
     assert res.failure_reason is not None
     assert "중첩" in res.failure_reason
@@ -367,6 +372,128 @@ def test_fewer_than_three_correspondences_is_rejected():
     a = bumpy_floor(size=(4.0, 3.0), seed=5)
     with pytest.raises(ValueError, match="대응점"):
         register_clouds(a, a, a[:2], a[:2])
+
+
+# --- 실패 방향 테스트 (게이트를 통과 방향으로만 단언하면 무력화를 못 잡는다) -----
+
+def test_spec_rmse_threshold_is_two_millimetres():
+    """스펙 §4.4의 임계값 자체를 고정한다.
+
+    게이트 테스트가 구현 상수를 참조하면 상수를 키우는 변이에 단언이 함께 끌려가
+    게이트가 사실상 사라져도 초록불이 된다.
+    """
+    assert reg.MAX_RMSE_M == _SPEC_MAX_RMSE_M
+    assert reg.MIN_OVERLAP_RATIO == 0.1
+
+
+def test_one_metre_horizontal_misalignment_is_reported_as_failure():
+    """수평 1m 어긋난 자세는 성공으로 나가면 안 된다 — **RMSE 게이트가 잡아야 한다**.
+
+    사유가 RMSE임을 함께 단언한다. 통과 방향만 보면 `rmse_m`을 0으로 만드는 변이가
+    모든 실패를 성공으로 뒤집어도 아무 테스트가 울지 않는다(실제로 그런 변이가
+    17건을 전부 통과했다).
+
+    **한계 기록:** 이 테스트가 성립하는 것은 바닥에 범프가 있기 때문이다. 완전
+    평면에서는 3m를 밀어도 point-to-plane 잔차가 1.006mm로 그대로다 — 수평
+    어긋남을 원리적으로 볼 수 없다(스펙 §9.3.1). 아래 발산 가드가 그 사각의
+    일부(대상 표면 밖으로 벗어나는 경우)를 덮는다.
+    """
+    a, b, _cs, _cd = _scan_pair(click_sd=0.0)
+    off = np.eye(4)
+    off[0, 3] = 1.0                                   # 참값 위에 수평 1m를 얹는다
+    res = icp_refine(b, a, off @ _expected())
+    assert not res.converged
+    assert res.failure_reason is not None
+    assert "RMSE" in res.failure_reason, res.failure_reason
+    assert res.rmse_m > _SPEC_MAX_RMSE_M
+
+
+def test_divergence_guard_catches_a_cloud_beyond_the_target_edge():
+    """대상 표면 **밖**에 떠 있는 점군을 잡는다 — point-to-plane이 못 보는 사각.
+
+    수평면 가장자리 밖으로 밀린 점들은 변위가 접선 방향이라 법선 성분이 0이다.
+    실측: point-to-plane **0.000mm**, 중첩 **0.800** — RMSE 게이트도 중첩 가드도
+    통과한다. point-to-point 잔차만 표본 간격의 1.6배로 튄다. 발산 가드가 유일한
+    방어선이므로, 다른 두 게이트가 **울지 않았다는 것까지** 함께 단언한다.
+    그러지 않으면 `max_iterations=1`이 만드는 "수렴 못 함" 사유에 가려 가드를
+    없애도 `converged=False`가 유지된다.
+
+    `max_iterations=1`은 의도적이다 — **주어진 자세를 평가**하는 가드를 보는
+    테스트이기 때문이다. 그대로 두면 ICP가 점군을 표면 위로 끌어와 자세 자체가
+    사라진다(실측: 45회 만에 p2p 0.63배로 수렴). 이 가드가 수렴한 결과에서 실제로
+    울린 경우는 아직 관측하지 못했다(보고서 §9 참고).
+    """
+    def plane(x0, x1, sample_seed, spacing=0.05):
+        rng = np.random.default_rng(sample_seed)
+        gx, gy = np.meshgrid(np.arange(x0, x1 + spacing / 2, spacing),
+                             np.arange(0.0, 6.0 + spacing / 2, spacing))
+        gx = gx + rng.uniform(-spacing / 2, spacing / 2, gx.shape)
+        gy = gy + rng.uniform(-spacing / 2, spacing / 2, gy.shape)
+        return np.column_stack([gx.ravel(), gy.ravel(), np.zeros(gx.size)])
+
+    dst = plane(0.0, 8.0, 1)
+    src = plane(8.2, 8.4, 3)                          # dst 가장자리 밖 0.2~0.4m
+    res = icp_refine(src, dst, np.eye(4), max_iterations=1)
+    assert res.rmse_m <= _SPEC_MAX_RMSE_M, f"이 픽스처는 point-to-plane이 깨끗해야 한다: {res.rmse_m}"
+    assert res.overlap_ratio >= 0.1, f"중첩 가드도 통과해야 한다: {res.overlap_ratio}"
+    assert res.point_rmse_m > 1.5 * res.sample_spacing_m
+    assert not res.converged
+    reason = res.failure_reason or ""
+    assert "발산" in reason, reason
+    assert "RMSE" not in reason, f"이 픽스처에서 RMSE 게이트는 울면 안 된다: {reason}"
+    assert "중첩" not in reason, f"이 픽스처에서 중첩 가드는 울면 안 된다: {reason}"
+
+
+def test_collinear_correspondences_are_rejected():
+    """스펙 §8: 공선 대응점은 거부하고 한국어 사유를 준다."""
+    a, b, _cs, _cd = _scan_pair(click_sd=0.0)
+    line = np.array([[1.0, 1.0, 0.0], [2.5, 1.0, 0.0], [4.0, 1.0, 0.0]])
+    with pytest.raises(ValueError, match="공선"):
+        register_clouds(b, a, _apply(line, _KNOWN_YAW_DEG, _KNOWN_SHIFT_M), line)
+
+
+def test_correspondences_clustered_in_a_small_patch_are_rejected():
+    """근접 3점(2cm 안)은 거부한다 — ICP로는 못 고치는 오정합의 실제 트리거.
+
+    실측: 이 배치로 초기 Umeyama가 이미 yaw 89도·면내 5.3m로 틀어진다. 판별식이
+    없으면 7m 어긋난 정합이 성공으로 나갈 수 있다. 공선성만 봐서는 못 잡는다 —
+    이 배치의 sv1/sv0은 0.98로 오히려 정상 4점(0.67)보다 크다. 퍼짐을 따로 본다.
+    """
+    a, b, _cs, _cd = _scan_pair(click_sd=0.0)
+    near = _surface(np.array([[3.00, 2.00], [3.02, 2.00], [3.01, 2.017]]))
+    with pytest.raises(ValueError, match="몰려 있"):
+        register_clouds(b, a, _apply(near, _KNOWN_YAW_DEG, _KNOWN_SHIFT_M), near)
+
+
+def test_z_gate_holds_across_the_documented_slope_range():
+    """구배 2% 램프에서도 z 게이트(<=1mm)가 성립한다 — 적용 범위의 상한 근처.
+
+    픽스처 바닥은 국소 경사 median 0.10%로 사실상 평탄이라, 구배가 붙었을 때를
+    따로 재지 않으면 "구배 측정 용역인데 구배에서 검증한 적이 없는" 상태가 된다.
+    실측 적용 범위는 스펙 §9.3.1 표에 있다(3%까지 z<=1mm, 16%까지 ±5mm 안).
+    """
+    slope = 0.02
+    rng = np.random.default_rng(7)
+    a = bumpy_floor(size=_SIZE, seed=_SURF_SEED, sample_jitter=0.025, sample_seed=101, slope=(slope, 0.0))
+    b_local = bumpy_floor(size=_SIZE, seed=_SURF_SEED, sample_jitter=0.025, sample_seed=202, slope=(slope, 0.0))
+    b = _apply(b_local, _KNOWN_YAW_DEG, _KNOWN_SHIFT_M) + rng.normal(0, _NOISE_SD_M, b_local.shape)
+    corr_dst = np.column_stack([_CORR_XY, bumpy_surface_z(_CORR_XY[:, 0], _CORR_XY[:, 1],
+                                                          size=_SIZE, seed=_SURF_SEED)
+                                + slope * _CORR_XY[:, 0]])
+    corr_src = _apply(corr_dst, _KNOWN_YAW_DEG, _KNOWN_SHIFT_M) + rng.normal(0, _CLICK_SD_M, corr_dst.shape)
+    res = register_clouds(b, a, corr_src, corr_dst)
+    assert res.converged, res.failure_reason
+    _yaw, _inplane, z_err = _errors(res)
+    assert abs(z_err) <= 0.001, f"구배 {slope * 100:.0f}%에서 z 오차 {z_err * 1000:.3f}mm"
+
+
+def test_result_reports_point_rmse_and_sample_spacing():
+    """발산 가드의 근거값이 결과에 실려 나온다(Task 4가 저장·표시할 수 있게)."""
+    a, b, cs, cd = _scan_pair(click_sd=0.0)
+    res = register_clouds(b, a, cs, cd)
+    assert 0.02 < res.sample_spacing_m < 0.06, res.sample_spacing_m
+    assert res.point_rmse_m > res.rmse_m, "표본이 독립이면 point-to-point가 더 커야 한다"
+    assert res.point_rmse_m < 1.5 * res.sample_spacing_m
 
 
 # --- 퇴화 픽스처 회귀 가드 (스펙 §9.3.1 부수 발견 1) --------------------------
@@ -410,10 +537,32 @@ def test_identical_point_fixture_recovers_in_plane_even_on_a_featureless_plane()
 # --- 서브셀 격자 -> 점군 ------------------------------------------------------
 
 def test_grid_to_points_drops_nan_subcells_and_uses_cell_centers():
+    """좌표 **집합 전체**를 기대값과 대조한다.
+
+    min/개수만 보면 ix/iy를 뒤바꾼 구현이 정사각 격자에서 통과해 버린다.
+    (비정사각 격자의 IndexError로만 잡히는 것은 우연에 기댄 것이다.)
+    아래 정사각 격자 테스트가 그 우연을 제거한다.
+    """
     grid = _grid_with_one_nan()
-    pts = grid_to_points(grid)
-    assert np.isfinite(pts).all()
-    assert len(pts) == int(np.isfinite(grid.median_z).sum())
-    # 셀 중심인가: origin + (i+0.5)*size_m
-    assert np.isclose(pts[:, 0].min(), grid.origin[0] + 0.5 * grid.size_m)
-    assert np.isclose(pts[:, 1].min(), grid.origin[1] + 0.5 * grid.size_m)
+    ny, nx = grid.shape
+    expect = {(round(grid.origin[0] + (ix + 0.5) * grid.size_m, 9),
+               round(grid.origin[1] + (iy + 0.5) * grid.size_m, 9),
+               round(float(grid.median_z[iy, ix]), 9))
+              for iy in range(ny) for ix in range(nx) if np.isfinite(grid.median_z[iy, ix])}
+    got = {(round(x, 9), round(y, 9), round(z, 9)) for x, y, z in grid_to_points(grid)}
+    assert got == expect
+
+
+def test_grid_to_points_keeps_x_and_y_distinct_on_a_square_grid():
+    """정사각 격자에서도 ix/iy 전치를 잡는다 — z를 좌표에 묶어 대조한다."""
+    z = np.array([[0.011, 0.013, 0.009],
+                  [0.012, 0.017, 0.010],
+                  [0.008, 0.016, 0.014]], dtype=np.float32)
+    grid = SubcellGrid(size_m=0.05, origin=np.array([12.3, -4.7]), shape=z.shape,
+                       median_z=z, counts=np.full(z.shape, 7, dtype=np.int32),
+                       bimodal=np.zeros(z.shape, dtype=bool))
+    expect = {(round(12.3 + (ix + 0.5) * 0.05, 9), round(-4.7 + (iy + 0.5) * 0.05, 9),
+               round(float(z[iy, ix]), 9))
+              for iy in range(3) for ix in range(3)}
+    got = {(round(x, 9), round(y, 9), round(zz, 9)) for x, y, zz in grid_to_points(grid)}
+    assert got == expect

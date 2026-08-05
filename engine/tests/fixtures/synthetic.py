@@ -32,7 +32,7 @@ def bumpy_surface_z(xy_x, xy_y, size=(8.0, 6.0), n_bumps=None, seed=0):
 
 
 def bumpy_floor(size=(8.0, 6.0), spacing=0.05, n_bumps=None, seed=0,
-                sample_jitter=0.0, sample_seed=None):
+                sample_jitter=0.0, sample_seed=None, slope=(0.0, 0.0)):
     """무작위 범프를 얹은 바닥 (n,3) float64[m] — 정합 테스트 전용 픽스처.
 
     완전 평면을 쓰면 안 된다. 수평 평면은 면내 2자유도와 yaw에 대해 구조적으로
@@ -57,6 +57,7 @@ def bumpy_floor(size=(8.0, 6.0), spacing=0.05, n_bumps=None, seed=0,
         gx = gx + srng.uniform(-sample_jitter, sample_jitter, gx.shape)
         gy = gy + srng.uniform(-sample_jitter, sample_jitter, gy.shape)
     z = bumpy_surface_z(gx, gy, size=size, n_bumps=n_bumps, seed=seed)
+    z = z + slope[0] * gx + slope[1] * gy      # 구배 램프 (무차원, 0.05 = 5%)
     return np.column_stack([gx.ravel(), gy.ravel(), z.ravel()])
 
 
