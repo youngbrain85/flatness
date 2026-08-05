@@ -78,13 +78,20 @@ function mkAnalysis(overrides: Partial<AnalysisRow> & { id: string; kind: Analys
   };
 }
 
-function stubSupabase(scan: ScanRow, analyses: AnalysisRow[], loc: LocationRow | null = location) {
+function stubSupabase(
+  scan: ScanRow, analyses: AnalysisRow[], loc: LocationRow | null = location,
+  registration: { id: string } | null = null,
+) {
   return {
     auth: { getUser: async () => ({ data: { user: { id: 'u1' } } }) },
     from: (table: string) => {
       if (table === 'scans') return chain({ data: scan, error: null });
       if (table === 'locations') return chain({ data: loc, error: null });
       if (table === 'analyses') return chain({ data: analyses, error: null });
+      // ★ 단계 F: 정합 이력 조회는 lineage === 'registered'일 때만 나가야 한다.
+      // 일반 스캔에서 이 테이블에 손대면 여기서 예외로 잡힌다(쿼리 1회 추가는
+      // 모든 스캔 상세에 붙는 비용이다).
+      if (table === 'registrations') return chain({ data: registration, error: null });
       throw new Error(`예상치 못한 테이블: ${table}`);
     },
   };
@@ -347,6 +354,46 @@ describe('ScanPage 메타·안내 문구 (단계 E)', () => {
 
     expect(text).toContain('점 개수');
     expect(text).toContain('1,234,567');
+  });
+
+  // ★ 리뷰 I1(단계 F): 병합 스캔은 정합 성공 즉시 status='ready'로 목록에 뜨고 여기서
+  // 바로 분석할 수 있다. 정합 화면으로 돌아가는 길이 없으면 이 경로로 들어온 사용자는
+  // 겹쳐보기(RMSE가 원리적으로 못 보는 수평 어긋남을 확인하는 유일한 수단)를 찾을
+  // 방법이 없다.
+  it('정합 병합 스캔이면 정합 화면으로 돌아가는 링크를 단다', async () => {
+    vi.mocked(createClient).mockResolvedValue(
+      stubSupabase(mkScan({ lineage: 'registered' }), [], location, { id: 'reg-9' }) as never);
+
+    const el = await ScanPage({ params: Promise.resolve({ id: 'sc1' }) });
+    const hrefs = findAll(el, Link).map((l) => l.props.href);
+    const text = collectText(el).join('');
+
+    expect(hrefs).toContain('/registrations/reg-9');
+    expect(text).toContain('정합해 만든 병합 스캔');
+    expect(text).toContain('수직 방향만');
+  });
+
+  it('정합 이력을 못 찾으면 링크 대신 주의를 알린다(이력 삭제 등)', async () => {
+    vi.mocked(createClient).mockResolvedValue(
+      stubSupabase(mkScan({ lineage: 'registered' }), [], location, null) as never);
+
+    const el = await ScanPage({ params: Promise.resolve({ id: 'sc1' }) });
+    const hrefs = findAll(el, Link).map((l) => l.props.href);
+    const text = collectText(el).join('');
+
+    expect(hrefs.some((h) => String(h).startsWith('/registrations/'))).toBe(false);
+    expect(text).toContain('정합 이력을 찾지 못했습니다');
+  });
+
+  // 일반 스캔에서 registrations를 조회하면 stubSupabase가 예외를 던진다 - 즉 이 테스트가
+  // "쿼리 1회가 모든 스캔 상세에 무조건 붙는" 회귀를 잡는다.
+  it('일반 스캔에서는 정합 이력을 조회하지도, 안내를 띄우지도 않는다', async () => {
+    vi.mocked(createClient).mockResolvedValue(
+      stubSupabase(mkScan({ lineage: 'raw' }), []) as never);
+
+    const el = await ScanPage({ params: Promise.resolve({ id: 'sc1' }) });
+
+    expect(collectText(el).join('')).not.toContain('정합해 만든 병합 스캔');
   });
 
   it('점 개수가 없는 기존 스캔에서도 메타가 죽지 않는다', async () => {

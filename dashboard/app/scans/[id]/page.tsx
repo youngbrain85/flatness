@@ -33,6 +33,16 @@ export default async function ScanPage({ params }: { params: Promise<{ id: strin
   const loc = locRes.data as LocationRow | null;
   const analyses = (analysesRes.data ?? []) as AnalysisRow[];
 
+  // ★ 리뷰 I1(단계 F): 병합 스캔은 정합 성공 즉시 status='ready'로 만들어져 측정위치
+  // 트리와 이 화면에 바로 나타난다. 그런데 여기서 정합 화면으로 돌아가는 길이 없으면,
+  // 이 경로로 들어온 사용자는 겹쳐보기(RMSE가 원리적으로 못 보는 수평 어긋남을
+  // 확인하는 유일한 수단)를 **찾을 방법이 없다.** lineage로 좁혀 질의하므로 일반
+  // 스캔은 이 쿼리를 타지 않는다.
+  const registrationRes = s.lineage === 'registered'
+    ? await supabase.from('registrations').select('id').eq('result_scan_id', id).maybeSingle()
+    : null;
+  const registrationId = (registrationRes?.data as { id: string } | null | undefined)?.id ?? null;
+
   // 종류별로 완전히 갈라서 다룬다(컨트롤러 보강 확정 3·5). analyses[0] 하나로 화면
   // 전체를 지배하면 구배 분석을 한 번이라도 돌리는 순간 평활도의 진행 상태·결과
   // 링크·이전 이력이 화면에서 사라진다. 쿼리가 이미 created_at desc이므로 kind로
@@ -98,6 +108,28 @@ export default async function ScanPage({ params }: { params: Promise<{ id: strin
         <dt className="text-slate-500">상태</dt><dd>{SCAN_STATUS_LABEL[s.status]}</dd>
         <dt className="text-slate-500">단위 배율</dt><dd>{s.unit_scale ?? '미확정'}</dd>
       </dl>
+      {s.lineage === 'registered' && (
+        <div className="rounded border border-amber-300 bg-amber-50 p-3 text-sm">
+          <p className="font-medium">두 스캔을 정합해 만든 병합 스캔입니다.</p>
+          <p className="mt-1 text-xs text-slate-700">
+            분석하기 전에 정합이 실제로 맞았는지 확인하세요. 정합 RMSE는 수직 방향만
+            보증하므로, 두 스캔이 수평으로 어긋나 있어도 수치는 정상으로 나옵니다.
+            정합 화면의 겹쳐보기가 그 방향을 확인하는 유일한 수단입니다.
+          </p>
+          {registrationId ? (
+            <Link href={`/registrations/${registrationId}`}
+              className="mt-2 inline-block rounded bg-blue-700 px-3 py-1.5 text-xs text-white">
+              정합 결과·겹쳐보기 확인
+            </Link>
+          ) : (
+            <p className="mt-1 text-xs text-slate-600">
+              이 스캔을 만든 정합 이력을 찾지 못했습니다(이력이 삭제됐거나 아직 반영되지
+              않았습니다). 겹쳐보기를 볼 수 없으므로 이 스캔의 분석 결과를 판단 근거로
+              쓸 때 주의하세요.
+            </p>
+          )}
+        </div>
+      )}
       {WATCHED_SCAN_STATUSES.has(s.status) && (
         <ScanStatusWatcher scanId={id} initialStatus={s.status} />
       )}

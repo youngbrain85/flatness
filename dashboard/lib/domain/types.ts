@@ -254,6 +254,16 @@ export interface RegistrationRow {
   /** ★ 참 중첩이 아니다 - trim_ratio(0.8)가 상한이다(스펙 §9.3.4).
    *  화면에 쓰려면 lib/domain/registration.ts의 trueOverlapPct를 거쳐야 한다. */
   overlap_ratio: number | null;
+  /** 수평 오정합을 **검출할 수 있는 정도**(엔진 감도 프로브). 정합을 ±10cm 수평으로
+   *  밀었을 때 point-to-plane 잔차가 오르는 비의 최솟값이다. 1.0에 가까우면 이 장면은
+   *  수평 방향으로 검증 불가다 - 몇 미터가 어긋나도 잔차가 그대로라 rmse_mm이 안전을
+   *  보장하지 못한다(스펙 §9.3.2).
+   *
+   *  null인 경우가 정상 경로에 둘 있다: (1) 감도 프로브 이전에 만들어진 정합 이력,
+   *  (2) 마이그레이션 012의 이 컬럼을 아직 적용하지 않은 DB(select('*')에 컬럼 자체가
+   *  없어 undefined로 온다). 둘 다 "알 수 없음"이지 "위험함"이 아니므로 화면은
+   *  조용히 넘어간다(lib/domain/registration.ts isHorizontalUnverifiable). */
+  horizontal_sensitivity: number | null;
   status: RegistrationStatus;
   /** 실패 사유. jobs 테이블은 RLS 정책이 0개라(설계 결정 F10) 여기가 유일한 통로다. */
   error_text: string | null;

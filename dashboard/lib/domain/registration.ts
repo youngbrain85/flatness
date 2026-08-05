@@ -12,6 +12,46 @@ export const MIN_CORRESPONDENCES = 3;
 /** engine icp_refine의 trim_ratio 기본값. overlap_ratio의 상한이기도 하다. */
 export const ICP_TRIM_RATIO = 0.8;
 
+/** ★ engine/flatness/core/registration.py의 `HORIZONTAL_SENSITIVITY_MIN`과 **같은 값이어야
+ *  한다.** 엔진이 이 임계로 실패시키지는 않는다 - 대신 화면이 알릴 책임을 진다고 엔진
+ *  독스트링이 명시한다. 그래서 임계가 화면 쪽에도 한 벌 있다.
+ *
+ *  판정 이중화가 아닌 이유: 이 값은 합격·불합격을 가르지 않는다. 엔진이 이미
+ *  `converged`로 합격을 판정했고, 이 상수는 "그 합격을 수평 방향으로 데이터가 뒷받침하는가"
+ *  라는 **표시 조건**만 정한다. 엔진 상수가 바뀌면 여기도 함께 바꿔야 한다. */
+export const HORIZONTAL_SENSITIVITY_MIN = 1.1;
+
+/** 수평 검증 가능성.
+ *
+ *  - `'ok'`   : 수평으로 밀면 잔차가 유의하게 오른다(장면에 수평 위치를 구속하는 특징이 있다)
+ *  - `'weak'` : 밀어도 잔차가 거의 그대로다. 데이터만으로는 수평 위치를 판별할 수 없다
+ *  - `'unknown'`: 값이 없다(구 데이터·컬럼 미적용 DB) - **아무것도 표시하지 않는다**
+ */
+export type HorizontalCheck = 'ok' | 'weak' | 'unknown';
+
+/** 감도 값 -> 수평 검증 가능성.
+ *
+ * ★ `'weak'`는 **이상 상황이 아니다.** 바닥이 평탄할수록 이 값이 낮게 나온다 - 평탄한
+ * 면은 자기 위로 밀어도 모양이 같아 수평 위치를 구속할 정보가 원래 없기 때문이다.
+ * 재리뷰 실측(같은 장면을 바닥 평탄도만 바꿔 잰 값):
+ *
+ *     ±12mm(이 용역 기준으론 불합격 바닥) 1.710 / ±6mm 1.218 /
+ *     ±3.5mm 1.084 / ±2.5mm 1.038  -> 교차점 약 ±4.5mm
+ *
+ * 스펙이 정의한 이 용역의 대상이 **±5mm 평탄 바닥**이므로, **스펙을 만족하는 좋은
+ * 바닥일수록 'weak'가 나온다.** 즉 이 상태는 흔하고 정상이다. 화면이 이것을 "오류·이상"
+ * 으로 표시하면 늑대소년이 되어 사용자가 곧 무시하게 된다 - 정보로 제시해야 한다.
+ *
+ * ★ null·undefined·비유한값은 `'unknown'`이다. 감도 프로브 이전에 만들어진 정합 이력과
+ * 012의 컬럼을 아직 적용하지 않은 DB(select('*')에 컬럼 자체가 없어 undefined)가 정상적으로
+ * 그 상태다. "알 수 없음"을 "낮음"으로 바꾸면 멀쩡한 옛 정합 전부에 안내가 붙는다.
+ */
+export function horizontalCheck(sensitivity: number | null | undefined): HorizontalCheck {
+  if (sensitivity === null || sensitivity === undefined) return 'unknown';
+  if (!Number.isFinite(sensitivity)) return 'unknown';
+  return sensitivity < HORIZONTAL_SENSITIVITY_MIN ? 'weak' : 'ok';
+}
+
 export interface PointPair { a: PickedPoint; b: PickedPoint }
 
 /** 화면이 모은 쌍 -> registrations.correspondences(jsonb).

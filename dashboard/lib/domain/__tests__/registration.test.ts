@@ -1,8 +1,8 @@
 // 정합 도메인 (단계 F Task 5) - 대응점 직렬화 / 참 중첩 환산 / 겹쳐보기 기하
 import { describe, expect, it } from 'vitest';
 import {
-  ICP_TRIM_RATIO, MIN_CORRESPONDENCES, imageCornersM, overlayAffine, overlayView,
-  toCorrespondences, trueOverlapPct,
+  HORIZONTAL_SENSITIVITY_MIN, ICP_TRIM_RATIO, MIN_CORRESPONDENCES, horizontalCheck,
+  imageCornersM, overlayAffine, overlayView, toCorrespondences, trueOverlapPct,
 } from '../registration';
 import type { HeightViewMeta } from '../height-view';
 
@@ -86,6 +86,51 @@ describe('참 중첩 환산 (스펙 §9.3.4)', () => {
 
   it('계약이 깨져 상한을 넘어도 100%를 넘겨 표시하지 않는다', () => {
     expect(trueOverlapPct(0.95)).toBe(100);
+  });
+});
+
+// 엔진 감도 프로브(engine/flatness/core/registration.py HORIZONTAL_SENSITIVITY_MIN).
+// 세 게이트(수렴·중첩·RMSE)가 전부 침묵하는 사각에서 유일하게 신호를 내는 값이다.
+describe('수평 검증 가능성 (엔진 감도 프로브)', () => {
+  it('임계는 엔진 상수와 같은 1.1이다', () => {
+    expect(HORIZONTAL_SENSITIVITY_MIN).toBe(1.1);
+  });
+
+  // ★ 'weak'는 이상 상황이 아니다. 바닥 평탄도만 바꿔 잰 재리뷰 실측:
+  //   ±12mm 1.710 / ±6mm 1.218 / ±3.5mm 1.084 / ±2.5mm 1.038 (교차점 약 ±4.5mm).
+  //   스펙이 정의한 대상이 ±5mm 평탄 바닥이므로 **좋은 바닥일수록 weak가 나온다.**
+  it.each([
+    ['±3.5mm 바닥', 1.084],
+    ['±2.5mm 바닥', 1.038],
+    ['완전 평면', 1.0],
+    ['완전 평면 대응점 3m 오클릭(실사용 재현)', 0.994],
+  ])('%s(감도 %f)는 수평 검증 가능성이 낮다', (_label, v) => {
+    expect(horizontalCheck(v)).toBe('weak');
+  });
+
+  it.each([
+    ['±12mm 바닥(이 용역 기준 불합격)', 1.710],
+    ['±6mm 바닥', 1.218],
+    ['바닥+벽', 1.248],
+    ['복도', 1.369],
+  ])('%s(감도 %f)는 수평도 데이터로 검증된다', (_label, v) => {
+    expect(horizontalCheck(v)).toBe('ok');
+  });
+
+  it('임계 자체(1.1)는 ok다(미만일 때만 weak)', () => {
+    expect(horizontalCheck(1.1)).toBe('ok');
+    expect(horizontalCheck(1.0999)).toBe('weak');
+  });
+
+  // ★ 값이 없는 것은 "낮음"이 아니라 "알 수 없음"이다. 감도 프로브 이전의 정합 이력과,
+  // 012의 컬럼을 아직 적용하지 않은 DB(select('*')에 컬럼이 없어 undefined)가 정상적으로
+  // 이 상태다. weak로 접으면 멀쩡한 옛 정합 전부에 안내가 붙는다.
+  it.each([
+    ['null(구 데이터)', null],
+    ['undefined(012 미적용 DB)', undefined],
+    ['NaN(프로브 실패)', Number.NaN],
+  ])('%s면 unknown이다(화면은 아무것도 띄우지 않는다)', (_label, v) => {
+    expect(horizontalCheck(v as number | null | undefined)).toBe('unknown');
   });
 });
 

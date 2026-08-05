@@ -8,7 +8,10 @@ vi.mock('@/lib/supabase/client', () => ({ createClient: vi.fn() }));
 
 import { createClient } from '@/lib/supabase/client';
 import { RegistrationWorkbench } from '../registration-workbench';
+import { FakeImage, recordingCtx } from './canvas-stub';
+import { plainPngUrl } from '@/lib/domain/height-view';
 import type { HeightViewMeta } from '@/lib/domain/height-view';
+import { imageCornersM, overlayAffine, overlayView } from '@/lib/domain/registration';
 import type { RegistrationRow, ScanRow } from '@/lib/domain/types';
 
 // ★ 두 스캔의 픽스처를 다르게 잡는다 - 같게 만들면 한쪽 사이드카만 읽는 구현도 통과한다.
@@ -46,7 +49,8 @@ const SCAN_B = scan({ id: 'sb', original_filename: 'b.ply', height_view_path: PA
 function reg(over: Partial<RegistrationRow> = {}): RegistrationRow {
   return {
     id: 'r1', source_scan_ids: ['sa', 'sb'], correspondences: [], transform: null,
-    rmse_mm: null, iterations: null, overlap_ratio: null, status: 'awaiting_points',
+    rmse_mm: null, iterations: null, overlap_ratio: null, horizontal_sensitivity: null,
+    status: 'awaiting_points',
     error_text: null, result_scan_id: null, created_by: null,
     created_at: '', updated_at: '', ...over,
   };
@@ -91,9 +95,9 @@ function stubSupabase(o: Opts = {}) {
   };
 }
 
-function stubFetch() {
+function stubFetch(fail = false) {
   vi.stubGlobal('fetch', vi.fn(async (url: string) => ({
-    ok: true, status: 200,
+    ok: !fail, status: fail ? 404 : 200,
     json: async () => (url.includes('OTHER-A') ? META_A : META_B),
   })));
 }
@@ -108,9 +112,9 @@ function stubRect() {
   });
 }
 
-function mount(row = reg(), o: Opts = {}, scanB: ScanRow = SCAN_B) {
+function mount(row = reg(), o: Opts = {}, scanB: ScanRow = SCAN_B, fetchFails = false) {
   vi.mocked(createClient).mockReturnValue(stubSupabase(o) as never);
-  stubFetch();
+  stubFetch(fetchFails);
   const utils = render(<RegistrationWorkbench registration={row} scanA={SCAN_A} scanB={scanB} />);
   stubRect();
   return utils;
@@ -187,6 +191,29 @@ describe('RegistrationWorkbench 대응점 수집 (스펙 §7.4)', () => {
     expect(fields.correspondences[0].b.z).toBeCloseTo(3.6, 6);
   });
 
+  // ★ 리뷰 I2: 저장된 대응점을 마커로 되돌릴 때 양쪽 모두 a를 써도 개수는 맞는다.
+  //   두 스캔의 사이드카가 다르므로 픽셀 위치로만 잡힌다. 이 회귀가 나면 사용자는
+  //   B 그림에서 엉뚱한 칸(대개 그림 밖)에 찍힌 마커를 보고 대응점을 다시 찍는다.
+  it('저장된 대응점 마커가 각자의 좌표계로 찍힌다(A는 A 메타, B는 B 메타)', async () => {
+    // A: 격자 (ix=2, iy=1) 중심 -> 픽셀 (2, 1) -> left 50% / top 50%
+    // B: 격자 (ix=4, iy=2) 중심 -> 픽셀 (4, 1) -> left 75% / top 37.5%
+    mount(reg({
+      correspondences: [{
+        a: { x: 1234.5 + 2.5 * 31.25, y: -678.25 + 1.5 * 31.25, z: 12.75 + 11 },
+        b: { x: -10 + 4.5 * 8, y: 40 + 2.5 * 8, z: 3.5 + 1.5 },
+      }],
+    }));
+    await waitReady();
+
+    const aMarker = screen.getByRole('img', { name: /A 스캔/ })
+      .parentElement!.querySelector('span') as HTMLElement;
+    const bMarker = screen.getByRole('img', { name: /B 스캔/ })
+      .parentElement!.querySelector('span') as HTMLElement;
+
+    expect([aMarker.style.left, aMarker.style.top]).toEqual(['50%', '50%']);
+    expect([bMarker.style.left, bMarker.style.top]).toEqual(['75%', '37.5%']);
+  });
+
   it('잡 등록에 실패하면 상태를 대응점 대기로 되돌리고 사유를 보여준다', async () => {
     const updateSpy = vi.fn();
     mount(reg(), { updateSpy, enqueueError: { message: '전송 오류로 등록 실패' } });
@@ -252,6 +279,33 @@ describe('RegistrationWorkbench 결과 표시 (스펙 §9.3.2·§9.3.4)', () => 
     expect(container.querySelector('canvas')).not.toBeNull();
   });
 
+  // ★ 리뷰 C2: overlay-view.test.tsx는 컴포넌트를 직접 마운트해 그 안쪽 배선만 잠근다.
+  //   **작업대가 그 컴포넌트에 무엇을 넘기는지**(어느 스캔의 unit_scale·어느 변환)는
+  //   여기서만 잡힌다 - 두 스캔의 배율이 1과 0.001로 다르므로 뒤바꾸면 1000배 어긋난다.
+  it('겹쳐보기에 각 스캔의 unit_scale과 정합 변환을 그대로 넘긴다', async () => {
+    const { ctx, calls } = recordingCtx();
+    const spy = vi.spyOn(HTMLCanvasElement.prototype, 'getContext')
+      .mockReturnValue(ctx as unknown as RenderingContext);
+    vi.stubGlobal('Image', FakeImage);
+    try {
+      mount(done);
+      await vi.waitFor(() => expect(calls).toHaveLength(2));
+
+      const view = overlayView([
+        imageCornersM(META_A, 1, null),
+        imageCornersM(META_B, 0.001, done.transform),
+      ], 560, 420);
+      expect(calls[0].src).toBe(plainPngUrl(PATH_A));
+      expect(calls[1].src).toBe(plainPngUrl(PATH_B));
+      expect(calls[0].transform).toEqual(overlayAffine(META_A, 1, null, view));
+      expect(calls[1].transform).toEqual(overlayAffine(META_B, 0.001, done.transform, view));
+      expect(calls[0].alpha).toBe(1);
+      expect(calls[1].alpha).toBeLessThan(1);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
   // ★ RMSE만 보고 승인하게 두면 안 된다(스펙 §9.3.2 남는 위험).
   it('겹쳐보기 확인 전에는 병합 스캔으로 진행할 수 없다', async () => {
     mount(done);
@@ -285,5 +339,123 @@ describe('RegistrationWorkbench 결과 표시 (스펙 §9.3.2·§9.3.4)', () => 
     expect(updateSpy).toHaveBeenCalledWith(expect.objectContaining({
       status: 'awaiting_points', result_scan_id: null,
     }));
+  });
+
+  // ★ 리뷰 I3: 다시 찍기 후 육안 확인 체크가 남아 있으면, 다음 정합 결과가 나왔을 때
+  // 사용자가 그 그림을 한 번도 안 봤는데도 병합 스캔 링크가 이미 열려 있다.
+  it('대응점을 다시 찍으면 육안 확인 체크가 풀린다', async () => {
+    mount(done);
+    await screen.findByText(/1\.01/);
+    fireEvent.click(screen.getByRole('checkbox', { name: /포개지는/ }));
+    expect(screen.getByRole('link', { name: /병합 스캔/ })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /대응점 다시 찍기/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /삭제하고 다시 찍기/ }));
+
+    await vi.waitFor(() =>
+      expect(screen.getByRole('checkbox', { name: /포개지는/ })).not.toBeChecked());
+    expect(screen.queryByRole('link', { name: /병합 스캔/ })).toBeNull();
+  });
+
+  // ★ 리뷰 C1 (실증 프로브: canvas=300x150 / 안내 없음 / 링크 열림). 사이드카가 404면
+  // metaA·metaB가 null이라 겹쳐보기가 빈 흰 상자로 남는데, 예전 구현은 아무 안내 없이
+  // 체크를 허용해 방어가 조용히 0이 됐다.
+  it('사이드카를 못 받으면 육안 확인을 체크할 수 없고 사유를 그 자리에 띄운다', async () => {
+    mount(done, {}, SCAN_B, true);
+    await screen.findByText(/1\.01/);
+
+    const cb = await screen.findByRole('checkbox', { name: /포개지는/ });
+    await vi.waitFor(() => expect(cb).toBeDisabled());
+    expect(screen.getByText(/겹쳐보기를 볼 수 없는 상태에서는/)).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /병합 스캔/ })).toBeNull();
+  });
+
+  // transform이 null인 채 done이면 B가 자기 좌표로 그려져 정합된 것처럼 보인다.
+  it('정합 변환이 저장되지 않았으면 육안 확인을 체크할 수 없다', async () => {
+    mount(reg({ ...done, transform: null }));
+    await screen.findByText(/1\.01/);
+
+    const cb = await screen.findByRole('checkbox', { name: /포개지는/ });
+    await vi.waitFor(() => expect(cb).toBeDisabled());
+    // 겹쳐보기 컴포넌트도 자기 자리에 같은 취지를 띄우므로, 체크박스 옆 사유만 고른다
+    expect(screen.getByText(/두 스캔을 겹쳐 그릴 수 없습니다/)).toBeInTheDocument();
+  });
+
+  // 리뷰 I4·I5: RMSE(수직)와 겹쳐보기(수평)가 서로 다른 축을 본다는 사실을 밝힌다.
+  it('RMSE와 겹쳐보기가 서로 다른 축을 본다고 밝힌다', async () => {
+    mount(done);
+    await screen.findByText(/1\.01/);
+    expect(screen.getByText(/서로 다른 축을 보며/)).toBeInTheDocument();
+  });
+
+  // 리뷰 I1: 체크는 승인 게이트가 아니다. 병합 스캔은 이미 목록에 떠 있다.
+  it('확인 체크가 시스템 차원의 승인 절차가 아님을 밝힌다', async () => {
+    mount(done);
+    await screen.findByText(/1\.01/);
+    expect(screen.getByText(/시스템 차원의 승인 절차가 아닙니다/)).toBeInTheDocument();
+  });
+});
+
+// 엔진 감도 프로브가 유일한 자동 신호인 사각(평탄 바닥 + 수평 오클릭)을 화면이 알린다.
+//
+// ★ 이것은 "이상 경고"가 아니라 **정보**다(재리뷰 정정). 바닥이 평탄할수록 값이 낮아지고
+// (±12mm 1.710 / ±6mm 1.218 / ±3.5mm 1.084 / ±2.5mm 1.038, 교차점 약 ±4.5mm), 스펙이
+// 정의한 이 용역의 대상이 ±5mm 평탄 바닥이라 **스펙을 만족하는 좋은 바닥일수록 낮게
+// 나온다.** 거의 항상 뜨는 안내를 경고로 만들면 늑대소년이 되어 곧 무시당한다.
+describe('RegistrationWorkbench 수평 검증 가능성 안내', () => {
+  const base = {
+    status: 'done' as const, rmse_mm: 1.008, iterations: 9, overlap_ratio: 0.8,
+    result_scan_id: 'merged-1',
+    transform: [[1, 0, 0, 0.5], [0, 1, 0, -0.25], [0, 0, 1, 0.001], [0, 0, 0, 1]],
+  };
+
+  it('감도가 기준 미만이면 "낮음"으로 알리고 왜인지·무엇을 해야 하는지 말한다', async () => {
+    mount(reg({ ...base, horizontal_sensitivity: 1.084 }));
+
+    expect(await screen.findByText(/수평 검증 가능성: 낮음/)).toBeInTheDocument();
+    expect(screen.getByText(/수평 검증 가능성: 낮음/)).toHaveTextContent('1.084');
+    // 왜: 평탄한 면에는 수평 위치를 구속할 정보가 원래 없다
+    expect(screen.getByText(/바닥이 평탄할수록 이 값은 낮게 나옵니다/)).toBeInTheDocument();
+    // 무엇을: 대응점을 넓게 분산한 것이 유일한 보장이다
+    expect(screen.getByText(/넓게 분산해 찍은 것이 이 방향의 유일한 보장/)).toBeInTheDocument();
+  });
+
+  // ★ 늑대소년 방지: 이 상태가 정상이고 흔하다는 것을 문구가 스스로 말해야 한다.
+  //   "오류·이상·실패"로 읽히면 사용자가 곧 무시한다.
+  it('낮은 것이 정상이고 흔하다고 밝히며 오류·이상·실패로 부르지 않는다', async () => {
+    const { container } = mount(reg({ ...base, horizontal_sensitivity: 1.038 }));
+    await screen.findByText(/수평 검증 가능성: 낮음/);
+
+    expect(screen.getByText(/정상이고 흔합니다/)).toBeInTheDocument();
+    const box = screen.getByText(/수평 검증 가능성: 낮음/).parentElement!;
+    for (const word of ['오류', '이상', '실패']) {
+      expect(box.textContent).not.toContain(word);
+    }
+    // 경고 색(빨강)으로 칠하지 않는다 - 실패 박스와 같은 무게로 보이면 안 된다.
+    expect(box.className).not.toMatch(/red/);
+    expect(container.querySelector('.border-red-300')).toBeNull();
+  });
+
+  // I4·I5와 하나의 이야기여야 한다: 감도가 낮은 바닥이 정확히 겹쳐보기도 안 통하는 바닥이다.
+  it('겹쳐보기도 같은 이유로 신호가 약하다고 이어서 말한다', async () => {
+    mount(reg({ ...base, horizontal_sensitivity: 1.084 }));
+    await screen.findByText(/수평 검증 가능성: 낮음/);
+
+    expect(screen.getByText(/같은 이유로 아래 겹쳐보기도/)).toBeInTheDocument();
+  });
+
+  it('감도가 기준 이상이면 수평도 데이터로 검증됐다고 알린다', async () => {
+    mount(reg({ ...base, horizontal_sensitivity: 1.71 }));
+
+    expect(await screen.findByText(/수평 검증 가능성: 있음/)).toBeInTheDocument();
+    expect(screen.queryByText(/수평 검증 가능성: 낮음/)).toBeNull();
+  });
+
+  // 구 데이터·012 미적용 DB. "알 수 없음"을 "낮음"으로 접으면 옛 정합 전부에 안내가 붙는다.
+  it('감도 값이 없으면 아무것도 띄우지 않는다', async () => {
+    mount(reg({ ...base, horizontal_sensitivity: null }));
+    await screen.findByText(/1\.01/);
+
+    expect(screen.queryByText(/수평 검증 가능성/)).toBeNull();
   });
 });
