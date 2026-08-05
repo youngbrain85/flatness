@@ -25,13 +25,14 @@ Vercel(대시보드) + Railway(워커, Docker) + Supabase(DB·Auth·Storage) 구
 ## 1. Supabase (사용자 수행)
 
 1. SQL Editor에서 `001_schema.sql`부터 `007_slope_analysis.sql`까지 **순서대로** 실행한
-   뒤 `010_scan_height_view.sql`도 이어서 실행한다(008·009는 건너뛰어도 된다 - 아래
-   참고)(001~004를 아직 실행하지 않았다면 `docs/SUPABASE_SETUP.md` 2단계부터 순서대로 먼저
+   뒤 `010_scan_height_view.sql`도 이어서 실행한다(008·009·011·012는 건너뛰어도 된다 -
+   아래 참고)(001~004를 아직 실행하지 않았다면 `docs/SUPABASE_SETUP.md` 2단계부터 순서대로 먼저
    진행한다). 006(`006_report_soft_delete.sql`)은 보고서 소프트 삭제, 007
    (`007_slope_analysis.sql`)은 구배 분석(`analyses.kind` 컬럼·구배 판정 기준 시드)을,
    010(`010_scan_height_view.sql`)은 `scans.height_view_path` 컬럼 하나를 추가한다 -
    셋 다 재실행 안전(멱등)하다. 010은 008·009처럼 job_type enum을 건드리지 않는
-   단순 컬럼 추가라 007 다음 어디에 두어도(008·009보다 먼저든 나중이든) 상관없다.
+   단순 컬럼 추가라 007 다음 어디에 두어도(008·009·011·012보다 먼저든 나중이든)
+   상관없다.
 
    > **[필수] 010을 워커 배포보다 먼저 적용한다.** `precheck` 잡 핸들러
    > (`worker/flatworker/jobs.py`의 `handle_precheck`)는 상태 승격·`point_count`·
@@ -78,6 +79,62 @@ Vercel(대시보드) + Railway(워커, Docker) + Supabase(DB·Auth·Storage) 구
    스키마는 `docs/SUPABASE_SETUP.md` 2단계 8·9번 참고). 이 저장소가 아직 세부과업 4
    단계 D의 워커·대시보드를 배포하지 않은 상태라면 008·009를 지금 당장 적용하지
    않아도 기존 기능에는 영향이 없다.
+
+   **정합(두 스캔을 대응점으로 합치기, 세부과업 4 단계 F) 기능을 쓸 계획이면 011·012도
+   이어서 적용한다**: `011_register_enums.sql`(`job_type`에 `register`,
+   `data_lineage`에 `registered` 추가) → `012_register_support.sql`(`registrations`
+   테이블 컬럼 보완 + `jobs_dedup` 재정의 + 잡 큐 함수 3종에 register 분기 확장).
+   **011과 012도 008·009와 똑같은 이유로 절대 한 번에 이어 붙여 실행하면 안 되고
+   반드시 두 번 나눠 Run 한다** - PostgreSQL이 같은 트랜잭션 안에서 방금 추가한 enum
+   값의 사용을 "unsafe use of new value"로 막고, Supabase SQL Editor는 붙여넣은 내용
+   전체를 한 트랜잭션으로 실행하기 때문이다. 011 Run → `Success` 확인 → 에디터 비우기
+   → 012 Run 순서를 지킨다. 둘 다 재실행 안전(멱등)하다. 012 맨 앞에는 카탈로그 가드
+   4종이 있어 선행(007·008·011)을 건너뛰면 한국어 오류로 즉시 막힌다. 적용 내용과
+   검증 쿼리는 `docs/SUPABASE_SETUP.md` 2단계 11·12번 참고.
+
+   > **⚠ 012를 쓰려면 008도 함께 적용해야 한다(009는 건너뛸 수 있다).** 012는 잡 큐
+   > 함수 3종의 **가장 마지막 확장 재정의**라 009의 본문(= `slope_judge` 분기)을 그대로
+   > 포함한 위에 `register` 분기만 더한 형태다. 즉 재판정을 쓰든 안 쓰든 012를 적용하면
+   > 함수 본문에 `'slope_judge'`라는 job_type 라벨이 들어가는데, 008 미적용 DB에는 그
+   > 라벨이 없어 워커가 **아무 잡이나** claim 하는 순간 "invalid input value for enum
+   > job_type: slope_judge"로 **잡 큐 전체가 멎는다**(정합뿐 아니라 precheck·analyze·
+   > import·report까지 전부). 012의 카탈로그 가드가 이 조합을 Run 시점에 막지만, 애초에
+   > 008을 함께 적용하는 것이 정답이다(008은 `add value if not exists` 한 줄이다).
+   > 반대로 009 자체는 012가 상위집합이므로 건너뛰어도 된다.
+   >
+   > **012를 적용한 뒤에는 003·004·009를 다시 실행하지 않는다.** `create or replace`가
+   > 012의 정의를 옛 정의로 덮어써 register 상태 전이가 **오류 없이** 사라진다(위 004
+   > 경고와 같은 종류의 회귀). 재실행이 필요하면 **003 → 004 → 009 → 012** 순서로
+   > 다시 실행한다.
+
+   > **[필수] 배포 순서 경고 - 011·012 → 워커 → 대시보드.** 세 갈래로 나눠 적는다.
+   >
+   > **(1) 워커를 012보다 먼저 배포하면 안 된다.** 단계 F 워커의 `handle_register`는
+   > 정합 결과(`transform`·`rmse_mm`·`iterations`·`overlap_ratio`·`result_scan_id`)를
+   > `registrations`에 PATCH하는데, `overlap_ratio`는 012가 추가하는 컬럼이다. 012
+   > 미적용 DB에서는 이 PATCH가 `42703`(undefined_column)으로 실패한다 - 007·010을
+   > 워커보다 늦게 배포했을 때와 같은 실패 양식이다(위 010·007 경고 참고). 다만 010의
+   > `precheck`와 달리 이 경로는 스캔 업로드마다 무조건 도는 경로가 아니다 - 정합을
+   > 한 번도 실행하지 않으면 도달하지 않으므로, 기존 기능이 함께 무너지지는 않는다.
+   >
+   > **(2) 대시보드는 010과 달리 "먼저 배포해도 안전"이 성립하지 않는다.** 010은
+   > `height_view_path`라는 **컬럼 하나**가 없는 상황이었고, 미적용 DB의 `select('*')`
+   > 결과에서 그 키가 `undefined`로 빠지면 화면의 truthy 가드가 그대로 걸러 주었다.
+   > 011·012에서 없는 것은 컬럼이 아니라 **`registrations` 테이블 전체와 enum 라벨**
+   > 이다 - PostgREST는 모르는 릴레이션에 대해 빈 결과가 아니라 **오류**를 돌려주므로
+   > truthy 가드로 흡수할 방법이 없고, 정합 화면의 조회·삽입이 그대로 실패한다. 즉
+   > 012 없이 단계 F 대시보드를 올리면 **정합 기능만 오류를 낸다**(기존 화면은
+   > `registrations`를 읽지 않으므로 007처럼 전체가 깨지지는 않는다 - 이 저장소의
+   > 현재 대시보드 코드에 `registrations`를 읽거나 쓰는 곳이 없음을 확인했다).
+   > 그러므로 **012 → 대시보드** 순서를 지킨다.
+   >
+   > **(3) 반대 순서(워커가 먼저, 대시보드가 나중)에도 눈에 안 띄는 흠이 하나 있다.**
+   > 정합이 성공하면 워커가 `lineage='registered'`인 병합 스캔 행을 만드는데, 스캔 상세
+   > 화면(`dashboard/app/scans/[id]/page.tsx`)은 `LINEAGE_LABEL[s.lineage]`로 라벨을
+   > 조회한다. `registered`를 모르는 **옛 대시보드**는 이 조회가 `undefined`가 되어
+   > "데이터 계보" 값이 **빈 칸**으로 뜬다(React가 `undefined`를 아무것도 렌더하지
+   > 않는다) - 오류도 경고도 없다. 대시보드를 워커와 같은 배포에서 함께 올리면
+   > 생기지 않는 문제이므로, 정합을 실제로 실행하기 전에 대시보드 배포를 끝낸다.
 
    > **[필수] 배포 순서 경고**: **007 적용 -> 엔진·워커 배포(저장소 루트 `Dockerfile`이
    > `engine/`·`worker/`를 한 이미지로 함께 빌드하므로 Railway 재배포 1회로 둘이 자동으로
@@ -449,13 +506,83 @@ Vercel(대시보드) + Railway(워커, Docker) + Supabase(DB·Auth·Storage) 구
        동작이며 결함이 아니다. 재판정을 확인하려면 반드시 이 배포 이후 새로
        배수 목적 기준으로 실행한 구배 분석을 써야 한다
 
+6. **정합(두 스캔 합치기) 스모크 - 011·012를 적용했을 때만 해당.** 011·012를 적용하지
+   않았다면 이 항목 전체를 건너뛴다(정합은 선택 기능이다 - §1의 1번 참고).
+
+   **(1) 중복 엔큐 차단을 SQL Editor에서 먼저 확인한다.** 정합은 두 점군을 다시 읽는
+   무거운 잡이라, 사용자가 "정합 실행"을 두 번 누르면 같은 잡이 두 개 도는 것이
+   012가 막으려는 핵심 결함이다(`jobs_dedup` 재정의). **화면 없이 확인할 수 있고,
+   실패해도 오류가 뜨지 않는 종류라 눈으로 볼 유일한 방법이다.** 아래를 그대로
+   실행한다:
+
+   ```sql
+   select fn_enqueue_job('register', '{"registration_id":"00000000-0000-0000-0000-000000000001"}'::jsonb);
+   ```
+
+   uuid 하나가 반환된다. **같은 문장을 한 번 더 실행하면 이번에는 실패해야 한다** -
+   `duplicate key value violates unique constraint "jobs_dedup"`(코드 23505). 두 번째도
+   성공해 새 uuid가 나오면 012의 `jobs_dedup` 재정의가 적용되지 않은 것이므로
+   `select indexdef from pg_indexes where indexname = 'jobs_dedup';`의 결과에
+   `registration_id`가 들어 있는지 확인한다(들어 있지 않으면 012를 다시 Run 한다).
+
+   확인이 끝나면 테스트 잡을 지운다:
+
+   ```sql
+   delete from jobs where type = 'register'
+     and payload->>'registration_id' = '00000000-0000-0000-0000-000000000001';
+   ```
+
+   워커가 이미 떠 있으면 지우기 전에 이 잡을 집어갈 수 있는데 **해롭지 않다** - 그
+   id의 `registrations` 행이 존재하지 않아 정합 핸들러가 실패로 끝나고, 012의
+   `fn_job_fail` register 분기도 없는 행을 갱신하려다 **0행 갱신**으로 조용히
+   지나간다(아무 데이터도 바뀌지 않는다. 재시도 3회 로그 소음만 남으며, 위 delete로
+   그것도 사라진다). 신경 쓰이면 이 확인을 워커 배포 **전에** 해 둔다.
+
+   **(2) 실제 정합을 한 번 돌려 DB 계약을 확인한다.** 같은 바닥면을 겹치게 찍은 스캔
+   2개를 올려 각각 분석까지 끝낸 뒤(§4-1과 같은 절차, **"스캔 분석" 모드로** - 임포트
+   모드는 높이 뷰가 만들어지지 않아 대응점을 찍을 그림 자체가 없다), 정합 화면에서
+   대응점 3쌍 이상을 찍고 정합을 실행한다. 완료되면 SQL Editor에서 결과 행을 직접
+   확인한다 - **화면 문구가 아니라 이 값들이 정합이 실제로 성립했다는 증거다**:
+
+   ```sql
+   select r.status, r.rmse_mm, r.overlap_ratio, r.iterations, r.error_text,
+          s.lineage, s.status as scan_status, s.unit_scale
+     from registrations r left join scans s on s.id = r.result_scan_id
+    order by r.created_at desc limit 1;
+   ```
+
+   - `status='done'`, `rmse_mm`이 **밀리미터 자릿수**(0.001 같은 값이면 미터를 그대로
+     넣은 것이다 - 워커가 `* 1000` 환산을 빠뜨린 경우이고, 이 값은 화면에서 **항상
+     합격으로 읽힌다**)
+   - `overlap_ratio`가 채워져 있을 것(012가 추가한 컬럼이다 - `null`이면 워커가
+     이 컬럼을 못 쓴 것이다)
+   - 병합 스캔의 `lineage='registered'`(`fused_mesh`가 아니다 - 업로드 화면이
+     `fused_mesh`에 "앱이 스무딩한 데이터" 경고를 붙여 두어 정합 병합에는 거짓
+     서술이 된다), `scan_status='ready'`, `unit_scale=1.0`
+   - 중첩이 부족해 실패한 경우라면 `status='failed'`이고 `error_text`에 한국어
+     사유가 있으며 `result_scan_id`가 **null**이어야 한다(실패한 정합이 병합 스캔을
+     남기면 안 된다)
+
+   워커 로그에서 `register` 잡 처리도 함께 확인한다. 정합은 점군을 두 번 읽으므로
+   재판정(수 초)과 달리 수십 초가 걸릴 수 있다.
+
+   > **이 문단의 화면 조작 부분(대응점 찍기·정합 실행 버튼)은 세부과업 4 단계 F의
+   > 대시보드가 배포된 뒤에만 성립한다.** 이 문서를 갱신한 시점(단계 F Task 3,
+   > 마이그레이션)에는 정합 화면이 아직 저장소에 없어 **버튼 이름·안내 문구를 실제로
+   > 확인하지 못했다** - 그래서 여기에는 확인 가능한 DB 계약만 적었다. 화면 구현이
+   > 들어오면 이 문단에 실제 문구를 채워 넣는다(§4-5가 재판정에 대해 그렇게 적혀
+   > 있는 것처럼).
+
 ## 사용자가 직접 해야 하는 작업 요약 (코드로 대신할 수 없음)
 
 1. Supabase SQL Editor에서 `001_schema.sql` ~ `007_slope_analysis.sql`을 순서대로 실행
    (**[필수] 007까지 반드시**, 007 없이 대시보드를 먼저 올리면 분석 조회 전체가 깨진다),
    버킷 3종 생성 확인(정책 42501 실패 시 UI 수동 생성). 재판정 기능을 쓸 계획이면
    `008_slope_judge_enum.sql`→`009_slope_judge_functions.sql`을 **반드시 두 번 나눠**
-   이어서 실행(§1의 1번 참고, 필수 최소 범위는 아니다)
+   이어서 실행(§1의 1번 참고, 필수 최소 범위는 아니다). 정합 기능을 쓸 계획이면
+   `011_register_enums.sql`→`012_register_support.sql`도 **반드시 두 번 나눠** 이어서
+   실행한다(같은 이유다. **012는 008을 전제하므로 009를 건너뛰더라도 008은 함께
+   적용한다** - §1의 1번 011·012 문단 참고)
 2. **[필수]** Supabase Authentication > Providers > Email에서 회원가입(Sign Ups) 차단 -
    이유는 위 §1의 3번 참고
 3. **[필수]** Supabase Authentication > **Add user**로 로그인 계정 생성(**Auto Confirm
@@ -470,7 +597,9 @@ Vercel(대시보드) + Railway(워커, Docker) + Supabase(DB·Auth·Storage) 구
    50MB 초과 안내 확인,
    구배 분석 스모크(§4-5 참고 - 007 검증을 겸한다), 008·009를 적용했다면 재판정
    (배수구 클릭) 스모크(§4-5의 8~10번 참고 - 3번에서 배수 목적 기준을 골라야
-   도달 가능하다)
+   도달 가능하다), 011·012를 적용했다면 정합 스모크(§4-6 참고 - **중복 엔큐 차단
+   확인은 화면 없이 SQL Editor만으로 되고, 이것이 012의 핵심 결함 방지를 눈으로 볼
+   유일한 방법이다**)
 8. 저장소 공개 전환 전 `git log -p`로 키 노출 여부 최종 확인
 
 ## 참고

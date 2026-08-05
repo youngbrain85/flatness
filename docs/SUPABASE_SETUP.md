@@ -7,12 +7,13 @@
 ## 0. 준비물
 
 - Supabase 계정(없으면 1단계에서 가입)
-- 이 저장소 클론본(마이그레이션 SQL 파일 10개: `supabase/migrations/001_schema.sql`,
+- 이 저장소 클론본(마이그레이션 SQL 파일 12개: `supabase/migrations/001_schema.sql`,
   `supabase/migrations/002_functions_seed.sql`, `supabase/migrations/003_dashboard_support.sql`,
   `supabase/migrations/004_report_support.sql`, `supabase/migrations/005_storage_buckets.sql`,
   `supabase/migrations/006_report_soft_delete.sql`, `supabase/migrations/007_slope_analysis.sql`,
   `supabase/migrations/008_slope_judge_enum.sql`, `supabase/migrations/009_slope_judge_functions.sql`,
-  `supabase/migrations/010_scan_height_view.sql`)
+  `supabase/migrations/010_scan_height_view.sql`, `supabase/migrations/011_register_enums.sql`,
+  `supabase/migrations/012_register_support.sql`)
 - Python 3.11+ (워커 실행용, 5단계에서 사용)
 
 ## 1. Supabase 프로젝트 생성 — 사용자가 직접 수행
@@ -49,12 +50,28 @@
 surface_type)` 함수를 drop 후 3인자 시그니처로 재생성하므로 001·002 다음에 실행돼
 있어야 한다(006과는 직접적인 의존 관계가 없다).
 
-**008·009는 재판정(구배 배수구 재클릭) 기능에만 필요한 선택 단계다** - 워커·
-대시보드가 아직 세부과업 4 단계 D를 배포하지 않았다면 지금 당장 건너뛰어도 001~007
-어떤 기능에도 영향이 없다. 다만 **실행하기로 했다면 반드시 007 다음, 008 다음 009
-순서를 지킨다**(008과 009는 한 번에 이어 실행하면 안 되고 반드시 두 번 나눠 Run
-한다 - 아래 8·9번 참고). 나중에 순서를 다시 챙기는 수고를 덜려면 지금 007과 함께
-실행해 두는 것을 권장한다. 이 프로젝트를 워커만 쓰고 대시보드나 보고서 기능을 쓰지
+**008·009는 재판정(구배 배수구 재클릭) 기능에만, 011·012는 정합(두 스캔 합치기)
+기능에만 필요한 선택 단계다** - 워커·대시보드가 아직 세부과업 4 단계 D·F를
+배포하지 않았다면 지금 당장 건너뛰어도 001~007 어떤 기능에도 영향이 없다. 다만
+**실행하기로 했다면 반드시 007 다음, 008 다음 009 순서를 지킨다**(008과 009는 한
+번에 이어 실행하면 안 되고 반드시 두 번 나눠 Run 한다 - 아래 8·9번 참고).
+**011·012도 같은 이유로 반드시 두 번 나눠 Run 한다**(아래 11·12번 참고). 나중에
+순서를 다시 챙기는 수고를 덜려면 지금 007과 함께 실행해 두는 것을 권장한다.
+
+> **⚠ 011·012를 쓰려면 008은 건너뛸 수 없다(009는 건너뛸 수 있다).** 012가 잡 큐
+> 함수 3종(`fn_job_claim`·`fn_job_fail`·`fn_reap_stuck_jobs`)의 **가장 마지막 확장
+> 재정의**라, 009의 본문(= `slope_judge` 분기)을 그대로 포함한 위에 `register`
+> 분기만 더한 형태이기 때문이다. 즉 **012를 적용하면 재판정을 쓰든 안 쓰든 함수
+> 본문에 `'slope_judge'`라는 job_type 라벨이 들어간다** - 008 미적용 DB에서는 그
+> 라벨이 존재하지 않아, 워커가 **아무 잡이나** claim 하는 순간 "invalid input
+> value for enum job_type: slope_judge"로 잡 큐 전체가 멎는다. 012 맨 앞의
+> 카탈로그 가드가 이 조합을 Run 시점에 한국어로 막아 주지만, 애초에 008을 함께
+> 적용하는 것이 정답이다(008은 `add value if not exists` 한 줄이라 재판정을 안
+> 써도 비용이 없다). 반대로 **009 자체는 012가 상위집합이므로 건너뛰어도 된다.**
+>
+> **그리고 012 다음에 003·004·009를 다시 실행하면 안 된다** - `create or replace`가
+> 012의 정의를 옛 정의로 덮어써 register 상태 전이가 오류 없이 사라진다(아래
+> 9번·12번 경고 참고). 이 프로젝트를 워커만 쓰고 대시보드나 보고서 기능을 쓰지
 않을 계획이라도 003·004까지 실행해 두는 것을 권장한다 — 나중에 P3/P4를 켤 때 순서를
 다시 챙기지 않아도 된다.
 
@@ -84,10 +101,11 @@ surface_type)` 함수를 drop 후 3인자 시그니처로 재생성하므로 001
    > `gen_status` 상태 전이가 사라진다(잡은 계속 처리되는 것처럼 보이지만 대시보드의
    > 진행 상태 화면이 더 이상 갱신되지 않는다). 재실행이 필요한 상황(스키마 확인,
    > 함수 재적용 등)이라면 반드시 003 → 004 순서로 **다시** 실행한다(**009까지
-   > 적용해 둔 프로젝트라면 → 009까지 이어서 다시 실행한다** - 009는 004가 만든
-   > 이 세 함수를 slope_judge 분기까지 포함해 다시 확장한 것이라, 004에서 멈추면
-   > 이번엔 slope_judge 상태 전이가 같은 방식으로 조용히 사라진다. 아래 2단계
-   > 9번 참고).
+   > 적용해 둔 프로젝트라면 → 009까지, 012까지 적용해 둔 프로젝트라면 → 012까지
+   > 이어서 다시 실행한다** - 009는 004가 만든 이 세 함수를 slope_judge 분기까지
+   > 포함해 다시 확장한 것이고 012는 거기에 register 분기까지 더한 최종 정본이라,
+   > 004에서 멈추면 이번엔 slope_judge·register 상태 전이가 같은 방식으로 조용히
+   > 사라진다. 아래 2단계 9번·12번 참고).
 
 5. **클라우드 배포 시에만 필요** — 로컬 워커만 쓰고 Vercel/Railway에 배포하지 않을 계획이면
    생략해도 된다. `supabase/migrations/005_storage_buckets.sql` 전체 내용을 붙여넣고 **Run**.
@@ -125,12 +143,14 @@ surface_type)` 함수를 drop 후 3인자 시그니처로 재생성하므로 001
    >
    > **이미 002를 재실행해 버렸다면 007만으로는 복구되지 않는다.** 007이 정의하는
    > 함수는 `fn_resolve_criteria` 하나뿐이라 위 2번의 강등은 그대로 남는다. 그 경우
-   > 복구 순서는 **003 → 004 → 007 → 009**이며(009까지 실행해 둔 프로젝트에 한한다 -
-   > 008·009를 아직 쓰지 않았다면 007에서 멈춰도 된다), 이는 4번 항목의 "003 → 004
-   > 순서로 다시 실행한다"와 같은 지시에 007·009가 뒤에 붙을 뿐이다. 009는 004가
-   > 만든 잡 큐 함수 3종을 slope_judge 분기까지 포함해 다시 최신 정의로 되돌린다
-   > (008은 enum 값 추가일 뿐이라 002 재실행의 영향을 받지 않으므로 다시 실행할
-   > 필요가 없다).
+   > 복구 순서는 **003 → 004 → 007 → 009 → 012**이며(각각 그 파일을 실행해 둔
+   > 프로젝트에 한한다 - 008·009를 아직 쓰지 않았다면 007에서 멈춰도 되고,
+   > 011·012를 쓰지 않았다면 009에서 멈춰도 된다), 이는 4번 항목의 "003 → 004
+   > 순서로 다시 실행한다"와 같은 지시에 007·009·012가 뒤에 붙을 뿐이다. 009는
+   > 004가 만든 잡 큐 함수 3종을 slope_judge 분기까지 포함해 다시 최신 정의로
+   > 되돌리고, 012는 거기에 register 분기까지 더한 최종 정본으로 되돌린다
+   > (008·011은 enum 값 추가일 뿐이라 002 재실행의 영향을 받지 않으므로 다시
+   > 실행할 필요가 없다).
    >
    > 두 사실을 합치면 복구가 성립하지 않는다. SQL 에디터가 스크립트 전체를 한
    > 트랜잭션으로 실행하면 시드에서 23505가 나 **전체가 롤백**된다(아무것도
@@ -206,6 +226,9 @@ surface_type)` 함수를 drop 후 3인자 시그니처로 재생성하므로 001
    > **003 → 004 → 009** 순서로 다시 실행한다(`fn_resolve_criteria`는 007이 별도로
    > 정본이므로, 007까지 함께 쓰는 프로젝트는 007을 그 사이 어디에 두어도 - 잡 큐
    > 함수 3종과 무관한 별개 함수라 - 최종 상태는 같다).
+   >
+   > **012까지 적용한 프로젝트라면 이 재실행 사슬의 끝은 009가 아니라 012다**
+   > (012가 009의 본문에 register 분기를 더한 최종 정본이다 - 아래 12번 참고).
 
 10. `supabase/migrations/010_scan_height_view.sql` 전체 내용을 붙여넣고 **Run**.
     `scans.height_view_path` 컬럼 하나만 추가한다 - `precheck` 잡(세부과업 4 단계 E)이
@@ -244,6 +267,98 @@ surface_type)` 함수를 drop 후 3인자 시그니처로 재생성하므로 001
     > 준다. 복구하려면 010을 적용한 뒤 해당 스캔을 **새로 업로드**해야 한다 -
     > 그래서 순서를 지키는 것이 유일하게 값싼 길이다. 자세한 내용은
     > `docs/DEPLOY.md` §1의 010 경고 문단 참고.
+
+11. `supabase/migrations/011_register_enums.sql` 전체 내용을 붙여넣고 **Run**.
+    enum 값 두 개만 추가한다(정합 기능, 세부과업 4 단계 F): `job_type`에
+    `register`(정합 실행 잡), `data_lineage`에 `registered`(정합으로 합쳐 만든
+    병합 스캔의 계보). 재실행해도 안전하다(멱등, `add value if not exists`).
+    검증:
+
+    ```sql
+    select enumlabel from pg_enum where enumtypid = 'job_type'::regtype order by enumsortorder;
+    select enumlabel from pg_enum where enumtypid = 'data_lineage'::regtype order by enumsortorder;
+    ```
+
+    첫 결과 맨 끝에 `register`, 둘째 결과 맨 끝에 `registered`가 보이면 성공이다.
+
+    **두 문장이 한 파일에 함께 있는 것은 안전하다** - 서로를 사용하지 않기
+    때문이다(`data_lineage`의 새 값을 실제로 쓰는 것은 병합 스캔 행을 만드는
+    워커이지 이 파일이 아니다). 위험한 것은 이 값들을 **사용하는** 012를 같은
+    트랜잭션에 넣는 것이다.
+
+    > **⚠ 011 다음에 반드시 012를 별도로 Run 한다 - 같은 쿼리 창에서 이어붙여 한
+    > 번에 실행하면 안 된다.** 이유는 008·009와 정확히 같다(위 8번 참고):
+    > PostgreSQL은 같은 트랜잭션 안에서 방금 추가한 enum 값을 사용하는 것을
+    > "unsafe use of new value" 오류로 막는데, SQL Editor는 붙여넣은 내용 전체를
+    > 한 트랜잭션으로 실행하기 때문이다. 011을 **Run**해서 `Success` 확인 →
+    > 에디터를 비우거나 새 쿼리 탭을 연다 → 012를 붙여넣고 다시 **Run**한다.
+
+12. `supabase/migrations/012_register_support.sql` 전체 내용을 붙여넣고 **Run**.
+    파일 맨 앞에 카탈로그 가드 4종이 있어 선행 마이그레이션(007·008·011)을
+    건너뛰면 `Success` 대신 한국어 오류가 즉시 뜬다 - 무엇을 먼저 실행해야 하는지
+    오류 문구가 그대로 알려준다. 적용되는 내용:
+    - `registrations` 테이블(007이 이미 만들어 둔 정합 이력 테이블)에
+      `overlap_ratio`(중첩 비율)·`updated_at` 컬럼 추가, `correspondences`
+      기본값 `'[]'`
+    - Realtime publication에 `registrations` 추가(정합 진행 상태 자동 갱신)
+    - **`jobs_dedup` 부분 유니크 인덱스 재정의** - 중복 방지 키에
+      `payload->>'registration_id'`를 더한다
+    - `fn_job_claim`·`fn_job_fail`·`fn_reap_stuck_jobs`에 `register` 분기를 추가해
+      확장 재정의 - 정합 잡의 진행 상태를 `registrations.status`(007의
+      `registration_status` enum: `awaiting_points|queued|processing|done|failed`)와
+      `registrations.error_text`에 반영한다. 재판정(009)과 달리 우회 채널
+      (`analyses.params.judge`)을 쓰지 않는다 - 정합에는 자기 테이블이 있다
+
+    재실행해도 안전하다(멱등 - 가드는 존재 확인만 하고, 컬럼 추가는
+    `add column if not exists`, 인덱스는 `drop` 후 재생성, 함수는
+    `create or replace`다). 시그니처가 바뀌지 않으므로 권한 재발급(`grant`)과
+    `notify pgrst`는 원리상 불필요하지만, 컬럼이 늘었으므로 파일 끝에서
+    스키마 캐시 갱신을 한 번 알린다(007:144와 같은 관례).
+
+    검증 3종:
+
+    ```sql
+    -- (a) 함수 3종이 실제로 012 정의로 덮였는지 - 본문에 registration_id가 있는지 본다
+    select proname from pg_proc where prosrc like '%registration_id%';
+    -- (b) 중복 방지 인덱스가 재정의됐는지
+    select indexdef from pg_indexes where indexname = 'jobs_dedup';
+    -- (c) 테이블 컬럼이 실제로 추가됐는지
+    select overlap_ratio, updated_at from registrations limit 1;
+    ```
+
+    (a)는 `fn_job_claim`·`fn_job_fail`·`fn_reap_stuck_jobs` **3행**이 나와야 한다
+    (009의 검증 쿼리와 같은 원리 - 함수의 존재가 아니라 함수 **본문**을 확인하는
+    쿼리라, 012를 적용하지 않았다면 0행이 나온다). (b)의 결과 문자열 안에
+    `registration_id`가 보여야 한다. (c)는 빈 테이블이면 0행이어도 되고,
+    **오류가 나지 않는 것**이 확인 대상이다. 정합 잡의 중복 방지가 실제로
+    동작하는지까지 확인하는 절차는 [`DEPLOY.md`](DEPLOY.md) §4의 6번 참고.
+
+    > **★ `jobs_dedup` 재정의를 빠뜨리면 조용히 실패한다.** 001이 만든 원래 인덱스는
+    > `analysis_id`·`scan_id`·`report_id` 세 키만 본다. 정합 잡 payload에는
+    > `registration_id`만 있어 세 키가 전부 없으므로 `coalesce`가 NULL을 내는데,
+    > **유니크 인덱스에서 NULL은 서로 구별되므로 중복 엔큐가 전부 통과한다** -
+    > 사용자가 "정합 실행"을 두 번 누르면 무거운 잡이 두 개 돈다. 오류도 경고도
+    > 뜨지 않는다. 재정의는 기존 잡 타입들(precheck·analyze·import·report·
+    > slope_judge)의 동작을 전혀 바꾸지 않는다 - 새 키를 `coalesce`의 **맨 뒤**에
+    > 붙였고 `registration_id`를 싣는 다른 잡 타입이 없어서, register가 아닌 모든
+    > 행의 인덱스 값이 예전과 문자 그대로 같기 때문이다.
+
+    > **⚠ 012가 잡 큐 함수 3종의 최종 정본이다(004도 009도 아니다).** 012를 실행한
+    > 뒤 003·004·009 중 무엇이든 다시 실행하면 `create or replace`가 012의 정의를
+    > 옛 정의로 덮어써 **register 상태 전이가 오류 없이 사라진다**(위 4·9번 경고와
+    > 같은 종류의 회귀 - 정합 잡은 계속 처리되는 것처럼 보이지만 화면의 진행 상태가
+    > 갱신되지 않고, 워커가 죽어 실패해도 실패 사유가 화면에 뜨지 않는다). 재실행이
+    > 필요하면 **003 → 004 → 009 → 012** 순서로 다시 실행한다.
+
+    > **[필수] 배포 순서 경고 - 012를 워커보다 먼저 적용한다.** 단계 F 워커의
+    > `handle_register`는 `overlap_ratio`를 포함한 정합 결과를 `registrations`에
+    > PATCH한다. 012 미적용 DB에 이 코드가 담긴 워커를 먼저 배포하면 그 컬럼이 없어
+    > PATCH가 `42703`(undefined_column)으로 실패한다 - 007·010을 워커보다 늦게
+    > 배포했을 때와 같은 실패 양식이다(위 7·10번 경고 참고). **다만 010의
+    > `precheck`와 달리 이 경로는 스캔 업로드마다 무조건 도는 경로가 아니다** -
+    > 정합을 한 번도 실행하지 않으면 도달하지 않는다. 그래도 순서를 지키는 편이
+    > 값싸다. 대시보드와의 순서 관계는 [`DEPLOY.md`](DEPLOY.md) §1의 011·012 문단
+    > 참고(010과 달리 "먼저 배포해도 안전"이 성립하지 않는다).
 
 ## 3. 검증 쿼리
 
@@ -432,11 +547,12 @@ select id, file_size_limit from storage.buckets;
 - 워커 자체의 실행·테스트·코드 구조는 `worker/README.md` 참고.
 - `jobs`/`analyses` 등 산출물 JSON의 필드 계약은 `docs/contracts/stats-schema.md` 참고.
 - 이 가이드의 SQL 예시는 `supabase/migrations/002_functions_seed.sql`의 함수 시그니처
-  (`fn_job_claim(p_worker text)` 등 파라미터명)를 정본으로 삼는다(003·004·009 모두
-  파라미터명·반환형을 바꾸지 않았다). 다만 함수 **본문**(어떤 잡 타입에서 무엇을
-  전이시키는지)의 정본은 가장 마지막으로 확장 재정의한 `009_slope_judge_functions.sql`
+  (`fn_job_claim(p_worker text)` 등 파라미터명)를 정본으로 삼는다(003·004·009·012
+  모두 파라미터명·반환형을 바꾸지 않았다). 다만 함수 **본문**(어떤 잡 타입에서 무엇을
+  전이시키는지)의 정본은 가장 마지막으로 확장 재정의한 `012_register_support.sql`
   이다(002가 아니다 - 003이 import·precheck 분기를, 004가 report 분기를, 009가
-  slope_judge 분기를 차례로 더했다). `fn_resolve_criteria`는 007이 `(p_site_id uuid,
+  slope_judge 분기를, 012가 register 분기를 차례로 더했다. 011·012를 적용하지 않은
+  프로젝트라면 009가 정본이다). `fn_resolve_criteria`는 007이 `(p_site_id uuid,
   p_surface surface_type, p_kind analysis_kind default 'flatness')` 3인자
   시그니처로 교체했으므로 `007_slope_analysis.sql`이 정본이다 — 마이그레이션이
   바뀌면 이 문서도 함께 갱신한다.
