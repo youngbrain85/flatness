@@ -17,6 +17,11 @@ from flatness.outputs.heatmap import render_heatmap
 from flatness.outputs.deviation import render_deviation_map
 from flatness.outputs.preview3d import render_preview3d
 from flatness.outputs.summary import generate_summary
+# 모듈 최상단에서 임포트한다(judge_slope_cells 함수 내부 지역 임포트가 아니라) -
+# 테스트가 pipeline.render_slope_map을 monkeypatch로 갈아끼우려면 이 이름이
+# 모듈 전역에 있어야 하고, judge_slope_cells 안에서 지역 임포트로 다시 가져오면
+# 매 호출마다 그 지역 변수가 monkeypatch를 가린다(Task 1, 백로그 81).
+from flatness.outputs.slope_map import render_slope_map
 
 
 def _r(v, nd=3):
@@ -206,9 +211,9 @@ def judge_slope_cells(cells, threshold, out_dir, cell_m, drain_points=None,
     import json
     import os
     from collections import Counter
+    from pathlib import Path
 
     from flatness.core.slope import GRADE_NA, grade_slope_cells, slope_summary
-    from flatness.outputs.slope_map import render_slope_map
     from flatness.outputs.slope_judged import dump_slope_judged
 
     os.makedirs(out_dir, exist_ok=True)
@@ -236,8 +241,22 @@ def judge_slope_cells(cells, threshold, out_dir, cell_m, drain_points=None,
                         _r(c.se_pct), g["grade"], g["reason"],
                         round(c.width_m, 3), round(c.height_m, 3)])
 
-    png_path = render_slope_map(graded, os.path.join(out_dir, "slope_map.png"),
-                                cell_m=cell_m)
+    # render_slope_map의 drain_points 계약은 {"x":, "y":} dict 목록이다(대시보드
+    # Canvas 배수구 화면과 형태를 맞춘 render_slope_map 자체 인터페이스). 이 함수의
+    # drain_points는 (x, y) 튜플/리스트다 - grade_slope_cells의 p[0]/p[1] 인덱싱과
+    # 아래 stats["drain_points"] 빌드(`for x, y in drain_points`), CLI --drain 파싱과
+    # 형태를 공유해야 하므로 여기서 바꿀 수 없다. 그래서 이 호출 시점에만 형태를
+    # 바꿔 넘긴다.
+    png_out = Path(out_dir) / "slope_map.png"
+    render_slope_map(
+        graded, png_out, cell_m=cell_m,
+        drain_points=([{"x": p[0], "y": p[1]} for p in drain_points]
+                      if drain_points else None))
+    # stats.artifacts.map_png은 항상 전체 경로 문자열이어야 cells_json/cells_csv와
+    # 형식이 일관된다(docs/contracts/stats-schema.md §8.1) - render_slope_map의
+    # 반환값(Path를 넘기면 basename만 돌려주는 계약, outputs/slope_map.py 참고)에
+    # 기대지 않고 여기서 직접 만든 경로 문자열을 쓴다.
+    png_path = str(png_out)
 
     # 배수구를 지정하지 않으면 방향(역구배) 판정이 조용히 꺼진다(같은 스캔이 --drain
     # 유무에 따라 적합<->재시공으로 뒤집힐 수 있다). stats에 명시적으로 남겨야 보고서

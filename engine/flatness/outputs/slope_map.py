@@ -7,6 +7,7 @@ heatmap을 import하는 것은 부수효과 목적이다: matplotlib Agg 백엔�
 from flatness.outputs import heatmap as _engine_heatmap  # noqa: F401
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.lines import Line2D
 from matplotlib.patches import Patch
 
 from flatness.core.slope import (GRADE_BORDER, GRADE_NA, GRADE_PASS,
@@ -22,8 +23,14 @@ _COLOR = {
     GRADE_NA: "#9e9e9e",
 }
 
+# 대시보드 Canvas 히트맵(dashboard/components/analysis/slope-heatmap-view.tsx의
+# DRAIN_COLOR)과 정확히 같은 값. 같은 판정 결과를 그리는 두 렌더러(엔진 PNG·
+# 대시보드 Canvas)가 배수구를 다른 색으로 찍으면 나란히 봤을 때 혼란스럽다
+# (백로그 81).
+_DRAIN_COLOR = "#1a73e8"
 
-def render_slope_map(graded, out_path, cell_m=2.0):
+
+def render_slope_map(graded, out_path, cell_m=2.0, drain_points=None):
     fig, ax = plt.subplots(figsize=(8, 7))
     for g in graded:
         c = g["cell"]
@@ -52,13 +59,33 @@ def render_slope_map(graded, out_path, cell_m=2.0):
         ys = [g["cell"].center_y for g in graded]
         ax.set_xlim(min(xs) - cell_m, max(xs) + cell_m)
         ax.set_ylim(min(ys) - cell_m, max(ys) + cell_m)
+    legend_handles = [Patch(facecolor=v, label=k) for k, v in _COLOR.items()]
+    if drain_points:
+        # 판정표의 "왜 역구배인가"는 "배수구가 어디 있고 물이 그 반대로
+        # 흐르기 때문"인데, 종이 PDF만 받는 발주처는 stats.drain_points jsonb를
+        # 볼 방법이 없다(백로그 81) - 그림 자체에 배수구를 찍어야 자기완결적
+        # 설명이 된다. 셀 패치·화살표(둘 다 zorder 기본값)보다 위에 그려야
+        # 마커가 가려지지 않으므로 zorder를 높게 준다.
+        ax.scatter([p["x"] for p in drain_points], [p["y"] for p in drain_points],
+                   s=90, c=_DRAIN_COLOR, edgecolors="white", linewidths=1.0,
+                   zorder=5)
+        legend_handles.append(Line2D([0], [0], marker="o", color="none",
+                                     markerfacecolor=_DRAIN_COLOR,
+                                     markeredgecolor="white", markersize=8,
+                                     label="배수구"))
     ax.set_aspect("equal")
     ax.set_xlabel("X (m)")
     ax.set_ylabel("Y (m)")
     ax.set_title("구배 판정 지도 (화살표는 내리막 방향)")
-    ax.legend(handles=[Patch(facecolor=v, label=k) for k, v in _COLOR.items()],
+    ax.legend(handles=legend_handles,
               loc="upper left", bbox_to_anchor=(1.01, 1.0), fontsize=8)
     fig.tight_layout()
     fig.savefig(out_path, dpi=120)
     plt.close(fig)
-    return out_path
+    # out_path가 pathlib.Path면 basename만 돌려준다 - judge_slope_cells가 이
+    # 값을 그대로 stats.artifacts.map_png에 싣지 않고 자신이 만든 전체 경로
+    # 문자열을 쓰므로(형식은 호출부 책임), 여기서는 호출부가 Path를 넘겼다는
+    # 사실 자체를 돌려주는 쪽이 (예: 파일명만 다시 확인하고 싶은 호출부에)
+    # 더 쓸모 있다. 문자열 경로를 넘긴 기존 호출부(CLI 등)는 그 문자열을
+    # 그대로 돌려받는 기존 계약을 유지한다.
+    return out_path.name if hasattr(out_path, "name") else out_path
