@@ -1,8 +1,10 @@
-"""잡 핸들러 4종 (precheck/analyze/import/report) — 스펙 §5.1.7, §5.4, §8.
+"""잡 핸들러 (precheck/analyze/import/report/slope_judge/register) — 스펙 §5.1.7,
+§5.4, §8, 세부과업 4 단계 F.
 
 analyze/import/report는 실패 시 예외를 그대로 전파한다: 잡 상태 전이(재시도/최종
 실패)는 runner가 `fail_job`으로 처리하는 책임이라 이 모듈에서 잡지 않는다.
 """
+import math
 from pathlib import Path
 
 from flatness.criteria import Criterion
@@ -10,12 +12,13 @@ from flatness.core.pipeline import analyze_floor, analyze_wall, judge_slope_cell
 from flatness.core.subcell import build_subcell_grid
 from flatness.importer.colab_csv import import_colab_csv
 from flatness.importer.json_import import import_json
+from flatness.io.ply_writer import write_ply
 from flatness.io.reader import iter_chunks, read_info
 from flatness.outputs.height_view import (dump_height_view_meta, render_height_view,
                                           render_height_view_plain, subcell_m_for_bbox)
 from flatness.outputs.slope_cells import load_slope_cells
 
-from flatworker import slope
+from flatworker import registration, slope
 from flatworker.artifacts import staging_dir
 from flatworker.report.assets import build_assets
 from flatworker.report.context import load_report_context
@@ -471,3 +474,132 @@ def handle_report(db, cfg, payload, renderer=None):
         })
         storage.upload(f"reports/{report_id}/report.pdf", pdf_path.read_bytes(),
                        "application/pdf")
+
+
+def _merged_scan_fields(source_scan, registration_id, merged):
+    """병합 점군 -> 새 scans 행 필드 (설계 결정 F9).
+
+    현장·위치·표면·측정자 등 맥락은 첫 번째 원본(A)에서 그대로 물려받는다 - 정합은
+    "같은 위치를 두 번 나눠 찍은 것"을 하나로 되돌리는 작업이라 A와 B의 맥락이
+    같다는 것이 전제다(다른 위치라면 애초에 겹치지 않는다).
+
+    - `lineage='registered'`: `fused_mesh`를 재사용하면 업로드 화면이 그 값에 붙인
+      "앱이 스무딩한 데이터라 실제보다 양호하게 나올 수 있습니다" 경고가 거짓이
+      된다 - 정합 병합은 스캐너 앱의 스무딩이 아니라 원시 점군 두 개의 서브셀
+      중앙값이다(설계 결정 F9).
+    - `unit_scale=1.0`: 병합 점군은 이미 미터로 환산돼 있다.
+    - `status='ready'`: precheck를 다시 돌릴 이유가 없다(단위가 확정돼 있고
+      point_count도 여기서 채운다).
+    """
+    return {
+        "location_id": source_scan["location_id"],
+        "surface": source_scan["surface"],
+        "scanned_at": source_scan["scanned_at"],
+        "device": source_scan.get("device"),
+        "operator_id": source_scan.get("operator_id"),
+        "operator_name_manual": source_scan.get("operator_name_manual"),
+        "selected_criteria_id": source_scan.get("selected_criteria_id"),
+        # 경로 계약: DB에는 버킷-상대 문자열만 (스펙 §6.3). raw-scans/가 아니라
+        # artifacts/다 - raw-scans는 authenticated가 전면 쓰기 가능이라
+        # (005_storage_buckets.sql) 워커 산출물이 브라우저 업로드에 덮일 수 있다
+        # (설계 결정 E2와 같은 이유). 이 파일은 사용자가 올린 원본이 아니라
+        # 워커가 만든 산출물이다.
+        "raw_file_path": f"artifacts/registrations/{registration_id}/merged.ply",
+        "original_filename": "merged.ply",
+        "file_format": "ply",
+        "point_count": len(merged),
+        "unit_scale": 1.0,
+        "lineage": "registered",
+        "status": "ready",
+    }
+
+
+def handle_register(db, cfg, payload):
+    """정합 잡 (세부과업 4 단계 F) — 두 스캔을 대응점으로 정합해 병합 스캔 하나를
+    만든다. payload는 `{"registration_id": "<uuid>"}`.
+
+    흐름: registrations 읽기 -> processing -> **소스 A를 끝까지 처리 -> 그 다음
+    소스 B**(설계 결정 F3의 순차 처리) -> 정합 -> 병합 -> 업로드 -> 새 scans 행
+    -> registrations 확정.
+
+    **실패를 두 갈래로 나눈다.**
+
+    (1) 정합 자체의 실패(중첩 부족·RMSE 초과처럼 `RegistrationResult.converged`가
+        거짓인 경우)는 `registrations.status='failed'` + `error_text`로 끝내고
+        **예외를 올리지 않는다.** 두 가지 이유다 -
+        - `jobs` 테이블은 RLS 정책이 0개라 대시보드가 못 읽는다(설계 결정 F10).
+          사유는 반드시 registrations에 있어야 화면이 보여줄 수 있다.
+        - 같은 입력으로 다시 돌려도 결과가 같다. 예외로 올리면 fn_job_fail이
+          10초·20초 뒤 **무거운 잡을 두 번 더** 돌리고, 그동안 화면은
+          '정합 중'으로 되돌아갔다가 실패한다(사용자가 사유를 못 본다).
+    (2) 그 밖의 오류(원본 파일 없음, 단위 미확정, 대응점 형식 오류, 업로드 실패
+        등)는 예외를 그대로 올린다 - analyze/import/report와 같은 규약이며,
+        012의 fn_job_fail register 분기가 재시도·최종 실패를 registrations에
+        반영한다(재시도로 회복될 여지가 있는 종류다).
+
+    병합 스캔은 정합이 성공했을 때만 만든다 - 쓰레기 스캔이 목록에 남으면 안 된다.
+    원본 두 스캔은 읽기만 하고 건드리지 않는다(스펙 §6.3).
+    """
+    registration_id = payload["registration_id"]
+    reg = db.get_registration(registration_id)
+
+    scan_ids = list(reg.get("source_scan_ids") or [])
+    if len(scan_ids) != 2:
+        # 3개 이상 다중 정합은 단계 F 범위 밖이다(계획서 "범위 밖").
+        raise ValueError(f"정합은 스캔 2개만 지원합니다(현재 {len(scan_ids)}개).")
+    corr_a, corr_b = registration.correspondence_arrays(reg.get("correspondences"))
+
+    scan_a = db.get_scan(scan_ids[0])
+    scan_b = db.get_scan(scan_ids[1])
+    db.update_registration(registration_id, {"status": "processing", "error_text": None})
+
+    storage = get_storage(cfg, db)
+    with staging_dir() as work:
+        # ★ 설계 결정 F3: 소스를 **하나씩** 끝낸다. A의 격자를 버린 뒤에 B를
+        #   시작해야 한다 - build_subcell_grid의 정렬 버퍼가 점당 12B라 두 개를
+        #   동시에 들면 실측 피크 1.31GiB 위에 겹쳐 쌓여 2GiB 게이트를 넘긴다.
+        #   내려받는 디렉터리도 나눈다: 두 원본의 파일명이 보통 똑같아서
+        #   (raw.ply) 같은 스테이징에 받으면 뒤엣것이 앞엣것을 덮어쓴다.
+        pts_a = registration.load_source_points(
+            _fetch_raw(storage, scan_a, work / "a"), scan_a.get("unit_scale"))
+        pts_b = registration.load_source_points(
+            _fetch_raw(storage, scan_b, work / "b"), scan_b.get("unit_scale"))
+
+        # B를 A에 맞춘다(A가 기준). 대응점의 단위 환산은 align_sources가 한다.
+        result = registration.align_sources(
+            pts_b, pts_a, corr_b, corr_a,
+            scan_b.get("unit_scale"), scan_a.get("unit_scale"))
+        if not result.converged:
+            db.update_registration(registration_id, {
+                "status": "failed",
+                "error_text": result.failure_reason or "정합에 실패했습니다.",
+                # 실패해도 관측치는 남긴다 - 화면이 "왜 실패했나"를 수치로 보여줄 수
+                # 있어야 사용자가 대응점을 다시 찍을지 스캔을 다시 뜰지 판단한다.
+                # 대응이 3쌍 미만이면 엔진이 NaN을 내므로 그때는 비워 둔다.
+                "rmse_mm": (result.rmse_m * 1000.0
+                            if math.isfinite(result.rmse_m) else None),
+                "overlap_ratio": result.overlap_ratio,
+                "iterations": result.iterations,
+            })
+            return
+
+        merged = registration.merge_clouds(
+            pts_a, registration.apply_transform(pts_b, result.transform))
+
+        out_dir = work / "out"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        write_ply(merged, out_dir / "merged.ply")
+        storage.upload_dir(f"artifacts/registrations/{registration_id}", out_dir)
+        scan_id = db.insert_scan(_merged_scan_fields(scan_a, registration_id, merged))
+
+    db.update_registration(registration_id, {
+        "transform": registration.transform_to_json(result.transform),
+        # 엔진은 미터(rmse_m), DB 컬럼은 mm다. 이 환산을 빠뜨리면 화면이
+        # 0.0018mm 같은 값을 보여주며 **항상 합격으로 읽힌다**(조용한 실패).
+        "rmse_mm": float(result.rmse_m) * 1000.0,
+        "iterations": result.iterations,
+        "overlap_ratio": float(result.overlap_ratio),
+        "result_scan_id": scan_id,
+        "status": "done",
+        "error_text": None,
+    })

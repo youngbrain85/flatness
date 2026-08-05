@@ -378,3 +378,61 @@ def test_reap_stuck_jobs_leaves_slope_judge_untouched_when_judge_not_processing(
 
     assert n == 0
     assert db.analyses["a1"]["params"]["judge"]["state"] == "done"  # 그대로 유지
+
+
+def test_register_job_status_propagates_to_linked_registration():
+    """012_register_support.sql의 fn_job_claim/fn_job_fail은 type='register'이고
+    payload.registration_id가 있으면 registrations.status를 전이시킨다: 클레임 ->
+    processing(error_text 초기화), 재시도 여지 있는 실패 -> queued(+error_text),
+    max_attempts 소진 -> failed(+error_text). report 분기와 같은 모양이다
+    (설계 결정 F10: 정합은 자기 테이블에 자기 상태 컬럼이 있다).
+
+    FakeDB가 이 분기를 빠뜨리면 워커 테스트가 **실제 DB와 다른 세계**를 검증한다.
+    """
+    db = FakeDB()
+    db.registrations["g1"] = {"id": "g1", "status": "queued", "error_text": "이전 오류"}
+    jid = db.enqueue_job("register", {"registration_id": "g1"})
+
+    job = db.claim_job(ignore_backoff=True)
+    assert job is not None
+    assert db.registrations["g1"]["status"] == "processing"
+    assert db.registrations["g1"]["error_text"] is None
+
+    db.fail_job(jid, "정합 실패")
+    assert db.registrations["g1"]["status"] == "queued"
+    assert db.registrations["g1"]["error_text"] == "정합 실패"
+
+    for _ in range(2):
+        assert db.claim_job(ignore_backoff=True) is not None
+        db.fail_job(jid, "정합 실패")
+    assert db.jobs[jid]["status"] == "failed"
+    assert db.registrations["g1"]["status"] == "failed"
+    assert db.registrations["g1"]["error_text"] == "정합 실패"
+
+
+def test_register_job_complete_does_not_touch_registration_status():
+    """fn_job_complete는 jobs만 종결한다 - registrations.status='done'은 워커가
+    결과 컬럼(transform·rmse_mm·result_scan_id)과 함께 직접 쓴다."""
+    db = FakeDB()
+    db.registrations["g1"] = {"id": "g1", "status": "queued", "error_text": None}
+    jid = db.enqueue_job("register", {"registration_id": "g1"})
+    db.claim_job(ignore_backoff=True)
+    db.complete_job(jid)
+    assert db.registrations["g1"]["status"] == "processing"
+
+
+def test_reap_stuck_jobs_requeues_register_only_when_processing():
+    """고착 잡이 회수되면 정합 화면도 '대기 중'으로 되돌린다 - 이 줄이 없으면 잡은
+    다시 큐에 들어갔는데 화면만 '정합 중...'에 영구히 남는다. 반대로 이미 done인
+    정합은 건드리면 안 된다(성공 결과를 이유 없이 되돌리는 조용한 회귀)."""
+    db = FakeDB()
+    db.registrations["g1"] = {"id": "g1", "status": "queued", "error_text": None}
+    db.registrations["g2"] = {"id": "g2", "status": "done", "error_text": None}
+    stuck = db.enqueue_job("register", {"registration_id": "g1"})
+    db.enqueue_job("register", {"registration_id": "g2"})   # queued인 채로 남겨 순회 대상에 둔다
+    db.claim_job(ignore_backoff=True)
+    db.jobs[stuck]["locked_at"] = datetime.now(timezone.utc) - timedelta(minutes=60)
+
+    assert db.reap_stuck_jobs(timeout_minutes=30) == 1
+    assert db.registrations["g1"]["status"] == "queued"
+    assert db.registrations["g2"]["status"] == "done"

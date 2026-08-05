@@ -20,7 +20,7 @@ import httpx
 
 from flatworker.db import DBError
 from flatworker.jobs import (handle_precheck, handle_analyze, handle_import,
-                             handle_report, handle_slope_judge)
+                             handle_register, handle_report, handle_slope_judge)
 
 _DEFAULT_HANDLERS = {
     "precheck": handle_precheck,
@@ -28,6 +28,7 @@ _DEFAULT_HANDLERS = {
     "import": handle_import,
     "report": handle_report,
     "slope_judge": handle_slope_judge,
+    "register": handle_register,
 }
 
 _MAX_BACKOFF_S = 60.0
