@@ -78,13 +78,20 @@ function mkAnalysis(overrides: Partial<AnalysisRow> & { id: string; kind: Analys
   };
 }
 
-function stubSupabase(scan: ScanRow, analyses: AnalysisRow[], loc: LocationRow | null = location) {
+function stubSupabase(
+  scan: ScanRow, analyses: AnalysisRow[], loc: LocationRow | null = location,
+  registration: { id: string } | null = null,
+) {
   return {
     auth: { getUser: async () => ({ data: { user: { id: 'u1' } } }) },
     from: (table: string) => {
       if (table === 'scans') return chain({ data: scan, error: null });
       if (table === 'locations') return chain({ data: loc, error: null });
       if (table === 'analyses') return chain({ data: analyses, error: null });
+      // ★ 단계 F: 정합 이력 조회는 lineage === 'registered'일 때만 나가야 한다.
+      // 일반 스캔에서 이 테이블에 손대면 여기서 예외로 잡힌다(쿼리 1회 추가는
+      // 모든 스캔 상세에 붙는 비용이다).
+      if (table === 'registrations') return chain({ data: registration, error: null });
       throw new Error(`예상치 못한 테이블: ${table}`);
     },
   };
@@ -349,6 +356,52 @@ describe('ScanPage 메타·안내 문구 (단계 E)', () => {
     expect(text).toContain('1,234,567');
   });
 
+  // ★ 리뷰 I1(단계 F): 병합 스캔은 정합 성공 즉시 status='ready'로 목록에 뜬다.
+  // 정합 화면으로 돌아가는 길이 없으면 이 경로로 들어온 사용자는 겹쳐보기(RMSE가
+  // 원리적으로 못 보는 수평 어긋남을 확인하는 유일한 수단)를 찾을 방법이 없다.
+  //
+  // ★★ 정정(단계 F 최종 리뷰 Critical): 이 주석은 원래 "여기서 바로 분석할 수 있다"고
+  // 적혀 있었는데 **거짓이었다.** 병합 스캔은 analyses 행 없이 ready로 만들어지므로
+  // (worker의 _merged_scan_fields) 당시 이 화면의 분석 진입점 셋이 전부 비껴갔고,
+  // 바로 아래 테스트가 `analyses: []`인 병합 스캔을 실제로 렌더하면서도 정합 링크만
+  // 확인하고 넘어가 반증을 놓쳤다. 분석 진입점은 아래 별도 describe가 단언한다 -
+  // 주석이 사실을 대신하지 못한다.
+  it('정합 병합 스캔이면 정합 화면으로 돌아가는 링크를 단다', async () => {
+    vi.mocked(createClient).mockResolvedValue(
+      stubSupabase(mkScan({ lineage: 'registered' }), [], location, { id: 'reg-9' }) as never);
+
+    const el = await ScanPage({ params: Promise.resolve({ id: 'sc1' }) });
+    const hrefs = findAll(el, Link).map((l) => l.props.href);
+    const text = collectText(el).join('');
+
+    expect(hrefs).toContain('/registrations/reg-9');
+    expect(text).toContain('정합해 만든 병합 스캔');
+    expect(text).toContain('수직 방향만');
+  });
+
+  it('정합 이력을 못 찾으면 링크 대신 주의를 알린다(이력 삭제 등)', async () => {
+    vi.mocked(createClient).mockResolvedValue(
+      stubSupabase(mkScan({ lineage: 'registered' }), [], location, null) as never);
+
+    const el = await ScanPage({ params: Promise.resolve({ id: 'sc1' }) });
+    const hrefs = findAll(el, Link).map((l) => l.props.href);
+    const text = collectText(el).join('');
+
+    expect(hrefs.some((h) => String(h).startsWith('/registrations/'))).toBe(false);
+    expect(text).toContain('정합 이력을 찾지 못했습니다');
+  });
+
+  // 일반 스캔에서 registrations를 조회하면 stubSupabase가 예외를 던진다 - 즉 이 테스트가
+  // "쿼리 1회가 모든 스캔 상세에 무조건 붙는" 회귀를 잡는다.
+  it('일반 스캔에서는 정합 이력을 조회하지도, 안내를 띄우지도 않는다', async () => {
+    vi.mocked(createClient).mockResolvedValue(
+      stubSupabase(mkScan({ lineage: 'raw' }), []) as never);
+
+    const el = await ScanPage({ params: Promise.resolve({ id: 'sc1' }) });
+
+    expect(collectText(el).join('')).not.toContain('정합해 만든 병합 스캔');
+  });
+
   it('점 개수가 없는 기존 스캔에서도 메타가 죽지 않는다', async () => {
     vi.mocked(createClient).mockResolvedValue(
       stubSupabase(mkScan({ point_count: null }), []) as never);
@@ -357,5 +410,220 @@ describe('ScanPage 메타·안내 문구 (단계 E)', () => {
     const text = collectText(el).join('');
 
     expect(text).toContain('점 개수');
+  });
+});
+
+// ★ 단계 F 최종 리뷰 Critical: status='ready'인데 평활도 analyses 행이 없는 스캔은
+// **분석을 시작할 방법이 아예 없었다.** 이 화면의 진입점 셋이 전부 이 상태를 비껴간다:
+// 단위 확인 링크는 awaiting_unit_confirm 전용, 평활도 ReanalyzeButton은 기존 analyses
+// 행을 요구, 구배 버튼은 완료된 평활도 분석을 요구. 그런데 상태 칸과 측정위치 트리는
+// SCAN_STATUS_LABEL.ready("분석 준비됨")를 달아 할 수 있다고 말한다 - 막다른 골목이다.
+//
+// 이 상태에 도달하는 경로가 둘이라 진입점을 계보로 좁히지 않았다:
+//   (1) 정합 성공이 만드는 병합 스캔(worker의 _merged_scan_fields - ready·행 없음),
+//   (2) unit-confirm-form.tsx의 되돌리기까지 실패해 남은 고아 스캔(그 파일 52-56행
+//       주석이 이 골목을 그대로 적어 놓고 "관리자에게 알리세요"로 끝난다).
+describe('ScanPage 분석 시작 진입점 (단계 F 최종 리뷰 Critical)', () => {
+  // ★★ 재리뷰 Critical(C1-c): 1차 수정은 "임포트 스캔은 ready+분석0행 상태에 존재할 수
+  // 없다"고 단정하고 isImport=false를 고정했는데 **틀렸다.** upload-form.tsx는 3)에서
+  // status='ready'로 먼저 승격하고 4)에서야 analyses 행을 만든다 - 그 사이에 탭이
+  // 닫히면 정리 코드가 아예 안 돈다. 그러면 Colab 결과 CSV에 'analyze' 잡이 걸려
+  // Signed_Distance_mm이 무시되고 전 셀이 조용히 "적합"이 된다(C1 사고 계열).
+  //
+  // 아래 세 테스트가 그 세 경로를 각각 못 박는다. 특히 임포트 건은 **실패 방향
+  // 단언**이다 - 1차 수정에서 이 자리를 주석 5줄이 대신했고, 같은 파일이 스스로
+  // 적어 둔 "주석이 사실을 대신하지 못한다"에 정확히 걸렸다.
+  it('경로3(실패 방향): 임포트 고아 스캔(ready·분석 0행)에는 분석 버튼을 띄우지 않는다', async () => {
+    // upload-form.tsx의 mode='import'가 만드는 그대로: lineage='unknown'(DB 기본값이자
+    // 임포트가 쓰는 값), unit_scale=1.0, status='ready', 그리고 precheck를 돌지 않아
+    // height_view_path=null. 여기서 버튼이 뜨면 isImport=false로 'analyze' 잡이 걸린다.
+    vi.mocked(createClient).mockResolvedValue(
+      stubSupabase(mkScan({
+        lineage: 'unknown', status: 'ready', unit_scale: 1.0,
+        original_filename: 'colab_result.csv', file_format: 'csv', height_view_path: null,
+      }), []) as never);
+
+    const el = await ScanPage({ params: Promise.resolve({ id: 'sc1' }) });
+
+    expect(findAll(el, ReanalyzeButton)).toHaveLength(0);
+    // 안내 문구도 새면 안 된다 - "바로 분석할 수 있다"고 말해 놓고 버튼이 없으면
+    // 그 자체가 1차 수정이 고치려던 거짓말의 재발이다.
+    expect(collectText(el).join('')).not.toContain('첫 분석을 시작하세요');
+  });
+
+  it('경로3 변형: JSON 임포트 고아 스캔도 마찬가지로 막는다', async () => {
+    vi.mocked(createClient).mockResolvedValue(
+      stubSupabase(mkScan({
+        lineage: 'unknown', status: 'ready', unit_scale: 1.0,
+        original_filename: 'result.json', file_format: 'json', height_view_path: null,
+      }), []) as never);
+
+    const el = await ScanPage({ params: Promise.resolve({ id: 'sc1' }) });
+
+    expect(findAll(el, ReanalyzeButton)).toHaveLength(0);
+  });
+
+  // 받아들인 트레이드오프의 경계. precheck는 돌았지만 높이 뷰 렌더가 실패해
+  // height_view_path가 비었고(worker의 handle_precheck가 except로 삼킨다) 단위 확정까지
+  // 실패한 스캔은 임포트와 구별할 수 없다 - 고치기 전과 같은 막다른 골목으로 남는다.
+  // 조용한 오답보다 조용한 막다른 골목이 낫다는 판단을 여기 못 박는다.
+  it('판별 불가(높이 뷰 없는 raw 고아 스캔)면 버튼을 띄우지 않는다(받아들인 트레이드오프)', async () => {
+    vi.mocked(createClient).mockResolvedValue(
+      stubSupabase(mkScan({
+        lineage: 'raw', status: 'ready', height_view_path: null,
+      }), []) as never);
+
+    const el = await ScanPage({ params: Promise.resolve({ id: 'sc1' }) });
+
+    expect(findAll(el, ReanalyzeButton)).toHaveLength(0);
+  });
+
+  it('경로1: 병합 스캔(ready·분석 행 없음)에 평활도 분석 시작 버튼이 있다', async () => {
+    // ★ height_view_path를 명시적으로 null로 둔다. 병합 스캔은 precheck를 돌지 않아
+    // 이 값이 없다(worker의 handle_register는 이 필드를 건드리지 않는다) - 임포트
+    // 판별을 height_view_path 하나로만 하면 병합 스캔이 통째로 막힌다.
+    vi.mocked(createClient).mockResolvedValue(
+      stubSupabase(
+        mkScan({
+          lineage: 'registered', selected_criteria_id: 'cr-merged', height_view_path: null,
+        }), [],
+        location, { id: 'reg-9' },
+      ) as never);
+
+    const el = await ScanPage({ params: Promise.resolve({ id: 'sc1' }) });
+    const flatnessBtn = findAll(el, ReanalyzeButton).find((b) => b.props.kind === 'flatness');
+
+    expect(flatnessBtn).toBeDefined();
+    // 기준은 스캔이 원본 A에서 물려받은 selected_criteria_id다.
+    expect(flatnessBtn?.props.criteriaId).toBe('cr-merged');
+    // 병합 점군은 워커가 만든 ply다 - 'import' 잡을 걸면 안 된다(C1 사고 계열).
+    expect(flatnessBtn?.props.isImport).toBe(false);
+    // 직전 상태가 없어야 버튼이 활성이다. 값이 새면 첫 분석 버튼이 비활성으로 굳는다.
+    expect(flatnessBtn?.props.latestStatus).toBeUndefined();
+  });
+
+  // 병합 점군은 unit_scale이 이미 1.0(미터)이다. confirm-unit은 "파일 좌표가 m·cm·mm 중
+  // 무엇인지 확정하는 단계"라 틀린 안내이고, 거기서 mm를 고르면 멀쩡한 좌표가 1/1000이
+  // 된다. 우회로였던 그 화면으로 되돌리는 것은 해법이 아니다.
+  it('병합 스캔을 단위 확인 화면으로 되돌리지 않고 그 이유를 밝힌다', async () => {
+    vi.mocked(createClient).mockResolvedValue(
+      stubSupabase(mkScan({ lineage: 'registered', height_view_path: null }), [],
+        location, { id: 'reg-9' }) as never);
+
+    const el = await ScanPage({ params: Promise.resolve({ id: 'sc1' }) });
+    const hrefs = findAll(el, Link).map((l) => String(l.props.href));
+
+    expect(hrefs.some((h) => h.includes('confirm-unit'))).toBe(false);
+    expect(collectText(el).join('')).toContain('이미 미터로 환산돼 있어');
+  });
+
+  it('경로2: 단위 확정 직후 실패로 남은 고아 스캔(raw·ready·분석 없음)도 같은 진입점을 얻는다', async () => {
+    // 이 스캔은 uploaded -> precheck -> awaiting_unit_confirm을 거쳐 왔으므로
+    // height_view_path가 채워져 있다(worker의 handle_precheck:155). 그 값이 이 스캔이
+    // 임포트가 아님을 증명한다 - 임포트는 precheck를 아예 돌지 않기 때문이다.
+    vi.mocked(createClient).mockResolvedValue(
+      stubSupabase(mkScan({
+        lineage: 'raw', status: 'ready',
+        height_view_path: 'artifacts/scans/sc1/height_view.png',
+      }), []) as never);
+
+    const el = await ScanPage({ params: Promise.resolve({ id: 'sc1' }) });
+    const flatnessBtn = findAll(el, ReanalyzeButton).find((b) => b.props.kind === 'flatness');
+
+    expect(flatnessBtn).toBeDefined();
+    expect(flatnessBtn?.props.criteriaId).toBe('cr1');
+    expect(flatnessBtn?.props.isImport).toBe(false);
+  });
+
+  // ★ 기존 흐름(awaiting_unit_confirm -> ready) 회귀 방지. 새 진입점이 단위 미확정
+  // 스캔까지 삼키면 단위를 확정하지 않은 채 분석이 돌아 결과 전체가 왜곡된다.
+  //
+  // ★★ 재재리뷰: 이 픽스처는 height_view_path를 **반드시** 채워야 한다. 비워 두면
+  // provenNotImport가 먼저 막아 버려서, 이 테스트가 상태 게이트가 아니라 임포트
+  // 판별자 덕분에 통과한다 - 그러면 상태 조건을 'ready || awaiting_unit_confirm'으로
+  // 넓히는 회귀를 아무도 못 잡고, 이 테스트가 스스로 내건 근거(위 문단)를 지키지
+  // 못한다. 실제로도 이 상태의 스캔은 precheck를 끝낸 뒤이므로 값이 채워져 있는
+  // 쪽이 사실에 맞다(worker의 handle_precheck가 status와 함께 한 PATCH로 넣는다).
+  it('단위 미확정 스캔은 여전히 단위 확인 링크로 보내고 직행 버튼은 띄우지 않는다', async () => {
+    vi.mocked(createClient).mockResolvedValue(
+      stubSupabase(mkScan({
+        status: 'awaiting_unit_confirm', unit_scale: null,
+        height_view_path: 'artifacts/scans/sc1/height_view.png',
+      }), []) as never);
+
+    const el = await ScanPage({ params: Promise.resolve({ id: 'sc1' }) });
+    const hrefs = findAll(el, Link).map((l) => String(l.props.href));
+
+    expect(hrefs).toContain('/scans/sc1/confirm-unit');
+    expect(collectText(el).join('')).toContain('단위 확인하고 분석 시작');
+    expect(findAll(el, ReanalyzeButton)).toHaveLength(0);
+  });
+
+  // 사전 검사 대기 중인 스캔에는 아직 raw 좌표도 단위도 없다.
+  //
+  // ★★ 재재리뷰: 위와 같은 이유로 height_view_path를 채운다. uploaded 상태에서 이
+  // 값이 자연히 나오지는 않지만(handle_precheck가 status와 함께 채운다), 여기서는
+  // provenNotImport를 참으로 만들어 **상태 게이트만** 시험대에 올리려는 의도적
+  // 픽스처다. 비워 두면 임포트 판별자가 대신 막아 상태 조건 회귀가 통째로 샌다.
+  it('사전 검사 대기(uploaded) 스캔에는 분석 시작 버튼을 띄우지 않는다', async () => {
+    vi.mocked(createClient).mockResolvedValue(
+      stubSupabase(mkScan({
+        status: 'uploaded', unit_scale: null,
+        height_view_path: 'artifacts/scans/sc1/height_view.png',
+      }), []) as never);
+
+    const el = await ScanPage({ params: Promise.resolve({ id: 'sc1' }) });
+
+    expect(findAll(el, ReanalyzeButton)).toHaveLength(0);
+  });
+
+  // ★★ 재재리뷰: provenNotImport의 `!!` truthy 검사가 하중을 지게 한다. 근거를
+  // 주석으로만 적어 두면 `!!x` -> `x !== null` 변이가 조용히 살아남는다.
+  // 010_scan_height_view.sql을 아직 적용하지 않은 DB에서는 select('*')에 이 컬럼이
+  // 아예 없어 undefined로 온다 - `!== null`로 좁히면 **그 DB의 모든 스캔이 "임포트가
+  // 아님"으로 잘못 증명되어** Colab CSV에 'analyze' 잡이 걸린다. 형제 화면의 같은
+  // 가드(components/__tests__/unit-confirm-form.test.tsx)와 같은 패턴이지만, 저쪽의
+  // 실패 모드가 죽은 화면인 데 비해 여기는 조용한 오답이라 더 나쁘다.
+  it.each([
+    ['undefined(010 미적용 DB의 select(*))', undefined],
+    ['빈 문자열', ''],
+  ])('height_view_path가 %s면 임포트 판별 불가로 보고 버튼을 띄우지 않는다', async (_label, value) => {
+    const oddScan = {
+      ...mkScan({ status: 'ready', lineage: 'raw' }), height_view_path: value,
+    } as unknown as ScanRow;
+    vi.mocked(createClient).mockResolvedValue(stubSupabase(oddScan, []) as never);
+
+    const el = await ScanPage({ params: Promise.resolve({ id: 'sc1' }) });
+
+    expect(findAll(el, ReanalyzeButton)).toHaveLength(0);
+  });
+
+  // ★ 재리뷰 D6: 상태 조건의 경계를 못 박는다. 이전에는 'ready'를 'archived'까지
+  // 넓혀도 아무 테스트가 잡지 않았다. 보관된 스캔에 새 분석을 걸 수 있으면 안 된다.
+  it('D6 경계: 보관된(archived) 스캔에는 분석 시작 버튼을 띄우지 않는다', async () => {
+    vi.mocked(createClient).mockResolvedValue(
+      stubSupabase(mkScan({
+        status: 'archived', height_view_path: 'artifacts/scans/sc1/height_view.png',
+      }), []) as never);
+
+    const el = await ScanPage({ params: Promise.resolve({ id: 'sc1' }) });
+
+    expect(findAll(el, ReanalyzeButton)).toHaveLength(0);
+  });
+
+  it('평활도 분석이 이미 있으면 진입점이 겹쳐 뜨지 않는다(재분석 버튼 하나뿐)', async () => {
+    // height_view_path를 채워 provenNotImport를 참으로 만든다 - 그러지 않으면 이
+    // 테스트가 "임포트 판별에 막혀서" 통과해 정작 막으려던 중복 렌더를 못 본다.
+    const flatness = mkAnalysis({ id: 'f1', kind: 'flatness' });
+    vi.mocked(createClient).mockResolvedValue(
+      stubSupabase(mkScan({
+        status: 'ready', height_view_path: 'artifacts/scans/sc1/height_view.png',
+      }), [flatness]) as never);
+
+    const el = await ScanPage({ params: Promise.resolve({ id: 'sc1' }) });
+    const flatnessBtns = findAll(el, ReanalyzeButton).filter((b) => b.props.kind === 'flatness');
+
+    expect(flatnessBtns).toHaveLength(1);
+    expect(flatnessBtns[0].props.latestStatus).toBe('done');
   });
 });

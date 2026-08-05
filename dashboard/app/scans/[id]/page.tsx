@@ -33,6 +33,16 @@ export default async function ScanPage({ params }: { params: Promise<{ id: strin
   const loc = locRes.data as LocationRow | null;
   const analyses = (analysesRes.data ?? []) as AnalysisRow[];
 
+  // ★ 리뷰 I1(단계 F): 병합 스캔은 정합 성공 즉시 status='ready'로 만들어져 측정위치
+  // 트리와 이 화면에 바로 나타난다. 그런데 여기서 정합 화면으로 돌아가는 길이 없으면,
+  // 이 경로로 들어온 사용자는 겹쳐보기(RMSE가 원리적으로 못 보는 수평 어긋남을
+  // 확인하는 유일한 수단)를 **찾을 방법이 없다.** lineage로 좁혀 질의하므로 일반
+  // 스캔은 이 쿼리를 타지 않는다.
+  const registrationRes = s.lineage === 'registered'
+    ? await supabase.from('registrations').select('id').eq('result_scan_id', id).maybeSingle()
+    : null;
+  const registrationId = (registrationRes?.data as { id: string } | null | undefined)?.id ?? null;
+
   // 종류별로 완전히 갈라서 다룬다(컨트롤러 보강 확정 3·5). analyses[0] 하나로 화면
   // 전체를 지배하면 구배 분석을 한 번이라도 돌리는 순간 평활도의 진행 상태·결과
   // 링크·이전 이력이 화면에서 사라진다. 쿼리가 이미 created_at desc이므로 kind로
@@ -77,6 +87,63 @@ export default async function ScanPage({ params }: { params: Promise<{ id: strin
   const showSlopeButton = s.surface === 'floor' && !isImportUnknownOrTrue && !!loc;
   const showSlopeSection = !!latestSlope || showSlopeButton;
 
+  // ★ 리뷰 Critical(단계 F 최종): status='ready'인데 평활도 analyses 행이 없는 스캔은
+  // 지금까지 **분석을 시작할 방법이 아예 없었다.** 이 화면의 분석 진입점 셋이 전부
+  // 이 상태를 비껴간다: 단위 확인 링크는 awaiting_unit_confirm 전용이고, 평활도
+  // ReanalyzeButton은 latestFlatness(=기존 analyses 행)를 요구하며, 구배 버튼은 완료된
+  // 평활도 분석(doneFlatness)을 요구한다. 그런데 측정위치 트리와 이 화면의 상태 칸은
+  // SCAN_STATUS_LABEL.ready("분석 준비됨")를 달아 할 수 있다고 말한다 - 막다른 골목이다.
+  //
+  // 범위를 lineage==='registered'(병합 스캔)로 좁히지 않는다. 결함의 본질은 계보가
+  // 아니라 **"ready인데 분석 행이 없다"는 상태 자체**이고, 이 저장소에는 그 상태에
+  // 도달하는 경로가 둘 있다:
+  //   (1) 정합 성공이 만드는 병합 스캔(worker의 _merged_scan_fields - ready·행 없음),
+  //   (2) unit-confirm-form.tsx의 되돌리기까지 실패한 경우. 그 파일 주석(52-56행)이
+  //       이미 이 막다른 골목을 그대로 적어 놓고 "관리자에게 알리세요"로 끝난다.
+  // 계보로 좁히면 (1)만 고치고 (2)는 죽은 채로 남는다.
+  //
+  // 단위 확인 화면으로 보내지 않는 이유: 이 상태의 스캔은 unit_scale이 이미 확정돼
+  // 있다(병합 점군은 1.0 = 미터, (2)는 확정 직후 실패한 것이다). confirm-unit은
+  // "파일 좌표가 m·cm·mm 중 무엇인지 확정하는 단계"라 이미 미터인 점군에는 틀린
+  // 안내이고, 거기서 mm를 고르면 멀쩡한 좌표가 1/1000로 망가진다.
+  //
+  // ★★ 재리뷰 Critical(C1-c): 여기서 isImport를 false로 **고정하면 안 된다.**
+  // 1차 수정은 "임포트 스캔은 이 상태에 존재할 수 없다"고 단정했는데 틀렸다.
+  // upload-form.tsx는 3)에서 status='ready'로 먼저 승격하고 4)에서야 analyses 행을
+  // 만든다(102행 vs 125행). 그 사이에 탭이 닫히거나 연결이 끊기면 정리 코드가 아예
+  // 실행되지 않고, discardScan조차 자신의 update 오류를 검사하지 않는다. 즉 임포트
+  // 스캔도 "ready + 평활도 행 0개"로 남을 수 있다. 그 스캔에 isImport=false를 주면
+  // Colab 결과 CSV에 'analyze' 잡이 걸려 Signed_Distance_mm이 통째로 무시되고 전 셀이
+  // 조용히 "적합"이 된다(reanalyze-button.tsx 21-33행이 적어 둔 C1 사고 그대로).
+  // 고치기 전에는 조용한 막다른 골목(안전)이었지만 그렇게 하면 조용한 오답이 된다.
+  //
+  // 판별자로 쓸 수 있는 것과 없는 것:
+  //   - lineage: 못 쓴다. 임포트는 'unknown'인데 그 값은 DB 기본값이자 사용자가 스캔
+  //     모드에서도 고를 수 있다(upload-form.tsx).
+  //   - file_format/확장자: 단독으로는 못 쓴다. 워커의 _IMPORT_HANDLERS는 .csv/.json
+  //     인데 SCAN_EXTS에도 'csv'가 있다(lib/upload/validate.ts) - csv는 양쪽이다.
+  //   - height_view_path: **한 방향으로 확실하다.** 이 값은 handle_precheck만 채우고
+  //     (worker/flatworker/jobs.py:155) 임포트는 precheck를 아예 돌지 않으므로,
+  //     값이 있으면 임포트가 아니다. 다만 **병합 스캔도 precheck를 돌지 않아 이 값이
+  //     없다**(handle_register는 이 필드를 건드리지 않는다) - 이것만 쓰면 병합 스캔이
+  //     막힌다.
+  //   - lineage==='registered': 시스템만 쓰는 값이고(types.ts) 워커가 만든 merged.ply라
+  //     역시 임포트가 아니다.
+  // 그래서 두 신호의 **합집합**을 쓴다. 둘 다 "임포트가 아님"을 한 방향으로 증명하는
+  // 신호이고, 어느 쪽도 아니면 판별 불가다.
+  //
+  // 판별 불가일 때는 버튼을 숨긴다 - 이 파일이 구배 버튼에서 이미 쓰는 정책과 같다
+  // (isImportUnknownOrTrue). 남는 사각은 "precheck는 돌았는데 높이 뷰 렌더가 실패해
+  // height_view_path가 비었고, 게다가 단위 확정까지 실패한" 스캔뿐이다. 그 경우는
+  // 고치기 전과 같은 막다른 골목으로 남는다 - 받아들인 트레이드오프다. 조용한
+  // 오답보다 조용한 막다른 골목이 낫다.
+  //
+  // truthy 검사인 이유는 unit-confirm-form.tsx와 같다: 010을 아직 적용하지 않은 DB에서는
+  // select('*')에 이 컬럼이 없어 undefined로 온다. `!== null`로 쓰면 그 DB의 모든
+  // 스캔이 "임포트가 아님"으로 잘못 증명된다.
+  const provenNotImport = s.lineage === 'registered' || !!s.height_view_path;
+  const showFirstFlatness = s.status === 'ready' && !latestFlatness && provenNotImport;
+
   return (
     <main className="mx-auto max-w-6xl space-y-4 p-6">
       <h1 className="text-xl font-bold">
@@ -98,6 +165,28 @@ export default async function ScanPage({ params }: { params: Promise<{ id: strin
         <dt className="text-slate-500">상태</dt><dd>{SCAN_STATUS_LABEL[s.status]}</dd>
         <dt className="text-slate-500">단위 배율</dt><dd>{s.unit_scale ?? '미확정'}</dd>
       </dl>
+      {s.lineage === 'registered' && (
+        <div className="rounded border border-amber-300 bg-amber-50 p-3 text-sm">
+          <p className="font-medium">두 스캔을 정합해 만든 병합 스캔입니다.</p>
+          <p className="mt-1 text-xs text-slate-700">
+            분석하기 전에 정합이 실제로 맞았는지 확인하세요. 정합 RMSE는 수직 방향만
+            보증하므로, 두 스캔이 수평으로 어긋나 있어도 수치는 정상으로 나옵니다.
+            정합 화면의 겹쳐보기가 그 방향을 확인하는 유일한 수단입니다.
+          </p>
+          {registrationId ? (
+            <Link href={`/registrations/${registrationId}`}
+              className="mt-2 inline-block rounded bg-blue-700 px-3 py-1.5 text-xs text-white">
+              정합 결과·겹쳐보기 확인
+            </Link>
+          ) : (
+            <p className="mt-1 text-xs text-slate-600">
+              이 스캔을 만든 정합 이력을 찾지 못했습니다(이력이 삭제됐거나 아직 반영되지
+              않았습니다). 겹쳐보기를 볼 수 없으므로 이 스캔의 분석 결과를 판단 근거로
+              쓸 때 주의하세요.
+            </p>
+          )}
+        </div>
+      )}
       {WATCHED_SCAN_STATUSES.has(s.status) && (
         <ScanStatusWatcher scanId={id} initialStatus={s.status} />
       )}
@@ -126,6 +215,31 @@ export default async function ScanPage({ params }: { params: Promise<{ id: strin
             워커 실행 창의 로그에 남습니다(3회 자동 재시도 후에도 실패한 상태입니다).
           </p>
         </div>
+      )}
+      {showFirstFlatness && (
+        <section className="space-y-2">
+          <div className="flex items-center justify-between">
+            <h2 className="font-semibold">{ANALYSIS_KIND_LABEL.flatness} 분석</h2>
+            {user && (
+              // latestStatus를 넘기지 않는다 - 이 종류의 분석이 한 번도 없었다는 뜻이므로
+              // ReanalyzeButton은 이를 "진행 중 아님"으로 보고 버튼을 활성 상태로 둔다
+              // (구배 첫 분석과 같은 취급). criteriaId는 스캔에 현재 적용된 기준이다;
+              // 병합 스캔은 이 값을 원본 A에서 물려받는다(worker의 _merged_scan_fields).
+              //
+              // isImport={false}는 가정이 아니라 provenNotImport가 증명한 값이다 - 이
+              // 섹션은 임포트가 아님이 증명된 스캔에서만 그려진다(위 주석). 이 게이트를
+              // 지우면 Colab CSV에 'analyze' 잡이 걸린다.
+              <ReanalyzeButton scanId={id} userId={user.id} surface={s.surface} kind="flatness"
+                criteriaId={s.selected_criteria_id ?? undefined}
+                isImport={false} />
+            )}
+          </div>
+          <p className="text-sm text-slate-600">
+            {s.lineage === 'registered'
+              ? '병합 점군은 이미 미터로 환산돼 있어 단위 확인 없이 바로 분석할 수 있습니다. 다만 정합이 실제로 맞았는지는 위 겹쳐보기로 먼저 확인하세요 - 분석은 어긋난 정합도 그대로 받아 수치를 냅니다.'
+              : '단위가 확정된 스캔인데 아직 분석이 없습니다. 위 버튼으로 첫 분석을 시작하세요.'}
+          </p>
+        </section>
       )}
       {latestFlatness && (
         <section className="space-y-2">

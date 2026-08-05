@@ -51,7 +51,10 @@ def test_surface_lineage_zone_labels_match_dashboard():
     surface = _extract_object(source, "SURFACE_LABEL")
     lineage = _extract_object(source, "LINEAGE_LABEL")
     zone = _extract_object(source, "ZONE_STATUS_LABEL")
-    assert (len(surface), len(lineage), len(zone)) == (2, 3, 3), "파싱 실패 의심"
+    # lineage는 011_register_enums.sql이 data_lineage에 'registered'를 더해 4개다
+    # (설계 결정 F9). 이 숫자가 세 곳(워커 report/labels.py · 대시보드
+    # lib/domain/labels.ts · types.ts)의 일관성을 강제하는 장치다.
+    assert (len(surface), len(lineage), len(zone)) == (2, 4, 3), "파싱 실패 의심"
     assert surface == SURFACE_LABEL
     assert lineage == LINEAGE_LABEL
     assert zone == ZONE_STATUS_LABEL

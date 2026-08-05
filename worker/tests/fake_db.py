@@ -37,6 +37,15 @@ max_attempts에 도달하면 'failed'로 종결, 그렇지 않으면
   jsonb_build_object(...)`) - Task 3(D8)이 남기는 judge.previous_drain_points를
   네 분기 모두 보존해야 한다. 클레임만 예외적으로 기존 'error' 키를 먼저
   지운다(004의 gen_error=null 클레임 관례와 동일).
+- type이 'register'이고 payload.registration_id가 있으면 연결된
+  registrations.status를 전이한다(012_register_support.sql, 세부과업 4 단계 F).
+  registrations는 **자기 상태 컬럼**이 있으므로 slope_judge 같은 우회 채널이
+  필요 없다(설계 결정 F10) - report 분기와 같은 모양이다: fn_job_claim은
+  'processing'(+error_text 초기화), fn_job_fail은 재시도 여지가 있으면
+  'queued'(+error_text)/소진이면 'failed'(+error_text), fn_reap_stuck_jobs는
+  status가 'processing'인 행만 골라 'queued'로 되돌린다. 세 분기 모두
+  updated_at을 함께 갱신한다. fn_job_complete는 registrations를 건드리지 않는다
+  (status='done'은 워커 핸들러가 결과 컬럼과 함께 직접 쓴다).
 """
 from datetime import datetime, timedelta, timezone
 from itertools import count
@@ -70,6 +79,7 @@ class FakeDB(DBClient):
         self.profiles = {}
         self.photos = {}            # photo_id -> photos 행
         self.photo_blobs = {}       # photos.file_path -> bytes (Storage 대체)
+        self.registrations = {}     # registration_id -> registrations 행 (단계 F)
 
     # -- 내부 헬퍼 -----------------------------------------------------------
     def _sync_linked_analysis_status(self, job, status):
@@ -115,6 +125,26 @@ class FakeDB(DBClient):
             return
         report["gen_status"] = status
         report["gen_error"] = error
+
+    def _sync_linked_registration_status(self, job, status, error=None):
+        """type='register' + payload.registration_id 잡의 registrations.status
+        부수효과 (012_register_support.sql, 세부과업 4 단계 F).
+
+        fn_job_claim/fn_job_fail SQL의 `elsif v_job.type = 'register' and
+        (v_job.payload ? 'registration_id') then update registrations set
+        status = ..., error_text = ..., updated_at = now()`를 그대로 옮긴 것 -
+        report 분기와 같은 모양이다(설계 결정 F10: 정합은 자기 테이블에 자기
+        상태 컬럼이 있어 우회 채널이 필요 없다). fn_job_complete는 호출하지
+        않는다(status='done'은 워커가 결과 컬럼과 함께 직접 쓴다).
+        """
+        if job["type"] != "register" or "registration_id" not in job["payload"]:
+            return
+        reg = self.registrations.get(job["payload"]["registration_id"])
+        if reg is None:
+            return
+        reg["status"] = status
+        reg["error_text"] = error
+        reg["updated_at"] = _now()
 
     def _sync_slope_judge_state(self, job, overlay, strip_error=False):
         """type='slope_judge' + payload.analysis_id 잡의 analyses.params.judge
@@ -209,6 +239,19 @@ class FakeDB(DBClient):
             judge = (analysis.get("params") or {}).get("judge") or {}
             if judge.get("state") == "processing":
                 self._sync_slope_judge_state(job, {"state": "queued", "at": _now().isoformat()})
+        # register: 고착 잡이 회수되면 정합 화면도 '대기 중'으로 되돌린다
+        # (012_register_support.sql의 fn_reap_stuck_jobs 마지막 UPDATE). 이 줄이
+        # 없으면 잡은 다시 큐에 들어갔는데 화면만 '정합 중...'에 영구히 남는다.
+        # error_text는 건드리지 않는다 - SQL도 status/updated_at만 쓴다.
+        for job in self.jobs.values():
+            if job["status"] != "queued" or job["type"] != "register":
+                continue
+            if "registration_id" not in job["payload"]:
+                continue
+            reg = self.registrations.get(job["payload"]["registration_id"])
+            if reg is not None and reg["status"] == "processing":
+                reg["status"] = "queued"
+                reg["updated_at"] = _now()
         return reaped_count
 
     def enqueue_job(self, type_, payload):
@@ -247,6 +290,7 @@ class FakeDB(DBClient):
         job["started_at"] = job["started_at"] or now
         self._sync_linked_analysis_status(job, "processing")
         self._sync_linked_report_status(job, "processing", None)
+        self._sync_linked_registration_status(job, "processing", None)
         self._sync_slope_judge_state(job, {"state": "processing", "at": now.isoformat()},
                                      strip_error=True)
         return dict(job)
@@ -267,6 +311,7 @@ class FakeDB(DBClient):
             self._sync_linked_analysis_status(job, "failed")
             self._sync_linked_scan_status_on_fail(job, "failed")
             self._sync_linked_report_status(job, "failed", error)
+            self._sync_linked_registration_status(job, "failed", error)
             self._sync_slope_judge_state(
                 job, {"state": "failed", "at": _now().isoformat(), "error": error})
         else:
@@ -275,6 +320,7 @@ class FakeDB(DBClient):
             self._sync_linked_analysis_status(job, "queued")
             self._sync_linked_scan_status_on_fail(job, "uploaded")
             self._sync_linked_report_status(job, "queued", error)
+            self._sync_linked_registration_status(job, "queued", error)
             self._sync_slope_judge_state(
                 job, {"state": "queued", "at": _now().isoformat(), "error": error})
         job["locked_at"] = None
@@ -296,6 +342,27 @@ class FakeDB(DBClient):
     # -- 갱신 -----------------------------------------------------------
     def update_scan(self, scan_id, fields):
         self.scans[scan_id].update(fields)
+
+    def upsert_scan(self, fields):
+        """PostgREST `Prefer: resolution=merge-duplicates` 시맨틱 - 기본키(id)가 이미
+        있으면 새 행을 만들지 않고 주어진 컬럼만 덮어쓴다.
+
+        호출자가 id를 정해서 넘긴다(정합 병합 스캔은 정합 id에서 결정적으로 유도한다)
+        - 그래야 잡 재시도가 같은 행을 다시 쓸 뿐 고아 스캔을 만들지 않는다.
+        """
+        scan_id = fields["id"]
+        row = self.scans.get(scan_id, {})
+        self.scans[scan_id] = {**row, **fields}
+        return scan_id
+
+    # -- 정합 (단계 F) ---------------------------------------------------
+    def get_registration(self, registration_id):
+        return self.registrations[registration_id]
+
+    def update_registration(self, registration_id, fields):
+        # SupabaseRest와 동일하게 updated_at을 함께 갱신한다(012는 트리거를 두지
+        # 않고 쓰는 쪽이 채우는 관례다).
+        self.registrations[registration_id].update({**fields, "updated_at": _now()})
 
     def insert_analysis(self, fields):
         analysis_id = str(uuid4())

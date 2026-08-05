@@ -12,6 +12,7 @@ RPC 함수 시그니처는 `supabase/migrations/002_functions_seed.sql`(실제 �
 """
 import time
 from abc import ABC
+from datetime import datetime, timezone
 
 import httpx
 
@@ -113,8 +114,27 @@ class DBClient(ABC):
     def update_scan(self, scan_id, fields):
         raise NotImplementedError
 
+    def upsert_scan(self, fields):
+        """`fields['id']`를 기본키로 scans 행을 **upsert** 하고 그 id(str)를 반환.
+
+        정합 병합 스캔(단계 F)이 유일한 호출부다 - 평소 scans 행은 대시보드가
+        업로드 시 만든다. 삽입이 아니라 upsert인 이유는 잡 재시도 멱등성이다
+        (`registration.merged_scan_id` 독스트링 참고): 결과 PATCH가 실패해 핸들러가
+        재실행되면 같은 id로 다시 들어와 **같은 행 하나**를 갱신해야 하고, 새 행이
+        생기면 고아 병합 스캔이 쌓인다.
+        """
+        raise NotImplementedError
+
     def insert_analysis(self, fields):
         """새 analyses 행을 만들고 생성된 id(str)를 반환."""
+        raise NotImplementedError
+
+    # -- 정합 (단계 F) ---------------------------------------------------
+    def get_registration(self, registration_id):
+        """registrations 행 1개 (012_register_support.sql)."""
+        raise NotImplementedError
+
+    def update_registration(self, registration_id, fields):
         raise NotImplementedError
 
     def update_analysis(self, analysis_id, fields):
@@ -282,6 +302,30 @@ class SupabaseRest(DBClient):
     # -- 갱신 -----------------------------------------------------------
     def update_scan(self, scan_id, fields):
         self._patch("scans", scan_id, fields)
+
+    def upsert_scan(self, fields):
+        # `resolution=merge-duplicates`가 PostgREST의 upsert다 - 기본키(id)가 이미
+        # 있으면 INSERT 대신 UPDATE 한다. 이것이 없으면 재시도 두 번째부터
+        # 23505(duplicate key)로 죽어, 고아 스캔을 막는 대신 잡을 못 끝내게 된다.
+        resp = self._client.post(
+            "/rest/v1/scans",
+            json=fields,
+            headers={"Prefer": "resolution=merge-duplicates,return=representation"},
+        )
+        self._raise_for_status(resp)
+        return resp.json()[0]["id"]
+
+    # -- 정합 (단계 F) ---------------------------------------------------
+    def get_registration(self, registration_id):
+        return self._select_one("registrations", registration_id)
+
+    def update_registration(self, registration_id, fields):
+        # updated_at은 트리거가 없으므로 쓰는 쪽이 채운다(012의 잡 큐 함수 3종과
+        # 같은 관례). 워커가 상태를 바꿔 놓고 시각을 안 남기면 화면의 "마지막
+        # 갱신"이 잡 큐가 건드린 시점에서 멈춘다. 문자열 'now()'는 timestamptz
+        # 리터럴이 아니므로(22007) ISO-8601 값을 직접 넣는다.
+        self._patch("registrations", registration_id,
+                    {**fields, "updated_at": datetime.now(timezone.utc).isoformat()})
 
     def insert_analysis(self, fields):
         resp = self._client.post(

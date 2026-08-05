@@ -30,6 +30,9 @@ function stubSupabase(
     scansUpdate?: (fields: unknown) => void;
     analysesUpdate?: (fields: unknown) => void;
     analysesInsert?: (fields: unknown) => void;
+    /** discardScan의 soft delete(update에 deleted_at이 실린 호출)만 실패시킨다.
+     *  3)의 raw_file_path 반영 update는 그대로 성공해야 그 뒤 경로에 닿는다. */
+    softDeleteError?: { message: string };
   } = {},
 ) {
   return {
@@ -39,7 +42,12 @@ function stubSupabase(
           insert: () => ({ select: () => ({ single: async () => ({ data: { id: 'scan1' }, error: null }) }) }),
           update: (fields: unknown) => {
             spies.scansUpdate?.(fields);
-            return { eq: async () => ({ error: null }) };
+            const isSoftDelete = !!(fields as { deleted_at?: string }).deleted_at;
+            return {
+              eq: async () => ({
+                error: isSoftDelete ? spies.softDeleteError ?? null : null,
+              }),
+            };
           },
         };
       }
@@ -148,6 +156,29 @@ describe('UploadForm 엔큐 실패 처리 (리뷰 Important #1)', () => {
       expect.objectContaining({ deleted_at: expect.any(String) }));
     expect(scansUpdate).toHaveBeenLastCalledWith(
       expect.objectContaining({ deleted_at: expect.any(String) }));
+  });
+
+  // ★ 재리뷰: 정리(soft delete)까지 실패하면 스캔이 status='ready' + analyses 0행으로
+  // 남는다(임포트 모드는 3)에서 이미 ready로 승격했다). 예전에는 이 update의 오류를
+  // 검사하지 않고 "등록되지 않았습니다"라고 단언해, 사용자가 남은 스캔을 모른 채
+  // 떠났다. 그 남은 스캔이 바로 스캔 상세의 분석 진입점이 임포트인지 판별해야 하는
+  // 대상이다 - 실패를 삼키면 안 된다.
+  it('임포트 모드: 스캔 정리까지 실패하면 "등록되지 않았다"고 말하지 않고 사실대로 알린다', async () => {
+    vi.mocked(createClient).mockReturnValue(
+      stubSupabase({ code: '23505', message: 'dup' },
+        { softDeleteError: { message: '연결이 끊겼습니다' } }) as never);
+    const { container } = render(<UploadForm sites={[site]} locations={[location]} userId="u1" />);
+    fireEvent.click(screen.getByLabelText('기존 결과 가져오기(CSV/JSON)'));
+    await selectSiteAndLocation();
+    fireEvent.change(screen.getByLabelText(/결과 파일 \(csv\/json\)/), {
+      target: { files: [new File(['x'], 'result.csv')] } });
+    fireEvent.submit(container.querySelector('form')!);
+
+    expect(await screen.findByText(/정리하지도 못했습니다/)).toBeInTheDocument();
+    expect(screen.getByText(/연결이 끊겼습니다/)).toBeInTheDocument();
+    expect(screen.getByText(/관리자에게 알리세요/)).toBeInTheDocument();
+    // 거짓 안심을 주면 안 된다 - 스캔은 실제로 남아 있다.
+    expect(screen.queryByText(/업로드한 스캔은 등록되지 않았습니다/)).toBeNull();
   });
 });
 

@@ -443,7 +443,7 @@
   이 파일에서 미이행 항목을 뽑아 발주처 제출 문서에 반영하므로, 실제로
   아직 남아 있는 결함만 여기 남긴다
 
-81. **엔진이 만드는 `slope_map.png`에는 배수구 마커가 없다** —
+81. [해결: 커밋 `3bf3b8f`] **엔진이 만드는 `slope_map.png`에는 배수구 마커가 없다** —
     `render_slope_map(graded, out_path, cell_m=2.0)`
     (`engine/flatness/outputs/slope_map.py`의 함수 시그니처)에 `drain_points`
     인자 자체가 없어 배수구 위치를 그릴 방법이 없다. 대시보드 Canvas 화면

@@ -20,7 +20,12 @@ GRADE_COLOR = {
 
 SURFACE_LABEL = {"floor": "바닥", "wall": "벽면"}
 
-LINEAGE_LABEL = {"raw": "원시 점군", "fused_mesh": "융합 메시", "unknown": "모름"}
+LINEAGE_LABEL = {"raw": "원시 점군", "fused_mesh": "융합 메시", "unknown": "모름",
+                 # 011이 data_lineage에 더한 값(설계 결정 F9). 'fused_mesh'를
+                 # 재사용하지 않는 이유가 라벨에도 그대로 있다 - "융합 메시"는
+                 # 스캐너 앱이 스무딩한 데이터를 가리키는 말이고, 정합 병합은
+                 # 원시 점군 두 개의 서브셀 중앙값이라 그 서술이 거짓이 된다.
+                 "registered": "정합 병합"}
 
 ZONE_STATUS_LABEL = {"ok": "정상", "ghost": "유령층(제외)", "furniture": "가구 추정(제외)"}
 
