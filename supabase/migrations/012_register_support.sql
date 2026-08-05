@@ -5,9 +5,14 @@
 --       011_register_enums.sql(job_type에 'register', data_lineage에 'registered')
 --       009는 건너뛰어도 된다 - 012가 009의 함수 정의를 상위집합으로 포함한다.
 --
--- ⚠ 011과 012는 반드시 두 번 나눠 Run 한다 - 같은 트랜잭션에 넣으면 PostgreSQL이
---    새 enum 값의 사용을 "unsafe use of new value"로 막는다(Supabase SQL Editor는
---    파일 전체를 한 트랜잭션으로 실행한다). 008/009 선례와 같은 이유다.
+-- ⚠ 011과 012는 두 번 나눠 Run 한다(008/009 선례와 같은 절차).
+--    **근거를 정확히 적는다: 지금의 012는 "unsafe use of new value"에 실제로 걸리지
+--    않는다** - 실측하면 011+012를 한 트랜잭션으로 실행해도 성공한다(PostgreSQL 16
+--    확인). 012가 새 enum 값을 top-level SQL에서 쓰지 않기 때문이다(가드는 enumlabel
+--    문자열 비교, jobs_dedup은 type 컬럼만 참조, 새 값의 실제 사용은 전부 plpgsql
+--    본문 안). 그래도 나누는 이유는 (1) 008/009 선례이고 (2) 앞으로 이 파일에 본문
+--    밖에서 새 값을 쓰는 문장이 하나라도 늘면 합쳐진 파일이 그 순간 막히기 때문이다.
+--    자세한 설명은 011_register_enums.sql 헤더 참고.
 --
 -- **011 없이 이 파일만 Run 하면 "Success"가 뜬다 - 이것이 함정이다.** plpgsql
 -- 함수 본문 안의 SQL은 CREATE 시점에는 파싱만 되고 *계획*은 첫 실행 시점에야
@@ -38,15 +43,24 @@
 -- job_type/data_lineage 값을 *사용*(캐스팅·비교)하는 게 아니라 pg_enum 카탈로그에서
 -- 라벨 문자열(text)의 존재만 확인하는 것이므로 "unsafe use of new value" 제약에
 -- 걸리지 않는다 - 그래도 이 파일은 여전히 011과 별도로 Run 하는 것이 정본이다.
+--
+-- ★ 타입 특정은 반드시 `enumtypid = '<타입>'::regtype`으로 한다(009:78의 형태).
+--    `pg_type.typname = '<타입>'`으로 조인하면 **스키마를 좁히지 않아** 다른
+--    스키마에 같은 이름의 enum이 있기만 해도 가드가 **거짓 통과**한다 - 실측으로
+--    재현된다(`create schema other; create type other.job_type as enum('register')`
+--    만 있으면 public.job_type에 register가 없는데도 이 파일이 Success로 끝나고,
+--    그 뒤 fn_job_claim 첫 호출이 잡 큐 전체를 세운다). 가드는 거짓 통과가 위험한
+--    방향이므로, 이 파일이 실제로 쓰는 타입(search_path가 가리키는 그 타입)과
+--    **같은 방식으로 해석되는** regtype 캐스팅을 쓴다.
 -- -----------------------------------------------------------------------------
 do $$
 begin
-  if not exists (select 1 from pg_enum e join pg_type t on t.oid = e.enumtypid
-                 where t.typname = 'job_type' and e.enumlabel = 'register') then
+  if not exists (select 1 from pg_enum
+                  where enumtypid = 'job_type'::regtype and enumlabel = 'register') then
     raise exception '011_register_enums.sql을 먼저 실행하세요 (job_type에 register 값이 없습니다).';
   end if;
-  if not exists (select 1 from pg_enum e join pg_type t on t.oid = e.enumtypid
-                 where t.typname = 'data_lineage' and e.enumlabel = 'registered') then
+  if not exists (select 1 from pg_enum
+                  where enumtypid = 'data_lineage'::regtype and enumlabel = 'registered') then
     raise exception '011_register_enums.sql을 먼저 실행하세요 (data_lineage에 registered 값이 없습니다).';
   end if;
   -- ★ 008도 전제한다. 아래 (5)의 함수 3종은 009의 본문을 그대로 물려받으므로
@@ -58,8 +72,8 @@ begin
   --    전체가 멎는다(register 잡뿐 아니라 precheck·analyze·import·report까지 전부).
   --    008은 `add value if not exists` 한 줄이라 재판정을 안 쓰더라도 적용 비용이
   --    사실상 없다. 009는 012가 상위집합이므로 건너뛰어도 된다.
-  if not exists (select 1 from pg_enum e join pg_type t on t.oid = e.enumtypid
-                 where t.typname = 'job_type' and e.enumlabel = 'slope_judge') then
+  if not exists (select 1 from pg_enum
+                  where enumtypid = 'job_type'::regtype and enumlabel = 'slope_judge') then
     raise exception '008_slope_judge_enum.sql을 먼저 실행하세요 (job_type에 slope_judge 값이 없습니다 - 012의 잡 큐 함수는 009의 slope_judge 분기를 그대로 포함합니다).';
   end if;
 end $$;

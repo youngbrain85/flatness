@@ -1,10 +1,23 @@
 -- 011: register 잡 타입 + registered lineage (세부과업 4 단계 F)
 --
--- ⚠ 이 파일에는 enum 추가 두 문장만 둔다. PostgreSQL은 같은 트랜잭션 안에서
---    새 enum 값을 *사용*하는 것을 막는다(unsafe use of new value). Supabase SQL
---    Editor가 파일 전체를 한 트랜잭션으로 실행하므로, 이 값들을 쓰는 테이블·함수는
---    012에 있다. **011을 Run 한 뒤 012를 별도로 Run 해야 한다.**
+-- ⚠ 이 파일에는 enum 추가 두 문장만 둔다. **011을 Run 한 뒤 012를 별도로 Run
+--    한다**(008/009 선례와 같은 절차).
 --    (두 문장이 함께 있는 것은 안전하다 - 서로를 사용하지 않는다.)
+--
+--    근거를 정확히 적는다. PostgreSQL이 같은 트랜잭션 안에서 새 enum 값을
+--    *사용*하는 것을 막는 것(unsafe use of new value)은 사실이고 Supabase SQL
+--    Editor가 파일 전체를 한 트랜잭션으로 실행하는 것도 사실이다. 다만 **지금의
+--    012는 그 제약에 실제로 걸리지 않는다** - 실측하면 011+012를 한 트랜잭션으로
+--    실행해도 성공한다(PostgreSQL 16 확인). 012가 새 값을 top-level SQL에서 쓰지
+--    않기 때문이다: 카탈로그 가드는 `enumlabel` **문자열** 비교이고, jobs_dedup은
+--    `type` 컬럼만 참조하며, `'register'`·`'registered'`의 실제 사용은 전부
+--    plpgsql 함수 **본문 안**이라 첫 실행 시점에야 계획된다.
+--    그런데도 나누는 이유 둘:
+--      1. 008/009가 세운 선례이고 사용자가 이미 그 절차를 수행해 왔다.
+--      2. 앞으로 012에 본문 밖에서 새 값을 쓰는 문장이 하나라도 늘면(예:
+--         `where type = 'register'`인 인덱스·뷰·체크 제약, 시드 INSERT) 그 순간
+--         합쳐진 파일이 "unsafe use of new value"로 막힌다. 나눠 두면 그 변경이
+--         공짜다.
 --
 -- 재실행 안전(멱등) - add value if not exists.
 alter type job_type add value if not exists 'register';
