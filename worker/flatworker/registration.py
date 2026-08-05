@@ -10,16 +10,18 @@
 1. **`grid_to_points`의 z는 절대 높이가 아니다.** `build_subcell_grid`가 median_z를
    `bbox_min[2]` 상대 높이로 저장하므로, 두 스캔의 bbox가 다르면 오프셋도 서로
    다르다. `load_source_points`가 각 격자의 오프셋을 되돌려 공통 기준으로 맞춘다.
-2. **대응점은 파일 단위 월드 좌표다**(설계 결정 F7). `align_sources`가 각 소스의
-   `scans.unit_scale`을 곱해 미터로 맞춘다. 두 소스의 배율이 서로 다를 수 있으므로
-   각각 자기 배율을 쓴다.
+2. **대응점은 파일 단위 월드 좌표다**(설계 결정 F7). `prepare_correspondences`가
+   각 소스의 `scans.unit_scale`을 곱해 미터로 맞춘다 — **한 곳에서만** 한다.
+   두 소스의 배율이 서로 다를 수 있으므로 각각 자기 배율을 쓴다. 이 함수 뒤로는
+   모든 대응점이 미터라고 가정해도 된다.
 3. **두 소스를 순차로 처리한다**(설계 결정 F3). `build_subcell_grid`의 정렬 버퍼가
    점당 12B라, 두 개를 동시에 들면 실측 피크 1.31GiB 위에 겹쳐 쌓여 2GiB 게이트를
    넘긴다. `load_source_points`는 격자를 만들어 점을 뽑은 뒤 **격자를 즉시 버린다**.
 """
 import numpy as np
 
-from flatness.core.registration import grid_to_points, register_clouds
+from flatness.core.registration import (check_correspondence_geometry, grid_to_points,
+                                        register_clouds)
 from flatness.core.subcell import build_subcell_grid
 from flatness.io.reader import CloudInfo, iter_chunks, read_info
 
@@ -58,6 +60,56 @@ def correspondence_arrays(rows):
     return np.array(a, dtype=np.float64), np.array(b, dtype=np.float64)
 
 
+def to_metres(corr, unit_scale):
+    """파일 단위 대응점 (N,3) -> 미터 (N,3).
+
+    `scans.unit_scale`은 "파일 좌표 1당 몇 미터인가"다. 이 환산이 이 모듈에서
+    일어나는 **유일한 지점**이다(모듈 독스트링 계약 2).
+    """
+    if unit_scale is None:
+        raise ValueError(
+            "스캔의 단위가 확정되지 않아 정합할 수 없습니다. 업로드 화면에서 단위를 먼저 확인하세요.")
+    return np.asarray(corr, dtype=np.float64) * float(unit_scale)
+
+
+def prepare_correspondences(rows, unit_scale_a, unit_scale_b):
+    """`registrations.correspondences` -> **미터**로 환산·검증된 (A쪽, B쪽) 배열.
+
+    형식(`correspondence_arrays`)·단위(`to_metres`)·기하(`check_correspondence_geometry`)
+    를 한 자리에서 전부 본다. 실패는 전부 한국어 `ValueError`다.
+
+    ★ **원본 파일을 내려받기 전에 부른다.** 여기서 걸리는 것은 전부 "사용자가
+    화면에서 즉시 고칠 수 있는" 종류다(대응점을 다시 찍으면 된다). 그런데 예전
+    순서는 A·B 두 원본을 내려받아 격자화까지 끝낸 **뒤에야** 기하 검사를 만나서,
+    사용자가 사유를 보기까지 무거운 잡을 최대 3회(재시도 포함) 기다려야 했다.
+    대응점이 그대로면 세 번 다 같은 결과라 순수 낭비다.
+
+    ★ **기하 검사는 미터를 전제한다.** 임계가 클릭 오차(±5cm)라는 물리량이기
+    때문이다. 환산 전 파일 좌표로 재면 mm 파일에서 값이 1000배로 부풀어
+    **한곳에 몰린 대응점이 그대로 통과한다** - 실측: 3cm 안에 몰린 4점을 미터로
+    재면 회전 불확도 165도(거부)인데 mm 좌표로 재면 0.2도(통과)다. 게이트가
+    mm 파일에서만 조용히 사라지는 셈이다.
+
+    ★ **여기서 도는 것은 엔진 게이트 둘 중 하나뿐이다**(`region_diag_m=0.0`).
+    엔진의 `check_correspondence_geometry`는 (1) 회전 불확도(공선·밀집)와
+    (2) 정합 영역 대비 퍼짐을 본다. (2)는 **점군의 xy 범위를 알아야** 판정할 수
+    있어서 파일을 읽기 전에는 원리적으로 불가능하다 - 그래서 0을 넘겨 건너뛰고,
+    `register_clouds`가 점군을 받은 뒤 자기 안에서 두 게이트를 모두 다시 본다.
+    (1)은 대응점만으로 판정되므로 여기서 미리 거른다. 실제로 사용자가 가장 흔히
+    저지르는 "한곳에 몰아 찍기"가 (1)에 걸리므로 조기 거절의 값어치가 크다.
+    """
+    corr_a, corr_b = correspondence_arrays(rows)
+    corr_a = to_metres(corr_a, unit_scale_a)
+    corr_b = to_metres(corr_b, unit_scale_b)
+    # 인자를 키워드로 넘긴다 - 엔진 시그니처가 (pts, region_diag_m, what)으로
+    # 바뀐 전례가 있어 위치 인자로 넘기면 사유 문구가 조용히 임계 자리로 들어간다.
+    check_correspondence_geometry(corr_a, region_diag_m=0.0,
+                                  what="첫 번째 스캔에서 찍은 대응점")
+    check_correspondence_geometry(corr_b, region_diag_m=0.0,
+                                  what="두 번째 스캔에서 찍은 대응점")
+    return corr_a, corr_b
+
+
 def load_source_points(path, unit_scale, subcell_m=SUBCELL_M):
     """원본 스캔 파일 하나 -> **미터·절대 z**의 서브셀 중앙값 점군 (M,3).
 
@@ -87,17 +139,14 @@ def load_source_points(path, unit_scale, subcell_m=SUBCELL_M):
     return pts
 
 
-def align_sources(pts_src, pts_dst, corr_src, corr_dst, scale_src, scale_dst):
-    """대응점을 각 소스의 `unit_scale`로 미터 환산한 뒤 정합한다.
+def align_sources(pts_src, pts_dst, corr_src_m, corr_dst_m):
+    """정합 실행 이음매. **대응점은 이미 미터여야 한다**(`prepare_correspondences`
+    가 환산·검증을 끝내 놓는다는 선행 조건).
 
-    ★ 화면이 저장한 대응점은 **파일 단위 월드 좌표**다(설계 결정 F7). 점군은
-    `load_source_points`가 이미 미터로 환산했으므로, 대응점만 그대로 넘기면
-    mm 파일에서 1000배 틀린다. 두 소스의 `unit_scale`이 서로 다를 수도 있으므로
-    각각 자기 배율을 쓴다.
+    점군도 `load_source_points`가 미터로 만들어 둔다 - 이 함수 안팎으로 파일
+    단위 좌표가 흘러다니지 않는 것이 계약이다(설계 결정 F7).
     """
-    return register_clouds(pts_src, pts_dst,
-                           np.asarray(corr_src, dtype=np.float64) * float(scale_src),
-                           np.asarray(corr_dst, dtype=np.float64) * float(scale_dst))
+    return register_clouds(pts_src, pts_dst, corr_src_m, corr_dst_m)
 
 
 def apply_transform(pts, transform):

@@ -309,8 +309,8 @@ surface_type)` 함수를 drop 후 3인자 시그니처로 재생성하므로 001
     건너뛰면 `Success` 대신 한국어 오류가 즉시 뜬다 - 무엇을 먼저 실행해야 하는지
     오류 문구가 그대로 알려준다. 적용되는 내용:
     - `registrations` 테이블(007이 이미 만들어 둔 정합 이력 테이블)에
-      `overlap_ratio`(중첩 비율)·`updated_at` 컬럼 추가, `correspondences`
-      기본값 `'[]'`
+      `overlap_ratio`(중첩 비율)·`horizontal_sensitivity`(수평 감도)·`updated_at`
+      컬럼 추가, `correspondences` 기본값 `'[]'`
     - Realtime publication에 `registrations` 추가(정합 진행 상태 자동 갱신)
     - **`jobs_dedup` 부분 유니크 인덱스 재정의** - 중복 방지 키에
       `payload->>'registration_id'`를 더한다
@@ -334,7 +334,7 @@ surface_type)` 함수를 drop 후 3인자 시그니처로 재생성하므로 001
     -- (b) 중복 방지 인덱스가 재정의됐는지
     select indexdef from pg_indexes where indexname = 'jobs_dedup';
     -- (c) 테이블 컬럼이 실제로 추가됐는지
-    select overlap_ratio, updated_at from registrations limit 1;
+    select overlap_ratio, horizontal_sensitivity, updated_at from registrations limit 1;
     ```
 
     (a)는 `fn_job_claim`·`fn_job_fail`·`fn_reap_stuck_jobs` **3행**이 나와야 한다
@@ -362,7 +362,8 @@ surface_type)` 함수를 drop 후 3인자 시그니처로 재생성하므로 001
     > 필요하면 **003 → 004 → 009 → 012** 순서로 다시 실행한다.
 
     > **[필수] 배포 순서 경고 - 012를 워커보다 먼저 적용한다.** 단계 F 워커의
-    > `handle_register`는 `overlap_ratio`를 포함한 정합 결과를 `registrations`에
+    > `handle_register`는 `overlap_ratio`·`horizontal_sensitivity`를 포함한 정합
+    > 결과를 `registrations`에
     > PATCH한다. 012 미적용 DB에 이 코드가 담긴 워커를 먼저 배포하면 그 컬럼이 없어
     > PATCH가 `42703`(undefined_column)으로 실패한다 - 007·010을 워커보다 늦게
     > 배포했을 때와 같은 실패 양식이다(위 7·10번 경고 참고). **다만 010의

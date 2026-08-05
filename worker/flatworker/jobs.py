@@ -514,6 +514,41 @@ def _merged_scan_fields(source_scan, registration_id, merged):
     }
 
 
+def _finite_or_none(value):
+    """PostgREST는 JSON에 NaN/Infinity를 실을 수 없다(표준 JSON에 없는 토큰이라
+    `json.dumps`가 `NaN`을 내면 PostgREST가 400으로 거절한다). 유한하지 않은
+    엔진 관측치는 NULL로 보낸다 - 컬럼 자체를 비우는 편이 "0.0"처럼 읽히는
+    가짜 값을 남기는 것보다 정직하다."""
+    v = float(value)
+    return v if math.isfinite(v) else None
+
+
+def _registration_metrics(result):
+    """`RegistrationResult` -> registrations 테이블에 남길 관측치 dict.
+
+    성공·실패 **양쪽에서 같은 값을 남긴다.** 실패했을 때야말로 "왜 못 믿는지"의
+    근거가 필요하고, 성공했을 때도 `horizontal_sensitivity`는 그 성공을 어디까지
+    믿어도 되는지를 말해 준다.
+
+    ★ `horizontal_sensitivity`(엔진 커밋 c4ba9e1): 정합을 수평으로 ±10cm 밀었을
+    때 point-to-plane 잔차가 오르는 비의 최솟값이다. 1.0에 가까우면 그 장면은
+    수평 방향으로 **검증 불가**다 - 완전 평면에서는 대응점을 통째로 3m 틀리게
+    찍어도 `rmse_m`이 1.008mm로 게이트 안에 들어오고 기하 검사·발산 가드까지
+    전부 침묵한다(실측). 그때 신호를 내는 것은 이 값 하나뿐이라(0.994),
+    저장하지 않으면 화면이 경고할 근거를 아예 갖지 못한다.
+
+    `rmse_m`은 미터, DB 컬럼은 mm다 - 워커가 *1000한다. 이 환산을 빠뜨리면
+    화면이 0.0018mm 같은 값을 보여주며 **항상 합격으로 읽힌다**(조용한 실패).
+    """
+    rmse_mm = _finite_or_none(result.rmse_m)
+    return {
+        "rmse_mm": None if rmse_mm is None else rmse_mm * 1000.0,
+        "iterations": result.iterations,
+        "overlap_ratio": _finite_or_none(result.overlap_ratio),
+        "horizontal_sensitivity": _finite_or_none(result.horizontal_sensitivity),
+    }
+
+
 def handle_register(db, cfg, payload):
     """정합 잡 (세부과업 4 단계 F) — 두 스캔을 대응점으로 정합해 병합 스캔 하나를
     만든다. payload는 `{"registration_id": "<uuid>"}`.
@@ -524,18 +559,23 @@ def handle_register(db, cfg, payload):
 
     **실패를 두 갈래로 나눈다.**
 
-    (1) 정합 자체의 실패(중첩 부족·RMSE 초과처럼 `RegistrationResult.converged`가
-        거짓인 경우)는 `registrations.status='failed'` + `error_text`로 끝내고
-        **예외를 올리지 않는다.** 두 가지 이유다 -
+    (1) **사용자가 화면에서 고칠 수 있는 실패**는 `registrations.status='failed'` +
+        `error_text`로 끝내고 **예외를 올리지 않는다.** 대응점 문제(형식·단위
+        미확정·공선/밀집)와 정합 실패(중첩 부족·RMSE 초과)가 여기 든다.
+        두 가지 이유다 -
         - `jobs` 테이블은 RLS 정책이 0개라 대시보드가 못 읽는다(설계 결정 F10).
           사유는 반드시 registrations에 있어야 화면이 보여줄 수 있다.
         - 같은 입력으로 다시 돌려도 결과가 같다. 예외로 올리면 fn_job_fail이
           10초·20초 뒤 **무거운 잡을 두 번 더** 돌리고, 그동안 화면은
           '정합 중'으로 되돌아갔다가 실패한다(사용자가 사유를 못 본다).
-    (2) 그 밖의 오류(원본 파일 없음, 단위 미확정, 대응점 형식 오류, 업로드 실패
-        등)는 예외를 그대로 올린다 - analyze/import/report와 같은 규약이며,
-        012의 fn_job_fail register 분기가 재시도·최종 실패를 registrations에
-        반영한다(재시도로 회복될 여지가 있는 종류다).
+    (2) 그 밖의 오류(원본 파일 없음, 업로드 실패, 저장소 장애 등)는 예외를 그대로
+        올린다 - analyze/import/report와 같은 규약이며, 012의 fn_job_fail
+        register 분기가 재시도·최종 실패를 registrations에 반영한다(재시도로
+        회복될 여지가 있는 종류다).
+
+    **대응점 검사는 원본을 내려받기 전에 한다.** 순서가 계약이다 - 뒤에 두면
+    "대응점이 한곳에 몰렸다"는 즉시 고칠 수 있는 사유를 보기까지 A·B 두 원본을
+    내려받아 격자화하는 무거운 잡을 최대 3회 기다려야 한다.
 
     병합 스캔은 정합이 성공했을 때만 만든다 - 쓰레기 스캔이 목록에 남으면 안 된다.
     원본 두 스캔은 읽기만 하고 건드리지 않는다(스펙 §6.3).
@@ -547,11 +587,22 @@ def handle_register(db, cfg, payload):
     if len(scan_ids) != 2:
         # 3개 이상 다중 정합은 단계 F 범위 밖이다(계획서 "범위 밖").
         raise ValueError(f"정합은 스캔 2개만 지원합니다(현재 {len(scan_ids)}개).")
-    corr_a, corr_b = registration.correspondence_arrays(reg.get("correspondences"))
 
     scan_a = db.get_scan(scan_ids[0])
     scan_b = db.get_scan(scan_ids[1])
     db.update_registration(registration_id, {"status": "processing", "error_text": None})
+
+    # ★ 파일을 내려받기 **전에** 대응점부터 본다(형식·단위·기하). 여기서 걸리는
+    #   것은 전부 사용자가 화면에서 즉시 고칠 수 있는 종류라, 재시도로 태우지 않고
+    #   곧장 failed로 끝낸다. except가 ValueError로 한정된 것은 이 블록이
+    #   prepare_correspondences 하나만 담고 있고 그 함수의 모든 거부가 한국어
+    #   ValueError이기 때문이다(다른 예외는 버그이므로 그대로 올라가야 한다).
+    try:
+        corr_a, corr_b = registration.prepare_correspondences(
+            reg.get("correspondences"), scan_a.get("unit_scale"), scan_b.get("unit_scale"))
+    except ValueError as e:
+        db.update_registration(registration_id, {"status": "failed", "error_text": str(e)})
+        return
 
     storage = get_storage(cfg, db)
     with staging_dir() as work:
@@ -565,21 +616,25 @@ def handle_register(db, cfg, payload):
         pts_b = registration.load_source_points(
             _fetch_raw(storage, scan_b, work / "b"), scan_b.get("unit_scale"))
 
-        # B를 A에 맞춘다(A가 기준). 대응점의 단위 환산은 align_sources가 한다.
-        result = registration.align_sources(
-            pts_b, pts_a, corr_b, corr_a,
-            scan_b.get("unit_scale"), scan_a.get("unit_scale"))
+        # B를 A에 맞춘다(A가 기준). 대응점은 위에서 이미 미터로 환산·검증됐다.
+        try:
+            result = registration.align_sources(pts_b, pts_a, corr_b, corr_a)
+        except ValueError as e:
+            # 점군을 받아야만 판정할 수 있는 대응점 기하(정합 영역 대비 퍼짐 -
+            # 영역 대각을 알아야 한다)가 여기서 나온다. 위 조기 검사와 성격이
+            # 같으므로 같게 다룬다: 사용자가 즉시 고칠 수 있고 재시도해도 결과가
+            # 같으니 failed로 끝낸다. 파일 읽기는 이미 끝났지만 **재시도 2회는
+            # 아낀다.**
+            db.update_registration(registration_id, {
+                "status": "failed", "error_text": str(e)})
+            return
         if not result.converged:
             db.update_registration(registration_id, {
                 "status": "failed",
                 "error_text": result.failure_reason or "정합에 실패했습니다.",
                 # 실패해도 관측치는 남긴다 - 화면이 "왜 실패했나"를 수치로 보여줄 수
                 # 있어야 사용자가 대응점을 다시 찍을지 스캔을 다시 뜰지 판단한다.
-                # 대응이 3쌍 미만이면 엔진이 NaN을 내므로 그때는 비워 둔다.
-                "rmse_mm": (result.rmse_m * 1000.0
-                            if math.isfinite(result.rmse_m) else None),
-                "overlap_ratio": result.overlap_ratio,
-                "iterations": result.iterations,
+                **_registration_metrics(result),
             })
             return
 
@@ -594,11 +649,7 @@ def handle_register(db, cfg, payload):
 
     db.update_registration(registration_id, {
         "transform": registration.transform_to_json(result.transform),
-        # 엔진은 미터(rmse_m), DB 컬럼은 mm다. 이 환산을 빠뜨리면 화면이
-        # 0.0018mm 같은 값을 보여주며 **항상 합격으로 읽힌다**(조용한 실패).
-        "rmse_mm": float(result.rmse_m) * 1000.0,
-        "iterations": result.iterations,
-        "overlap_ratio": float(result.overlap_ratio),
+        **_registration_metrics(result),
         "result_scan_id": scan_id,
         "status": "done",
         "error_text": None,

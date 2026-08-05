@@ -17,6 +17,7 @@
 를 갖는다. 두 점군이 1:1로 같은 점을 담으면 최근접점이 늘 '같은 점'을 찾아
 정합이 실제보다 쉬워지고, 병합 검증도 "한쪽만 써도 통과하는" 항등식이 된다.
 """
+import dataclasses
 import gc
 import json
 import weakref
@@ -24,6 +25,7 @@ import weakref
 import numpy as np
 import pytest
 
+from flatness.core.registration import HORIZONTAL_SENSITIVITY_MIN
 from flatness.core.subcell import build_subcell_grid
 from flatness.io.reader import iter_chunks, read_info
 
@@ -152,10 +154,33 @@ def _seed_pair(db, cfg, *, unit_scale_a=1.0, unit_scale_b=1.0,
         "id": _REG_ID, "source_scan_ids": ["scanA", "scanB"],
         "correspondences": _corr_rows(corr_xy, unit_scale_a, unit_scale_b),
         "transform": None, "rmse_mm": None, "iterations": None,
-        "overlap_ratio": None, "status": "queued", "error_text": None,
-        "result_scan_id": None,
+        "overlap_ratio": None, "horizontal_sensitivity": None,
+        "status": "queued", "error_text": None, "result_scan_id": None,
     }
     return a_world, b_world
+
+
+# 3cm 안에 몰린 대응점 - 측방 RMS 퍼짐 0.87cm로 클릭 오차 5cm보다 작다(실측).
+# 회전을 전혀 정할 수 없는 배치라 엔진이 거부한다(스펙 §8).
+_CLUSTERED_CORR_XY = np.array([[2.00, 1.50], [2.02, 1.51], [2.01, 1.53], [2.03, 1.52]])
+
+
+def _count_downloads(monkeypatch):
+    """원본 파일을 실제로 내려받았는지 세는 카운터.
+
+    "파일을 읽기 전에 거부했는가"를 구현 세부(어느 내부 함수를 먼저 부르는지)에
+    기대지 않고 확인하기 위해 **저장소 경계**에서 센다.
+    """
+    from flatworker import storage as storage_mod
+    seen = {"n": 0}
+    real = storage_mod.LocalStorage.download_to
+
+    def _spy(self, key, dst):
+        seen["n"] += 1
+        return real(self, key, dst)
+
+    monkeypatch.setattr(storage_mod.LocalStorage, "download_to", _spy)
+    return seen
 
 
 def _run(db, cfg):
@@ -311,6 +336,179 @@ def test_register_stores_rmse_in_millimetres_not_metres(tmp_path, monkeypatch):
         "transform에 numpy 스칼라가 남아 있다 - ndarray.tolist()로 변환해야 한다")
 
 
+# -- 수평 감도 (스펙 9.3.2) ---------------------------------------------------
+
+def test_register_stores_horizontal_sensitivity_on_success(tmp_path, monkeypatch):
+    """`horizontal_sensitivity`를 저장한다 - 화면이 "수평 방향 검증 불가"를 경고할
+    유일한 근거다(스펙 §9.3.2).
+
+    point-to-plane RMSE는 수평 오정합을 **원리적으로 못 본다**: 완전 평면에서
+    대응점을 통째로 3m 틀리게 찍어도 rmse 1.008mm·converged=True·사유 없음으로
+    나가고, 기하 검사도 발산 가드도 침묵한다(엔진 실측). 그때 신호를 내는 값은
+    감도 프로브 하나뿐이다(0.994 대 임계 1.1). 저장하지 않으면 화면이 아무것도
+    할 수 없다.
+    """
+    db, cfg = FakeDB(), _cfg(tmp_path)
+    _seed_pair(db, cfg)
+
+    captured = {}
+    real = reg_mod.register_clouds
+
+    def _spy(*a, **k):
+        res = real(*a, **k)
+        captured["res"] = res
+        return res
+
+    monkeypatch.setattr(reg_mod, "register_clouds", _spy)
+
+    _run(db, cfg)
+
+    reg = db.registrations[_REG_ID]
+    assert reg["status"] == "done"
+    assert reg["horizontal_sensitivity"] == pytest.approx(
+        captured["res"].horizontal_sensitivity, rel=1e-9)
+    # 픽스처가 실제로 "검증 가능한" 장면인지 함께 고정한다 - 이 값이 1.0 근처로
+    # 내려가면 픽스처가 완전 평면으로 퇴화했다는 뜻이고, 그러면 정합 테스트 전체가
+    # 수평 방향으로 아무것도 증명하지 못한다.
+    assert reg["horizontal_sensitivity"] > HORIZONTAL_SENSITIVITY_MIN, (
+        f"픽스처 감도 {reg['horizontal_sensitivity']:.3f} - 수평 특징이 사라졌다")
+    json.dumps(reg["horizontal_sensitivity"])
+
+
+def test_register_stores_horizontal_sensitivity_on_failure_too(tmp_path):
+    """실패해도 감도를 남긴다 - "왜 못 믿는지"의 근거는 실패했을 때 더 필요하다.
+
+    실패 경로에서 관측치를 통째로 비우면, 화면은 "실패했다"만 말할 수 있고
+    사용자는 대응점을 다시 찍을지 스캔을 다시 뜰지 판단할 근거가 없다.
+    """
+    db, cfg = FakeDB(), _cfg(tmp_path)
+    _seed_pair(db, cfg, a_x=(0.0, 3.5), b_x=(3.2, 8.0), b_holes=[(3.5, 4.7)],
+               corr_xy=np.array([[3.25, 0.4], [3.45, 1.1], [3.28, 2.7], [3.42, 2.0]]))
+
+    _run(db, cfg)
+
+    reg = db.registrations[_REG_ID]
+    assert reg["status"] == "failed"
+    assert reg["horizontal_sensitivity"] is not None, "실패 경로에서 감도가 버려졌다"
+    assert reg["rmse_mm"] is not None and reg["overlap_ratio"] is not None
+
+
+def test_register_writes_null_not_nan_for_non_finite_metrics(tmp_path, monkeypatch):
+    """NaN 관측치는 **NULL**로 보낸다 - PostgREST는 JSON에 NaN을 실을 수 없다.
+
+    엔진은 대응이 3쌍 미만이거나 프로브가 성립하지 않으면 `nan`을 낸다(기본값도
+    `nan`이다). 그대로 PATCH하면 표준 JSON에 없는 `NaN` 토큰이 나가 PostgREST가
+    400으로 거절하고, **정합을 다 끝낸 뒤에** 잡이 실패한다. FakeDB는 파이썬
+    객체를 그대로 담아 두므로 이 회귀를 구조적으로 못 잡는다 - 그래서 값 자체를
+    단언한다.
+    """
+    db, cfg = FakeDB(), _cfg(tmp_path)
+    _seed_pair(db, cfg)
+    real = reg_mod.register_clouds
+
+    def _spy(*a, **k):
+        return dataclasses.replace(real(*a, **k), horizontal_sensitivity=float("nan"))
+
+    monkeypatch.setattr(reg_mod, "register_clouds", _spy)
+
+    _run(db, cfg)
+
+    reg = db.registrations[_REG_ID]
+    assert reg["status"] == "done"
+    assert reg["horizontal_sensitivity"] is None, (
+        f"NaN이 그대로 저장됐다: {reg['horizontal_sensitivity']!r}")
+    assert "NaN" not in json.dumps(reg["horizontal_sensitivity"])
+
+
+# -- 대응점 기하 검사는 파일 읽기 전에 (스펙 8) --------------------------------
+
+def test_register_rejects_clustered_correspondences_before_reading_any_file(
+        tmp_path, monkeypatch):
+    """한곳에 몰린 대응점은 **원본을 내려받기 전에** 거부한다.
+
+    "대응점이 몰렸다"는 사용자가 화면에서 즉시 고칠 수 있는 종류다. 검사를 정합
+    직전에 두면 A·B 두 원본을 내려받아 격자화까지 끝낸 **뒤에야** 사유가 나오고,
+    게다가 예외로 올리면 대응점이 그대로인 채 무거운 잡이 3회 돈다(같은 결과).
+    """
+    db, cfg = FakeDB(), _cfg(tmp_path)
+    _seed_pair(db, cfg, corr_xy=_CLUSTERED_CORR_XY)
+    downloads = _count_downloads(monkeypatch)
+
+    _run(db, cfg)   # 예외를 올리지 않는다
+
+    assert downloads["n"] == 0, (
+        f"원본을 {downloads['n']}번 내려받은 뒤에야 대응점을 거부했다")
+    reg = db.registrations[_REG_ID]
+    assert reg["status"] == "failed"
+    assert "몰려" in reg["error_text"], reg["error_text"]
+    assert _merged_scan(db) is None
+
+
+def test_register_geometry_check_is_done_in_metres_not_file_units(tmp_path, monkeypatch):
+    """기하 검사는 **미터**를 전제한다 - 임계가 클릭 오차(5cm)라는 물리량이다.
+
+    ★ 환산을 빠뜨리면 게이트가 **mm 파일에서만 조용히 사라진다**. 실측: 3cm 안에
+    몰린 4점의 측방 퍼짐이 미터로 0.87cm(거부)인데 같은 점을 mm 파일 좌표로 재면
+    866cm가 되어 임계를 가볍게 통과한다. 미터 픽스처만으로는 이 회귀를 절대
+    잡을 수 없다(환산이 항등식이라서) - 변이 5에서 겪은 그 함정과 같은 구조다.
+
+    ★ **두 스캔을 모두 mm로 둔다.** 한쪽만 mm로 두면 미터 쪽 스캔의 검사가 먼저
+    걸려서 통과해 버린다 - 실측으로 확인했다(A=미터·B=mm 픽스처에서는 "환산 전에
+    검사한다"는 변이가 **생존했다**). 검사 순서에 기대지 않으려면 두 쪽 다 환산이
+    필요한 상태여야 한다. 배율이 서로 다른 경우는
+    `test_register_scales_correspondences_by_each_sources_unit_scale`이 맡는다.
+    """
+    db, cfg = FakeDB(), _cfg(tmp_path)
+    _seed_pair(db, cfg, unit_scale_a=0.001, unit_scale_b=0.001,
+               corr_xy=_CLUSTERED_CORR_XY)
+    downloads = _count_downloads(monkeypatch)
+
+    _run(db, cfg)
+
+    assert downloads["n"] == 0, "mm 파일에서 몰린 대응점이 게이트를 빠져나갔다"
+    reg = db.registrations[_REG_ID]
+    assert reg["status"] == "failed"
+    assert "몰려" in reg["error_text"], reg["error_text"]
+
+
+def test_register_does_not_retry_correspondence_errors_raised_after_loading(
+        tmp_path, monkeypatch):
+    """점군을 받은 **뒤에** 나오는 대응점 거부도 재시도로 태우지 않는다.
+
+    엔진의 대응점 게이트 중 "정합 영역 대비 퍼짐"은 점군의 xy 범위를 알아야 해서
+    파일을 읽기 전에는 원리적으로 판정할 수 없다 - `register_clouds` 안에서야
+    ValueError로 나온다. 그래도 사용자가 즉시 고칠 수 있는 종류(넓게 다시 찍으면
+    된다)이고 재시도해도 같은 결과이므로, 예외를 올리지 않고 `registrations`에
+    사유를 남기고 끝낸다. 파일 읽기는 이미 끝났지만 **재시도 2회는 아낀다.**
+
+    ★ 어떤 배치가 그 게이트에 걸리는지는 **엔진 테스트의 몫**이라 여기서 픽스처로
+    재현하지 않는다. 실제로 그렇게 썼다가 임계가 조정되는 동안 이 테스트가
+    초록·빨강을 오갔다(실측). 여기서 고정할 계약은 "엔진이 결정론적 ValueError를
+    내면 워커가 어떻게 처리하는가" 하나뿐이므로, 그 예외를 직접 주입한다.
+    """
+    db, cfg = FakeDB(), _cfg(tmp_path)
+    _seed_pair(db, cfg)
+    downloads = _count_downloads(monkeypatch)
+    storage = get_storage(cfg, db)
+    reason = "대응점이 정합 영역의 좁은 구역에만 몰려 있습니다(퍼짐 0.42m가 영역 4.6m의 9%)."
+
+    def _boom(*a, **k):
+        raise ValueError(reason)
+
+    monkeypatch.setattr(reg_mod, "register_clouds", _boom)
+
+    _run(db, cfg)   # 예외를 올리지 않는다
+
+    reg = db.registrations[_REG_ID]
+    assert reg["status"] == "failed"
+    assert reg["error_text"] == reason, "엔진이 준 한국어 사유가 그대로 남아야 한다"
+    assert _merged_scan(db) is None
+    assert storage.download(f"artifacts/registrations/{_REG_ID}/merged.ply") is None
+    # 이 경로는 정의상 파일을 읽은 **뒤**다 - 조기 게이트에서 걸렸다면 이 테스트가
+    # 검증하려던 구간을 아예 안 탄 것이므로 함께 고정한다.
+    assert downloads["n"] > 0, "원본을 읽기 전에 끝났다 - 사후 경로를 시험하지 못했다"
+
+
 # -- 설계 결정 F8: 병합은 두 소스의 서브셀 중앙값 -----------------------------
 
 def test_register_merged_cloud_is_subcell_median_of_both_sources(tmp_path):
@@ -396,6 +594,8 @@ def test_register_scales_correspondences_by_each_sources_unit_scale(tmp_path):
     _run(db, cfg)
 
     reg = db.registrations[_REG_ID]
+    # 반대 방향 회귀도 함께 막는다: 넓게 퍼진 **정상** 배치가 mm 파일이라는 이유로
+    # 기하 검사에 거부되면 안 된다(환산을 두 번 하거나 나눗셈으로 하면 그렇게 된다).
     assert reg["status"] == "done", f"mm 파일 정합이 실패했다: {reg['error_text']}"
     merged = _merged_points(storage, tmp_path)
     # 병합 점군은 미터다. 환산을 빠뜨리면 애초에 정합이 실패하지만, 혹시 성공하더라도

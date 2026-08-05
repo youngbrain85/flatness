@@ -29,6 +29,7 @@
 --   (1) 카탈로그 가드 4종 - 011의 enum 값 두 개 + 008의 slope_judge + 007의
 --       registrations 테이블
 --   (2) registrations 테이블 보완 - 007이 만든 테이블에 단계 F가 쓰는 컬럼 추가
+--       (overlap_ratio · horizontal_sensitivity · updated_at)
 --   (3) Realtime publication에 registrations 추가
 --   (4) jobs_dedup 재정의 - register 중복 엔큐 차단 (설계 결정 F5)
 --   (5) 잡 큐 함수 3종 확장 재정의 - register 분기 추가
@@ -116,8 +117,8 @@ end $$;
 --
 -- ★ **create table if not exists로 쓰지 않은 이유** - 007이 이 테이블을 이미
 --    만들어 두었기 때문이다. 007의 정의에는 단계 F가 쓰는 overlap_ratio·
---    updated_at이 없는데, `create table if not exists`는 테이블이 있으면
---    **본문을 통째로 무시하고 성공한다**. 즉 두 컬럼이 조용히 빠진 채
+--    horizontal_sensitivity·updated_at이 없는데, `create table if not exists`는
+--    테이블이 있으면 **본문을 통째로 무시하고 성공한다**. 즉 세 컬럼이 조용히 빠진 채
 --    "Success"가 뜨고, 나중에 워커가 정합 결과를 PATCH하는 순간
 --    42703(undefined_column)으로 register 잡이 전부 실패한다(010을 워커보다
 --    늦게 적용했을 때와 같은 실패 양식 - docs/DEPLOY.md §1 참고). 그래서
@@ -137,6 +138,18 @@ end $$;
 -- 중첩 비율(0~1). 설계 결정 F: 중첩 10% 미만이면 정합을 실패로 끝낸다 - 그 판단
 -- 근거를 화면이 보여줄 수 있어야 하므로 rmse_mm과 함께 남긴다.
 alter table registrations add column if not exists overlap_ratio double precision;
+
+-- 수평 감도(스펙 §9.3.2). 정합을 수평으로 ±10cm 밀었을 때 point-to-plane 잔차가
+-- 오르는 비의 최솟값이다. 1.0에 가까우면 그 장면은 수평 방향으로 **검증 불가**다.
+--
+-- ★ 이 컬럼이 없으면 화면이 경고할 근거를 아예 갖지 못한다. 완전 평면에서는
+--   대응점을 통째로 3m 틀리게 찍어도 rmse_mm이 1.008로 게이트 안에 들어오고
+--   대응점 기하 검사·발산 가드까지 전부 침묵한다(엔진 실측). 그 상황에서 신호를
+--   내는 값은 이것 하나뿐이다(0.994). 실패로 처리하지는 않는다 - ±5mm 평탄
+--   바닥이 이 용역의 정상 대상이라 전부 막으면 기능이 성립하지 않는다.
+--   판단 기준은 엔진의 HORIZONTAL_SENSITIVITY_MIN(1.1)이다:
+--   완전 평면 1.000 / 바닥+벽 1.248 / 범프 바닥 1.710 / 구배 램프 1.86~1.87.
+alter table registrations add column if not exists horizontal_sensitivity double precision;
 
 -- 마지막 상태 전이 시각. 001의 다른 테이블들과 같은 관례로 트리거는 두지 않고
 -- 쓰는 쪽이 채운다 - 아래 (5)의 잡 큐 함수 3종이 status를 바꿀 때마다 함께 갱신한다.
