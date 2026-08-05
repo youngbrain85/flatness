@@ -44,23 +44,43 @@
 -- 라벨 문자열(text)의 존재만 확인하는 것이므로 "unsafe use of new value" 제약에
 -- 걸리지 않는다 - 그래도 이 파일은 여전히 011과 별도로 Run 하는 것이 정본이다.
 --
--- ★ 타입 특정은 반드시 `enumtypid = '<타입>'::regtype`으로 한다(009:78의 형태).
---    `pg_type.typname = '<타입>'`으로 조인하면 **스키마를 좁히지 않아** 다른
---    스키마에 같은 이름의 enum이 있기만 해도 가드가 **거짓 통과**한다 - 실측으로
---    재현된다(`create schema other; create type other.job_type as enum('register')`
---    만 있으면 public.job_type에 register가 없는데도 이 파일이 Success로 끝나고,
---    그 뒤 fn_job_claim 첫 호출이 잡 큐 전체를 세운다). 가드는 거짓 통과가 위험한
---    방향이므로, 이 파일이 실제로 쓰는 타입(search_path가 가리키는 그 타입)과
---    **같은 방식으로 해석되는** regtype 캐스팅을 쓴다.
+-- ★ 타입 특정은 반드시 `enumtypid = 'public.<타입>'::regtype`으로 한다 - **스키마를
+--    문자열에 못박는다.** 가드는 거짓 통과가 위험한 방향이라, 약한 형태 둘 다
+--    실측으로 뚫린다:
+--
+--      (a) `pg_type.typname = '<타입>'` 조인 - 스키마를 아예 안 좁힌다. 다른
+--          스키마에 같은 이름의 enum이 있기만 해도 통과한다.
+--      (b) `'<타입>'::regtype`(스키마 없는 형태, 009:78이 쓰는 형태) - **세션의
+--          search_path로 해석된다.** `set search_path = other, public`인 세션이면
+--          `other.job_type`으로 풀려 통과한다.
+--
+--    둘 중 어느 쪽이든 `create schema other; create type other.job_type as
+--    enum('register', 'slope_judge')`만 있으면 public.job_type에 register가 없는데도
+--    이 파일이 Success로 끝나고, 그 뒤 워커가 **precheck 같은 평범한 잡을** claim
+--    하는 순간 `invalid input value for enum job_type: "register"`로 잡 큐 전체가
+--    멎는다(실측 재현).
+--
+--    `public.`을 붙이면 **아래 (5)의 함수 3종이 `set search_path = public, pg_temp`로
+--    고정돼 있는 것과 해석이 일치한다** - 함수 본문의 `v_job.type = 'register'`가
+--    런타임에 보는 타입이 정확히 `public.job_type`이므로, 가드도 같은 타입을 봐야
+--    한다. 스키마 없는 형태는 "가드는 세션 search_path로, 함수는 고정 search_path로"
+--    서로 다른 타입을 보게 되어 가드의 의미가 무너진다.
+--
+--    다만 이것은 **가드가 옳은 타입을 보게 하는 것까지**다. 이 파일의 객체 생성
+--    (create index/function, alter table)은 다른 마이그레이션과 마찬가지로 스키마를
+--    적지 않아 세션 search_path를 따른다 - `search_path`를 public이 아닌 것으로
+--    바꿔 놓고 실행하면 함수 사본이 그쪽 스키마에 생긴다(002~009도 같은 성질이며,
+--    public의 정의 자체는 그대로 남는다). Supabase SQL Editor의 기본값이 public이고
+--    이 저장소의 모든 절차가 그 전제 위에 있으므로 여기서 더 손대지 않는다.
 -- -----------------------------------------------------------------------------
 do $$
 begin
   if not exists (select 1 from pg_enum
-                  where enumtypid = 'job_type'::regtype and enumlabel = 'register') then
+                  where enumtypid = 'public.job_type'::regtype and enumlabel = 'register') then
     raise exception '011_register_enums.sql을 먼저 실행하세요 (job_type에 register 값이 없습니다).';
   end if;
   if not exists (select 1 from pg_enum
-                  where enumtypid = 'data_lineage'::regtype and enumlabel = 'registered') then
+                  where enumtypid = 'public.data_lineage'::regtype and enumlabel = 'registered') then
     raise exception '011_register_enums.sql을 먼저 실행하세요 (data_lineage에 registered 값이 없습니다).';
   end if;
   -- ★ 008도 전제한다. 아래 (5)의 함수 3종은 009의 본문을 그대로 물려받으므로
@@ -73,7 +93,7 @@ begin
   --    008은 `add value if not exists` 한 줄이라 재판정을 안 쓰더라도 적용 비용이
   --    사실상 없다. 009는 012가 상위집합이므로 건너뛰어도 된다.
   if not exists (select 1 from pg_enum
-                  where enumtypid = 'job_type'::regtype and enumlabel = 'slope_judge') then
+                  where enumtypid = 'public.job_type'::regtype and enumlabel = 'slope_judge') then
     raise exception '008_slope_judge_enum.sql을 먼저 실행하세요 (job_type에 slope_judge 값이 없습니다 - 012의 잡 큐 함수는 009의 slope_judge 분기를 그대로 포함합니다).';
   end if;
 end $$;

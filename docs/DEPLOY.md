@@ -197,6 +197,8 @@ Vercel(대시보드) + Railway(워커, Docker) + Supabase(DB·Auth·Storage) 구
    > `fn_resolve_criteria`의 drop(007:50-51)이 2인자·3인자 시그니처를 모두 겨냥하므로,
    > 002 재실행으로 되살아난 옛 2인자 오버로드가 있더라도 007 재실행 한 번으로
    > 제거되고 3인자가 정본으로 재생성된다(권한 revoke/grant도 007:69-71이 함께
+   > 재발급한다). 이 원칙은 `docs/SUPABASE_SETUP.md`의 "새 프로젝트에서 순서대로
+   > 한 번씩만 실행하면 정상"과 일치한다 - 예외는 007 하나뿐이다.
    >
    > **이미 002를 재실행해 버렸다면 007만으로는 복구되지 않는다.** 007이 정의하는
    > 함수는 `fn_resolve_criteria` 하나뿐이라, 위 (2)의 잡 큐 함수 3종 강등은 그대로
@@ -226,9 +228,6 @@ Vercel(대시보드) + Railway(워커, Docker) + Supabase(DB·Auth·Storage) 구
    > select proname from pg_proc where prosrc like '%registration_id%';  -- register
    > select proname from pg_proc where prosrc like '%slope_judge%';      -- 재판정
    > ```
-
-   > 재발급한다). 이 원칙은 `docs/SUPABASE_SETUP.md`의 "새 프로젝트에서 순서대로
-   > 한 번씩만 실행하면 정상"과 일치한다 - 예외는 007 하나뿐이다
 2. Storage 화면에서 `raw-scans`·`artifacts`·`reports` 버킷 3개 생성 확인
    (정책 생성이 `42501`로 실패하면 백로그 티켓 42대로 Storage > Policies UI에서 수동 생성)
 3. **[필수] 회원가입(Sign Ups) 차단** - **Authentication** > **Providers** > **Email**에서
@@ -575,8 +574,18 @@ Vercel(대시보드) + Railway(워커, Docker) + Supabase(DB·Auth·Storage) 구
    >
    > ```sql
    > select status, attempts from jobs
-   >  where payload->>'registration_id' = '00000000-0000-0000-0000-000000000001';
+   >  where type = 'register'
+   >    and payload->>'registration_id' = '00000000-0000-0000-0000-000000000001';
    > ```
+   >
+   > (`type = 'register'`는 아래 뒷정리 `delete`와 같은 필터다 - 두 문장이 정확히
+   > 같은 행 집합을 가리키게 맞춘다.)
+   >
+   > **결과가 2행 이상이면 이미 이 사이클을 한 번 겪은 것이다**(`failed` 하나 +
+   > 재시도로 새로 들어간 `queued` 하나). 둘 다 `type='register'`라 필터로는 걸러지지
+   > 않으니, `queued` 행만 보고 "아직 살아 있네" 하고 넘어가지 말고 **아래 뒷정리
+   > `delete`로 전부 지운 뒤 1회차부터 다시 시작한다** - 그래야 1회차/2회차가 같은
+   > 조건에서 비교된다.
    >
    > `status`가 `queued` 또는 `processing`이어야 이 검사가 성립한다. 이미
    > `failed`(또는 `done`)면 **012의 문제가 아니라 시간이 지난 것이다** - 아래
