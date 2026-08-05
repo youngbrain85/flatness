@@ -32,6 +32,7 @@ from flatness.io.reader import iter_chunks, read_info
 from flatworker import registration as reg_mod
 from flatworker.artifacts import raw_scan_dir
 from flatworker.config import Config
+from flatworker.db import DBError
 from flatworker.jobs import handle_register
 from flatworker.runner import _DEFAULT_HANDLERS, run_loop
 from flatworker.storage import get_storage
@@ -671,6 +672,93 @@ def test_register_is_wired_into_the_default_handler_table():
     """러너 기본 배선 - 이 단언이 없으면 핸들러를 만들어 놓고 등록을 빠뜨려도
     아무도 모른다(잡은 "핸들러 없음"으로 3회 재시도 후 실패한다)."""
     assert _DEFAULT_HANDLERS["register"] is handle_register
+
+
+def _drain_job_with_retries(db, cfg, attempts=3):
+    """runner.run_loop의 dispatch 부분을 그대로 재현해 잡을 **재시도까지** 태운다.
+
+    `run_loop`을 그대로 쓸 수 없다 - `fn_job_fail`의 백오프(10초 x 시도 횟수)가
+    걸려 `claim_job()`이 다음 시도를 집어가지 않는다. FakeDB의 `ignore_backoff`로
+    그 시간만 건너뛰고, claim -> 핸들러 -> complete/fail 순서는 runner와 동일하게
+    유지한다(잡 큐 부수효과도 그대로 돈다).
+    """
+    seen = []
+    for _ in range(attempts):
+        job = db.claim_job(ignore_backoff=True)
+        if job is None:
+            break
+        try:
+            handle_register(db, cfg, job["payload"])
+            db.complete_job(job["id"])
+            seen.append("done")
+        except Exception as e:                      # runner.run_loop과 같은 처리
+            db.fail_job(job["id"], str(e)[:500])
+            seen.append(f"fail: {type(e).__name__}")
+    return seen
+
+
+def test_register_retry_after_result_patch_failure_leaves_exactly_one_merged_scan(
+        tmp_path, monkeypatch):
+    """결과 PATCH가 실패해 잡이 재시도돼도 병합 스캔은 **하나만** 남아야 한다.
+
+    실제 시나리오는 docs/DEPLOY.md §1이 못 박은 "012 -> 워커" 순서를 어긴 배포다:
+    012 미적용 DB에서 마지막 PATCH가 42703(undefined_column)으로 죽는다. 그러면
+    예외가 올라가 fn_job_fail이 잡을 재큐잉하고 **핸들러 전체가 처음부터 다시
+    돈다** - 병합 스캔 INSERT가 멱등이 아니면 max_attempts=3에서
+    `lineage='registered'` 고아 스캔이 3개 쌓이고, 그 스캔들은 `result_scan_id`가
+    비어 있어 화면이 "정합 이력을 찾지 못했습니다"만 띄운다.
+
+    처음 두 번만 실패시키고 세 번째를 성공시켜, "재시도 뒤 정상 복구"까지 함께
+    고정한다. 단발 실행만 보는 기존 테스트로는 구조적으로 잡을 수 없는 결함이다.
+    """
+    db, cfg = FakeDB(), _cfg(tmp_path)
+    _seed_pair(db, cfg)
+    db.registrations[_REG_ID]["status"] = "queued"
+    db.enqueue_job("register", {"registration_id": _REG_ID})
+
+    real_update = FakeDB.update_registration
+    calls = {"n": 0}
+
+    def _flaky(self, registration_id, fields):
+        # 결과 PATCH(status='done')만 골라 실패시킨다 - 'processing'/'failed'
+        # 전이는 그대로 통과시켜야 잡 큐 시맨틱이 살아 있다.
+        if fields.get("status") == "done":
+            calls["n"] += 1
+            if calls["n"] <= 2:
+                raise DBError(400, 'column "horizontal_sensitivity" does not exist')
+        return real_update(self, registration_id, fields)
+
+    monkeypatch.setattr(FakeDB, "update_registration", _flaky)
+
+    outcomes = _drain_job_with_retries(db, cfg)
+
+    assert outcomes == ["fail: DBError", "fail: DBError", "done"], outcomes
+    merged = [s for s in db.scans.values() if s.get("lineage") == "registered"]
+    assert len(merged) == 1, (
+        f"재시도 3회에 고아 병합 스캔이 {len(merged)}개 생겼다 - "
+        "병합 스캔 INSERT가 멱등이 아니다")
+    reg = db.registrations[_REG_ID]
+    assert reg["status"] == "done"
+    assert reg["result_scan_id"] == merged[0]["id"], "복구된 정합이 병합 스캔을 못 가리킨다"
+    # 원본 두 개는 그대로 - 병합 스캔이 그 위에 덮이지 않았는지도 함께 본다.
+    assert set(db.scans) == {"scanA", "scanB", merged[0]["id"]}
+
+
+def test_register_merged_scan_id_is_derived_from_the_registration(tmp_path):
+    """병합 스캔 id는 정합 id에서 결정적으로 유도된다(UUIDv5).
+
+    멱등성의 근거가 "재시도가 우연히 같은 id를 받는다"가 아니라 **id 유도 규칙**
+    이라는 것을 못 박는다. DB의 gen_random_uuid에 맡기면 재시도마다 새 행이 생긴다.
+    """
+    db, cfg = FakeDB(), _cfg(tmp_path)
+    _seed_pair(db, cfg)
+
+    _run(db, cfg)
+
+    merged = _merged_scan(db)
+    assert merged["id"] == reg_mod.merged_scan_id(_REG_ID)
+    # 다른 정합이면 다른 id여야 한다(상수를 그대로 돌려주는 구현 차단).
+    assert reg_mod.merged_scan_id(_REG_ID) != reg_mod.merged_scan_id("reg2")
 
 
 def test_register_job_runs_end_to_end_through_the_runner(tmp_path):

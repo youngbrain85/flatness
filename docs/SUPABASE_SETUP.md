@@ -173,8 +173,9 @@ surface_type)` 함수를 drop 후 3인자 시그니처로 재생성하므로 001
 8. `supabase/migrations/008_slope_judge_enum.sql` 전체 내용을 붙여넣고 **Run**. `job_type`
    enum에 `slope_judge` 값 하나만 추가한다(재판정 잡 타입, 세부과업 4 단계 D). 재실행해도
    안전하다(멱등, `add value if not exists`). 검증: `select enumlabel from pg_enum where
-   enumtypid = 'job_type'::regtype order by enumsortorder;` 결과 맨 끝에 `slope_judge`가
-   보이면 성공.
+   enumtypid = 'public.job_type'::regtype order by enumsortorder;` 결과 맨 끝에
+   `slope_judge`가 보이면 성공(`public.`을 붙이는 이유는 아래 11번의 상자 참고 -
+   스키마를 적지 않으면 세션 `search_path`로 해석돼 거짓 통과할 수 있다).
 
    > **⚠ 008 다음에 반드시 009를 별도로 Run 한다 - 같은 쿼리 창에서 이어붙여 한 번에
    > 실행하면 안 된다.** PostgreSQL은 같은 트랜잭션 안에서 방금 추가한 enum 값을
@@ -279,11 +280,21 @@ surface_type)` 함수를 drop 후 3인자 시그니처로 재생성하므로 001
     검증:
 
     ```sql
-    select enumlabel from pg_enum where enumtypid = 'job_type'::regtype order by enumsortorder;
-    select enumlabel from pg_enum where enumtypid = 'data_lineage'::regtype order by enumsortorder;
+    select enumlabel from pg_enum
+     where enumtypid = 'public.job_type'::regtype order by enumsortorder;
+    select enumlabel from pg_enum
+     where enumtypid = 'public.data_lineage'::regtype order by enumsortorder;
     ```
 
     첫 결과 맨 끝에 `register`, 둘째 결과 맨 끝에 `registered`가 보이면 성공이다.
+
+    > **`public.`을 붙인 이유** - 스키마를 적지 않은 `'job_type'::regtype`은 **세션의
+    > `search_path`로 해석된다**. `set search_path = other, public`인 세션에서 다른
+    > 스키마에 같은 이름의 enum이 있으면 그쪽을 보고 **거짓으로 통과한다**(실측 재현).
+    > 012의 카탈로그 가드가 정확히 이 이유로 `'public.job_type'::regtype`으로
+    > 강화돼 있으므로(012 (1)번 주석 참고) 검증 쿼리도 같은 타입을 보게 맞춘다.
+    > 검증 쿼리라 위험 자체는 낮지만, 가드와 검증이 서로 다른 것을 보면 "가드는
+    > 막았는데 검증은 통과"·그 반대가 생겨 원인 추적이 어려워진다.
 
     **두 문장이 한 파일에 함께 있는 것은 안전하다** - 서로를 사용하지 않기
     때문이다(`data_lineage`의 새 값을 실제로 쓰는 것은 병합 스캔 행을 만드는

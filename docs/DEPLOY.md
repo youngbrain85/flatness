@@ -139,13 +139,31 @@ Vercel(대시보드) + Railway(워커, Docker) + Supabase(DB·Auth·Storage) 구
    > **(2) 대시보드는 010과 달리 "먼저 배포해도 안전"이 성립하지 않는다.** 010은
    > `height_view_path`라는 **컬럼 하나**가 없는 상황이었고, 미적용 DB의 `select('*')`
    > 결과에서 그 키가 `undefined`로 빠지면 화면의 truthy 가드가 그대로 걸러 주었다.
-   > 011·012에서 없는 것은 컬럼이 아니라 **`registrations` 테이블 전체와 enum 라벨**
-   > 이다 - PostgREST는 모르는 릴레이션에 대해 빈 결과가 아니라 **오류**를 돌려주므로
-   > truthy 가드로 흡수할 방법이 없고, 정합 화면의 조회·삽입이 그대로 실패한다. 즉
-   > 012 없이 단계 F 대시보드를 올리면 **정합 기능만 오류를 낸다**(기존 화면은
-   > `registrations`를 읽지 않으므로 007처럼 전체가 깨지지는 않는다 - 이 저장소의
-   > 현재 대시보드 코드에 `registrations`를 읽거나 쓰는 곳이 없음을 확인했다).
-   > 그러므로 **012 → 대시보드** 순서를 지킨다.
+   > 정합 화면은 그 방식으로 흡수되지 않는다. **다만 없는 것이 무엇인지 정확히
+   > 적는다 - 아래 세 줄은 격리 PostgreSQL 클러스터에서 실제로 재현해 확인했다.**
+   >
+   > - **`registrations` 테이블 자체는 007이 만든다**(`007_slope_analysis.sql`의
+   >   "정합 이력 - 단계 F에서 사용, 스키마만 먼저 세운다"). 011·012가 만드는 것이
+   >   아니다 - 012는 `alter table ... add column if not exists`로 **차이만** 메우며,
+   >   012의 네 번째 카탈로그 가드가 "007_slope_analysis.sql을 먼저 실행하세요
+   >   (registrations 테이블이 없습니다)"로 007을 전제한다. 007은 §1에서 이미 [필수]다.
+   > - **011이 없으면 "정합 실행"이 엔큐에서 막힌다.** `fn_enqueue_job('register', ...)`
+   >   이 `invalid input value for enum job_type: "register"`로 실패하고, 화면은
+   >   `lib/domain/jobs.ts`의 한국어 메시지로 그 실패를 그대로 보여준다(조용히 넘어가지
+   >   않는다). 대응점을 찍고 저장하는 단계까지는 007만으로도 동작한다.
+   > - **012가 없으면 두 곳이 42703으로 깨진다.** (a) 워커의 결과 PATCH - 위 (1)과
+   >   같은 이유(`overlap_ratio`·`horizontal_sensitivity`가 012 컬럼이다). (b) 정합
+   >   화면의 **"대응점 다시 찍기"** - 그 버튼이 결과 수치를 지우면서 같은 두 컬럼을
+   >   `null`로 쓴다. 여기에 더해 `jobs_dedup`이 register 중복을 못 막고(설계 결정 F5),
+   >   잡 큐 함수 3종에 register 분기가 없어 화면이 **'정합 대기 중'에서 갱신되지
+   >   않는다**.
+   >
+   > 즉 012 없이 단계 F 대시보드를 올리면 **정합 기능만 오류를 낸다** - 기존 화면
+   > (측정위치·스캔·분석·보고서)은 `registrations`를 건드리지 않으므로 007처럼 전체가
+   > 깨지지는 않는다. **다만 "대시보드 코드에 registrations를 읽거나 쓰는 곳이 없다"는
+   > 옛 서술은 더 이상 사실이 아니다** - `/registrations/new`(생성),
+   > `/registrations/[id]`(조회·갱신), `/scans/[id]`(병합 스캔에서 정합 이력 역조회)가
+   > 읽고 쓴다. 그러므로 **011·012 → 대시보드** 순서를 지킨다.
    >
    > **(3) 반대 순서(워커가 먼저, 대시보드가 나중)에도 눈에 안 띄는 흠이 하나 있다.**
    > 정합이 성공하면 워커가 `lineage='registered'`인 병합 스캔 행을 만드는데, 스캔 상세
@@ -615,12 +633,34 @@ Vercel(대시보드) + Railway(워커, Docker) + Supabase(DB·Auth·Storage) 구
 
    **(2) 실제 정합을 한 번 돌려 DB 계약을 확인한다.** 같은 바닥면을 겹치게 찍은 스캔
    2개를 올려 각각 분석까지 끝낸 뒤(§4-1과 같은 절차, **"스캔 분석" 모드로** - 임포트
-   모드는 높이 뷰가 만들어지지 않아 대응점을 찍을 그림 자체가 없다), 정합 화면에서
-   대응점 3쌍 이상을 찍고 정합을 실행한다. 완료되면 SQL Editor에서 결과 행을 직접
-   확인한다 - **화면 문구가 아니라 이 값들이 정합이 실제로 성립했다는 증거다**:
+   모드는 높이 뷰가 만들어지지 않아 대응점을 찍을 그림 자체가 없다) 아래 순서로
+   진행한다. **화면 문구는 실제 코드에서 읽어 옮긴 것이다**(단계 F 대시보드 기준):
+
+   1. 홈(측정위치 트리)에서 두 스캔이 속한 **측정위치 줄의 "스캔 정합"** 링크를 누른다
+      ("스캔 업로드"·"보고서" 링크 옆에 있다). 주소는 `/registrations/new?location=...`
+      이다. 후보 스캔이 2개 미만이거나 높이 뷰·단위가 준비되지 않았으면 그 화면이
+      이유를 안내한다.
+   2. 스캔 두 개를 고르고 **"대응점 찍기 시작"** 을 누른다 - `registrations` 행이
+      `status='awaiting_points'`로 만들어지고 `/registrations/{id}`로 이동한다.
+   3. 좌우 두 그림(장식 없는 높이 뷰)에서 **같은 지점**을 번갈아 눌러 대응점 3쌍
+      이상을 찍는다. 찍은 쌍은 목록에 쌓이고 "지우기"로 뺄 수 있다.
+   4. **"정합 실행"** 을 누른다. `registrations.status`가 `queued` → `processing` →
+      `done`으로 바뀌며 화면에 **"정합 결과"** 패널(정합 잔차 RMSE · ICP 반복 ·
+      겹친 영역(추정))이 뜬다.
+   5. **"겹쳐보기 (정합 결과 육안 확인)"** 를 열어 두 점군이 실제로 포개졌는지 눈으로
+      본다. **이 단계를 건너뛰지 마라** - RMSE는 수직 방향만 보증하므로 수평으로
+      몇 미터가 어긋나도 수치는 정상으로 나온다(아래 `horizontal_sensitivity` 항목).
+   6. **"병합 스캔 열기"** 로 `lineage='registered'` 스캔 상세로 넘어간다. 그 화면
+      상단에 "두 스캔을 정합해 만든 병합 스캔입니다." 배너와 **"정합 결과·겹쳐보기
+      확인"** 버튼이 보여야 한다. 배너 자리에 "이 스캔을 만든 정합 이력을 찾지
+      못했습니다"가 뜨면 `result_scan_id`가 비어 있다는 뜻이다(아래 쿼리로 확인).
+
+   완료되면 SQL Editor에서 결과 행을 직접 확인한다 - **화면 문구가 아니라 이 값들이
+   정합이 실제로 성립했다는 증거다**:
 
    ```sql
-   select r.status, r.rmse_mm, r.overlap_ratio, r.iterations, r.error_text,
+   select r.status, r.rmse_mm, r.overlap_ratio, r.horizontal_sensitivity,
+          r.iterations, r.error_text, r.result_scan_id,
           s.lineage, s.status as scan_status, s.unit_scale
      from registrations r left join scans s on s.id = r.result_scan_id
     order by r.created_at desc limit 1;
@@ -631,6 +671,14 @@ Vercel(대시보드) + Railway(워커, Docker) + Supabase(DB·Auth·Storage) 구
      합격으로 읽힌다**)
    - `overlap_ratio`가 채워져 있을 것(012가 추가한 컬럼이다 - `null`이면 워커가
      이 컬럼을 못 쓴 것이다)
+   - **`horizontal_sensitivity`가 채워져 있을 것.** 012가 추가한 컬럼이고 `null`이면
+     워커가 이 값을 못 쓴 것이다(012 미적용 또는 옛 워커). **이 값이 없으면 화면이
+     "수평 방향 검증 불가"를 경고할 근거를 아예 갖지 못한다** - point-to-plane RMSE는
+     수평 오정합을 원리적으로 못 보기 때문에(완전 평면에서 3m 어긋나도 RMSE가 게이트
+     안에 들어온다), 이 값이 유일한 신호다. 1.1 미만이면 그 장면은 수평으로 검증할 수
+     없다는 뜻이므로 위 5번의 겹쳐보기로 반드시 육안 확인한다.
+   - `result_scan_id`가 채워져 있을 것(`done`인데 `null`이면 병합 스캔을 못 가리키는
+     상태다 - 스캔 상세의 "정합 이력을 찾지 못했습니다"가 그 증상이다)
    - 병합 스캔의 `lineage='registered'`(`fused_mesh`가 아니다 - 업로드 화면이
      `fused_mesh`에 "앱이 스무딩한 데이터" 경고를 붙여 두어 정합 병합에는 거짓
      서술이 된다), `scan_status='ready'`, `unit_scale=1.0`
@@ -641,12 +689,12 @@ Vercel(대시보드) + Railway(워커, Docker) + Supabase(DB·Auth·Storage) 구
    워커 로그에서 `register` 잡 처리도 함께 확인한다. 정합은 점군을 두 번 읽으므로
    재판정(수 초)과 달리 수십 초가 걸릴 수 있다.
 
-   > **이 문단의 화면 조작 부분(대응점 찍기·정합 실행 버튼)은 세부과업 4 단계 F의
-   > 대시보드가 배포된 뒤에만 성립한다.** 이 문서를 갱신한 시점(단계 F Task 3,
-   > 마이그레이션)에는 정합 화면이 아직 저장소에 없어 **버튼 이름·안내 문구를 실제로
-   > 확인하지 못했다** - 그래서 여기에는 확인 가능한 DB 계약만 적었다. 화면 구현이
-   > 들어오면 이 문단에 실제 문구를 채워 넣는다(§4-5가 재판정에 대해 그렇게 적혀
-   > 있는 것처럼).
+   > **위 화면 문구는 저장소의 실제 코드에서 읽어 옮긴 것이다**(진입점은
+   > `dashboard/components/location-tree.tsx`, 생성 화면은
+   > `dashboard/components/registration/registration-create-form.tsx`, 작업 화면은
+   > `registration-workbench.tsx`, 병합 스캔 배너는 `dashboard/app/scans/[id]/page.tsx`).
+   > 문구가 바뀌면 이 절차도 함께 고친다 - 이 문서에서 다섯 번 난 Critical이 전부
+   > "존재하지 않는 것을 확인하라고 시키거나, 새로 생긴 것을 아무도 안 본다"였다.
 
 ## 사용자가 직접 해야 하는 작업 요약 (코드로 대신할 수 없음)
 

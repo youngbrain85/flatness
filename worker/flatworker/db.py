@@ -114,11 +114,14 @@ class DBClient(ABC):
     def update_scan(self, scan_id, fields):
         raise NotImplementedError
 
-    def insert_scan(self, fields):
-        """새 scans 행을 만들고 생성된 id(str)를 반환.
+    def upsert_scan(self, fields):
+        """`fields['id']`를 기본키로 scans 행을 **upsert** 하고 그 id(str)를 반환.
 
         정합 병합 스캔(단계 F)이 유일한 호출부다 - 평소 scans 행은 대시보드가
-        업로드 시 만든다.
+        업로드 시 만든다. 삽입이 아니라 upsert인 이유는 잡 재시도 멱등성이다
+        (`registration.merged_scan_id` 독스트링 참고): 결과 PATCH가 실패해 핸들러가
+        재실행되면 같은 id로 다시 들어와 **같은 행 하나**를 갱신해야 하고, 새 행이
+        생기면 고아 병합 스캔이 쌓인다.
         """
         raise NotImplementedError
 
@@ -300,11 +303,14 @@ class SupabaseRest(DBClient):
     def update_scan(self, scan_id, fields):
         self._patch("scans", scan_id, fields)
 
-    def insert_scan(self, fields):
+    def upsert_scan(self, fields):
+        # `resolution=merge-duplicates`가 PostgREST의 upsert다 - 기본키(id)가 이미
+        # 있으면 INSERT 대신 UPDATE 한다. 이것이 없으면 재시도 두 번째부터
+        # 23505(duplicate key)로 죽어, 고아 스캔을 막는 대신 잡을 못 끝내게 된다.
         resp = self._client.post(
             "/rest/v1/scans",
             json=fields,
-            headers={"Prefer": "return=representation"},
+            headers={"Prefer": "resolution=merge-duplicates,return=representation"},
         )
         self._raise_for_status(resp)
         return resp.json()[0]["id"]

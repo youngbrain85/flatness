@@ -492,6 +492,10 @@ def _merged_scan_fields(source_scan, registration_id, merged):
       point_count도 여기서 채운다).
     """
     return {
+        # ★ id를 워커가 정한다(DB의 gen_random_uuid에 맡기지 않는다). 정합 id에서
+        # 결정적으로 유도되므로 잡이 재시도돼도 **같은 행 하나**를 upsert 한다 -
+        # 근거는 registration.merged_scan_id 독스트링(고아 병합 스캔 최대 3개).
+        "id": registration.merged_scan_id(registration_id),
         "location_id": source_scan["location_id"],
         "surface": source_scan["surface"],
         "scanned_at": source_scan["scanned_at"],
@@ -579,6 +583,22 @@ def handle_register(db, cfg, payload):
 
     병합 스캔은 정합이 성공했을 때만 만든다 - 쓰레기 스캔이 목록에 남으면 안 된다.
     원본 두 스캔은 읽기만 하고 건드리지 않는다(스펙 §6.3).
+
+    **재시도에 대해 멱등이다.** 병합 스캔 행을 만든 뒤 `registrations`에 결과를
+    PATCH하는데, 이 마지막 PATCH가 실패하면(012 미적용 DB의 42703, PostgREST 5xx)
+    예외가 올라가 잡이 재큐잉되고 **핸들러 전체가 처음부터 다시 돈다.** 그래서
+    쓰기 세 곳을 전부 같은 키로 덮어쓰게 만들었다 - 저장소 객체는
+    `artifacts/registrations/{registration_id}/merged.ply`, scans 행은
+    `registration.merged_scan_id(registration_id)`(UUIDv5)로 결정적이고, 삽입은
+    `db.upsert_scan`이다. 이 장치가 없으면 재시도 3회에 `lineage='registered'`
+    고아 스캔이 3개 남고, `result_scan_id`가 비어 있어 스캔 상세 화면은 "이 스캔을
+    만든 정합 이력을 찾지 못했습니다"만 띄운다.
+
+    남는 한계(은폐하지 않고 명시한다): 마지막 PATCH가 3회 모두 실패하면 병합 스캔
+    행 **하나**는 남는다. Storage와 DB를 한 트랜잭션으로 묶을 수 없어 생기는
+    구조적 한계이며(`handle_report`의 같은 서술 참고), 다만 그 행의 id가 정합
+    id에서 유도되므로 012를 적용하고 다시 실행하면 **같은 행이 제자리에서**
+    복구된다 - 중복이 쌓이지 않는다.
     """
     registration_id = payload["registration_id"]
     reg = db.get_registration(registration_id)
@@ -645,7 +665,7 @@ def handle_register(db, cfg, payload):
         out_dir.mkdir(parents=True, exist_ok=True)
         write_ply(merged, out_dir / "merged.ply")
         storage.upload_dir(f"artifacts/registrations/{registration_id}", out_dir)
-        scan_id = db.insert_scan(_merged_scan_fields(scan_a, registration_id, merged))
+        scan_id = db.upsert_scan(_merged_scan_fields(scan_a, registration_id, merged))
 
     db.update_registration(registration_id, {
         "transform": registration.transform_to_json(result.transform),

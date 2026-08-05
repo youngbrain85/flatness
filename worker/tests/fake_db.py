@@ -343,9 +343,16 @@ class FakeDB(DBClient):
     def update_scan(self, scan_id, fields):
         self.scans[scan_id].update(fields)
 
-    def insert_scan(self, fields):
-        scan_id = str(uuid4())
-        self.scans[scan_id] = {**fields, "id": scan_id}
+    def upsert_scan(self, fields):
+        """PostgREST `Prefer: resolution=merge-duplicates` 시맨틱 - 기본키(id)가 이미
+        있으면 새 행을 만들지 않고 주어진 컬럼만 덮어쓴다.
+
+        호출자가 id를 정해서 넘긴다(정합 병합 스캔은 정합 id에서 결정적으로 유도한다)
+        - 그래야 잡 재시도가 같은 행을 다시 쓸 뿐 고아 스캔을 만들지 않는다.
+        """
+        scan_id = fields["id"]
+        row = self.scans.get(scan_id, {})
+        self.scans[scan_id] = {**row, **fields}
         return scan_id
 
     # -- 정합 (단계 F) ---------------------------------------------------

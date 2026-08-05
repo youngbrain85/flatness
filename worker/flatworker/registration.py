@@ -18,6 +18,8 @@
    점당 12B라, 두 개를 동시에 들면 실측 피크 1.31GiB 위에 겹쳐 쌓여 2GiB 게이트를
    넘긴다. `load_source_points`는 격자를 만들어 점을 뽑은 뒤 **격자를 즉시 버린다**.
 """
+import uuid
+
 import numpy as np
 
 from flatness.core.registration import (check_correspondence_geometry, grid_to_points,
@@ -31,6 +33,31 @@ from flatness.io.reader import CloudInfo, iter_chunks, read_info
 # 상태에서만 일어난다), 5cm는 분석 파이프라인이 쓰는 값과 같아야 병합 결과가
 # 분석 결과를 바꾸지 않는다.
 SUBCELL_M = 0.05
+
+# 병합 스캔 id를 정합 id에서 결정적으로 유도할 때 쓰는 고정 네임스페이스(UUIDv5).
+# ★ **이 값을 절대 바꾸지 마라.** 바꾸면 이미 만들어진 병합 스캔과 재시도가 서로
+#   다른 id를 갖게 되어, 이 상수가 막으려던 고아 스캔이 정확히 그 순간 되살아난다.
+#   값 자체에는 의미가 없다(한 번 정한 임의의 uuid4).
+_MERGED_SCAN_NAMESPACE = uuid.UUID("3f2b6c1e-9a47-4d58-8b0c-2e1d7a5f6c94")
+
+
+def merged_scan_id(registration_id):
+    """정합 하나당 **결정적인** 병합 스캔 id (UUIDv5).
+
+    ★ 잡 재시도 멱등성의 핵심이다. `handle_register`는 병합 스캔 행을 만든 **뒤에**
+    `registrations`에 결과를 PATCH하는데, 그 PATCH가 실패하면(012 미적용 DB의
+    42703, PostgREST 5xx 등) 예외가 올라가 `fn_job_fail`이 잡을 재큐잉하고 **핸들러
+    전체가 처음부터 다시 돈다**. id를 DB가 매번 새로 만들게 두면 재시도마다 새 행이
+    생겨 `max_attempts=3`에서 `lineage='registered'` **고아 스캔이 3개** 남는다 -
+    측정위치 트리에 쌓이는데 `result_scan_id`가 비어 있어 스캔 상세 화면은 "이 스캔을
+    만든 정합 이력을 찾지 못했습니다"만 띄운다. docs/DEPLOY.md §1이 "012 -> 워커"
+    순서를 못 박은 바로 그 배포 사고가 이 결과를 낸다.
+
+    id가 정합 id에서만 유도되므로 몇 번을 재시도해도 **같은 행 하나**를 upsert 한다.
+    저장소 객체 키(`artifacts/registrations/{id}/merged.ply`)도 같은 이유로 이미
+    정합 id 기반이라, 재시도가 파일을 덧쓰기만 하고 쓰레기를 남기지 않는다.
+    """
+    return str(uuid.uuid5(_MERGED_SCAN_NAMESPACE, f"registration:{registration_id}"))
 
 
 def correspondence_arrays(rows):
