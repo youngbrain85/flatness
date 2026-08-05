@@ -478,6 +478,13 @@ alter type data_lineage add value if not exists 'registered';
 
 - [ ] **Step 2: 012를 쓴다 — 카탈로그 가드 + 테이블 + dedup + 함수**
 
+> **구현 중 발견 (커밋 `d965563`)**: **012는 008도 전제한다.** 012의 잡 큐 함수 3종은
+> 009 본문을 물려받아 `slope_judge` 분기를 계속 포함하는데, 배포 문서는 **008·009를
+> 선택 단계로 안내한다.** 008을 건너뛴 채 011·012만 적용하면 파일은 Success로 끝나고,
+> 워커가 **아무 잡이나**(register뿐 아니라 precheck·analyze·import·report까지)
+> claim 하는 순간 잡 큐 전체가 멎는다. **네 번째 가드**로 `slope_judge` enum 값 존재를
+> 확인한다.
+
 009의 가드를 그대로 본떠 **011 없이 012만 Run 하면 즉시 한국어로 거부**하게 한다. 009 주석이 설명한 함정이 여기에도 그대로 적용된다: plpgsql 본문의 SQL은 CREATE 시점에 파싱만 되므로 파일 실행은 성공하고, 나중에 워커가 `register` 잡을 claim하는 순간 잡 큐 전체가 조용히 멎는다.
 
 ```sql
@@ -493,7 +500,18 @@ begin
   end if;
 end $$;
 
-create table if not exists registrations (
+-- ⚠ 정정 (구현 중 발견, 커밋 d965563): 아래 create table은 **쓰면 안 된다.**
+-- registrations는 마이그레이션 007이 이미 만들어 두었다(007_slope_analysis.sql:73-100,
+-- "단계 F에서 사용, 스키마만 먼저 세운다")이고 007은 사용자 DB에 이미 적용돼 있다.
+-- `create table if not exists`는 테이블이 있으면 **본문을 통째로 무시하고 Success로
+-- 끝난다** - overlap_ratio·updated_at이 빠진 채 성공 표시가 뜨고 나중에 워커 PATCH가
+-- 42703으로 죽는다. 실제 012는 alter로 차이만 메웠다:
+--     alter table registrations add column if not exists overlap_ratio double precision;
+--     alter table registrations add column if not exists updated_at timestamptz not null default now();
+-- status는 007의 registration_status enum을 유지한다(값 집합이 정확히 일치하며,
+-- text로 내리면 오타 상태값을 DB가 더는 막지 않는다). RLS도 007의 all_auth를 쓴다.
+-- 아래 블록은 스펙 §3.6의 목표 스키마를 참고용으로 남긴 것이다.
+create table if not exists registrations (   -- 참고용. 실제 012는 alter를 쓴다
   id uuid primary key default gen_random_uuid(),
   source_scan_ids uuid[] not null,
   correspondences jsonb not null default '[]'::jsonb,
