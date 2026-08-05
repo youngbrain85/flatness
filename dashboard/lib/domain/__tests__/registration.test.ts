@@ -178,7 +178,8 @@ describe('겹쳐보기 기하 (RMSE만으로는 못 보는 수평 오정합을 �
   });
 
   // 사이드카 좌표는 파일 단위이고 변환은 미터다. unit_scale을 빼먹으면 mm 파일에서
-  // 1000배 틀린다(워커 align_sources가 대응점에 unit_scale을 곱하는 것과 같은 이유).
+  // 1000배 틀린다(워커 prepare_correspondences가 대응점에 각 소스의 unit_scale을
+  // 곱해 미터로 맞춘 뒤 align_sources에 넘기는 것과 같은 이유).
   it('unit_scale로 파일 단위를 미터로 맞춘다', () => {
     const view = { xMinM: 0, yMaxM: 0.01, scale: 1000, width: 10, height: 10 };
     const [, , , , e, f] = overlayAffine(META_B, 0.001, transform4(IDENTITY_R, [0, 0]), view);

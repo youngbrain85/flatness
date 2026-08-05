@@ -424,10 +424,69 @@ describe('ScanPage 메타·안내 문구 (단계 E)', () => {
 //   (2) unit-confirm-form.tsx의 되돌리기까지 실패해 남은 고아 스캔(그 파일 52-56행
 //       주석이 이 골목을 그대로 적어 놓고 "관리자에게 알리세요"로 끝난다).
 describe('ScanPage 분석 시작 진입점 (단계 F 최종 리뷰 Critical)', () => {
-  it('병합 스캔(ready·분석 행 없음)에 평활도 분석 시작 버튼이 있다', async () => {
+  // ★★ 재리뷰 Critical(C1-c): 1차 수정은 "임포트 스캔은 ready+분석0행 상태에 존재할 수
+  // 없다"고 단정하고 isImport=false를 고정했는데 **틀렸다.** upload-form.tsx는 3)에서
+  // status='ready'로 먼저 승격하고 4)에서야 analyses 행을 만든다 - 그 사이에 탭이
+  // 닫히면 정리 코드가 아예 안 돈다. 그러면 Colab 결과 CSV에 'analyze' 잡이 걸려
+  // Signed_Distance_mm이 무시되고 전 셀이 조용히 "적합"이 된다(C1 사고 계열).
+  //
+  // 아래 세 테스트가 그 세 경로를 각각 못 박는다. 특히 임포트 건은 **실패 방향
+  // 단언**이다 - 1차 수정에서 이 자리를 주석 5줄이 대신했고, 같은 파일이 스스로
+  // 적어 둔 "주석이 사실을 대신하지 못한다"에 정확히 걸렸다.
+  it('경로3(실패 방향): 임포트 고아 스캔(ready·분석 0행)에는 분석 버튼을 띄우지 않는다', async () => {
+    // upload-form.tsx의 mode='import'가 만드는 그대로: lineage='unknown'(DB 기본값이자
+    // 임포트가 쓰는 값), unit_scale=1.0, status='ready', 그리고 precheck를 돌지 않아
+    // height_view_path=null. 여기서 버튼이 뜨면 isImport=false로 'analyze' 잡이 걸린다.
+    vi.mocked(createClient).mockResolvedValue(
+      stubSupabase(mkScan({
+        lineage: 'unknown', status: 'ready', unit_scale: 1.0,
+        original_filename: 'colab_result.csv', file_format: 'csv', height_view_path: null,
+      }), []) as never);
+
+    const el = await ScanPage({ params: Promise.resolve({ id: 'sc1' }) });
+
+    expect(findAll(el, ReanalyzeButton)).toHaveLength(0);
+    // 안내 문구도 새면 안 된다 - "바로 분석할 수 있다"고 말해 놓고 버튼이 없으면
+    // 그 자체가 1차 수정이 고치려던 거짓말의 재발이다.
+    expect(collectText(el).join('')).not.toContain('첫 분석을 시작하세요');
+  });
+
+  it('경로3 변형: JSON 임포트 고아 스캔도 마찬가지로 막는다', async () => {
+    vi.mocked(createClient).mockResolvedValue(
+      stubSupabase(mkScan({
+        lineage: 'unknown', status: 'ready', unit_scale: 1.0,
+        original_filename: 'result.json', file_format: 'json', height_view_path: null,
+      }), []) as never);
+
+    const el = await ScanPage({ params: Promise.resolve({ id: 'sc1' }) });
+
+    expect(findAll(el, ReanalyzeButton)).toHaveLength(0);
+  });
+
+  // 받아들인 트레이드오프의 경계. precheck는 돌았지만 높이 뷰 렌더가 실패해
+  // height_view_path가 비었고(worker의 handle_precheck가 except로 삼킨다) 단위 확정까지
+  // 실패한 스캔은 임포트와 구별할 수 없다 - 고치기 전과 같은 막다른 골목으로 남는다.
+  // 조용한 오답보다 조용한 막다른 골목이 낫다는 판단을 여기 못 박는다.
+  it('판별 불가(높이 뷰 없는 raw 고아 스캔)면 버튼을 띄우지 않는다(받아들인 트레이드오프)', async () => {
+    vi.mocked(createClient).mockResolvedValue(
+      stubSupabase(mkScan({
+        lineage: 'raw', status: 'ready', height_view_path: null,
+      }), []) as never);
+
+    const el = await ScanPage({ params: Promise.resolve({ id: 'sc1' }) });
+
+    expect(findAll(el, ReanalyzeButton)).toHaveLength(0);
+  });
+
+  it('경로1: 병합 스캔(ready·분석 행 없음)에 평활도 분석 시작 버튼이 있다', async () => {
+    // ★ height_view_path를 명시적으로 null로 둔다. 병합 스캔은 precheck를 돌지 않아
+    // 이 값이 없다(worker의 handle_register는 이 필드를 건드리지 않는다) - 임포트
+    // 판별을 height_view_path 하나로만 하면 병합 스캔이 통째로 막힌다.
     vi.mocked(createClient).mockResolvedValue(
       stubSupabase(
-        mkScan({ lineage: 'registered', selected_criteria_id: 'cr-merged' }), [],
+        mkScan({
+          lineage: 'registered', selected_criteria_id: 'cr-merged', height_view_path: null,
+        }), [],
         location, { id: 'reg-9' },
       ) as never);
 
@@ -448,7 +507,8 @@ describe('ScanPage 분석 시작 진입점 (단계 F 최종 리뷰 Critical)', (
   // 된다. 우회로였던 그 화면으로 되돌리는 것은 해법이 아니다.
   it('병합 스캔을 단위 확인 화면으로 되돌리지 않고 그 이유를 밝힌다', async () => {
     vi.mocked(createClient).mockResolvedValue(
-      stubSupabase(mkScan({ lineage: 'registered' }), [], location, { id: 'reg-9' }) as never);
+      stubSupabase(mkScan({ lineage: 'registered', height_view_path: null }), [],
+        location, { id: 'reg-9' }) as never);
 
     const el = await ScanPage({ params: Promise.resolve({ id: 'sc1' }) });
     const hrefs = findAll(el, Link).map((l) => String(l.props.href));
@@ -457,15 +517,22 @@ describe('ScanPage 분석 시작 진입점 (단계 F 최종 리뷰 Critical)', (
     expect(collectText(el).join('')).toContain('이미 미터로 환산돼 있어');
   });
 
-  it('단위 확정 직후 실패로 남은 고아 스캔(raw·ready·분석 없음)도 같은 진입점을 얻는다', async () => {
+  it('경로2: 단위 확정 직후 실패로 남은 고아 스캔(raw·ready·분석 없음)도 같은 진입점을 얻는다', async () => {
+    // 이 스캔은 uploaded -> precheck -> awaiting_unit_confirm을 거쳐 왔으므로
+    // height_view_path가 채워져 있다(worker의 handle_precheck:155). 그 값이 이 스캔이
+    // 임포트가 아님을 증명한다 - 임포트는 precheck를 아예 돌지 않기 때문이다.
     vi.mocked(createClient).mockResolvedValue(
-      stubSupabase(mkScan({ lineage: 'raw', status: 'ready' }), []) as never);
+      stubSupabase(mkScan({
+        lineage: 'raw', status: 'ready',
+        height_view_path: 'artifacts/scans/sc1/height_view.png',
+      }), []) as never);
 
     const el = await ScanPage({ params: Promise.resolve({ id: 'sc1' }) });
     const flatnessBtn = findAll(el, ReanalyzeButton).find((b) => b.props.kind === 'flatness');
 
     expect(flatnessBtn).toBeDefined();
     expect(flatnessBtn?.props.criteriaId).toBe('cr1');
+    expect(flatnessBtn?.props.isImport).toBe(false);
   });
 
   // ★ 기존 흐름(awaiting_unit_confirm -> ready) 회귀 방지. 새 진입점이 단위 미확정
@@ -492,10 +559,27 @@ describe('ScanPage 분석 시작 진입점 (단계 F 최종 리뷰 Critical)', (
     expect(findAll(el, ReanalyzeButton)).toHaveLength(0);
   });
 
+  // ★ 재리뷰 D6: 상태 조건의 경계를 못 박는다. 이전에는 'ready'를 'archived'까지
+  // 넓혀도 아무 테스트가 잡지 않았다. 보관된 스캔에 새 분석을 걸 수 있으면 안 된다.
+  it('D6 경계: 보관된(archived) 스캔에는 분석 시작 버튼을 띄우지 않는다', async () => {
+    vi.mocked(createClient).mockResolvedValue(
+      stubSupabase(mkScan({
+        status: 'archived', height_view_path: 'artifacts/scans/sc1/height_view.png',
+      }), []) as never);
+
+    const el = await ScanPage({ params: Promise.resolve({ id: 'sc1' }) });
+
+    expect(findAll(el, ReanalyzeButton)).toHaveLength(0);
+  });
+
   it('평활도 분석이 이미 있으면 진입점이 겹쳐 뜨지 않는다(재분석 버튼 하나뿐)', async () => {
+    // height_view_path를 채워 provenNotImport를 참으로 만든다 - 그러지 않으면 이
+    // 테스트가 "임포트 판별에 막혀서" 통과해 정작 막으려던 중복 렌더를 못 본다.
     const flatness = mkAnalysis({ id: 'f1', kind: 'flatness' });
     vi.mocked(createClient).mockResolvedValue(
-      stubSupabase(mkScan({ status: 'ready' }), [flatness]) as never);
+      stubSupabase(mkScan({
+        status: 'ready', height_view_path: 'artifacts/scans/sc1/height_view.png',
+      }), [flatness]) as never);
 
     const el = await ScanPage({ params: Promise.resolve({ id: 'sc1' }) });
     const flatnessBtns = findAll(el, ReanalyzeButton).filter((b) => b.props.kind === 'flatness');

@@ -107,12 +107,42 @@ export default async function ScanPage({ params }: { params: Promise<{ id: strin
   // "파일 좌표가 m·cm·mm 중 무엇인지 확정하는 단계"라 이미 미터인 점군에는 틀린
   // 안내이고, 거기서 mm를 고르면 멀쩡한 좌표가 1/1000로 망가진다.
   //
-  // isImport=false로 고정해도 안전하다(C1 사고 계열 재확인): 임포트 스캔은 이 상태에
-  // 존재할 수 없다. upload-form.tsx가 mode='import'에서 status='ready' 승격과 analyses
-  // 행 생성을 같은 제출 안에서 하고, 그 행 생성·엔큐가 실패하면 discardScan이 스캔
-  // 자체를 soft delete 한다(125-136행). 즉 "ready + 평활도 행 0개"인 임포트 스캔은
-  // 어느 경로로도 만들어지지 않는다.
-  const showFirstFlatness = s.status === 'ready' && !latestFlatness;
+  // ★★ 재리뷰 Critical(C1-c): 여기서 isImport를 false로 **고정하면 안 된다.**
+  // 1차 수정은 "임포트 스캔은 이 상태에 존재할 수 없다"고 단정했는데 틀렸다.
+  // upload-form.tsx는 3)에서 status='ready'로 먼저 승격하고 4)에서야 analyses 행을
+  // 만든다(102행 vs 125행). 그 사이에 탭이 닫히거나 연결이 끊기면 정리 코드가 아예
+  // 실행되지 않고, discardScan조차 자신의 update 오류를 검사하지 않는다. 즉 임포트
+  // 스캔도 "ready + 평활도 행 0개"로 남을 수 있다. 그 스캔에 isImport=false를 주면
+  // Colab 결과 CSV에 'analyze' 잡이 걸려 Signed_Distance_mm이 통째로 무시되고 전 셀이
+  // 조용히 "적합"이 된다(reanalyze-button.tsx 21-33행이 적어 둔 C1 사고 그대로).
+  // 고치기 전에는 조용한 막다른 골목(안전)이었지만 그렇게 하면 조용한 오답이 된다.
+  //
+  // 판별자로 쓸 수 있는 것과 없는 것:
+  //   - lineage: 못 쓴다. 임포트는 'unknown'인데 그 값은 DB 기본값이자 사용자가 스캔
+  //     모드에서도 고를 수 있다(upload-form.tsx).
+  //   - file_format/확장자: 단독으로는 못 쓴다. 워커의 _IMPORT_HANDLERS는 .csv/.json
+  //     인데 SCAN_EXTS에도 'csv'가 있다(lib/upload/validate.ts) - csv는 양쪽이다.
+  //   - height_view_path: **한 방향으로 확실하다.** 이 값은 handle_precheck만 채우고
+  //     (worker/flatworker/jobs.py:155) 임포트는 precheck를 아예 돌지 않으므로,
+  //     값이 있으면 임포트가 아니다. 다만 **병합 스캔도 precheck를 돌지 않아 이 값이
+  //     없다**(handle_register는 이 필드를 건드리지 않는다) - 이것만 쓰면 병합 스캔이
+  //     막힌다.
+  //   - lineage==='registered': 시스템만 쓰는 값이고(types.ts) 워커가 만든 merged.ply라
+  //     역시 임포트가 아니다.
+  // 그래서 두 신호의 **합집합**을 쓴다. 둘 다 "임포트가 아님"을 한 방향으로 증명하는
+  // 신호이고, 어느 쪽도 아니면 판별 불가다.
+  //
+  // 판별 불가일 때는 버튼을 숨긴다 - 이 파일이 구배 버튼에서 이미 쓰는 정책과 같다
+  // (isImportUnknownOrTrue). 남는 사각은 "precheck는 돌았는데 높이 뷰 렌더가 실패해
+  // height_view_path가 비었고, 게다가 단위 확정까지 실패한" 스캔뿐이다. 그 경우는
+  // 고치기 전과 같은 막다른 골목으로 남는다 - 받아들인 트레이드오프다. 조용한
+  // 오답보다 조용한 막다른 골목이 낫다.
+  //
+  // truthy 검사인 이유는 unit-confirm-form.tsx와 같다: 010을 아직 적용하지 않은 DB에서는
+  // select('*')에 이 컬럼이 없어 undefined로 온다. `!== null`로 쓰면 그 DB의 모든
+  // 스캔이 "임포트가 아님"으로 잘못 증명된다.
+  const provenNotImport = s.lineage === 'registered' || !!s.height_view_path;
+  const showFirstFlatness = s.status === 'ready' && !latestFlatness && provenNotImport;
 
   return (
     <main className="mx-auto max-w-6xl space-y-4 p-6">
@@ -195,6 +225,10 @@ export default async function ScanPage({ params }: { params: Promise<{ id: strin
               // ReanalyzeButton은 이를 "진행 중 아님"으로 보고 버튼을 활성 상태로 둔다
               // (구배 첫 분석과 같은 취급). criteriaId는 스캔에 현재 적용된 기준이다;
               // 병합 스캔은 이 값을 원본 A에서 물려받는다(worker의 _merged_scan_fields).
+              //
+              // isImport={false}는 가정이 아니라 provenNotImport가 증명한 값이다 - 이
+              // 섹션은 임포트가 아님이 증명된 스캔에서만 그려진다(위 주석). 이 게이트를
+              // 지우면 Colab CSV에 'analyze' 잡이 걸린다.
               <ReanalyzeButton scanId={id} userId={user.id} surface={s.surface} kind="flatness"
                 criteriaId={s.selected_criteria_id ?? undefined}
                 isImport={false} />

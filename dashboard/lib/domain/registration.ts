@@ -121,8 +121,9 @@ export interface OverlayView {
  *
  * 세 단계다:
  *   1. 픽셀 -> 파일 단위 월드. 이미지 v=0이 격자 iy=ny-1(월드 y 최댓값) 행이다.
- *   2. x unit_scale -> 미터. 두 스캔의 배율이 서로 다를 수 있다(워커 align_sources와
- *      같은 이유) - mm 파일에서 이 곱을 빼면 1000배 틀린다.
+ *   2. x unit_scale -> 미터. 두 스캔의 배율이 서로 다를 수 있다(워커
+ *      prepare_correspondences가 대응점에 각 소스의 unit_scale을 곱하는 것과 같은
+ *      이유) - mm 파일에서 이 곱을 빼면 1000배 틀린다.
  *   3. 정합 변환(4x4, 미터) 적용. transform이 null이면 A(기준 스캔)이라 그대로 둔다.
  */
 function pixelToMeterA(

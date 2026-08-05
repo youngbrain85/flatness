@@ -110,9 +110,17 @@ export function UploadForm({ sites, locations, userId, initialSiteId, initialLoc
       // 재업로드를 안내하는 편이 정직하다. 이미 올라간 Storage 객체는 남는다(티켓 58).
       const scanId = scan.id;
       async function discardScan(message: string) {
-        await supabase.from('scans')
+        // ★ 재리뷰: 이 update의 오류를 검사하지 않은 채 "등록되지 않았습니다"라고
+        // 단언하면 안 된다. insert를 죽인 연결 장애는 이 삭제도 죽인다 - 그러면
+        // 스캔이 status='ready'(임포트 모드는 3)에서 이미 승격했다) + analyses 0행으로
+        // 남는데, 화면은 정리됐다고 말한다. 그 상태가 바로 스캔 상세의 "분석 시작"
+        // 진입점이 임포트인지 아닌지 판별해야 하는 대상이다(app/scans/[id]/page.tsx).
+        // 실패를 삼키지 않고 사실대로 알린다.
+        const { error: delErr } = await supabase.from('scans')
           .update({ deleted_at: new Date().toISOString() }).eq('id', scanId);
-        setError(`${message} 업로드한 스캔은 등록되지 않았습니다. 다시 시도하세요.`);
+        setError(delErr
+          ? `${message} 업로드한 스캔을 정리하지도 못했습니다(${delErr.message}). 이 스캔이 분석 없이 목록에 남아 있을 수 있으니 관리자에게 알리세요.`
+          : `${message} 업로드한 스캔은 등록되지 않았습니다. 다시 시도하세요.`);
         setBusy(false);
       }
 
