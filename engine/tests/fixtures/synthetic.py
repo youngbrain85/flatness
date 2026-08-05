@@ -14,6 +14,52 @@ def flat_floor(size=(6.0, 6.0), spacing=0.02, noise_sd=0.0, tilt=(0.0, 0.0), see
     return np.column_stack([gx.ravel(), gy.ravel(), z.ravel()])
 
 
+def bumpy_surface_z(xy_x, xy_y, size=(8.0, 6.0), n_bumps=None, seed=0):
+    """무작위 범프 높이장 z(x,y). 임의 좌표에서 평가할 수 있어야 두 스캔이
+    **같은 표면을 서로 다른 점으로** 샘플링할 수 있다(현실 조건)."""
+    rng = np.random.default_rng(seed)
+    if n_bumps is None:
+        n_bumps = max(8, int(0.3 * size[0] * size[1]))
+    z = np.zeros(np.shape(xy_x), dtype=np.float64)
+    for _ in range(n_bumps):
+        cx = rng.uniform(0.12, 0.88) * size[0]
+        cy = rng.uniform(0.12, 0.88) * size[1]
+        sx = rng.uniform(0.18, 0.55)
+        sy = rng.uniform(0.18, 0.55)
+        amp = rng.uniform(0.012, 0.035) * (1.0 if rng.random() < 0.5 else -1.0)
+        z += amp * np.exp(-(((xy_x - cx) / sx) ** 2 + ((xy_y - cy) / sy) ** 2))
+    return z
+
+
+def bumpy_floor(size=(8.0, 6.0), spacing=0.05, n_bumps=None, seed=0,
+                sample_jitter=0.0, sample_seed=None):
+    """무작위 범프를 얹은 바닥 (n,3) float64[m] — 정합 테스트 전용 픽스처.
+
+    완전 평면을 쓰면 안 된다. 수평 평면은 면내 2자유도와 yaw에 대해 구조적으로
+    퇴화해서(설계 결정 F1) 픽스처 자체가 변이를 못 잡는 상태가 된다. 이 단계에서만
+    그 함정을 네 번 겪었다. 그래서 폭·높이·부호·위치가 전부 무작위인 이방성
+    가우시안 범프를 얹어 **면내 특징**을 준다.
+
+    의도적으로 피한 것: 대칭 배치, 정사각 격자(기본 size가 8x6), bbox 기하 중심
+    (범프 중심을 12~88% 구간에서 뽑고 sx!=sy로 회전 대칭도 깬다).
+    범프 밀도는 면적에 비례시켜 크기를 바꿔도 특징 밀도가 유지되게 한다.
+
+    `sample_jitter`>0이면 표본 위치를 흩뿌린다. 표면(`seed`)은 그대로 두고
+    `sample_seed`만 바꾸면 **같은 바닥을 다른 점으로 스캔한** 두 점군이 나온다.
+    정합 테스트에서 두 점군의 점이 1:1로 동일하면 최근접점 탐색이 '같은 점'을
+    찾아버려 정합이 실제보다 훨씬 쉬워진다 — 그 교락을 없애는 용도다.
+    """
+    xs = np.arange(0.0, size[0] + spacing / 2, spacing)
+    ys = np.arange(0.0, size[1] + spacing / 2, spacing)
+    gx, gy = np.meshgrid(xs, ys)
+    if sample_jitter > 0:
+        srng = np.random.default_rng(seed if sample_seed is None else sample_seed)
+        gx = gx + srng.uniform(-sample_jitter, sample_jitter, gx.shape)
+        gy = gy + srng.uniform(-sample_jitter, sample_jitter, gy.shape)
+    z = bumpy_surface_z(gx, gy, size=size, n_bumps=n_bumps, seed=seed)
+    return np.column_stack([gx.ravel(), gy.ravel(), z.ravel()])
+
+
 def flat_wall(length=4.0, height=2.4, spacing=0.02, y0=0.0, axis='x', noise_sd=0.0, seed=0):
     """수직 벽 점군. axis='x': x가 벽 방향·y=y0(법선 y), axis='y': y가 벽 방향·x=y0."""
     rng = np.random.default_rng(seed)
