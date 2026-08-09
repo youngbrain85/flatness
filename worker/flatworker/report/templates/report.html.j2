@@ -70,7 +70,9 @@ pre.summary { white-space: pre-wrap; font-family: inherit; font-size: 10pt; marg
     <tbody>
       {% for a in snap.analyses %}
       <tr>
-        <td>{{ a.surface_label }}{% if a.is_external %} <span class="note">(외부 결과)</span>{% endif %}</td>
+        {# 구배는 같은 바닥 스캔에서 나오므로 표면 라벨만 쓰면 평활도 행과 '바닥'으로
+           겹쳐 육안 구별이 안 된다 - 종류를 문구로 밝힌다(종합의견의 말머리와 동일). #}
+        <td>{{ a.surface_label }}{% if a.kind == 'slope' %} {{ a.kind_label }}{% endif %}{% if a.is_external %} <span class="note">(외부 결과)</span>{% endif %}</td>
         <td>{{ a.scan.scanned_at or '-' }}</td>
         <td>{{ a.scan.operator_name or '-' }}</td>
         <td>{{ a.scan.device or '-' }}</td>
@@ -91,6 +93,11 @@ pre.summary { white-space: pre-wrap; font-family: inherit; font-size: 10pt; marg
 <section class="part">
   <h2>2. 분석 개요</h2>
   {% for a in snap.analyses %}
+  {# 구배 분석은 이 표가 읽는 키(mm 통계·등급 분포·직선자 스팬)를 하나도 갖지
+     않는다. 0/'-'로 채워 넣으면 측정한 적 없는 수치가 진짜 결과처럼 인쇄되므로
+     여기서 건너뛰고 구배 전용 장이 맡는다. 긍정형으로 판별하는 이유는
+     snapshot._slope_analysis_entry 주석 참고(옛 스냅샷에는 kind 키가 없다). #}
+  {% if a.kind != 'slope' %}
   <h3>{{ loop.index }}) {{ a.surface_label }} 분석</h3>
   <table class="kv">
     <tr><th>입력 파일</th><td>{{ a.scan.original_filename or a.overview.file or '-' }} ({{ a.scan.file_format or '-' }})</td></tr>
@@ -160,6 +167,7 @@ pre.summary { white-space: pre-wrap; font-family: inherit; font-size: 10pt; marg
   {% for w in a.warnings %}
   <div class="warn">{{ w.text }}</div>
   {% endfor %}
+  {% endif %}
   {% endif %}
   {% endfor %}
 
@@ -244,6 +252,9 @@ pre.summary { white-space: pre-wrap; font-family: inherit; font-size: 10pt; marg
 <section class="part">
   <h2>4. 시각자료</h2>
   {% for a in snap.analyses %}
+  {# 구배 산출물(slope_map.png)은 구배 전용 장이 배수구 위치와 함께 싣는다.
+     여기서 돌면 자산 목록이 전부 비어 머리글만 있는 빈 절이 생긴다. #}
+  {% if a.kind != 'slope' %}
   <h3>{{ loop.index }}) {{ a.surface_label }} · {{ a.scan.scanned_at or '-' }}</h3>
   {% for h in a.assets.heatmaps %}
   <figure>
@@ -270,6 +281,7 @@ pre.summary { white-space: pre-wrap; font-family: inherit; font-size: 10pt; marg
     <img src="{{ a.assets.histogram | asset(report_id) }}" alt="셀 편차 분포" />
     <figcaption>셀 편차 분포(점선은 허용치·재시공 임계)</figcaption>
   </figure>
+  {% endif %}
   {% endif %}
   {% endfor %}
 

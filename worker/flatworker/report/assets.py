@@ -19,6 +19,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from flatworker.artifacts import staging_dir
+from flatworker.report.context import analysis_kind
 
 
 def report_dir(data_dir, report_id) -> Path:
@@ -78,12 +79,40 @@ def _fetch_if_exists(storage, key, dst):
     return True
 
 
+def _copy_slope_assets(storage, report_id, bundle, dst_dir, notes):
+    """구배 산출물 복사 - 과업지시서 11·12쪽이 요구한 PNG(시각자료)를 박제한다.
+
+    평활도 전용 자산(판정 히트맵·정밀 편차맵·3D 프리뷰·셀 편차 히스토그램)은
+    구배 분석에 애초에 존재하지 않는다. 빈 목록을 그대로 두고 notes도 남기지
+    않는다 - "파일이 없어 제외했다"는 안내는 없는 것이 정상인 자산에 대해서는
+    거짓 경보이고, 보고서를 받는 사람에게 산출 실패로 읽힌다.
+
+    구배 히스토그램은 만들지 않는다(계획서 "범위 밖") - 평활도의 편차 히스토그램은
+    mm 편차 분포지만 구배는 %p 편차라 축과 임계선의 의미가 달라 별도 판단이 필요하다.
+    """
+    analysis_id = str(bundle.analysis["id"])
+    # stats.artifacts.map_png은 이미 버킷-상대 전체 경로다(flatworker/slope.py의
+    # normalize_slope_stats) - artifacts_dir와 다시 합치면 경로가 중복된다.
+    src = ((bundle.stats.get("artifacts") or {}).get("map_png")
+           or f"{bundle.analysis['artifacts_dir']}/slope_map.png")
+    slope_map = None
+    if _fetch_if_exists(storage, src, dst_dir / "slope_map.png"):
+        slope_map = assets_rel(report_id, analysis_id, "slope_map.png")
+    else:
+        notes.append(f"분석 {analysis_id}: 구배 판정 지도(slope_map.png) 파일이 없어 "
+                     "보고서에서 제외했습니다.")
+    return {"heatmaps": [], "deviation": [], "preview3d": [], "histogram": None,
+            "slope_map": slope_map}
+
+
 def _copy_analysis_assets(storage, report_id, bundle, assets_root, notes):
     analysis_id = str(bundle.analysis["id"])
     src_prefix = bundle.analysis["artifacts_dir"]
     dst_dir = assets_root / analysis_id
     dst_dir.mkdir(parents=True, exist_ok=True)
     stats = bundle.stats
+    if analysis_kind(bundle.analysis) == "slope":
+        return _copy_slope_assets(storage, report_id, bundle, dst_dir, notes)
     is_wall = stats.get("meta", {}).get("surface") == "wall"
 
     heatmaps = []

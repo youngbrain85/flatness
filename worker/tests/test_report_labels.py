@@ -7,8 +7,9 @@
 import re
 from pathlib import Path
 
-from flatworker.report.labels import (GRADE_COLOR, GRADE_LABEL, LINEAGE_LABEL, SURFACE_LABEL,
-                                      WARNING_LABEL, ZONE_STATUS_LABEL, warning_label)
+from flatworker.report.labels import (ANALYSIS_KIND_LABEL, GRADE_COLOR, GRADE_LABEL,
+                                      LINEAGE_LABEL, SURFACE_LABEL, WARNING_LABEL,
+                                      ZONE_STATUS_LABEL, warning_label)
 
 _LABELS_TS = Path(__file__).resolve().parents[2] / "dashboard" / "lib" / "domain" / "labels.ts"
 
@@ -58,6 +59,13 @@ def test_surface_lineage_zone_labels_match_dashboard():
     assert surface == SURFACE_LABEL
     assert lineage == LINEAGE_LABEL
     assert zone == ZONE_STATUS_LABEL
+
+
+def test_analysis_kind_label_matches_dashboard():
+    """보고서가 평활도와 구배를 문구로 구별하려면 두 곳의 종류 라벨이 같아야 한다."""
+    kinds = _extract_object(_ts(), "ANALYSIS_KIND_LABEL")
+    assert len(kinds) == 2, "파싱 실패 의심(analyses.kind는 flatness/slope 2값)"
+    assert kinds == ANALYSIS_KIND_LABEL
 
 
 def test_warning_dictionary_matches_dashboard():

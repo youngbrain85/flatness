@@ -2,11 +2,11 @@
 from flatworker.config import Config
 from flatworker.report.assets import build_assets
 from flatworker.report.context import load_report_context
-from flatworker.report.html import asset_src, fmt_mm, render_html
+from flatworker.report.html import asset_src, fmt_mm, render_html, section_analyses
 from flatworker.report.snapshot import build_snapshot
 from flatworker.storage import LocalStorage
 from tests.fake_db import FakeDB
-from tests.test_report_snapshot import _seed
+from tests.test_report_snapshot import _seed, _seed_slope
 
 
 def _cfg(tmp_path):
@@ -92,6 +92,34 @@ def test_render_html_includes_deviation_figure(tmp_path):
     assert "판정 등급 산출에는 사용되지 않으며" in html
     assert "1m 판정 셀" in html
     assert "—" not in html                                  # 사용자 대면 문자열 U+2014 금지
+
+
+def test_slope_analysis_is_not_rendered_as_a_flatness_section(tmp_path):
+    """구배 분석은 scans.surface가 'floor'라 걸러내지 않으면 '3.1 수평면(바닥)'에
+    섞인다 - 구간·레벨·mm 편차가 전부 없어 머리글만 있는 빈 표가 박힌다.
+
+    구배 장(Task 2)이 들어올 자리는 여기가 아니므로 이 목록에서 뺀다.
+    """
+    db, cfg = FakeDB(), _cfg(tmp_path)
+    _seed(db, cfg)
+    _seed_slope(db, cfg)
+    artifacts = cfg.data_dir / "artifacts" / "an1"
+    for name in ("heatmap.png", "preview3d.png"):
+        (artifacts / name).write_bytes(b"\x89PNG-fake")
+    storage = _storage(tmp_path)
+    ctx = load_report_context(db, storage, "r1")
+    snap = build_snapshot(ctx, build_assets(db, storage, "r1", ctx))
+
+    assert len(snap["analyses"]) == 2, "픽스처 확인: 평활도 + 구배 두 건이어야 한다"
+    assert [a["analysis_id"] for a in section_analyses(snap["analyses"], "floor")] == ["an1"]
+    assert section_analyses(snap["analyses"], "wall") == []
+
+    html = render_html(snap)
+    body = html[html.index("3. 구간별 결과"):html.index("4. 시각자료")]
+    assert "slope-parking-ramp" not in body     # 구배 기준이 평활도 구간표에 새면 안 된다
+    assert "구역 1" in body                      # 평활도 구간표는 그대로다
+    # 표지 측정 개요에는 실리되 평활도와 문구로 구별된다(둘 다 같은 바닥 스캔이다)
+    assert "slope-parking-ramp" in html and "바닥 구배" in html
 
 
 def test_render_html_tolerates_snapshot_without_deviation_key(tmp_path):
