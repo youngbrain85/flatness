@@ -4,16 +4,40 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { enqueueJob } from '@/lib/domain/jobs';
-import { SURFACE_LABEL } from '@/lib/domain/labels';
+import { ANALYSIS_KIND_LABEL, SURFACE_LABEL } from '@/lib/domain/labels';
 import { buildDraftOpinion } from '@/lib/domain/reports';
-import type { Surface } from '@/lib/domain/types';
+import type { AnalysisKind, Surface } from '@/lib/domain/types';
 
 export interface ReportCandidate {
   analysis_id: string;
+  /** 단계 H: 후보 목록에서 평활도와 구배를 **문구로** 구별하기 위한 값. */
+  kind: AnalysisKind;
   surface: Surface;
   scanned_at: string;
   verdict_label: string;
   summary: string | null;
+  /**
+   * 선택 불가 사유(한국어 문장). null이면 선택할 수 있다.
+   * 화면에서 감추지 않고 사유를 그대로 보여준다 - 완료된 분석이 설명 없이
+   * 사라지면 사용자가 원인을 알 수 없다. 판단 근거는 app/reports/new/page.tsx의
+   * judgeBlockReason 주석.
+   */
+  blocked_reason: string | null;
+}
+
+/** 후보에 실린 종류를 제목 문구로. 실릴 수 있는 것만 세야 표지가 거짓이 되지 않는다. */
+function kindTitleLabel(candidates: ReportCandidate[]): string {
+  const usable = candidates.filter((c) => !c.blocked_reason);
+  // 선택 가능한 후보가 하나도 없으면 남은 후보의 종류를 따른다. 여기서 '평활도'로
+  // 되돌리면 화면에 있지도 않은 종류를 제목이 단언하게 된다.
+  const source = usable.length > 0 ? usable : candidates;
+  const kinds = [...new Set(source.map((c) => c.kind))].sort();
+  return kinds.length > 0 ? kinds.map((k) => ANALYSIS_KIND_LABEL[k]).join('·') : '평활도';
+}
+
+/** 종합의견 초안의 항목 머리말. 같은 바닥에 평활도와 구배가 함께 실릴 수 있다. */
+function opinionLabel(c: ReportCandidate): string {
+  return `${ANALYSIS_KIND_LABEL[c.kind]} ${SURFACE_LABEL[c.surface]}`;
 }
 
 export function ReportCreateForm({ locationId, locationLabel, candidates }: {
@@ -22,17 +46,22 @@ export function ReportCreateForm({ locationId, locationLabel, candidates }: {
   candidates: ReportCandidate[];
 }) {
   const router = useRouter();
-  const [title, setTitle] = useState(`${locationLabel} 평활도 분석 보고서`);
-  const [selected, setSelected] = useState<string[]>(candidates.map((c) => c.analysis_id));
+  const kindLabel = kindTitleLabel(candidates);
+  const [title, setTitle] = useState(`${locationLabel} ${kindLabel} 분석 보고서`);
+  const [selected, setSelected] = useState<string[]>(
+    candidates.filter((c) => !c.blocked_reason).map((c) => c.analysis_id),
+  );
   const [opinion, setOpinion] = useState(
-    buildDraftOpinion(candidates.map((c) => ({
-      surfaceLabel: SURFACE_LABEL[c.surface], text: c.summary,
+    buildDraftOpinion(candidates.filter((c) => !c.blocked_reason).map((c) => ({
+      surfaceLabel: opinionLabel(c), text: c.summary,
     }))),
   );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   function toggle(analysisId: string) {
+    // disabled 속성이 우회돼도(자동화·확장 프로그램) 선택되지 않게 여기서도 막는다
+    if (candidates.find((c) => c.analysis_id === analysisId)?.blocked_reason) return;
     setSelected((prev) => (prev.includes(analysisId)
       ? prev.filter((id) => id !== analysisId)
       : [...prev, analysisId]));
@@ -52,7 +81,7 @@ export function ReportCreateForm({ locationId, locationLabel, candidates }: {
       .from('reports')
       .insert({
         location_id: locationId,
-        title: title.trim() || '평활도 분석 보고서',
+        title: title.trim() || `${kindLabel} 분석 보고서`,
         opinion_text: opinion.trim() || null,
         created_by: auth?.user?.id ?? null,
       })
@@ -102,16 +131,26 @@ export function ReportCreateForm({ locationId, locationLabel, candidates }: {
       <fieldset>
         <legend className="text-sm font-medium">포함할 분석</legend>
         <p className="text-xs text-slate-500">
-          같은 측정위치의 완료된 최신 분석만 후보로 표시됩니다(바닥과 벽면을 함께 묶을 수 있습니다).
+          같은 측정위치의 완료된 최신 분석만 후보로 표시됩니다(평활도와 구배, 바닥과 벽면을 함께 묶을 수 있습니다).
         </p>
         <ul className="mt-2 space-y-1">
           {candidates.map((c) => (
             <li key={c.analysis_id} className="rounded border p-2 text-sm">
-              <label className="flex items-center gap-2">
+              {/* 종류는 **문구로** 앞세운다. 색만으로 구별하지 않는다(스펙 §7.2). */}
+              <label className={`flex items-center gap-2 ${c.blocked_reason ? 'text-slate-400' : ''}`}>
                 <input type="checkbox" checked={selected.includes(c.analysis_id)}
+                  disabled={!!c.blocked_reason}
                   onChange={() => toggle(c.analysis_id)} />
-                <span>{SURFACE_LABEL[c.surface]} · {c.scanned_at} · 판정 {c.verdict_label}</span>
+                <span>
+                  {ANALYSIS_KIND_LABEL[c.kind]} · {SURFACE_LABEL[c.surface]} · {c.scanned_at} ·
+                  {' '}판정 {c.verdict_label}
+                </span>
               </label>
+              {c.blocked_reason && (
+                <p className="mt-1 rounded border border-amber-300 bg-amber-50 p-2 text-xs text-amber-800">
+                  {c.blocked_reason}
+                </p>
+              )}
             </li>
           ))}
         </ul>

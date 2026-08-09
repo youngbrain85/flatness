@@ -20,11 +20,17 @@ h1 { font-size: 20pt; margin: 0 0 6mm; }
 h2 { font-size: 13pt; margin: 0 0 3mm; border-bottom: 1.2pt solid #1f2937; padding-bottom: 1.5mm; }
 h3 { font-size: 11pt; margin: 5mm 0 2mm; }
 h4 { font-size: 10pt; margin: 4mm 0 1.5mm; color: #334155; }
+/* 머리글만 페이지 끝에 홀로 남는 것을 막는다(실제 렌더에서 머리글이 앞 페이지
+   바닥에, 그 표는 다음 페이지에 떨어졌다). 이 style 블록의 주석은 모든 보고서에
+   실리므로 특정 분석 종류의 어휘를 적지 않는다. */
+h3, h4 { break-after: avoid; page-break-after: avoid; }
 .part { page-break-before: always; }
 .part.first { page-break-before: auto; }
 table { width: 100%; border-collapse: collapse; font-size: 9pt; margin-bottom: 3mm; }
 th, td { border: 0.4pt solid #cbd5e1; padding: 1.3mm 2mm; text-align: left; vertical-align: top; }
-th { background: #f1f5f9; }
+/* 한국어 머리글이 낱말 가운데서 잘리지 않게 한다 - 띄어쓰기 자리에서만 줄을
+   바꾼다(실제 렌더에서 두 어절 머리글이 어절 중간에서 끊겼다). */
+th { background: #f1f5f9; word-break: keep-all; }
 td.num, th.num { text-align: right; }
 table.kv th { width: 26%; background: #f8fafc; }
 .badge { display: inline-block; padding: 0.4mm 2.2mm; border-radius: 1.5mm; color: #fff; font-weight: 700; font-size: 9pt; }
@@ -70,7 +76,9 @@ pre.summary { white-space: pre-wrap; font-family: inherit; font-size: 10pt; marg
     <tbody>
       {% for a in snap.analyses %}
       <tr>
-        <td>{{ a.surface_label }}{% if a.is_external %} <span class="note">(외부 결과)</span>{% endif %}</td>
+        {# 구배는 같은 바닥 스캔에서 나오므로 표면 라벨만 쓰면 평활도 행과 '바닥'으로
+           겹쳐 육안 구별이 안 된다 - 종류를 문구로 밝힌다(종합의견의 말머리와 동일). #}
+        <td>{{ a.surface_label }}{% if a.kind == 'slope' %} {{ a.kind_label }}{% endif %}{% if a.is_external %} <span class="note">(외부 결과)</span>{% endif %}</td>
         <td>{{ a.scan.scanned_at or '-' }}</td>
         <td>{{ a.scan.operator_name or '-' }}</td>
         <td>{{ a.scan.device or '-' }}</td>
@@ -91,6 +99,11 @@ pre.summary { white-space: pre-wrap; font-family: inherit; font-size: 10pt; marg
 <section class="part">
   <h2>2. 분석 개요</h2>
   {% for a in snap.analyses %}
+  {# 구배 분석은 이 표가 읽는 키(mm 통계·등급 분포·직선자 스팬)를 하나도 갖지
+     않는다. 0/'-'로 채워 넣으면 측정한 적 없는 수치가 진짜 결과처럼 인쇄되므로
+     여기서 건너뛰고 구배 전용 장이 맡는다. 긍정형으로 판별하는 이유는
+     snapshot._slope_analysis_entry 주석 참고(옛 스냅샷에는 kind 키가 없다). #}
+  {% if a.kind != 'slope' %}
   <h3>{{ loop.index }}) {{ a.surface_label }} 분석</h3>
   <table class="kv">
     <tr><th>입력 파일</th><td>{{ a.scan.original_filename or a.overview.file or '-' }} ({{ a.scan.file_format or '-' }})</td></tr>
@@ -160,6 +173,92 @@ pre.summary { white-space: pre-wrap; font-family: inherit; font-size: 10pt; marg
   {% for w in a.warnings %}
   <div class="warn">{{ w.text }}</div>
   {% endfor %}
+  {% endif %}
+  {% endif %}
+
+  {# 구배 개요 - 별도 장을 만들지 않고 여기에 둔다. 구배만 담긴 보고서에서 이 절을
+     빼면 §2가 머리글과 불확도 고지만 남은 빈 장이 되고, 무엇보다 과업지시서 11쪽
+     산출 항목(평균편차·표준편차·최대편차)이 실릴 자리가 없어진다. 셀별 값은
+     '3.3 바닥 구배', 판정 지도는 '4. 시각자료'가 맡는다. #}
+  {% if a.kind == 'slope' %}
+  <h3>{{ loop.index }}) {{ a.surface_label }} {{ a.kind_label }} 분석</h3>
+  <table class="kv">
+    <tr><th>입력 파일</th><td>{{ a.scan.original_filename or a.overview.file or '-' }} ({{ a.scan.file_format or '-' }})</td></tr>
+    <tr><th>점 수</th><td>{{ a.overview.n_points | num }}</td></tr>
+    <tr><th>단위 배율</th><td>{{ a.scan.unit_scale if a.scan.unit_scale is not none else '-' }} (m 기준)</td></tr>
+    <tr><th>데이터 계보</th><td>{{ a.scan.lineage_label }}</td></tr>
+    <tr><th>분석 파라미터</th><td>서브셀 {{ a.overview.subcell_m }}m · 판정 셀 {{ a.overview.cell_m }}m x {{ a.overview.cell_m }}m 격자</td></tr>
+    <tr><th>{{ a.overview.coverage_label }}</th><td>{{ a.overview.coverage_pct }}%</td></tr>
+    {# 배수구 좌표는 판정 지도의 캡션에도 넣지만 여기에도 남긴다 - 지도 파일이
+       빠진 보고서에서도 방향 판정의 기준점은 읽을 수 있어야 한다. #}
+    <tr><th>배수구 위치</th>
+      <td>
+        {% if a.slope.drain_points %}
+        {% for p in a.slope.drain_points %}({{ '%.2f' | format(p.x) }}, {{ '%.2f' | format(p.y) }}){% if not loop.last %}, {% endif %}{% endfor %}
+        {% else %}지정되지 않음{% endif %}
+      </td>
+    </tr>
+    <tr><th>엔진 버전</th><td>{{ a.engine_version or '-' }}</td></tr>
+    <tr><th>적용 기준</th>
+      <td>
+        {{ a.criteria.name }} ({{ a.criteria.source }})<br />
+        설계 구배 {{ a.slope.design_pct }}% · 허용 편차 {{ a.slope.pass_pct }}% · 재시공 {{ a.slope.re_pct }}%{% if a.slope.dir_pass_deg is not none %} · 방향 허용 {{ a.slope.dir_pass_deg }}도{% endif %}
+      </td>
+    </tr>
+  </table>
+
+  {# 과업지시서 11쪽 "산출 항목 : 구배값(%), 설계기준 대비 편차, 평균편차, 표준편차,
+     최대편차". 화면(slope-verdict-panel.tsx)은 '평균 편차'처럼 띄어 쓰지만 여기서는
+     과업지시서 원문 어휘를 그대로 쓴다 - 발주처가 대조하는 문서다. 수치는 화면과
+     같은 스냅샷 값이라 표기만 다르고 값은 갈리지 않는다. #}
+  <h4>판정 요약</h4>
+  <table>
+    <thead>
+      <tr>
+        <th class="num">설계 구배(%)</th><th class="num">평균편차(%)</th>
+        <th class="num">표준편차(%)</th><th class="num">최대편차(%)</th>
+        <th>조치 대상 셀(표 게재/전체)</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="num">{{ a.slope.design_pct if a.slope.design_pct is not none else '-' }}</td>
+        <td class="num">{{ a.slope.dev_mean_pct if a.slope.dev_mean_pct is not none else '-' }}</td>
+        <td class="num">{{ a.slope.dev_sd_pct if a.slope.dev_sd_pct is not none else '-' }}</td>
+        <td class="num">{{ a.slope.dev_max_pct if a.slope.dev_max_pct is not none else '-' }}</td>
+        <td>{{ a.slope.cells | length }} / {{ a.slope.n_cells }}</td>
+      </tr>
+    </tbody>
+  </table>
+  {# 상호참조에 장 번호를 박지 않는다. 번호를 본문에 적어 두면 나중에 장 구성이
+     바뀔 때 한 곳만 고치고 다른 곳이 남는 사고가 난다(이 저장소가 반복해 겪었다). #}
+  <p class="note">편차는 설계 구배와의 차이(%)입니다. 셀별 구배값과 편차는 구간별 결과의 바닥 구배 절에 있습니다.</p>
+
+  {# 등급 어휘가 평활도(영문 키 + palette 색)와 달라 snap.palette를 쓰지 않는다.
+     구배 색표는 엔진 outputs/slope_map.py와 대시보드 slope-heatmap.ts 두 곳에만
+     있고 스냅샷에 없다 - 세 번째 사본을 대조 장치 없이 만들지 않는다(스펙 §7.2가
+     어차피 색만으로 구별하지 말 것을 요구한다). 순서는 snapshot.SLOPE_GRADE_ORDER
+     삽입 순서를 그대로 따른다. #}
+  <h4>등급 분포</h4>
+  <table>
+    <thead>
+      <tr>{% for g in a.slope.counts %}<th>{{ g }}</th>{% endfor %}</tr>
+    </thead>
+    <tbody>
+      <tr>{% for n in a.slope.counts.values() %}<td>{{ n }}개</td>{% endfor %}</tr>
+    </tbody>
+  </table>
+
+  {% if not a.slope.direction_judged %}
+  <div class="warn">배수구 위치를 지정하지 않아 방향(역구배)은 판정하지 않았습니다.
+    등급은 구배 크기만 본 결과이며, 물이 반대로 흐르는 셀이 '적합'으로 남아 있을 수 있습니다.</div>
+  {% endif %}
+  {% if a.warnings %}
+  <h4>경고</h4>
+  {% for w in a.warnings %}
+  <div class="warn">{{ w.text }}</div>
+  {% endfor %}
+  {% endif %}
   {% endif %}
   {% endfor %}
 
@@ -238,12 +337,80 @@ pre.summary { white-space: pre-wrap; font-family: inherit; font-size: 10pt; marg
   </table>
   {% endfor %}
   {% endif %}
+
+  {# 3.3 구배 - 셀별 결과는 성격상 '구간별 결과'다. 장 번호를 새로 만들지 않고
+     하위 절로 두는 이유: (1) 5부 구성(스펙 §8)을 밀지 않으므로 상호참조를 고칠
+     곳이 없다 (2) 3.1·3.2가 이미 조건부라 결번을 견디는 구조다(벽만 있는 보고서는
+     3.2만 나온다) (3) 구배만 담긴 보고서에서 이 절이 없으면 §3이 머리글만 남은
+     빈 장이 된다. 판별은 반드시 긍정형 == 'slope'다(html.slope_analyses 참고). #}
+  {% if slope_analyses %}
+  <h3>3.3 바닥 구배</h3>
+  {% for a in slope_analyses %}
+  <h4>{{ a.scan.scanned_at or '-' }} 측정 · {{ a.criteria.name }}</h4>
+  {% if a.slope.cells %}
+  <table>
+    <thead>
+      <tr>
+        <th>위치(cx,cy)</th><th>등급</th><th class="num">구배값(%)</th>
+        <th class="num">설계기준 대비 편차(%)</th><th>방향 편차</th>
+        <th>보정 조치</th><th>사유</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in a.slope.cells %}
+      <tr>
+        <td>({{ c.cx }}, {{ c.cy }})</td>
+        {# 스펙 §7.2: 역구배는 색만으로 드러나지 않는다(크기가 정상이면 초록인데
+           물은 반대로 흐른다). 보고서에는 색 자체가 없으므로 등급 칸의 문구와
+           보정란 전용 문구 두 곳으로 구별한다. #}
+        <td>{{ c.grade }}{% if c.reverse %} (역구배){% endif %}</td>
+        <td class="num">{{ c.slope_pct if c.slope_pct is not none else '-' }}</td>
+        <td class="num">{{ c.dev_pct if c.dev_pct is not none else '-' }}</td>
+        <td>{{ c.direction_text }}</td>
+        <td>{{ c.correction_text }}</td>
+        <td>{{ c.reason }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {# 문구에 U+2014을 쓰지 않는다(전역 제약). HTML 엔티티로 우회해도 렌더 결과가
+     같은 글리프이므로 마찬가지로 금지다. #}
+  <p class="note">표에는 조치가 필요한 셀(보수·재시공·판정불가)만 실었습니다(전체 {{ a.slope.n_cells }}셀 중 {{ a.slope.cells | length }}셀).
+    적합·경계 셀은 분석 개요의 등급 분포에 집계돼 있습니다.</p>
+  {% else %}
+  <p class="note">조치가 필요한 셀이 없습니다(전체 {{ a.slope.n_cells }}셀이 적합 또는 경계).
+    등급 분포는 분석 개요에 있습니다.</p>
+  {% endif %}
+  {% endfor %}
+  {% endif %}
 </section>
 
 {# ---------------- ④ 시각자료 ---------------- #}
 <section class="part">
   <h2>4. 시각자료</h2>
   {% for a in snap.analyses %}
+  {# 구배 산출물은 slope_map.png 하나뿐이고 평활도 자산(히트맵·편차맵·3D·히스토그램)은
+     애초에 존재하지 않는다. 평활도 목록을 그대로 돌면 자산이 전부 비어 머리글만 있는
+     빈 절이 생기므로 분기한다. 판별은 긍정형 == 'slope'다 - 이미 발행된 스냅샷의
+     평활도 항목에는 kind 키 자체가 없어 == 'flatness'는 옛 발행본에서 전부 거짓이다
+     (snapshot._slope_analysis_entry 주석). #}
+  {% if a.kind == 'slope' %}
+  <h3>{{ loop.index }}) {{ a.surface_label }} {{ a.kind_label }} · {{ a.scan.scanned_at or '-' }}</h3>
+  {% if a.slope.map_png %}
+  <figure>
+    <img src="{{ a.slope.map_png | asset(report_id) }}" alt="구배 판정 지도" />
+    <figcaption>구배 판정 지도({{ a.slope.cell_m }}m 격자 셀별 등급과 내리막 방향).
+      배수구 위치:
+      {% if a.slope.drain_points %}
+      {% for p in a.slope.drain_points %}({{ '%.2f' | format(p.x) }}, {{ '%.2f' | format(p.y) }}){% if not loop.last %}, {% endif %}{% endfor %}
+      {% else %}지정되지 않음(방향 판정 없음){% endif %}
+    </figcaption>
+  </figure>
+  {% else %}
+  <p class="note">구배 판정 지도(PNG)를 보고서에 담지 못했습니다. 사유는 종합의견 장의
+    생성 참고 사항을 확인하세요.</p>
+  {% endif %}
+  {% else %}
   <h3>{{ loop.index }}) {{ a.surface_label }} · {{ a.scan.scanned_at or '-' }}</h3>
   {% for h in a.assets.heatmaps %}
   <figure>
@@ -270,6 +437,7 @@ pre.summary { white-space: pre-wrap; font-family: inherit; font-size: 10pt; marg
     <img src="{{ a.assets.histogram | asset(report_id) }}" alt="셀 편차 분포" />
     <figcaption>셀 편차 분포(점선은 허용치·재시공 임계)</figcaption>
   </figure>
+  {% endif %}
   {% endif %}
   {% endfor %}
 

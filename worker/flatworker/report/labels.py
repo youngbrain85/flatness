@@ -6,6 +6,10 @@
 """
 import re
 
+# analyses.kind. 보고서가 평활도와 구배를 **문구로** 구별하는 데 쓴다 - 같은 바닥
+# 스캔에서 두 분석이 나오므로 surface_label('바닥')만으로는 갈리지 않는다.
+ANALYSIS_KIND_LABEL = {"flatness": "평활도", "slope": "구배"}
+
 GRADE_ORDER = ["pass", "borderline", "repair", "rework", "na"]
 
 GRADE_LABEL = {

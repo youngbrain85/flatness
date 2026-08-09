@@ -50,6 +50,30 @@ _ENV.filters["num"] = fmt_num
 _ENV.filters["asset"] = asset_src
 
 
+def section_analyses(analyses, surface):
+    """'구간별 결과'(평활도 §3)에 실을 분석 목록.
+
+    구배 분석은 scans.surface가 'floor'라 걸러내지 않으면 수평면 표에 섞이는데,
+    구역·레벨·mm 편차가 하나도 없어 머리글만 있는 빈 표가 발행본에 박제된다.
+    구배 셀 결과는 별도 장이 맡는다(스냅샷의 analyses[].slope).
+
+    ★ 긍정형(`== 'slope'`)으로 판별한다 - 이미 발행된 스냅샷의 평활도 항목에는
+    kind 키 자체가 없다(snapshot._slope_analysis_entry 주석 참고).
+    """
+    return [a for a in analyses
+            if a["surface"] == surface and a.get("kind") != "slope"]
+
+
+def slope_analyses(analyses):
+    """'구간별 결과'의 3.3 구배 절에 실을 분석 목록.
+
+    ★ 긍정형(`== 'slope'`)이어야 한다. 이미 발행된 스냅샷의 평활도 항목에는 kind
+    키 자체가 없으므로(설계 결정 D8로 박제된다) `!= 'flatness'`류로 뒤집으면 옛
+    발행본의 평활도 분석이 전부 구배로 분류돼 UndefinedError로 죽는다.
+    """
+    return [a for a in analyses if a.get("kind") == "slope"]
+
+
 def render_html(snap):
     location = snap["location"]
     location_path = " / ".join(
@@ -60,6 +84,7 @@ def render_html(snap):
         snap=snap,
         report_id=snap["report"]["id"],
         location_path=location_path,
-        floor_analyses=[a for a in analyses if a["surface"] == "floor"],
-        wall_analyses=[a for a in analyses if a["surface"] == "wall"],
+        floor_analyses=section_analyses(analyses, "floor"),
+        wall_analyses=section_analyses(analyses, "wall"),
+        slope_analyses=slope_analyses(analyses),
     )
