@@ -64,6 +64,16 @@ def section_analyses(analyses, surface):
             if a["surface"] == surface and a.get("kind") != "slope"]
 
 
+def slope_analyses(analyses):
+    """'구간별 결과'의 3.3 구배 절에 실을 분석 목록.
+
+    ★ 긍정형(`== 'slope'`)이어야 한다. 이미 발행된 스냅샷의 평활도 항목에는 kind
+    키 자체가 없으므로(설계 결정 D8로 박제된다) `!= 'flatness'`류로 뒤집으면 옛
+    발행본의 평활도 분석이 전부 구배로 분류돼 UndefinedError로 죽는다.
+    """
+    return [a for a in analyses if a.get("kind") == "slope"]
+
+
 def render_html(snap):
     location = snap["location"]
     location_path = " / ".join(
@@ -76,4 +86,5 @@ def render_html(snap):
         location_path=location_path,
         floor_analyses=section_analyses(analyses, "floor"),
         wall_analyses=section_analyses(analyses, "wall"),
+        slope_analyses=slope_analyses(analyses),
     )
