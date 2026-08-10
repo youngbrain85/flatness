@@ -23,6 +23,7 @@ class ScanConfig:
     mobile_angres_deg: float = 0.5         # 가정값: 모바일 각해상도
     tls_range_mm: float = 10000.0          # 가정값: TLS 유효 사거리
     tls_angres_deg: float = 0.035          # 가정값: TLS 각해상도
+    tls_height_mm: float = 1500.0          # 가정값: TLS 센서(삼각대) 높이 — 바닥 입사각 모델용
     tls_dwell_s: float = 120.0             # 가정값: 거치점당 체류 시간
     step_s: float = 0.2                    # 시뮬레이션 시간 스텝 (스펙 §6)
     density_targets_mm: dict = field(
