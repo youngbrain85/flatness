@@ -1,0 +1,220 @@
+{# 스캔 커버리지 평가 보고서 — 5부 구성 (계획 Task 8).
+   스타일 규약은 bim/report/templates/robot_report.html.j2 와 맞춘다
+   (같은 발주처가 여러 보고서를 나란히 받으므로). #}
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<title>{{ ctx.title }}</title>
+<style>
+@page { size: A4; margin: 14mm 12mm 16mm 12mm; }
+* { box-sizing: border-box; }
+body {
+  /* 리눅스 컨테이너의 fonts-noto-cjk 는 'Noto Sans CJK KR' 로 등록된다.
+     Windows 개발 PC 호환을 위해 나머지 후보도 남긴다. */
+  font-family: 'Noto Sans CJK KR', 'Noto Sans KR', 'Malgun Gothic', sans-serif;
+  font-size: 10pt; color: #1f2937; margin: 0; line-height: 1.45;
+}
+h1 { font-size: 20pt; margin: 0 0 6mm; }
+h2 { font-size: 13pt; margin: 0 0 3mm; border-bottom: 1.2pt solid #1f2937; padding-bottom: 1.5mm; }
+h3 { font-size: 11pt; margin: 5mm 0 2mm; }
+h3, h4 { break-after: avoid; page-break-after: avoid; }
+.part { page-break-before: always; }
+.part.first { page-break-before: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 9pt; margin-bottom: 3mm; }
+th, td { border: 0.4pt solid #cbd5e1; padding: 1.3mm 2mm; text-align: left; vertical-align: top; }
+th { background: #f1f5f9; word-break: keep-all; }
+td.num, th.num { text-align: right; }
+table.kv th { width: 26%; background: #f8fafc; }
+.badge { display: inline-block; padding: 0.4mm 2.2mm; border-radius: 1.5mm; color: #fff; font-weight: 700; font-size: 8.5pt; white-space: nowrap; }
+.b-assumed { background: #b45309; } .b-spec { background: #475569; }
+.warn { border: 0.5pt solid #f59e0b; background: #fffbeb; padding: 2mm; margin: 1.5mm 0; font-size: 9pt; }
+.note { color: #64748b; font-size: 8.5pt; }
+.disclaimer { border: 1pt solid #1f2937; background: #f8fafc; padding: 3mm; font-weight: 700; margin-top: 4mm; }
+figure { margin: 0 0 4mm; page-break-inside: avoid; }
+figure img { max-width: 100%; max-height: 130mm; object-fit: contain; }
+figcaption { font-size: 8.5pt; color: #475569; margin-top: 1mm; }
+.mode { page-break-inside: avoid; margin-bottom: 5mm; }
+.maps { display: flex; gap: 4mm; align-items: flex-start; }
+.maps figure { flex: 1; min-width: 0; }
+ul { margin: 1mm 0 2mm; padding-left: 5mm; }
+li { margin-bottom: 0.8mm; }
+code { font-size: 8.5pt; }
+</style>
+</head>
+<body>
+
+{# ── 1부: 표지·조건 ─────────────────────────────────────────────────────── #}
+<section class="part first">
+  <h1>{{ ctx.title }}</h1>
+  <table class="kv">
+    <tr><th>대상 도면</th><td>{{ ctx.drawing.title or "—" }} ({{ ctx.drawing.doc_no or "—" }})</td></tr>
+    <tr><th>발행</th><td>{{ ctx.drawing.issuer or "—" }} · 코드체계 {{ ctx.drawing.system or "—" }}</td></tr>
+    <tr><th>도면 키</th><td>{{ ctx.drawing.doc_key or "—" }}</td></tr>
+    <tr><th>스캔 모드</th><td>{% for m in ctx.primary.modes %}{{ m.label }}{% if not loop.last %} · {% endif %}{% endfor %}</td></tr>
+    <tr><th>시나리오</th><td>
+      {% for s in ctx.scenarios %}
+      {{ s.label }} (가구 {{ s.n_furniture }}개 · 자유 바닥 {{ s.free_m2 }} m² = {{ s.free_cells }}셀){% if not loop.last %}<br/>{% endif %}
+      {% endfor %}
+    </td></tr>
+  </table>
+
+  <div class="disclaimer">
+    아래 장비 파라미터의 기본값은 <strong>모델 파라미터(가정값)</strong>이며 특정 장비의
+    공표 사양이 아니다. 실제 장비가 확정되면 설정 데이터만 교체해 재계산한다. 커버리지는
+    목표 점간격 이하로 <strong>실제 관측된 셀만</strong> 센다 — 미상·미커버를 커버로 접지 않는다.
+  </div>
+
+  <h3>밀도 목표 (설정 데이터)</h3>
+  <table>
+    <tr><th style="width:24mm">등급</th><th class="num" style="width:28mm">목표 점간격 (mm)</th><th>뜻</th></tr>
+    {% for t in ctx.targets %}
+    <tr><td>{{ t.tier }}</td><td class="num">≤ {{ t.target }}</td><td>{{ t.desc }}</td></tr>
+    {% endfor %}
+  </table>
+
+  <h3>시뮬레이션 조건 (ScanConfig)</h3>
+  <table>
+    <tr><th style="width:38mm">파라미터</th><th class="num" style="width:22mm">값</th><th>설명</th><th style="width:18mm">근거</th></tr>
+    {% for r in ctx.cfg_rows %}
+    <tr>
+      <td><code>{{ r.name }}</code></td>
+      <td class="num">{{ r.value }}</td>
+      <td>{{ r.desc }}</td>
+      <td><span class="badge {{ 'b-assumed' if r.assumed else 'b-spec' }}">{{ r.basis }}</span></td>
+    </tr>
+    {% endfor %}
+  </table>
+  <p class="note">
+    커버 판정: 셀별 추정 점 간격을 누적(재관측 시 최소값)하고, 목표 이하인 자유 셀 비율이
+    커버리지다. 모바일 spacing = max(거리×각해상도, 속도÷스캔율), TLS spacing =
+    거리×각해상도÷cos(입사각) — 가려짐은 점유격자 레이캐스트로 반영한다.
+  </p>
+</section>
+
+{# ── 2부: 모드별 계획 (주 시나리오) ─────────────────────────────────────── #}
+<section class="part">
+  <h2>2. 모드별 계획 — {{ ctx.primary.label }} 시나리오</h2>
+  {% for m in ctx.primary.modes %}
+  <div class="mode">
+    <h3>{{ m.label }}</h3>
+    <div class="maps">
+      <figure>
+        <img src="assets/{{ m.assets.plan }}" alt="{{ m.label }} 계획 지도" />
+        <figcaption>계획 {{ "경로" if m.mode == "mobile" else "거치점·순회" }} — 회색은 벽·가구 장애물.</figcaption>
+      </figure>
+      <figure>
+        <img src="assets/{{ m.assets.final }}" alt="{{ m.label }} 최종 커버리지" />
+        <figcaption>시뮬레이션 최종 커버리지 — 초록 농도 = 달성 등급, 빨강 = 미달·미관측.</figcaption>
+      </figure>
+    </div>
+    <table class="kv">
+      <tr><th>{{ "경로 길이" if m.mode == "mobile" else "순회 이동 길이" }}</th><td>{{ m.length_m }} m (시뮬 재주행 {{ m.sim_dist_m }} m)</td></tr>
+      <tr><th>소요 시간</th><td>계획 {{ m.est_time }} · 시뮬 {{ m.sim_time }} <span class="note">등속 모델 — 하한 추정</span></td></tr>
+      {% if m.n_stations is not none %}
+      <tr><th>거치점 수</th><td>{{ m.n_stations }}</td></tr>
+      {% endif %}
+      <tr><th>최종 커버리지</th><td>{{ m.coverage_text }}</td></tr>
+    </table>
+    <h4>계획 산출 기록 (플래너 notes 원문)</h4>
+    <ul>
+      {% for n in m.notes %}<li>{{ n }}</li>{% endfor %}
+    </ul>
+  </div>
+  {% endfor %}
+</section>
+
+{# ── 3부: 커버리지 곡선·트레이드오프 ────────────────────────────────────── #}
+<section class="part">
+  <h2>3. 커버리지 곡선·트레이드오프 — {{ ctx.primary.label }} 시나리오</h2>
+  {% for m in ctx.primary.modes %}
+  <h3>{{ m.label }}</h3>
+  <figure>
+    <img src="assets/{{ m.assets.curve }}" alt="{{ m.label }} 커버리지-시간 곡선" />
+    <figcaption>커버리지-시간 곡선 (등급별). 원자료: <code>{{ m.key }}_coverage.csv</code></figcaption>
+  </figure>
+  {% if m.assets.gif %}
+  <p class="note">커버리지가 차오르는 과정은 애니메이션 <code>assets/{{ m.assets.gif }}</code>
+    (프레임 PNG: <code>assets/{{ m.key }}_frames/</code>)에 있다 — PDF 에는 정지 지도만 싣는다.</p>
+  {% endif %}
+  {% if m.tradeoff %}
+  <figure>
+    <img src="assets/{{ m.assets.tradeoff }}" alt="거치점 수 vs 커버리지 트레이드오프" />
+    <figcaption>거치점 수 vs 계획 커버리지 트레이드오프 — 탐욕 선택 접두열이라 비감소.</figcaption>
+  </figure>
+  <table>
+    <tr><th class="num" style="width:24mm">거치점 수</th><th class="num" style="width:32mm">계획 커버리지 (%)</th><th>비고</th></tr>
+    {% for t in m.tradeoff %}
+    <tr><td class="num">{{ t.n }}</td><td class="num">{{ t.pct }}</td><td>{% if loop.first %}탐욕 1번째 선택{% endif %}</td></tr>
+    {% endfor %}
+  </table>
+  {% endif %}
+  {% endfor %}
+</section>
+
+{# ── 4부: 운행 거리·시간 (두 시나리오 병기) ─────────────────────────────── #}
+<section class="part">
+  <h2>4. 운행 거리·소요 시간 — 가구 유/무 병기</h2>
+  <table>
+    <tr>
+      <th>시나리오</th><th>모드</th><th class="num">이동 길이 (m)</th>
+      <th>소요 시간 (시뮬)</th><th class="num">거치점</th><th>최종 커버리지</th>
+    </tr>
+    {% for r in ctx.dist_rows %}
+    <tr>
+      <td>{{ r.scenario }}</td>
+      <td>{{ r.label }}</td>
+      <td class="num">{{ r.length_m }}</td>
+      <td>{{ r.sim_time }}</td>
+      <td class="num">{{ r.n_stations if r.n_stations is not none else "—" }}</td>
+      <td>{{ r.coverage_text }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  <p class="note">
+    소요 시간은 등속 주행(회전·가감속 미모형) 하한 추정이며, TLS 는 거치점당 체류
+    시간을 포함한다. 가구 유/무에 따라 경로·커버리지가 달라진다 — 어느 쪽이 실제와
+    맞는지는 입주 시점 가구 배치에 달려 있어 도면으로 확정되지 않는다(5부 한계).
+  </p>
+
+  <h3>산출물 목록 (전 형식)</h3>
+  <table>
+    <tr><th>시나리오 · 모드</th><th>파일</th></tr>
+    {% for s in ctx.scenarios %}
+    {% for m in s.modes %}
+    <tr>
+      <td>{{ s.label }} · {{ m.label }}</td>
+      <td>{% for f in m.files %}<code>{{ f }}</code>{% if not loop.last %} · {% endif %}{% endfor %}
+          · <code>assets/{{ m.assets.plan }}</code> · <code>assets/{{ m.assets.final }}</code>
+          · <code>assets/{{ m.assets.curve }}</code>{% if m.assets.tradeoff %} · <code>assets/{{ m.assets.tradeoff }}</code>{% endif %}</td>
+    </tr>
+    {% endfor %}
+    {% endfor %}
+  </table>
+</section>
+
+{# ── 5부: 한계 ──────────────────────────────────────────────────────────── #}
+<section class="part">
+  <h2>5. 알려진 한계</h2>
+  <ul>
+    {% for lim in ctx.limits %}<li>{{ lim }}</li>{% endfor %}
+  </ul>
+
+  {% if ctx.missing %}
+  <h3>가구 추출 누락 (지어내지 않고 보고)</h3>
+  <table>
+    <tr><th style="width:34mm">항목</th><th>사유</th></tr>
+    {% for miss in ctx.missing %}
+    <tr><td>{{ miss.name }}</td><td>{{ miss.reason }}</td></tr>
+    {% endfor %}
+  </table>
+  {% endif %}
+
+  <div class="disclaimer">
+    이 보고서의 커버리지·거리·시간은 자체 시뮬레이션 결과이며, 장비 파라미터는
+    가정값이다. 실제 장비 확정 전의 수치는 계획 비교·검토 용도로만 쓴다.
+  </div>
+</section>
+
+</body>
+</html>
