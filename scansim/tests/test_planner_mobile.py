@@ -299,3 +299,28 @@ class TestPlanLh26:
         assert pct >= 90.0 or any("잔여" in n for n in plan.notes)
         # 분리 영역은 도달 불가로 명시된다
         assert any("도달 불가" in n for n in plan.notes)
+
+
+# ── 스윕 간격의 하중은 커버리지가 아니라 보완 개수다 ─────────────────────────
+# 간격이 벌어져도 보완 루프가 구멍을 메워 최종 커버리지는 안 변한다 — 변이 실험에서
+# SWEEP_SPACING_FACTOR 0.5→1.0 이 커버리지 단언을 전부 통과하며 실증됐다
+# (보완 2개→22개, 경로 48.1m→64.3m). 그래서 커버리지가 아니라 보완 개수를 고정한다:
+# 스윕이 일을 해야 하고, 보완은 장애물 그림자용이지 스윕 구멍 메우기용이 아니다.
+def _repair_count(plan):
+    import re
+    for n in plan.notes:
+        m = re.fullmatch(r"보완 경유점 (\d+)개", n)
+        if m:
+            return int(m.group(1))
+    raise AssertionError(f"보완 경유점 노트가 없다: {plan.notes}")
+
+
+def test_빈_방은_스윕만으로_거의_덮인다_보완은_소수():
+    occ, cfg, plan = get_plan("empty")
+    assert _repair_count(plan) <= 5, (
+        f"빈 방인데 보완 경유점 {_repair_count(plan)}개 — 스윕 간격이 벌어졌다는 신호")
+
+
+def test_보완_개수가_항상_보고된다():
+    occ, cfg, plan = get_plan("obstacle")
+    assert _repair_count(plan) >= 0  # 존재 자체를 고정 (없으면 _repair_count 가 raise)

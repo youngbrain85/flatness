@@ -139,7 +139,13 @@ def plan_mobile(occ: OccupancyGrid, cfg: ScanConfig,
 
     cov = CoverageGrid(occ, cfg)
     simulate_polyline(cov, waypoints, cfg)
+    n_before_repair = len(waypoints)
     _repair(occ, inf, labels, main, cov, cfg, t_plan, waypoints, max_repair)
+    # 보완 개수를 항상 보고하는 이유: 스윕 간격이 벌어져도 보완 루프가 구멍을 메워
+    # 최종 커버리지는 안 변한다 — 변이 실험에서 간격 2배가 커버리지 단언을 전부
+    # 통과하며 실증됐다(보완 2개 → 22개, 경로 +33%). 즉 간격·겹침의 하중은
+    # 커버리지가 아니라 이 숫자에 있고, 이것이 보이지 않으면 효율 회귀를 못 잡는다.
+    notes.append(f"보완 경유점 {len(waypoints) - n_before_repair}개")
 
     pct = cov.coverage_pct(target)
     n_free = int(occ.free.sum())
