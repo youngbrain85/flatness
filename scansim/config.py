@@ -19,7 +19,12 @@ class ScanConfig:
     mobile_fov_deg: float = 90.0           # 가정값: 모바일 스캐너 시야각
     mobile_range_mm: float = 4000.0        # 가정값: 모바일 유효 사거리
     mobile_speed_mms: float = 300.0        # 가정값: 주행 속도
-    mobile_scan_hz: float = 10.0           # 가정값: 스캔율
+    mobile_scan_hz: float = 30.0           # 가정값: 스캔율
+    # ↑ 30Hz 인 이유: 기본값끼리 자기일관이어야 한다. 진행방향 점 간격 바닥값 v/f =
+    #   300/30 = 10mm 로 기본 모바일 목표(20mm)를 달성할 수 있다. 10Hz 로 두면 바닥값
+    #   30mm > 목표 20mm 라 기본 실행의 모바일 커버리지가 원천적으로 0% 가 된다 —
+    #   실제로 그렇게 출하될 뻔했다(검증 결함 2). 달성 불가 조합의 정직 보고 경로는
+    #   테스트가 hz 를 명시해 따로 고정한다.
     mobile_angres_deg: float = 0.5         # 가정값: 모바일 각해상도
     tls_range_mm: float = 10000.0          # 가정값: TLS 유효 사거리
     tls_angres_deg: float = 0.035          # 가정값: TLS 각해상도

@@ -108,7 +108,10 @@ def get_plan(name):
         if name == "empty":
             occ, cfg = empty_room(), fixture_cfg()
         elif name == "empty_default_cfg":
-            occ, cfg = empty_room(), ScanConfig(mobile_range_mm=2500.0)
+            # hz 를 명시하는 이유: 이 픽스처가 고정하는 성질은 "목표 < v/f 바닥이면
+            # 달성 불가를 보고한다"이지 기본값이 아니다. 기본 hz 는 자기일관(10mm ≤ 20mm)
+            # 으로 바뀌었으므로, 달성 불가 조합(300/10 = 30mm > 20mm)을 직접 만든다.
+            occ, cfg = empty_room(), ScanConfig(mobile_range_mm=2500.0, mobile_scan_hz=10.0)
         elif name == "obstacle":
             occ, cfg = room_with_obstacle(), fixture_cfg()
         elif name == "lh26_subset":
@@ -235,8 +238,8 @@ class TestPlanEmptyRoom:
         assert cov.coverage_pct(cfg.density_targets_mm["mobile"]) >= 99.5
 
     def test_infeasible_target_noted(self):
-        # 기본 설정: v/f = 300/10 = 30mm > 목표 20mm — 어떤 경로로도 달성 불가.
-        # 조용히 접지 않고 notes 로 드러낸다.
+        # v/f = 300/10 = 30mm > 목표 20mm — 어떤 경로로도 달성 불가.
+        # 조용히 접지 않고 notes 로 드러낸다. (픽스처가 hz=10 을 명시한다)
         occ, cfg, plan = get_plan("empty_default_cfg")
         assert any("달성 불가" in n for n in plan.notes)
 
