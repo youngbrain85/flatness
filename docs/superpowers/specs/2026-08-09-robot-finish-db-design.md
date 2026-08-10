@@ -286,14 +286,16 @@ WSL Ubuntu-24.04의 PostgreSQL 16.14에 격리 클러스터(포트 55432, 유닉
 | `bim/tests/` | 회귀 19건 (기대값은 도면 인쇄 면적표) |
 | `docs/contracts/finish-material-db.md` | DB 트리와 확장 규약 (카탈로그에서 생성) |
 
-**미편입** — 하드닝이 끝나야 `supabase/migrations/`로 옮긴다.
+**편입 완료 (2026-08-10, 발주처가 직접 배포하기로 확정)**
 
 | 파일 | 상태 |
 |---|---|
-| `013_finish_material_db.sql` | 적재 검증 완료(exit 0). 구조 강화 7건 남음 |
-| `014_finish_material_seed.sql` | 적재 검증 완료. 오답 0건 |
-| `015_finish_material_regression.sql` | 단언 38건, 변이 저항 확인. 마이그레이션이 아니라 검증 스크립트라 별도 위치에 둔다 |
-| `docs/robot-criteria-sources.md` | 미작성 (기존 `criteria-sources.md` 형식으로 쓸 것) |
+| `supabase/migrations/013_finish_material_db.sql` | 편입. 격리 클러스터 적재 exit 0 |
+| `supabase/migrations/014_finish_material_seed.sql` | 편입. 오답 0건 |
+| `supabase/verification/015_finish_material_regression.sql` | 편입. 단언 38건 게이트 — 마이그레이션이 아니라 검증 스크립트라 `verification/`에 둔다 |
+| `docs/robot-criteria-sources.md` | 작성 완료 (임계값 29행 근거 대조표) |
 
-편입을 미루는 이유는 결함이 아니라 **§7의 한계 4(원문 모순 미해소)** 다. 발주처가 욕실·발코니
-레벨을 확정해야 발코니↔실외기실 판정이 `unknown`에서 벗어난다.
+적용 절차는 `docs/DEPLOY.md` §1의 1번. **§7의 한계 4(욕실·발코니 레벨 원문 모순)는 해소되지
+않은 채 배포된다** — 양쪽 값이 보존되고 그 위의 판정은 `unknown`으로 나오며, 발주처가 정본을
+확정하면 `spaces.fl_mm` 갱신으로 반영된다. 구조 강화 7건·회귀 공백 14건은 오답이 아닌 하드닝
+항목으로 남아 있다.

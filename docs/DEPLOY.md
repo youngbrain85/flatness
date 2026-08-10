@@ -22,6 +22,10 @@ Vercel(대시보드) + Railway(워커, Docker) + Supabase(DB·Auth·Storage) 구
   `jobs_dedup` 재정의, 세부과업 4 단계 F. 008·009처럼 필수 최소 범위(007까지)에는
   포함되지 않지만, 정합 기능을 켤 계획이면 §1의 1번에서 함께 적용한다
   (**012는 008을 전제한다** - §1의 1번 참고)
+- `supabase/migrations/013_finish_material_db.sql`·`014_finish_material_seed.sql` -
+  로봇친화형 마감재 DB(세부과업 2). 필수 최소 범위 밖이며 기존 테이블을 바꾸지
+  않는다(추가만). 적용 절차와 주의는 §1의 1번, 적용 후 검증은
+  `supabase/verification/015_finish_material_regression.sql`(단언 38건 게이트)
 - 저장소 루트 `Dockerfile` - 워커 이미지(Chromium·`Noto Sans CJK KR` 포함 - Debian
   `fonts-noto-cjk`가 실제로 등록하는 폰트 패밀리명이며 `Noto Sans KR`이 아니다)
 - 워커 `STORAGE_BACKEND=supabase` 기본값(Dockerfile `ENV`)
@@ -252,6 +256,25 @@ Vercel(대시보드) + Railway(워커, Docker) + Supabase(DB·Auth·Storage) 구
    > select proname from pg_proc where prosrc like '%registration_id%';  -- register
    > select proname from pg_proc where prosrc like '%slope_judge%';      -- 재판정
    > ```
+
+   **마감재 DB(세부과업 2)를 쓸 계획이면 013·014도 이어서 적용한다**:
+   `013_finish_material_db.sql`(테이블 21·뷰 3·함수·트리거·RLS — enum 은 전부 자기
+   파일 안에서 create type 하므로 008/011 같은 분리가 필요 없다) →
+   `014_finish_material_seed.sql`(마감재 분류·제품군 52·로봇 임계값 29·LH 26형 도면
+   데이터). **각각 한 번의 Run 으로 적용한다** — 013 Run → `Success` 확인 → 에디터
+   비우기 → 014 Run. 둘 다 재실행 안전(멱등)하다. 적용 후 검증은
+   `supabase/verification/015_finish_material_regression.sql` 을 통째로 Run 하면
+   된다 — 마지막에 `★회귀 게이트 통과: 단언 38건 전부 PASS` NOTICE 가 떠야 하고,
+   하나라도 실패하면 예외로 멈춘다(이 파일은 마이그레이션이 아니라 검증 스크립트라
+   `verification/` 에 있다. 임시 테이블만 만들며 데이터를 바꾸지 않는다).
+
+   > **알고 적용할 것 — 욕실·발코니 레벨의 도면 원문 모순은 해소되지 않은 채 실린다.**
+   > 도면 1쪽 그래픽 라벨과 주기 13이 서로 다른 값을 주는데, 어느 쪽도 임의로 고르지
+   > 않고 양쪽을 `spaces.conflict_note`·`raw` 에 보존했다. 그 위에 얹힌 판정
+   > (발코니↔실외기실)은 `unknown` 으로 나온다 — 통과가 아니다. 발주처가 정본을
+   > 확정하면 `spaces.fl_mm` 을 갱신하는 것으로 반영되며, 낡은 단차가 남으면
+   > `v_space_step` 이 판정에서 자동 제외하고 사유를 남긴다.
+
 2. Storage 화면에서 `raw-scans`·`artifacts`·`reports` 버킷 3개 생성 확인
    (정책 생성이 `42501`로 실패하면 백로그 티켓 42대로 Storage > Policies UI에서 수동 생성)
 3. **[필수] 회원가입(Sign Ups) 차단** - **Authentication** > **Providers** > **Email**에서
