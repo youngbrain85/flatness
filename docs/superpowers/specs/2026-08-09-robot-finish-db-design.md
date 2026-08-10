@@ -238,6 +238,27 @@ WSL Ubuntu-24.04의 PostgreSQL 16.14에 격리 클러스터(포트 55432, 유닉
 (기본값 refuted) / 회귀 신뢰성(테스트 자체를 불신) / 변이 생존자 사냥. 검증자는 읽기 전용이며
 모든 결함에 재현 가능한 SQL과 출력을 요구한다.
 
+## 6.4 IFC 내보내기 — 도면에 없는 값은 구조로도 주장하지 않는다
+
+"지어내지 않는다"는 원칙이 IFC 구조 선택을 바꾼다. 아래는 전부 왕복 검증(파일을 다시 읽어
+기하를 삼각분할)으로 확인했다.
+
+| 상황 | 처리 | 이유 |
+|---|---|---|
+| 면적 | 발주처 면적표 값을 `Qto_SpaceBaseQuantities`에 | 폴리곤 재계산값은 정본이 아니다 |
+| 층별 두께가 총두께와 불일치 | `IfcMaterialLayerSet`(두께 주장) 대신 `IfcMaterialConstituentSet` | 거실 바닥을 6mm로 읽게 만든다 — 실제 구성은 110mm |
+| 유효 통과폭 | `IfcDoor.OverallWidth`에 **문틀 내측 상한**만, `ClearWidthKnown=false` | 제작치수를 유효폭으로 쓰면 거짓 pass |
+| 천장고 미기재 | 명목값 돌출 + `HeightIsNominal=true` | 돌출 깊이는 필요하지만 사실이 아니다 |
+| 원문 모순 | `ConflictNote`에 양쪽 보존 | 한쪽을 고르면 그 선택이 사라진다 |
+| 도면에 면이 없는 실 | 기하 없이 등재 + `EvidenceBasis='inferred'` | 지워도, 지어내도 안 된다 |
+
+검증 결과: IFC4 · 길이단위 METRE · `IfcSpace` 9(기하 7) · `IfcDoor` 4 · `IfcMaterial` 12.
+파일에서 재계산한 바닥 면적이 도면 면적표와 **0.0025% 이내**.
+
+검증기가 실제로 잡은 결함 둘: (1) `ifcopenshell`의 기본 단위가 길이 밀리미터·면적 제곱미터로
+서로 어긋나 모델이 10⁶배 작았다. (2) 두께를 모르는 층에 자리표시 값을 넣어 바닥 구성이
+2mm로 나왔다. 둘 다 생성 스크립트만 봐서는 드러나지 않고, 파일을 다시 읽어야 보인다.
+
 ## 7. 알려진 한계
 
 1. **도면이 한 건뿐이다.** LH 26형 하나로만 검증했다. 추출 방법은 "면적산출근거도가 존재하고 실
@@ -256,13 +277,23 @@ WSL Ubuntu-24.04의 PostgreSQL 16.14에 격리 클러스터(포트 55432, 유닉
 
 ## 8. 산출물 위치
 
-구현 중인 파일은 아직 저장소에 편입하지 않았다. 검증이 끝나면 다음 이름으로 편입한다.
+**편입 완료**
 
 | 파일 | 내용 |
 |---|---|
-| `supabase/migrations/013_finish_material_db.sql` | 스키마 |
-| `supabase/migrations/014_finish_material_seed.sql` | 분류·제품군·임계값·LH 26형 시드 |
-| `docs/contracts/finish-material-db.md` | 트리와 확장 규약 |
-| `docs/robot-criteria-sources.md` | 로봇 임계값 근거 출처 (기존 `criteria-sources.md` 형식) |
+| `bim/extract_plan.py` | 도면 PDF → 실 폴리곤 + FL/SL 레벨 |
+| `bim/to_ifc.py` · `bim/verify_ifc.py` · `bim/dump.sql` | DB → IFC4 + 왕복 검증 |
+| `bim/tests/` | 회귀 19건 (기대값은 도면 인쇄 면적표) |
+| `docs/contracts/finish-material-db.md` | DB 트리와 확장 규약 (카탈로그에서 생성) |
 
-회귀 스위트(`015_...regression.sql`)는 마이그레이션이 아니라 검증 스크립트이며 별도 위치에 둔다.
+**미편입** — 하드닝이 끝나야 `supabase/migrations/`로 옮긴다.
+
+| 파일 | 상태 |
+|---|---|
+| `013_finish_material_db.sql` | 적재 검증 완료(exit 0). 구조 강화 7건 남음 |
+| `014_finish_material_seed.sql` | 적재 검증 완료. 오답 0건 |
+| `015_finish_material_regression.sql` | 단언 38건, 변이 저항 확인. 마이그레이션이 아니라 검증 스크립트라 별도 위치에 둔다 |
+| `docs/robot-criteria-sources.md` | 미작성 (기존 `criteria-sources.md` 형식으로 쓸 것) |
+
+편입을 미루는 이유는 결함이 아니라 **§7의 한계 4(원문 모순 미해소)** 다. 발주처가 욕실·발코니
+레벨을 확정해야 발코니↔실외기실 판정이 `unknown`에서 벗어난다.
