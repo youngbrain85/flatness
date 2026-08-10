@@ -1,0 +1,1813 @@
+{
+ "spaces": [
+  {
+   "raw": {
+    "area": "3쪽 면적표 PD 1.2096",
+    "kind": "파이프덕트(설비 샤프트)",
+    "note": "4쪽 주기2 - PD,AD 내부 미장마감 없음. 레벨 라벨 없음"
+   },
+   "name": "PD",
+   "basis": "drawing_confirmed",
+   "fl_mm": null,
+   "sl_mm": null,
+   "area_m2": 1.2096,
+   "outline": [
+    [
+     [
+      0,
+      8970
+     ],
+     [
+      1260,
+      8970
+     ],
+     [
+      1260,
+      8010
+     ],
+     [
+      0,
+      8010
+     ]
+    ]
+   ],
+   "finishes": null,
+   "basis_note": null,
+   "conflict_note": null,
+   "ceiling_height_mm": null
+  },
+  {
+   "raw": {
+    "fl_label": "FL.+110 / SL.±0"
+   },
+   "name": "거실/침실",
+   "basis": "drawing_confirmed",
+   "fl_mm": 110,
+   "sl_mm": 0,
+   "area_m2": 16.2528,
+   "outline": [
+    [
+     [
+      1860,
+      5590
+     ],
+     [
+      1860,
+      5355
+     ],
+     [
+      4400,
+      5355
+     ],
+     [
+      4400,
+      1670
+     ],
+     [
+      100,
+      1670
+     ],
+     [
+      100,
+      5520
+     ],
+     [
+      190,
+      5520
+     ],
+     [
+      190,
+      5590
+     ]
+    ]
+   ],
+   "finishes": [
+    {
+     "ks": [
+      "KS F 3504"
+     ],
+     "code": "B-9,10",
+     "part": "걸레받이",
+     "role": "base",
+     "family": "무기질계 보드",
+     "layer_no": 1,
+     "material": "석고보드 THK9.5/12.5",
+     "confidence": "exact",
+     "thickness_mm": 9.5
+    },
+    {
+     "ks": [],
+     "code": "B-9,10",
+     "part": "걸레받이",
+     "role": "finish",
+     "family": "성형 판넬계",
+     "layer_no": 1,
+     "material": "기성품 걸레받이재",
+     "confidence": "exact",
+     "thickness_mm": null
+    },
+    {
+     "ks": [
+      "KS M 3802"
+     ],
+     "code": "F-11",
+     "part": "바닥",
+     "role": "finish",
+     "family": "합성고분자 시트류",
+     "layer_no": 1,
+     "material": "기능성 륨(쿠션형 층간소음 저감 시트)",
+     "confidence": "approximate",
+     "thickness_mm": 6
+    },
+    {
+     "ks": [
+      "KS F 3504"
+     ],
+     "code": "W-7,8,9",
+     "part": "벽",
+     "role": "base",
+     "family": "무기질계 보드",
+     "layer_no": 1,
+     "material": "석고보드 THK9.5/12.5",
+     "confidence": "exact",
+     "thickness_mm": 9.5
+    },
+    {
+     "ks": [
+      "KS M 7305"
+     ],
+     "code": "W-7,8,9",
+     "part": "벽",
+     "role": "finish",
+     "family": "도배계",
+     "layer_no": 1,
+     "material": "실크벽지",
+     "confidence": "exact",
+     "thickness_mm": null
+    },
+    {
+     "ks": [
+      "KS D 3609"
+     ],
+     "code": "C-6B",
+     "part": "천장",
+     "role": "base",
+     "family": "금속판·바탕틀계",
+     "layer_no": 1,
+     "material": "경량철골 천장틀",
+     "confidence": "exact",
+     "thickness_mm": null
+    },
+    {
+     "ks": [
+      "KS F 3504"
+     ],
+     "code": "C-6B",
+     "part": "천장",
+     "role": "base",
+     "family": "무기질계 보드",
+     "layer_no": 2,
+     "material": "석고보드 THK9.5/12.5",
+     "confidence": "exact",
+     "thickness_mm": 9.5
+    },
+    {
+     "ks": [
+      "KS M 7305"
+     ],
+     "code": "C-6B",
+     "part": "천장",
+     "role": "finish",
+     "family": "도배계",
+     "layer_no": 1,
+     "material": "실크벽지",
+     "confidence": "exact",
+     "thickness_mm": null
+    }
+   ],
+   "basis_note": null,
+   "conflict_note": null,
+   "ceiling_height_mm": 2300
+  },
+  {
+   "raw": {
+    "hazard": "1쪽 콘크리트턱(H=110)·(H=310) 표기",
+    "note13": "발코니:FL+80(높은턱),+35(낮은턱)",
+    "fl_label": "FL.+35 / SL.±0",
+    "ceiling_height": "4쪽 공란"
+   },
+   "name": "발코니",
+   "basis": "drawing_confirmed",
+   "fl_mm": 35,
+   "sl_mm": 0,
+   "area_m2": 6.75,
+   "outline": [
+    [
+     [
+      4500,
+      1500
+     ],
+     [
+      4500,
+      0
+     ],
+     [
+      0,
+      0
+     ],
+     [
+      0,
+      1500
+     ]
+    ]
+   ],
+   "finishes": [
+    {
+     "ks": [
+      "KS L 5220"
+     ],
+     "code": "B-18",
+     "part": "걸레받이",
+     "role": "base",
+     "family": "미장·현장타설계",
+     "layer_no": 1,
+     "material": "시멘트 모르타르 바름",
+     "confidence": "exact",
+     "thickness_mm": null
+    },
+    {
+     "ks": [
+      "KS M 6010"
+     ],
+     "code": "B-18",
+     "part": "걸레받이",
+     "role": "finish",
+     "family": "도장계",
+     "layer_no": 1,
+     "material": "내부 수성페인트",
+     "confidence": "approximate",
+     "thickness_mm": null
+    },
+    {
+     "ks": [],
+     "code": "F-14",
+     "part": "바닥",
+     "role": "base",
+     "family": "미장·현장타설계",
+     "layer_no": 1,
+     "material": "방수 모르타르 바름",
+     "confidence": "exact",
+     "thickness_mm": 10
+    },
+    {
+     "ks": [
+      "KS L 5220"
+     ],
+     "code": "F-14",
+     "part": "바닥",
+     "role": "base",
+     "family": "미장·현장타설계",
+     "layer_no": 2,
+     "material": "시멘트 모르타르 바름",
+     "confidence": "exact",
+     "thickness_mm": null
+    },
+    {
+     "ks": [
+      "KS L 1001"
+     ],
+     "code": "F-14",
+     "part": "바닥",
+     "role": "finish",
+     "family": "도자기질계(타일)",
+     "layer_no": 1,
+     "material": "자기질 타일(바닥용)",
+     "confidence": "exact",
+     "thickness_mm": null
+    },
+    {
+     "ks": [
+      "KS M 6010"
+     ],
+     "code": "W-15",
+     "part": "벽",
+     "role": "finish",
+     "family": "도장계",
+     "layer_no": 1,
+     "material": "내부 수성페인트",
+     "confidence": "exact",
+     "thickness_mm": null
+    },
+    {
+     "ks": [
+      "KS M 6010"
+     ],
+     "code": "C-10",
+     "part": "천장",
+     "role": "finish",
+     "family": "도장계",
+     "layer_no": 1,
+     "material": "내부 수성페인트",
+     "confidence": "exact",
+     "thickness_mm": null
+    }
+   ],
+   "basis_note": null,
+   "conflict_note": "[모순·미해소] 1쪽 평면 라벨 \"FL.+35\" vs 1쪽 주기13 \"발코니:FL+80(높은턱),+35(낮은턱)\". 평면 라벨 값을 실었다",
+   "ceiling_height_mm": null
+  },
+  {
+   "raw": {
+    "area": "3쪽 면적표 벽체공용 3.3236",
+    "note": "실이 아니라 벽체 점유 면적. 전용 26.9538 = 현관+거실/침실+주방/식당+욕실+벽체공용의 합계 항목이 3쪽에 따로 있다",
+    "level": "레벨 라벨 없음"
+   },
+   "name": "벽체공용",
+   "basis": "drawing_confirmed",
+   "fl_mm": null,
+   "sl_mm": null,
+   "area_m2": 3.3236,
+   "outline": [
+    [
+     [
+      1260,
+      8970
+     ],
+     [
+      3170,
+      8970
+     ],
+     [
+      3170,
+      7370
+     ],
+     [
+      4500,
+      7370
+     ],
+     [
+      4500,
+      1500
+     ],
+     [
+      0,
+      1500
+     ],
+     [
+      0,
+      8010
+     ],
+     [
+      1260,
+      8010
+     ]
+    ],
+    [
+     [
+      2910,
+      8800
+     ],
+     [
+      1330,
+      8800
+     ],
+     [
+      1330,
+      7900
+     ],
+     [
+      1260,
+      7900
+     ],
+     [
+      190,
+      7900
+     ],
+     [
+      190,
+      5590
+     ],
+     [
+      190,
+      5520
+     ],
+     [
+      100,
+      5520
+     ],
+     [
+      100,
+      1670
+     ],
+     [
+      4400,
+      1670
+     ],
+     [
+      4400,
+      5355
+     ],
+     [
+      4400,
+      7200
+     ],
+     [
+      2910,
+      7200
+     ],
+     [
+      2910,
+      7825
+     ]
+    ]
+   ],
+   "finishes": null,
+   "basis_note": null,
+   "conflict_note": "[성격 주의] 3쪽 면적표 항목이지만 통행 가능한 실이 아니라 벽체가 차지하는 공용 면적이다. spaces에 둔 이유는 면적표 원문을 손실 없이 보존하고 거실/침실-발코니의 간접 인접을 표현하기 위함이며, 로봇 주행 판정 대상으로 삼으면 안 된다",
+   "ceiling_height_mm": null
+  },
+  {
+   "raw": {
+    "note": "4쪽 마감표에 행이 없어 마감 코드 미상",
+    "fl_label": "복도 FL.+55/SL.±0"
+   },
+   "name": "복도",
+   "basis": "inferred",
+   "fl_mm": 55,
+   "sl_mm": 0,
+   "area_m2": null,
+   "outline": null,
+   "finishes": null,
+   "basis_note": "[추론] 1쪽 평면에 FL 라벨 \"복도 FL.+55/SL.±0\"은 있으나 3쪽 면적산출표·면적도에 면(face)이 없어 면적도 인접 접촉길이도 계산할 수 없었다. 4쪽 마감표에도 행이 없어 마감 코드가 미상이다. 세대 외부(공용부)라 면적산출 대상이 아닌 것으로 보이나 도면이 그 사실을 명시하지 않는다",
+   "conflict_note": null,
+   "ceiling_height_mm": null
+  },
+  {
+   "raw": {
+    "area": "3쪽 면적표 미표기",
+    "fl_label": "FL.+35 / SL.±0",
+    "ceiling_height": "4쪽 공란"
+   },
+   "name": "실외기실",
+   "basis": "inferred",
+   "fl_mm": 35,
+   "sl_mm": 0,
+   "area_m2": null,
+   "outline": null,
+   "finishes": [
+    {
+     "ks": [
+      "KS L 5220"
+     ],
+     "code": "B-14",
+     "part": "걸레받이",
+     "role": "base",
+     "family": "미장·현장타설계",
+     "layer_no": 1,
+     "material": "시멘트 모르타르 바름",
+     "confidence": "exact",
+     "thickness_mm": null
+    },
+    {
+     "ks": [
+      "KS M 6010"
+     ],
+     "code": "B-14",
+     "part": "걸레받이",
+     "role": "finish",
+     "family": "도장계",
+     "layer_no": 1,
+     "material": "내부 수성페인트",
+     "confidence": "approximate",
+     "thickness_mm": null
+    },
+    {
+     "ks": [],
+     "code": "F-14",
+     "part": "바닥",
+     "role": "base",
+     "family": "미장·현장타설계",
+     "layer_no": 1,
+     "material": "방수 모르타르 바름",
+     "confidence": "exact",
+     "thickness_mm": 10
+    },
+    {
+     "ks": [
+      "KS L 5220"
+     ],
+     "code": "F-14",
+     "part": "바닥",
+     "role": "base",
+     "family": "미장·현장타설계",
+     "layer_no": 2,
+     "material": "시멘트 모르타르 바름",
+     "confidence": "exact",
+     "thickness_mm": null
+    },
+    {
+     "ks": [
+      "KS L 1001"
+     ],
+     "code": "F-14",
+     "part": "바닥",
+     "role": "finish",
+     "family": "도자기질계(타일)",
+     "layer_no": 1,
+     "material": "자기질 타일(바닥용)",
+     "confidence": "exact",
+     "thickness_mm": null
+    },
+    {
+     "ks": [
+      "KS M 6010"
+     ],
+     "code": "W-15",
+     "part": "벽",
+     "role": "finish",
+     "family": "도장계",
+     "layer_no": 1,
+     "material": "내부 수성페인트",
+     "confidence": "exact",
+     "thickness_mm": null
+    },
+    {
+     "ks": [
+      "KS M 6010"
+     ],
+     "code": "C-10",
+     "part": "천장",
+     "role": "finish",
+     "family": "도장계",
+     "layer_no": 1,
+     "material": "내부 수성페인트",
+     "confidence": "exact",
+     "thickness_mm": null
+    }
+   ],
+   "basis_note": "[추론] 1쪽 평면의 FL 라벨 \"FL.+35 / SL.±0\" 하나만이 근거다. 3쪽 면적산출표에 항목이 없고 면적도에 면(face)도 없어 면적도 인접 접촉길이도 계산할 수 없었다. 도면으로 확정된 실 7개(거실/침실·주방/식당·욕실·현관·PD·발코니·벽체공용) 목록에 이 실은 포함되지 않는다",
+   "conflict_note": null,
+   "ceiling_height_mm": null
+  },
+  {
+   "raw": {
+    "slope": "1쪽 주기22 욕실 구배시공 1/100",
+    "note13": "욕실:SL-60(FL+20/+10)",
+    "fl_label": "FL.+30 / SL.-150 (1쪽 평면)",
+    "baseboard": "BASEBOARD NO. 칸에 (none) 인쇄"
+   },
+   "name": "욕실",
+   "basis": "drawing_confirmed",
+   "fl_mm": 30,
+   "sl_mm": -150,
+   "area_m2": 3.3597,
+   "outline": [
+    [
+     [
+      1260,
+      7070
+     ],
+     [
+      1860,
+      7070
+     ],
+     [
+      1860,
+      5590
+     ],
+     [
+      190,
+      5590
+     ],
+     [
+      190,
+      7900
+     ],
+     [
+      1260,
+      7900
+     ]
+    ]
+   ],
+   "finishes": [
+    {
+     "ks": [
+      "KS F 4716"
+     ],
+     "code": "F-12",
+     "part": "바닥",
+     "role": "base",
+     "family": "미장·현장타설계",
+     "layer_no": 1,
+     "material": "수평조절(셀프레벨링) 모르타르",
+     "confidence": "exact",
+     "thickness_mm": 60
+    },
+    {
+     "ks": [
+      "KS L 1001"
+     ],
+     "code": "F-12",
+     "part": "바닥",
+     "role": "finish",
+     "family": "도자기질계(타일)",
+     "layer_no": 1,
+     "material": "자기질 타일(바닥용)",
+     "confidence": "approximate",
+     "thickness_mm": null
+    },
+    {
+     "ks": [
+      "KS L 5220"
+     ],
+     "code": "W-12",
+     "part": "벽",
+     "role": "base",
+     "family": "미장·현장타설계",
+     "layer_no": 1,
+     "material": "시멘트 모르타르 바름",
+     "confidence": "approximate",
+     "thickness_mm": null
+    },
+    {
+     "ks": [
+      "KS L 1001"
+     ],
+     "code": "W-12",
+     "part": "벽",
+     "role": "finish",
+     "family": "도자기질계(타일)",
+     "layer_no": 1,
+     "material": "도기질 타일(유색 시유·벽용)",
+     "confidence": "exact",
+     "thickness_mm": null
+    },
+    {
+     "ks": [
+      "KS D 3609"
+     ],
+     "code": "C-8",
+     "part": "천장",
+     "role": "base",
+     "family": "금속판·바탕틀계",
+     "layer_no": 1,
+     "material": "경량철골 천장틀",
+     "confidence": "exact",
+     "thickness_mm": null
+    },
+    {
+     "ks": [],
+     "code": "C-8",
+     "part": "천장",
+     "role": "finish",
+     "family": "성형 판넬계",
+     "layer_no": 1,
+     "material": "시스템욕실 ABS 판넬",
+     "confidence": "exact",
+     "thickness_mm": null
+    }
+   ],
+   "basis_note": null,
+   "conflict_note": "[모순·미해소] 1쪽 평면 라벨 \"FL.+30 / SL.-150\" vs 1쪽 주기13 \"욕실:SL-60(FL+20/+10)\". 둘 다 도면 원문이며 도면만으로 판정 불가 - 평면 라벨 값을 실었다. 판정에 쓰려면 어느 쪽을 정본으로 할지 사용자 결정이 필요하다",
+   "ceiling_height_mm": 2200
+  },
+  {
+   "raw": {
+    "note": "4쪽 주기3 - 개수대하부·신발장 하부 패널히팅 제외, 씽크대 하부 적용",
+    "fl_label": "FL.+110 / SL.±0"
+   },
+   "name": "주방/식당",
+   "basis": "drawing_confirmed",
+   "fl_mm": 110,
+   "sl_mm": 0,
+   "area_m2": 5.3426,
+   "outline": [
+    [
+     [
+      1860,
+      7070
+     ],
+     [
+      1860,
+      7825
+     ],
+     [
+      2910,
+      7825
+     ],
+     [
+      2910,
+      7200
+     ],
+     [
+      4400,
+      7200
+     ],
+     [
+      4400,
+      5355
+     ],
+     [
+      1860,
+      5355
+     ],
+     [
+      1860,
+      5590
+     ]
+    ]
+   ],
+   "finishes": [
+    {
+     "ks": [
+      "KS F 3504"
+     ],
+     "code": "B-9,10",
+     "part": "걸레받이",
+     "role": "base",
+     "family": "무기질계 보드",
+     "layer_no": 1,
+     "material": "석고보드 THK9.5/12.5",
+     "confidence": "exact",
+     "thickness_mm": 9.5
+    },
+    {
+     "ks": [],
+     "code": "B-9,10",
+     "part": "걸레받이",
+     "role": "finish",
+     "family": "성형 판넬계",
+     "layer_no": 1,
+     "material": "기성품 걸레받이재",
+     "confidence": "exact",
+     "thickness_mm": null
+    },
+    {
+     "ks": [
+      "KS M 3802"
+     ],
+     "code": "F-11",
+     "part": "바닥",
+     "role": "finish",
+     "family": "합성고분자 시트류",
+     "layer_no": 1,
+     "material": "기능성 륨(쿠션형 층간소음 저감 시트)",
+     "confidence": "approximate",
+     "thickness_mm": 6
+    },
+    {
+     "ks": [
+      "KS F 3504"
+     ],
+     "code": "W-14",
+     "part": "벽",
+     "role": "base",
+     "family": "무기질계 보드",
+     "layer_no": 1,
+     "material": "방수 석고보드 THK9.5",
+     "confidence": "exact",
+     "thickness_mm": 9.5
+    },
+    {
+     "ks": [
+      "KS M 7305"
+     ],
+     "code": "W-14",
+     "part": "벽",
+     "role": "finish",
+     "family": "도배계",
+     "layer_no": 1,
+     "material": "실크벽지",
+     "confidence": "exact",
+     "thickness_mm": null
+    },
+    {
+     "ks": [
+      "KS L 1001"
+     ],
+     "code": "W-14",
+     "part": "벽",
+     "role": "finish",
+     "family": "도자기질계(타일)",
+     "layer_no": 2,
+     "material": "도기질 타일(유색 시유·벽용)",
+     "confidence": "exact",
+     "thickness_mm": null
+    },
+    {
+     "ks": [
+      "KS D 3609"
+     ],
+     "code": "C-6B",
+     "part": "천장",
+     "role": "base",
+     "family": "금속판·바탕틀계",
+     "layer_no": 1,
+     "material": "경량철골 천장틀",
+     "confidence": "exact",
+     "thickness_mm": null
+    },
+    {
+     "ks": [
+      "KS F 3504"
+     ],
+     "code": "C-6B",
+     "part": "천장",
+     "role": "base",
+     "family": "무기질계 보드",
+     "layer_no": 2,
+     "material": "석고보드 THK9.5/12.5",
+     "confidence": "exact",
+     "thickness_mm": 9.5
+    },
+    {
+     "ks": [
+      "KS M 7305"
+     ],
+     "code": "C-6B",
+     "part": "천장",
+     "role": "finish",
+     "family": "도배계",
+     "layer_no": 1,
+     "material": "실크벽지",
+     "confidence": "exact",
+     "thickness_mm": null
+    }
+   ],
+   "basis_note": null,
+   "conflict_note": null,
+   "ceiling_height_mm": 2300
+  },
+  {
+   "raw": {
+    "thk": "FLOOR THK 80",
+    "fl_label": "FL.+80 / SL.±0"
+   },
+   "name": "현관",
+   "basis": "drawing_confirmed",
+   "fl_mm": 80,
+   "sl_mm": 0,
+   "area_m2": 1.9988,
+   "outline": [
+    [
+     [
+      1860,
+      7070
+     ],
+     [
+      1260,
+      7070
+     ],
+     [
+      1260,
+      7900
+     ],
+     [
+      1330,
+      7900
+     ],
+     [
+      1330,
+      8800
+     ],
+     [
+      2910,
+      8800
+     ],
+     [
+      2910,
+      7825
+     ],
+     [
+      1860,
+      7825
+     ]
+    ]
+   ],
+   "finishes": [
+    {
+     "ks": [
+      "KS F 3504"
+     ],
+     "code": "B-7B",
+     "part": "걸레받이",
+     "role": "base",
+     "family": "무기질계 보드",
+     "layer_no": 1,
+     "material": "석고보드 THK9.5/12.5",
+     "confidence": "exact",
+     "thickness_mm": 9.5
+    },
+    {
+     "ks": [],
+     "code": "B-7B",
+     "part": "걸레받이",
+     "role": "finish",
+     "family": "성형 판넬계",
+     "layer_no": 1,
+     "material": "인조대리석(BMC) 걸레받이",
+     "confidence": "exact",
+     "thickness_mm": null
+    },
+    {
+     "ks": [
+      "KS L 5220"
+     ],
+     "code": "F-10B",
+     "part": "바닥",
+     "role": "base",
+     "family": "미장·현장타설계",
+     "layer_no": 1,
+     "material": "시멘트 모르타르 바름",
+     "confidence": "exact",
+     "thickness_mm": null
+    },
+    {
+     "ks": [
+      "KS L 1001"
+     ],
+     "code": "F-10B",
+     "part": "바닥",
+     "role": "finish",
+     "family": "도자기질계(타일)",
+     "layer_no": 1,
+     "material": "포세린 타일(무유 자기질·무광)",
+     "confidence": "exact",
+     "thickness_mm": null
+    },
+    {
+     "ks": [
+      "KS F 3504"
+     ],
+     "code": "W-7,8,9",
+     "part": "벽",
+     "role": "base",
+     "family": "무기질계 보드",
+     "layer_no": 1,
+     "material": "석고보드 THK9.5/12.5",
+     "confidence": "exact",
+     "thickness_mm": 9.5
+    },
+    {
+     "ks": [
+      "KS M 7305"
+     ],
+     "code": "W-7,8,9",
+     "part": "벽",
+     "role": "finish",
+     "family": "도배계",
+     "layer_no": 1,
+     "material": "실크벽지",
+     "confidence": "exact",
+     "thickness_mm": null
+    },
+    {
+     "ks": [
+      "KS D 3609"
+     ],
+     "code": "C-6A",
+     "part": "천장",
+     "role": "base",
+     "family": "금속판·바탕틀계",
+     "layer_no": 1,
+     "material": "경량철골 천장틀",
+     "confidence": "exact",
+     "thickness_mm": null
+    },
+    {
+     "ks": [
+      "KS F 3504"
+     ],
+     "code": "C-6A",
+     "part": "천장",
+     "role": "base",
+     "family": "무기질계 보드",
+     "layer_no": 2,
+     "material": "석고보드 THK9.5/12.5",
+     "confidence": "exact",
+     "thickness_mm": 9.5
+    },
+    {
+     "ks": [
+      "KS M 7305"
+     ],
+     "code": "C-6A",
+     "part": "천장",
+     "role": "finish",
+     "family": "도배계",
+     "layer_no": 1,
+     "material": "실크벽지",
+     "confidence": "exact",
+     "thickness_mm": null
+    }
+   ],
+   "basis_note": null,
+   "conflict_note": null,
+   "ceiling_height_mm": 2340
+  }
+ ],
+ "drawing": {
+  "title": "실내재료마감표",
+  "doc_no": "AA-004",
+  "issuer": "LH",
+  "system": "lh-apt-unit-2025",
+  "doc_key": "lh-26형-2025.10.22"
+ },
+ "ruleset": {
+  "code": "robot-baseline-2026",
+  "name": "로봇 주행성 기본 기준세트 (2026 조사분)",
+  "source": "상용 로봇 제조사 공표 사양의 등급별 최보수 교집합(lte 지표는 등급 내 최소 공표치, gte 지표는 등급 내 최대 요구치). marginal_value에는 같은 등급에서 가장 관대한 기종의 공표치를 근거와 함께 둔다 - \"일부 기종만 통과\"를 뜻한다. 원문 대조표는 docs/robot-metric-sources.md. ★법규(장애인등편의법·ADA·BF)는 건축 하한이지 로봇 사양이 아니므로 임계값으로 쓰지 않고 source_text에만 병기한다",
+  "version": 1
+ },
+ "step_view": [
+  {
+   "label": "거실-발코니 미서기문",
+   "lower": "발코니",
+   "fl_disputed": true,
+   "step_abs_mm": 75,
+   "unevaluable": null,
+   "step_abs_raw_mm": 75
+  },
+  {
+   "label": "거실-주방 개방 경계",
+   "lower": null,
+   "fl_disputed": false,
+   "step_abs_mm": 0,
+   "unevaluable": null,
+   "step_abs_raw_mm": 0
+  },
+  {
+   "label": "발코니-실외기실 철제여닫이문",
+   "lower": null,
+   "fl_disputed": true,
+   "step_abs_mm": null,
+   "unevaluable": "원문 모순 FL 위에 있고 인접(또는 접한 실) 자체도 도면 확정이 아니다 - 어느 분기를 고르느냐로 판정이 뒤집히므로 판정 입력이 아니다",
+   "step_abs_raw_mm": 0
+  },
+  {
+   "label": "욕실-현관 벽체 경계(단차)",
+   "lower": "욕실",
+   "fl_disputed": true,
+   "step_abs_mm": 50,
+   "unevaluable": null,
+   "step_abs_raw_mm": 50
+  },
+  {
+   "label": "욕실문",
+   "lower": "욕실",
+   "fl_disputed": true,
+   "step_abs_mm": 80,
+   "unevaluable": null,
+   "step_abs_raw_mm": 80
+  },
+  {
+   "label": "주방-욕실 벽체 경계(단차)",
+   "lower": "욕실",
+   "fl_disputed": true,
+   "step_abs_mm": 80,
+   "unevaluable": null,
+   "step_abs_raw_mm": 80
+  },
+  {
+   "label": "주방-현관 마감 전환선",
+   "lower": "현관",
+   "fl_disputed": false,
+   "step_abs_mm": 30,
+   "unevaluable": null,
+   "step_abs_raw_mm": 30
+  },
+  {
+   "label": "현관 진입 철재여닫이문",
+   "lower": "복도",
+   "fl_disputed": false,
+   "step_abs_mm": 25,
+   "unevaluable": null,
+   "step_abs_raw_mm": 25
+  }
+ ],
+ "thresholds": [
+  {
+   "mode": "drive",
+   "unit": "mm",
+   "class": "commercial-cleaner",
+   "value": 1400,
+   "metric": "clear_width_mm",
+   "source": "Gausium Scrubber 75 \"Min. Pass Width 1400mm\" = 등급 내 최대 요구값(최보수). ★이전 판의 800(Scrubber 50)은 선언한 최보수 규칙 위반이었고 Scrubber 75가 못 들어가는 900mm 통로를 pass로 만들었다. marginal 650 = Gausium Phantas(등급 내 최소). 지하주차장 1,800mm는 별도 조건이라 취하지 않았다. ★통과폭은 모드별로 공표되지 않아 clean과 같은 값이다",
+   "profile": [],
+   "marginal": 650,
+   "comparator": "gte",
+   "unknown_reason": null
+  },
+  {
+   "mode": "clean",
+   "unit": "mm",
+   "class": "commercial-cleaner",
+   "value": 1400,
+   "metric": "clear_width_mm",
+   "source": "Gausium Scrubber 75 \"Min. Pass Width 1400mm\"(지하주차장 1800mm는 별도 조건이라 취하지 않았다). marginal 650 = Phantas. ★drive와 같은 값인 것이 맞다 - 제조사는 통과폭을 모드별로 공표하지 않는다",
+   "profile": [],
+   "marginal": 650,
+   "comparator": "gte",
+   "unknown_reason": null
+  },
+  {
+   "mode": "drive",
+   "unit": "mm",
+   "class": "commercial-cleaner",
+   "value": null,
+   "metric": "gap_width_mm",
+   "source": "조사 결과 공표 근거 없음 - unknown_reason 참조",
+   "profile": [],
+   "marginal": null,
+   "comparator": "lte",
+   "unknown_reason": "상업용 청소로봇의 틈 극복 폭 공표치를 확인하지 못했다"
+  },
+  {
+   "mode": "drive",
+   "unit": "deg",
+   "class": "commercial-cleaner",
+   "value": 4.6,
+   "metric": "slope_deg",
+   "source": "Gausium Scrubber 50 \"Max Slope 4.6도\" = 등급 내 최소 공표치(최보수). ★이전 판의 8.0은 선언한 규칙 위반이었고 Scrubber 50이 못 오르는 6도 램프를 pass로 만들었다. marginal 8 = Pudu CC1 비청소 주행·Scrubber 75 Auto Driving(등급 내 최대). Phantas는 5도",
+   "profile": [],
+   "marginal": 8,
+   "comparator": "lte",
+   "unknown_reason": null
+  },
+  {
+   "mode": "clean",
+   "unit": "deg",
+   "class": "commercial-cleaner",
+   "value": 3,
+   "metric": "slope_deg",
+   "source": "Pudu CC1 청소 중 3도 초과 금지 / Gausium Scrubber 75 Auto Cleaning 3도. 두 기종이 같은 값이고 더 관대한 청소모드 공표치가 없어 marginal이 없다. ★BF 최우수 램프(1/18, 3.18도)와 거의 같아 법정 최대 1/12 램프에서는 청소 불가",
+   "profile": [],
+   "marginal": null,
+   "comparator": "lte",
+   "unknown_reason": null
+  },
+  {
+   "mode": "drive",
+   "unit": "mm",
+   "class": "commercial-cleaner",
+   "value": 10,
+   "metric": "step_height_mm",
+   "source": "Gausium Scrubber 75 \"Min. Passable Obstacle Height: 10 mm\" = 등급 내 최소 공표치. marginal 20 = Pudu CC1 주행모드(등급 내 최대)",
+   "profile": [],
+   "marginal": 20,
+   "comparator": "lte",
+   "unknown_reason": null
+  },
+  {
+   "mode": "clean",
+   "unit": "mm",
+   "class": "commercial-cleaner",
+   "value": 8,
+   "metric": "step_height_mm",
+   "source": "Pudu CC1 청소모드 8mm = 등급 내 최소 공표치. marginal 10 = Gausium Scrubber 75의 통과 장애물 높이(모드 구분 없이 공표되어 청소 중에도 유효한 값으로 읽는다)",
+   "profile": [],
+   "marginal": 10,
+   "comparator": "lte",
+   "unknown_reason": null
+  },
+  {
+   "mode": "drive",
+   "unit": "mm",
+   "class": "commercial-cleaner",
+   "value": 2000,
+   "metric": "turn_width_mm",
+   "source": "Gausium Scrubber 75 \"Min. U-Turn Width 2,000mm\" = 등급 내 최대 요구값(최보수). ★이전 판의 1,100(Scrubber 50)은 최보수 규칙 위반. marginal 1,100 = Scrubber 50(등급 내 최소). ★U턴 폭도 모드별 공표가 없어 clean과 같은 값이다",
+   "profile": [],
+   "marginal": 1100,
+   "comparator": "gte",
+   "unknown_reason": null
+  },
+  {
+   "mode": "clean",
+   "unit": "mm",
+   "class": "commercial-cleaner",
+   "value": 2000,
+   "metric": "turn_width_mm",
+   "source": "Gausium Scrubber 75 \"Min. U-Turn Width 2,000mm\". marginal 1,100 = Scrubber 50",
+   "profile": [],
+   "marginal": 1100,
+   "comparator": "gte",
+   "unknown_reason": null
+  },
+  {
+   "mode": "",
+   "unit": "mm",
+   "class": "domestic-cleaner",
+   "value": 10,
+   "metric": "carpet_pile_mm",
+   "source": "삼성 파워봇 \"모 길이가 1cm 이하이고 두께가 1.5cm 이하인 밝은색 카펫일 경우 청소를 잘 할 수 있어요\". 다른 가정용 제조사의 파일 높이 공표치를 찾지 못해 marginal이 없다",
+   "profile": [],
+   "marginal": null,
+   "comparator": "lte",
+   "unknown_reason": null
+  },
+  {
+   "mode": "",
+   "unit": "deg",
+   "class": "domestic-cleaner",
+   "value": null,
+   "metric": "slope_deg",
+   "source": "조사 결과 공표 근거 없음 - unknown_reason 참조",
+   "profile": [],
+   "marginal": null,
+   "comparator": "lte",
+   "unknown_reason": "가정용 로봇청소기의 최대 등판각 공표치를 확인하지 못했다"
+  },
+  {
+   "mode": "",
+   "unit": "mm",
+   "class": "domestic-cleaner",
+   "value": 15,
+   "metric": "step_height_mm",
+   "source": "Roborock S4 15mm = 등급 내 최소 공표치(최보수). ★이전 판의 20mm는 \"대부분 모델\" 값이라 선언한 최보수 규칙 위반이었다 - S4를 쓰는 세대에서 18mm 문턱이 pass로 찍힌다. marginal 45 = 삼성 비스포크 이지패스 휠(등급 내 최대). ★Saros 20의 88mm는 \"앞턱이 더 낮은 이중턱\"이라는 조건부 값이라 등급 대표에 쓰지 않았다",
+   "profile": [],
+   "marginal": 45,
+   "comparator": "lte",
+   "unknown_reason": null
+  },
+  {
+   "mode": "",
+   "unit": "mm",
+   "class": "industrial-amr",
+   "value": 600,
+   "metric": "clear_width_mm",
+   "source": "Pudu T300·FlashBot Max \"Path Clearance >= 60 cm\". 두 기종이 같은 값이라 marginal이 없다",
+   "profile": [],
+   "marginal": null,
+   "comparator": "gte",
+   "unknown_reason": null
+  },
+  {
+   "mode": "",
+   "unit": "mm",
+   "class": "industrial-amr",
+   "value": 35,
+   "metric": "gap_width_mm",
+   "source": "Pudu T300 \"Groove Crossing Width: 35 mm\"",
+   "profile": [],
+   "marginal": null,
+   "comparator": "lte",
+   "unknown_reason": null
+  },
+  {
+   "mode": "",
+   "unit": "deg",
+   "class": "industrial-amr",
+   "value": null,
+   "metric": "slope_deg",
+   "source": "조사 결과 공표 근거 없음 - unknown_reason 참조",
+   "profile": [],
+   "marginal": null,
+   "comparator": "lte",
+   "unknown_reason": "Pudu T300·FlashBot Max의 최대 등판각 공표치를 확인하지 못했다. 서빙 등급의 5도를 옮기면 근거 없는 전용이 된다"
+  },
+  {
+   "mode": "",
+   "unit": "mm",
+   "class": "industrial-amr",
+   "value": 20,
+   "metric": "step_height_mm",
+   "source": "Pudu T300 \"Threshold Overcoming Height: 20 mm\". 이 등급은 공표 기종이 2종뿐이고 FlashBot Max는 단차를 공표하지 않아 marginal을 둘 근거가 없다",
+   "profile": [],
+   "marginal": null,
+   "comparator": "lte",
+   "unknown_reason": null
+  },
+  {
+   "mode": "",
+   "unit": "deg",
+   "class": "outdoor-delivery",
+   "value": null,
+   "metric": "slope_deg",
+   "source": "조사 결과 공표 근거 없음 - unknown_reason 참조",
+   "profile": [],
+   "marginal": null,
+   "comparator": "lte",
+   "unknown_reason": "실외이동로봇은 운행안전인증 제도(질량 500kg·15km/h, 심사 16개 항목)만 확인됐고 제품 정량 사양이 비공개다"
+  },
+  {
+   "mode": "",
+   "unit": "mm",
+   "class": "outdoor-delivery",
+   "value": null,
+   "metric": "step_height_mm",
+   "source": "조사 결과 공표 근거 없음 - unknown_reason 참조",
+   "profile": [],
+   "marginal": null,
+   "comparator": "lte",
+   "unknown_reason": "동상. 딜리 X3-R 1.4의 \"바퀴 대형화로 낮은 연석 극복\"은 보도자료 서술이며 수치가 없다"
+  },
+  {
+   "mode": "",
+   "unit": "mm",
+   "class": "serving-delivery",
+   "value": null,
+   "metric": "carpet_pile_mm",
+   "source": "조사 결과 공표 근거 없음 - unknown_reason 참조",
+   "profile": [],
+   "marginal": null,
+   "comparator": "lte",
+   "unknown_reason": "서빙·배송로봇 제조사가 카펫 파일 높이 한계를 공표하지 않았다. Pudu는 \"short-pile hard carpet\"이라는 정성 표현뿐이다. ADA §302.2의 12.7mm는 접근성 규격이지 로봇 사양이 아니므로 대입하지 않는다"
+  },
+  {
+   "mode": "",
+   "unit": "mm",
+   "class": "serving-delivery",
+   "value": 800,
+   "metric": "clear_width_mm",
+   "source": "Pudu PuduBot 2 \"1대 통과 >= 0.8m\" = 등급 내 최대 요구값(최보수). marginal 450 = 등급 내 최소 요구값(Bear Servi Q \"최소 통로폭 18 in\"). 450~800 구간은 Servi Q·KettyBot Pro(550)만 통과한다",
+   "profile": [],
+   "marginal": 450,
+   "comparator": "gte",
+   "unknown_reason": null
+  },
+  {
+   "mode": "",
+   "unit": "mm",
+   "class": "serving-delivery",
+   "value": null,
+   "metric": "elevator_car_width_mm",
+   "source": "조사 결과 공표 근거 없음 - unknown_reason 참조",
+   "profile": [],
+   "marginal": null,
+   "comparator": "gte",
+   "unknown_reason": "로봇 폭에 더할 여유(clearance)의 공표 근거가 없다. 장애인등편의법 1.1m는 건축 하한이지 로봇 요구가 아니다. KS B 7317(2021)이 단차·틈새 극복을 평가항목에 두지만 유료 표준이라 수치 미확인"
+  },
+  {
+   "mode": "",
+   "unit": "",
+   "class": "serving-delivery",
+   "value": null,
+   "metric": "floor_csr_b",
+   "source": "조사 결과 공표 근거 없음 - unknown_reason 참조",
+   "profile": [],
+   "marginal": null,
+   "comparator": "gte",
+   "unknown_reason": "로봇 측에 규격화된 최소 마찰계수 요구값이 확인되지 않았다. 업계 문헌의 COF 0.6 권장은 제조사 규격이 아니다. ADA §302.1도 최소 마찰계수를 규정하지 않는다"
+  },
+  {
+   "mode": "",
+   "unit": "mm",
+   "class": "serving-delivery",
+   "value": null,
+   "metric": "floor_flatness_mm_3m",
+   "source": "조사 결과 공표 근거 없음 - unknown_reason 참조",
+   "profile": [],
+   "marginal": null,
+   "comparator": "lte",
+   "unknown_reason": "이동로봇용 실내 바닥 평탄도의 국내 법정 기준·제조사 공표 수치가 확인되지 않았다. 업계 자료의 FF/FL·±1.5mm·조인트 1.0mm는 시공사·자재사 마케팅 자료이며 표준이 아니다. 제조사 요구는 \"flat and smooth ground\"라는 정성 표현뿐이다"
+  },
+  {
+   "mode": "",
+   "unit": "mm",
+   "class": "serving-delivery",
+   "value": 15,
+   "metric": "gap_width_mm",
+   "source": "Pudu PuduBot 2 \"maximum surmountable gap no more than 15 mm\" = 등급 내 최소 공표치. marginal 35 = KettyBot 극복 장애물 폭(등급 내 최대)",
+   "profile": [],
+   "marginal": 35,
+   "comparator": "lte",
+   "unknown_reason": null
+  },
+  {
+   "mode": "",
+   "unit": "mm",
+   "class": "serving-delivery",
+   "value": 1200,
+   "metric": "rec_path_width_mm",
+   "source": "Pudu PuduBot 2 \"권장 경로폭 1.2m\". ★U턴 폭이 아니라 권장 경로폭이다 - 같은 문서가 1대 통과 0.8m·2대 교행 2m를 따로 적는다. marginal 800 = 같은 문서의 \"1대 통과\" 하한(권장은 못 맞춰도 통과는 된다)",
+   "profile": [],
+   "marginal": 800,
+   "comparator": "gte",
+   "unknown_reason": null
+  },
+  {
+   "mode": "",
+   "unit": "deg",
+   "class": "serving-delivery",
+   "value": 5,
+   "metric": "slope_deg",
+   "source": "Pudu BellaBot·KettyBot·KettyBot Pro·PuduBot 2 \"Max Climbing Angle <= 5도\" = 등급 내 최소 공표치. marginal 7 = Bear Servi Plus(로커보기 서스펜션, 등급 내 최대). ★법정 최대 램프 1/12(4.76도)와 여유가 0.24도뿐이라 법규 최대치 램프는 실패 위험 구간이다",
+   "profile": [],
+   "marginal": 7,
+   "comparator": "lte",
+   "unknown_reason": null
+  },
+  {
+   "mode": "",
+   "unit": "mm",
+   "class": "serving-delivery",
+   "value": 5,
+   "metric": "step_height_mm",
+   "source": "동상. ★베벨·램프·라운드 문턱에 한해 marginal 12.7을 둔다 = 등급 내 최대 공표치(Bear Servi Plus \"thresholds up to 1/2 in\")이자 ADA §303의 베벨 상한과 같은 값이다. 형상이 미상이거나 수직이면 이 행은 적용되지 않는다",
+   "profile": [
+    "beveled",
+    "ramped",
+    "rounded"
+   ],
+   "marginal": 12.7,
+   "comparator": "lte",
+   "unknown_reason": null
+  },
+  {
+   "mode": "",
+   "unit": "mm",
+   "class": "serving-delivery",
+   "value": 5,
+   "metric": "step_height_mm",
+   "source": "Pudu KettyBot Pro \"Max. surmountable height: 5 mm\". 등급 내 최소 공표치(KettyBot 7 / PuduBot 2 10 / Servi Plus 12.7). ★형상 무관 행이라 marginal을 두지 않는다 - Servi Plus의 12.7은 ADA 문턱 규정을 전제한 값이라 베벨 없는 수직턱에는 근거가 되지 않는다",
+   "profile": [],
+   "marginal": null,
+   "comparator": "lte",
+   "unknown_reason": null
+  },
+  {
+   "mode": "",
+   "unit": "mm",
+   "class": "serving-delivery",
+   "value": null,
+   "metric": "turn_width_mm",
+   "source": "조사 결과 공표 근거 없음 - unknown_reason 참조",
+   "profile": [],
+   "marginal": null,
+   "comparator": "gte",
+   "unknown_reason": "서빙·배송 등급 전 기종(KettyBot Pro/KettyBot/BellaBot/PuduBot 2/Servi/Servi Plus/Servi Q/클로이)에 U턴 폭 공표치가 한 건도 없다. U턴 공표치는 Gausium Scrubber 50(1,100)·75(2,000)뿐이다. PuduBot 2의 1.2m는 권장 경로폭이며 다른 지표다"
+  }
+ ],
+ "adjacencies": [
+  {
+   "a": "거실/침실",
+   "b": "발코니",
+   "raw": {
+    "to": "발코니",
+    "from": "거실/침실",
+    "opening_code": "DPW",
+    "contact_len_mm": null,
+    "clear_width_unknown_reason": "★DPW 개구부 2,010 X 2,335는 개구부 치수이지 유효 통과폭이 아니다. 제작치수 1,990은 상한만 준다 - 미서기 이중문이라 실제 통과폭은 문짝 1매 폭에서 프레임을 뺀 값이며 도면에 없다"
+   },
+   "code": "DPW",
+   "kind": "door",
+   "basis": "drawing_confirmed",
+   "label": "거실-발코니 미서기문",
+   "lower": "발코니",
+   "profile": null,
+   "step_mm": -75,
+   "basis_note": null,
+   "gap_width_mm": null,
+   "clear_width_mm": null,
+   "clear_width_max_mm": 959
+  },
+  {
+   "a": "거실/침실",
+   "b": "욕실",
+   "raw": {
+    "to": "욕실",
+    "from": "거실/침실",
+    "opening_code": "",
+    "contact_len_mm": 1670,
+    "clear_width_unknown_reason": "★욕실 출입구는 6쪽 창호일람표에도 5쪽 평면 치수체인에도 없다(시스템욕실 제품에 문이 포함되어 별도 창호로 잡히지 않는다). 폭 자체가 미상이므로 개구부 치수를 대입할 수도 없다"
+   },
+   "code": null,
+   "kind": "door",
+   "basis": "drawing_confirmed",
+   "label": "욕실문",
+   "lower": "욕실",
+   "profile": null,
+   "step_mm": -80,
+   "basis_note": null,
+   "gap_width_mm": null,
+   "clear_width_mm": null,
+   "clear_width_max_mm": null
+  },
+  {
+   "a": "거실/침실",
+   "b": "주방/식당",
+   "raw": {
+    "to": "주방/식당",
+    "from": "거실/침실",
+    "opening_code": "",
+    "contact_len_mm": 2775,
+    "clear_width_unknown_reason": "개구부 없는 개방 경계라 창호코드가 없다. 유효 통과폭은 벽심이 아니라 마감면 간 거리여야 하는데 평면 치수체인에 그 값이 없다"
+   },
+   "code": null,
+   "kind": "open_boundary",
+   "basis": "drawing_confirmed",
+   "label": "거실-주방 개방 경계",
+   "lower": null,
+   "profile": null,
+   "step_mm": 0,
+   "basis_note": null,
+   "gap_width_mm": null,
+   "clear_width_mm": null,
+   "clear_width_max_mm": null
+  },
+  {
+   "a": "발코니",
+   "b": "실외기실",
+   "raw": {
+    "to": "실외기실",
+    "from": "발코니",
+    "opening_code": "SD",
+    "contact_len_mm": null,
+    "clear_width_unknown_reason": "★SD 개구부 710 X 2,110은 개구부 치수다. 정면도의 900은 지시 대상이 표기되지 않아 통과폭으로 단정할 수 없고, 제작치수 690은 상한이다"
+   },
+   "code": "SD",
+   "kind": "door",
+   "basis": "inferred",
+   "label": "발코니-실외기실 철제여닫이문",
+   "lower": null,
+   "profile": null,
+   "step_mm": 0,
+   "basis_note": "[추론] 이 세대에서 통행 개구부를 가진 경계 중 유일하게 전 등급 pass가 나오는 행인데, 그 pass가 두 겹의 미확정 위에 서 있다: (a) 실외기실은 3쪽 면적산출표·면적도에 없어 컨트롤러가 검증한 실 7개·인접 6쌍 목록 어디에도 없다(시드가 추가한 쌍이다). (b) 단차 0은 발코니 FL 원문 모순(주기13 높은턱 80 / 낮은턱 35) 중 낮은턱을 임의로 고른 결과다. 높은턱을 고르면 45mm다. 판정에 쓸 때는 v_space_step.fl_disputed(=true)와 touches_inferred_space(=true)를 함께 읽어야 한다",
+   "gap_width_mm": null,
+   "clear_width_mm": null,
+   "clear_width_max_mm": 600
+  },
+  {
+   "a": "복도",
+   "b": "현관",
+   "raw": {
+    "to": "복도",
+    "from": "현관",
+    "opening_code": "D-2",
+    "contact_len_mm": null,
+    "clear_width_unknown_reason": "★D-2 개구부 1,120 X 2,240은 개구부 치수다. 정면도의 950은 지시 대상 미표기라 통과폭으로 단정할 수 없다. 제작치수 1,090은 상한이며 여닫이문이 90도 미만으로 열리면 실유효폭은 더 줄어든다"
+   },
+   "code": "D-2",
+   "kind": "door",
+   "basis": "inferred",
+   "label": "현관 진입 철재여닫이문",
+   "lower": "복도",
+   "profile": null,
+   "step_mm": 25,
+   "basis_note": "[추론] 복도는 1쪽 평면에 FL.+55 라벨만 있고 3쪽 면적도에 면이 없어 현관과의 접촉을 계산할 수 없었다. 컨트롤러가 도면에서 확정한 인접 6쌍 목록에 이 쌍은 없다. 단차 25는 두 FL 라벨의 산술차이지 실측·상세도 확인값이 아니다",
+   "gap_width_mm": null,
+   "clear_width_mm": null,
+   "clear_width_max_mm": 1000
+  },
+  {
+   "a": "욕실",
+   "b": "주방/식당",
+   "raw": {
+    "to": "욕실",
+    "from": "주방/식당",
+    "opening_code": "",
+    "contact_len_mm": 1480,
+    "clear_width_unknown_reason": "통행 개구부가 없는 벽체 경계라 통과폭이 정의되지 않는다"
+   },
+   "code": null,
+   "kind": "level_change",
+   "basis": "drawing_confirmed",
+   "label": "주방-욕실 벽체 경계(단차)",
+   "lower": "욕실",
+   "profile": null,
+   "step_mm": 80,
+   "basis_note": null,
+   "gap_width_mm": null,
+   "clear_width_mm": null,
+   "clear_width_max_mm": null
+  },
+  {
+   "a": "욕실",
+   "b": "현관",
+   "raw": {
+    "to": "현관",
+    "from": "욕실",
+    "opening_code": "",
+    "contact_len_mm": 1430,
+    "clear_width_unknown_reason": "통행 개구부가 없는 벽체 경계라 통과폭이 정의되지 않는다"
+   },
+   "code": null,
+   "kind": "level_change",
+   "basis": "drawing_confirmed",
+   "label": "욕실-현관 벽체 경계(단차)",
+   "lower": "욕실",
+   "profile": null,
+   "step_mm": 50,
+   "basis_note": null,
+   "gap_width_mm": null,
+   "clear_width_mm": null,
+   "clear_width_max_mm": null
+  },
+  {
+   "a": "주방/식당",
+   "b": "현관",
+   "raw": {
+    "to": "현관",
+    "from": "주방/식당",
+    "opening_code": "",
+    "contact_len_mm": 1805,
+    "clear_width_unknown_reason": "개구부 없는 마감 전환선이라 창호코드가 없다"
+   },
+   "code": null,
+   "kind": "open_boundary",
+   "basis": "drawing_confirmed",
+   "label": "주방-현관 마감 전환선",
+   "lower": "현관",
+   "profile": null,
+   "step_mm": -30,
+   "basis_note": null,
+   "gap_width_mm": null,
+   "clear_width_mm": null,
+   "clear_width_max_mm": null
+  }
+ ],
+ "robot_classes": [
+  {
+   "code": "commercial-cleaner",
+   "name": "상업용 청소로봇",
+   "specs": {
+    "models": [
+     {
+      "name": "Pudu CC1",
+      "min_width_mm": 700,
+      "step_clean_mm": 8,
+      "step_drive_mm": 20,
+      "slope_clean_deg": 3,
+      "slope_drive_deg": 8
+     },
+     {
+      "d": 810,
+      "h": 1070,
+      "w": 700,
+      "name": "Gausium Scrubber 50",
+      "uturn_mm": 1100,
+      "slope_deg": 4.6,
+      "min_width_mm": 800
+     },
+     {
+      "d": 1370,
+      "h": 1417,
+      "w": 962,
+      "name": "Gausium Scrubber 75",
+      "step_mm": 10,
+      "uturn_mm": 2000,
+      "min_width_mm": 1400,
+      "slope_clean_deg": 3,
+      "slope_drive_deg": 8
+     },
+     {
+      "d": 585,
+      "h": 619,
+      "w": 445,
+      "name": "Gausium Phantas",
+      "slope_deg": 5,
+      "min_width_mm": 650
+     }
+    ]
+   },
+   "width": 962,
+   "height": 1417,
+   "length": 1370,
+   "default_mode": "clean"
+  },
+  {
+   "code": "domestic-cleaner",
+   "name": "가정용 로봇청소기",
+   "specs": {
+    "models": [
+     {
+      "name": "Roborock 일반",
+      "step_mm": 20
+     },
+     {
+      "name": "Roborock S4",
+      "step_mm": 15
+     },
+     {
+      "name": "Roborock Saros 20",
+      "note": "이중턱 45+43",
+      "step_mm": 88
+     },
+     {
+      "name": "삼성 비스포크 AI 스팀",
+      "step_mm": 45,
+      "step_stair": "45+15(폭 90)"
+     }
+    ]
+   },
+   "width": 350,
+   "height": 100,
+   "length": 350,
+   "default_mode": ""
+  },
+  {
+   "code": "industrial-amr",
+   "name": "산업용 실내 배송 AMR",
+   "specs": {
+    "models": [
+     {
+      "d": 835,
+      "h": 1350,
+      "w": 500,
+      "name": "Pudu T300",
+      "gap_mm": 35,
+      "step_mm": 20,
+      "payload_kg": 300,
+      "min_width_mm": 600
+     },
+     {
+      "d": 538,
+      "h": 1052,
+      "w": 534,
+      "name": "Pudu FlashBot Max",
+      "min_width_mm": 600
+     }
+    ]
+   },
+   "width": 534,
+   "height": 1350,
+   "length": 835,
+   "default_mode": ""
+  },
+  {
+   "code": "outdoor-delivery",
+   "name": "실외이동로봇",
+   "specs": {
+    "models": [],
+    "regulation": {
+     "scheme": "운행안전인증 심사 16개 항목",
+     "mass_kg_max": 500,
+     "speed_kmh_max": 15
+    }
+   },
+   "width": null,
+   "height": null,
+   "length": null,
+   "default_mode": ""
+  },
+  {
+   "code": "serving-delivery",
+   "name": "서빙·배송로봇(실내)",
+   "specs": {
+    "models": [
+     {
+      "d": 450,
+      "h": 1120,
+      "w": 435,
+      "name": "Pudu KettyBot Pro",
+      "step_mm": 5,
+      "slope_deg": 5,
+      "min_width_mm": 550
+     },
+     {
+      "name": "Pudu KettyBot",
+      "gap_mm": 35,
+      "step_mm": 7,
+      "slope_deg": 5
+     },
+     {
+      "name": "Pudu PuduBot 2",
+      "gap_mm": 15,
+      "step_mm": 10,
+      "slope_deg": 5,
+      "min_width_mm": 800
+     },
+     {
+      "d": 537,
+      "h": 1290,
+      "w": 565,
+      "name": "Pudu BellaBot",
+      "slope_deg": 5
+     },
+     {
+      "d": 430,
+      "h": 1046,
+      "w": 445,
+      "name": "Bear Servi"
+     },
+     {
+      "d": 590,
+      "h": 1230,
+      "w": 535,
+      "name": "Bear Servi Plus",
+      "step_mm": 12.7,
+      "slope_deg": 7
+     },
+     {
+      "d": 466,
+      "h": 1060,
+      "w": 350,
+      "name": "Bear Servi Q",
+      "min_width_mm": 450
+     },
+     {
+      "d": 500,
+      "h": 1300,
+      "w": 500,
+      "name": "LG 클로이 서브봇"
+     }
+    ]
+   },
+   "width": 565,
+   "height": 1290,
+   "length": 537,
+   "default_mode": ""
+  }
+ ]
+}

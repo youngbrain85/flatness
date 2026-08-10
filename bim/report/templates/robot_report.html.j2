@@ -1,0 +1,215 @@
+{# 로봇친화도 평가 보고서 — 5부 구성.
+   스타일 규약은 worker/flatworker/report/templates/report.html.j2 와 맞춘다
+   (같은 발주처가 두 종류 보고서를 나란히 받으므로). #}
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<title>{{ ctx.title }}</title>
+<style>
+@page { size: A4; margin: 14mm 12mm 16mm 12mm; }
+* { box-sizing: border-box; }
+body {
+  /* 리눅스 컨테이너의 fonts-noto-cjk 는 'Noto Sans CJK KR' 로 등록된다.
+     Windows 개발 PC 호환을 위해 나머지 후보도 남긴다. */
+  font-family: 'Noto Sans CJK KR', 'Noto Sans KR', 'Malgun Gothic', sans-serif;
+  font-size: 10pt; color: #1f2937; margin: 0; line-height: 1.45;
+}
+h1 { font-size: 20pt; margin: 0 0 6mm; }
+h2 { font-size: 13pt; margin: 0 0 3mm; border-bottom: 1.2pt solid #1f2937; padding-bottom: 1.5mm; }
+h3 { font-size: 11pt; margin: 5mm 0 2mm; }
+h3, h4 { break-after: avoid; page-break-after: avoid; }
+.part { page-break-before: always; }
+.part.first { page-break-before: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 9pt; margin-bottom: 3mm; }
+th, td { border: 0.4pt solid #cbd5e1; padding: 1.3mm 2mm; text-align: left; vertical-align: top; }
+th { background: #f1f5f9; word-break: keep-all; }
+td.num, th.num { text-align: right; }
+table.kv th { width: 26%; background: #f8fafc; }
+.badge { display: inline-block; padding: 0.4mm 2.2mm; border-radius: 1.5mm; color: #fff; font-weight: 700; font-size: 8.5pt; white-space: nowrap; }
+.b-pass { background: #15803d; } .b-marginal { background: #b45309; }
+.b-fail { background: #b91c1c; } .b-unknown { background: #475569; }
+.warn { border: 0.5pt solid #f59e0b; background: #fffbeb; padding: 2mm; margin: 1.5mm 0; font-size: 9pt; }
+.note { color: #64748b; font-size: 8.5pt; }
+.disclaimer { border: 1pt solid #1f2937; background: #f8fafc; padding: 3mm; font-weight: 700; margin-top: 4mm; }
+figure { margin: 0 0 4mm; page-break-inside: avoid; }
+figure img { max-width: 100%; max-height: 150mm; object-fit: contain; }
+figcaption { font-size: 8.5pt; color: #475569; margin-top: 1mm; }
+.cls { page-break-inside: avoid; margin-bottom: 5mm; }
+.cls .row { display: flex; gap: 4mm; align-items: flex-start; }
+.cls .row .fig { width: 46mm; flex: none; }
+.cls .row .fig img { width: 100%; }
+.cls .row .body { flex: 1; }
+ul { margin: 1mm 0 2mm; padding-left: 5mm; }
+li { margin-bottom: 0.8mm; }
+</style>
+</head>
+<body>
+
+{# ── 1부: 표지 ───────────────────────────────────────────────────────── #}
+<section class="part first">
+  <h1>{{ ctx.title }}</h1>
+  <table class="kv">
+    <tr><th>대상 도면</th><td>{{ ctx.drawing.title }} ({{ ctx.drawing.doc_no }})</td></tr>
+    <tr><th>발행</th><td>{{ ctx.drawing.issuer }} · 코드체계 {{ ctx.drawing.system }}</td></tr>
+    <tr><th>도면 키</th><td>{{ ctx.drawing.doc_key }}</td></tr>
+    <tr><th>적용 기준세트</th><td>{{ ctx.ruleset.name }} (v{{ ctx.ruleset.version }})<div class="note">{{ ctx.ruleset.source }}</div></td></tr>
+    <tr><th>진입 기준점</th><td>{{ ctx.entry_space }}</td></tr>
+    <tr><th>평가 대상</th><td>실 {{ ctx.n_spaces }} · 경계 {{ ctx.n_adjacencies }} · 로봇 등급 {{ ctx.results|length }}</td></tr>
+  </table>
+
+  <div class="disclaimer">
+    이 보고서는 <strong>설계 도면 단계</strong> 평가다. 시공 오차·문턱 마감 돌출·바닥
+    평활도는 포함하지 않으며, 실제 단차는 여기 적힌 값보다 클 수 있다. 시공 후 검증은
+    점군 실측(세부과업 1·4)이 담당한다.
+  </div>
+
+  <h3>판정 값의 뜻</h3>
+  <table>
+    <tr><th style="width:22mm">값</th><th>뜻</th></tr>
+    <tr><td><span class="badge b-pass">통과</span></td><td>공표 사양의 한계 안이다.</td></tr>
+    <tr><td><span class="badge b-marginal">조건부</span></td><td>한계는 넘지만 완충 구간 안이다. 문턱 형상에 따라 갈린다.</td></tr>
+    <tr><td><span class="badge b-fail">불가</span></td><td>공표 사양의 한계를 넘는다.</td></tr>
+    <tr><td><span class="badge b-unknown">미상</span></td><td><strong>도면에 값이 없거나 근거가 없어 판정할 수 없다.</strong> 통과가 아니다.</td></tr>
+  </table>
+  <p class="note">
+    미상을 통과로 처리하면 현장에서 로봇이 갇힌다. 이 보고서는 미상을 통과로 접지 않으며,
+    미상 경계는 도달 경로를 열지 않는다.
+  </p>
+</section>
+
+{# ── 2부: 무엇을 쟀는가 ─────────────────────────────────────────────────── #}
+<section class="part">
+  <h2>2. 평가 방법과 측정 가능 범위</h2>
+  <p>
+    실 경계는 도면의 면적산출근거도에서 <strong>선 굵기로 걸러</strong> 복원했고, 복원 면적을
+    도면에 인쇄된 면적산출표와 대조해 검증했다({{ ctx.max_area_error }} 이내). 바닥 레벨은
+    부분상세도의 FL/SL 라벨이 정본이며, 실내재료마감표의 THK와 <code>FL − SL = THK</code>로
+    서로 검증된다.
+  </p>
+  <div class="warn">
+    실내재료마감표의 <strong>THK는 두께이지 레벨이 아니다.</strong> 욕실은 슬래브가 150mm
+    내려가 있어 두께가 가장 두꺼우면서(180) 마감면은 가장 낮다(FL+30). THK를 레벨로 읽으면
+    높낮이 방향이 반대로 나온다.
+  </div>
+
+  <h3>지표별 도면 측정 가능성</h3>
+  <table>
+    <tr><th style="width:42mm">지표</th><th style="width:20mm">도면 측정</th><th>비고</th></tr>
+    {% for m in ctx.measurability %}
+    <tr><td>{{ m.metric }}</td><td>{{ m.verdict }}</td><td>{{ m.note }}</td></tr>
+    {% endfor %}
+  </table>
+  <p class="note">
+    마찰과 평활도는 시공 결과의 물리 속성이라 도면으로 측정되지 않는다. 이 둘은 세부과업 1·4의
+    점군 실측이 담당하며, 같은 세대에 대해 설계 예측값과 실측값을 대조할 수 있다.
+  </p>
+</section>
+
+{# ── 3부: 실별 현황 ─────────────────────────────────────────────────────── #}
+<section class="part">
+  <h2>3. 실별 현황</h2>
+  <figure>
+    <img src="assets/{{ ctx.assets.plan }}" alt="복원 평면" />
+    <figcaption>도면에서 복원한 실 경계와 바닥 레벨. 회색은 통행 대상이 아닌 면(벽체 점유·설비 샤프트).</figcaption>
+  </figure>
+  <table>
+    <tr>
+      <th>실</th><th class="num">면적 m²</th><th class="num">FL</th><th class="num">SL</th>
+      <th class="num">구성 THK</th><th>바닥 마감</th><th>근거</th>
+    </tr>
+    {% for s in ctx.spaces %}
+    <tr>
+      <td>{{ s.name }}</td>
+      <td class="num">{{ s.area }}</td>
+      <td class="num">{{ s.fl }}</td>
+      <td class="num">{{ s.sl }}</td>
+      <td class="num">{{ s.thk }}</td>
+      <td>{{ s.floor }}</td>
+      <td>{{ s.basis }}{% if s.conflict %} <span class="badge b-unknown">모순</span>{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% if ctx.conflicts %}
+  <h3>원문 모순 (미해소 · 발주처 확인 필요)</h3>
+  {% for c in ctx.conflicts %}
+  <div class="warn"><strong>{{ c.name }}</strong> — {{ c.note }}</div>
+  {% endfor %}
+  {% endif %}
+</section>
+
+{# ── 4부: 등급별 도달 범위 ───────────────────────────────────────────────── #}
+<section class="part">
+  <h2>4. 로봇 등급별 주행 가능 범위</h2>
+  <p>
+    경계별 통과 여부만으로는 실제 운용 가능성을 알 수 없다. 경계 하나가 막히면 그 너머 전체가
+    도달 불가가 되기 때문이다. 아래는 <strong>{{ ctx.entry_space }}에서 출발해 어디까지 갈 수
+    있는가</strong>를 계산한 결과다.
+  </p>
+  {% for r in ctx.results %}
+  <div class="cls">
+    <h3>{{ r.name }} <span class="note">({{ r.code }}{% if r.mode %} · {{ r.mode }} 모드{% endif %})</span></h3>
+    <div class="row">
+      <div class="fig">
+        <img src="assets/{{ r.asset }}" alt="{{ r.name }} 도달 범위" />
+      </div>
+      <div class="body">
+        <table>
+          <tr><th style="width:24mm">도달</th><td>{{ r.reachable }}</td></tr>
+          <tr><th>도달 불가</th><td>{{ r.unreachable }}</td></tr>
+          <tr><th>단차 한계</th><td>{{ r.limit }}</td></tr>
+          <tr><th>경계 판정</th><td>
+            <span class="badge b-pass">통과 {{ r.counts.pass }}</span>
+            <span class="badge b-marginal">조건부 {{ r.counts.marginal }}</span>
+            <span class="badge b-fail">불가 {{ r.counts.fail }}</span>
+            <span class="badge b-unknown">미상 {{ r.counts.unknown }}</span>
+          </td></tr>
+        </table>
+        {% if r.blocked_by %}
+        <p class="note">막는 경계: {{ r.blocked_by }}</p>
+        {% endif %}
+        {% if r.spec %}<p class="note">근거: {{ r.spec }}</p>{% endif %}
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+
+  <h3>경계별 상세</h3>
+  <table>
+    <tr>
+      <th>경계</th><th class="num">단차 mm</th>
+      {% for r in ctx.results %}<th>{{ r.short }}</th>{% endfor %}
+    </tr>
+    {% for row in ctx.matrix %}
+    <tr>
+      <td>{{ row.label }}</td>
+      <td class="num">{{ row.step }}</td>
+      {% for v in row.verdicts %}
+      <td><span class="badge b-{{ v.key }}">{{ v.text }}</span></td>
+      {% endfor %}
+    </tr>
+    {% endfor %}
+  </table>
+</section>
+
+{# ── 5부: 종합의견 ──────────────────────────────────────────────────────── #}
+<section class="part">
+  <h2>5. 종합의견</h2>
+  {% for line in ctx.summary %}
+  <p>{{ line }}</p>
+  {% endfor %}
+
+  <h3>알려진 한계</h3>
+  <ul>
+    {% for lim in ctx.limits %}<li>{{ lim }}</li>{% endfor %}
+  </ul>
+
+  <div class="disclaimer">
+    임계값은 전부 제조사 공표 사양 또는 법정 기준이며, 근거를 확인하지 못한 값은 이 보고서에
+    싣지 않았다. 근거가 없는 등급은 판정을 내지 않고 <span class="badge b-unknown">미상</span>으로
+    남겼다.
+  </div>
+</section>
+
+</body>
+</html>
