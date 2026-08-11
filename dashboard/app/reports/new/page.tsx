@@ -95,15 +95,16 @@ export default async function NewReportPage({ searchParams }: {
   // D8 이월(T7 우려사항): scans/[id]·reports/[id]와 같은 3단계 브레드크럼 규약
   // (현장 홈 › 현장명 › 측정위치 라벨)을 이 경로에도 맞춘다. 사이트 쿼리 하나만
   // 늘어날 뿐 후보 조회·제출 로직은 그대로다.
-  const { data: site } = await supabase.from('sites').select('*').eq('id', loc.site_id).maybeSingle();
+  // perf-auth-roundtrips: site와 scans는 서로 독립이라 병렬로 돈다.
+  const [{ data: site }, { data: scans }] = await Promise.all([
+    supabase.from('sites').select('*').eq('id', loc.site_id).maybeSingle(),
+    supabase.from('scans').select('*').eq('location_id', locationId).is('deleted_at', null),
+  ]);
   const crumbs = [
     { href: '/', label: '현장' },
     { href: `/sites/${loc.site_id}`, label: site ? (site as SiteRow).name : '현장 상세' },
     { label: locationLabel },
   ];
-
-  const { data: scans } = await supabase
-    .from('scans').select('*').eq('location_id', locationId).is('deleted_at', null);
   const scanRows = (scans ?? []) as ScanRow[];
   const scanById = new Map(scanRows.map((s) => [s.id, s]));
   // kind 필터는 **지우지 않고 넓힌다**(단계 H). 단계 C가 이 필터를 넣은 이유는 둘이었다:

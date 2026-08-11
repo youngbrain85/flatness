@@ -28,17 +28,23 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
   if (!report) notFound();
   const r = report as Omit<ReportRow, 'snapshot' | 'created_by'>;
 
-  const { data: location } = await supabase.from('locations').select('*').eq('id', r.location_id).maybeSingle();
+  // perf-auth-roundtrips: location과 links는 서로 독립이라 병렬로 돈다.
+  // site(loc 의존)와 analyses(links 의존)도 서로 독립이라 2차로 병렬.
+  const [{ data: location }, { data: links }] = await Promise.all([
+    supabase.from('locations').select('*').eq('id', r.location_id).maybeSingle(),
+    supabase.from('report_analyses')
+      .select('analysis_id, sort_order').eq('report_id', id).order('sort_order', { ascending: true }),
+  ]);
   const loc = location as LocationRow | null;
-  const { data: site } = loc
-    ? await supabase.from('sites').select('*').eq('id', loc.site_id).maybeSingle()
-    : { data: null };
-  const { data: links } = await supabase.from('report_analyses')
-    .select('analysis_id, sort_order').eq('report_id', id).order('sort_order', { ascending: true });
   const analysisIds = (links ?? []).map((l) => l.analysis_id as string);
-  const { data: analyses } = analysisIds.length
-    ? await supabase.from('analyses').select('id, scan_id, surface, overall_verdict').in('id', analysisIds)
-    : { data: [] };
+  const [{ data: site }, { data: analyses }] = await Promise.all([
+    loc
+      ? supabase.from('sites').select('*').eq('id', loc.site_id).maybeSingle()
+      : Promise.resolve({ data: null }),
+    analysisIds.length
+      ? supabase.from('analyses').select('id, scan_id, surface, overall_verdict').in('id', analysisIds)
+      : Promise.resolve({ data: [] }),
+  ]);
   const scanIds = (analyses ?? []).map((a) => a.scan_id as string);
   const { data: scans } = scanIds.length
     ? await supabase.from('scans').select('id, scanned_at').in('id', scanIds)
