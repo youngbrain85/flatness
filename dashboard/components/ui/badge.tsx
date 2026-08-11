@@ -7,7 +7,10 @@ export const TONE = {
   busy:    { bg: 'bg-zinc-100', text: 'text-zinc-600',  dot: 'bg-zinc-500' },
 } as const;
 
-export function Badge({ tone, children }: { tone: keyof typeof TONE; children: React.ReactNode }) {
+// Badge는 5종 tone만 허용 (busy는 StatusDot 전용)
+export type BadgeTone = Exclude<keyof typeof TONE, 'busy'>;
+
+export function Badge({ tone, children }: { tone: BadgeTone; children: React.ReactNode }) {
   const t = TONE[tone];
   return <span className={`inline-block rounded px-1.5 py-0.5 text-xs ${t.bg} ${t.text}`}>{children}</span>;
 }

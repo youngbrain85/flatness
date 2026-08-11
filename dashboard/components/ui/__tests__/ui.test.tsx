@@ -7,15 +7,29 @@ import { PageHeader } from '../page-header';
 import { EmptyState } from '../empty-state';
 
 describe('ui primitives', () => {
-  it('StatusDot: 의미색 4종 + busy가 라벨과 함께 렌더된다', () => {
-    render(<StatusDot tone="pass" label="적합" />);
-    expect(screen.getByText('적합')).toBeInTheDocument();
+  it.each([
+    { tone: 'pass' as const, dotClass: 'bg-green-600' },
+    { tone: 'warn' as const, dotClass: 'bg-amber-500' },
+    { tone: 'fail' as const, dotClass: 'bg-red-600' },
+    { tone: 'unknown' as const, dotClass: 'bg-zinc-400' },
+    { tone: 'busy' as const, dotClass: 'bg-zinc-500' },
+  ])('StatusDot: $tone이 라벨과 dot 클래스와 함께 렌더된다', ({ tone, dotClass }) => {
+    const { container } = render(<StatusDot tone={tone} label={tone} />);
+    expect(screen.getByText(tone)).toBeInTheDocument();
+    const dot = container.querySelector(`span.${dotClass}`);
+    expect(dot).toBeInTheDocument();
   });
-  it('Badge: tone별 클래스가 배경 -50 / 텍스트 -700 규칙을 따른다', () => {
-    render(<Badge tone="fail">재시공</Badge>);
-    const el = screen.getByText('재시공');
-    expect(el.className).toContain('bg-red-50');
-    expect(el.className).toContain('text-red-700');
+  it.each([
+    { tone: 'pass' as const, bg: 'bg-green-50', text: 'text-green-700' },
+    { tone: 'warn' as const, bg: 'bg-amber-50', text: 'text-amber-700' },
+    { tone: 'fail' as const, bg: 'bg-red-50', text: 'text-red-700' },
+    { tone: 'unknown' as const, bg: 'bg-zinc-100', text: 'text-zinc-600' },
+    { tone: 'neutral' as const, bg: 'bg-zinc-100', text: 'text-zinc-600' },
+  ])('Badge: $tone이 배경·텍스트 클래스 규칙을 따른다', ({ tone, bg, text }) => {
+    render(<Badge tone={tone}>{tone}</Badge>);
+    const el = screen.getByText(tone);
+    expect(el.className).toContain(bg);
+    expect(el.className).toContain(text);
   });
   it('MetricCard: 수치가 모노스페이스로, 단위가 분리 렌더된다', () => {
     render(<MetricCard label="스캔" value={12} unit="건" />);
