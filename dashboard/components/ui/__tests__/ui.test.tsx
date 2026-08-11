@@ -5,6 +5,7 @@ import { Badge } from '../badge';
 import { MetricCard, VerdictBar } from '../metric-card';
 import { PageHeader } from '../page-header';
 import { EmptyState } from '../empty-state';
+import { Spinner } from '../spinner';
 
 describe('ui primitives', () => {
   it.each([
@@ -50,5 +51,19 @@ describe('ui primitives', () => {
   it('EmptyState: 행동 버튼이 항상 있다', () => {
     render(<EmptyState message="보고서가 없습니다" actionHref="/reports/new" actionLabel="새 보고서" />);
     expect(screen.getByRole('link', { name: '새 보고서' })).toHaveAttribute('href', '/reports/new');
+  });
+  it.each([
+    { size: undefined, sizeClass: 'h-8 w-8' },
+    { size: 'sm' as const, sizeClass: 'h-4 w-4' },
+    { size: 'md' as const, sizeClass: 'h-8 w-8' },
+  ])('Spinner: role="status"와 sr-only 안내 텍스트를 포함해 렌더된다 (size=$size)', ({ size, sizeClass }) => {
+    render(size === undefined ? <Spinner /> : <Spinner size={size} />);
+    const status = screen.getByRole('status');
+    expect(status.className).toContain('animate-spin');
+    expect(status.className).toContain('motion-reduce:animate-none');
+    for (const cls of sizeClass.split(' ')) {
+      expect(status.className).toContain(cls);
+    }
+    expect(screen.getByText('불러오는 중')).toHaveClass('sr-only');
   });
 });
