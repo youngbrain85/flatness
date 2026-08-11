@@ -330,3 +330,108 @@ describe('UploadForm 인라인 현장·측정위치 생성 (단계 D4)', () => {
       expect.objectContaining({ site_id: 's2', name: '1층' })));
   });
 });
+
+describe('UploadForm 인라인 생성 리뷰 픽스', () => {
+  // F1 [Important]: sites insert는 성공했는데 뒤이은 locations insert가 실패하면,
+  // newLocSiteId가 NEW_SITE_VALUE로 남아 있던 예전 구현에서는 사용자가 "저장"을
+  // 다시 눌렀을 때 sites insert가 또 실행돼 같은 이름의 고아 현장이 재시도마다
+  // 쌓였다. 이제는 site 생성 성공 즉시 newLocSiteId를 그 site로 전환하므로
+  // 재시도가 기존 site를 재사용하고 sites insert가 두 번째로 불리지 않아야 한다.
+  it('현장 생성 후 측정위치 저장이 실패해도 재시도 시 sites insert가 다시 불리지 않는다', async () => {
+    const sitesInsert = vi.fn();
+    const locationsInsert = vi.fn();
+    let locationAttempts = 0;
+    vi.mocked(createClient).mockReturnValue({
+      from: (table: string) => {
+        if (table === 'sites') {
+          return {
+            insert: (fields: unknown) => {
+              sitesInsert(fields);
+              return { select: () => ({ single: async () => ({ data: { id: 's2' }, error: null }) }) };
+            },
+          };
+        }
+        if (table === 'locations') {
+          return {
+            insert: (fields: unknown) => {
+              locationsInsert(fields);
+              locationAttempts += 1;
+              const failThisAttempt = locationAttempts === 1;
+              return {
+                select: () => ({
+                  single: async () => (failThisAttempt
+                    ? { data: null, error: { code: '23505', message: 'dup' } }
+                    : { data: { id: 'l2' }, error: null }),
+                }),
+              };
+            },
+          };
+        }
+        throw new Error(`예상치 못한 테이블: ${table}`);
+      },
+      rpc: async () => ({ data: [], error: null }),
+    } as never);
+    render(<UploadForm sites={[site]} locations={[location]} userId="u1" />);
+    fireEvent.click(screen.getByRole('button', { name: '+ 새 측정위치' }));
+    fireEvent.change(screen.getByLabelText('새 현장명'), { target: { value: '신규현장' } });
+    fireEvent.change(screen.getByLabelText('이름'), { target: { value: '1층' } });
+    fireEvent.click(screen.getByRole('button', { name: '저장' }));
+
+    // 1차 시도: site는 만들어지고 location은 실패 - 상황을 알리는 메시지가 떠야 한다.
+    await waitFor(() => expect(sitesInsert).toHaveBeenCalledTimes(1));
+    await screen.findByText(/현장은 생성됐습니다\. 같은 현장으로 다시 시도하세요/);
+
+    // 2차 시도(재시도): 같은 입력으로 다시 저장 - sites insert는 다시 불리면 안 된다.
+    fireEvent.click(screen.getByRole('button', { name: '저장' }));
+
+    await waitFor(() => expect(locationsInsert).toHaveBeenCalledTimes(2));
+    expect(sitesInsert).toHaveBeenCalledTimes(1);
+    expect(locationsInsert).toHaveBeenLastCalledWith(
+      expect.objectContaining({ site_id: 's2', name: '1층' }));
+  });
+
+  // F2 [Important]: 미니폼이 상위 스캔 업로드 <form> 안에 중첩돼 있어, 파일·위치·
+  // 기준을 이미 골라 둔 상태에서 미니폼 입력 중 Enter를 누르면 브라우저 기본 동작이
+  // 상위 폼을 암묵 제출해 엉뚱한 기존 측정위치로 스캔이 올라갈 수 있었다. Enter는
+  // 패널 안에서 가로채져 측정위치 생성으로만 이어져야 한다.
+  it('미니폼 입력에서 Enter를 누르면 스캔 제출이 아니라 측정위치 생성이 실행된다', async () => {
+    const scansInsert = vi.fn();
+    const locationsInsert = vi.fn();
+    vi.mocked(createClient).mockReturnValue({
+      from: (table: string) => {
+        if (table === 'scans') {
+          return {
+            insert: (fields: unknown) => {
+              scansInsert(fields);
+              return { select: () => ({ single: async () => ({ data: { id: 'scan1' }, error: null }) }) };
+            },
+          };
+        }
+        if (table === 'locations') {
+          return {
+            insert: (fields: unknown) => {
+              locationsInsert(fields);
+              return { select: () => ({ single: async () => ({ data: { id: 'l2' }, error: null }) }) };
+            },
+          };
+        }
+        throw new Error(`예상치 못한 테이블: ${table}`);
+      },
+      rpc: async () => ({ data: [], error: null }),
+    } as never);
+    render(<UploadForm sites={[site]} locations={[location]} userId="u1" />);
+    // 파일·위치를 이미 골라 둔 상태를 흉내낸다 - 실수로 제출되면 이 기존
+    // 측정위치(l1)로 스캔이 올라간다.
+    fireEvent.change(screen.getByLabelText('측정위치'), { target: { value: 'l1' } });
+    fireEvent.change(screen.getByLabelText(/스캔 파일/), { target: { files: [new File(['x'], 'scan.ply')] } });
+
+    fireEvent.click(screen.getByRole('button', { name: '+ 새 측정위치' }));
+    fireEvent.change(screen.getByLabelText('현장 선택 또는 새 현장명'), { target: { value: 's1' } });
+    fireEvent.change(screen.getByLabelText('이름'), { target: { value: '2층' } });
+    fireEvent.keyDown(screen.getByLabelText('이름'), { key: 'Enter', code: 'Enter' });
+
+    await waitFor(() => expect(locationsInsert).toHaveBeenCalledWith(
+      expect.objectContaining({ site_id: 's1', name: '2층' })));
+    expect(scansInsert).not.toHaveBeenCalled();
+  });
+});

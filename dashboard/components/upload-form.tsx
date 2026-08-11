@@ -191,6 +191,9 @@ export function UploadForm({ sites, locations, userId, initialLocationId }: Prop
     const supabase = createClient();
     try {
       let targetSiteId = newLocSiteId;
+      // 이번 호출에서 sites insert가 성공했는지 - 아래 locations insert가 실패해도
+      // site는 이미 DB에 실존하므로 실패 메시지와 재시도 동작에 쓴다(리뷰 F1).
+      let justCreatedSite = false;
       if (targetSiteId === NEW_SITE_VALUE) {
         const siteName = newSiteName.trim();
         const { data: siteRow, error: siteErr } = await supabase.from('sites')
@@ -198,10 +201,17 @@ export function UploadForm({ sites, locations, userId, initialLocationId }: Prop
           .select('id').single();
         if (siteErr || !siteRow) { setNewLocError(siteErr?.message ?? '현장 저장 실패'); return; }
         targetSiteId = siteRow.id;
+        justCreatedSite = true;
         setSitesList((prev) => [
           ...prev,
           { id: siteRow.id, name: siteName, address: null, memo: null, created_at: '', updated_at: '' },
         ]);
+        // ★ 리뷰 F1: 아래 locations insert가 실패해도 이 두 setState는 그대로 둔다.
+        // newLocSiteId를 NEW_SITE_VALUE로 남겨두면 사용자가 "저장"을 다시 눌렀을 때
+        // 이 if 블록이 또 실행돼 같은 이름의 sites 행이 재시도마다 쌓인다(고아 site
+        // 누적) - site는 이미 만들어졌으니 재시도는 그 site를 재사용해야 한다.
+        setNewLocSiteId(targetSiteId);
+        setNewSiteName('');
       }
       const { data: locRow, error: locErr } = await supabase.from('locations').insert({
         site_id: targetSiteId,
@@ -212,9 +222,13 @@ export function UploadForm({ sites, locations, userId, initialLocationId }: Prop
         name,
       }).select('id').single();
       if (locErr || !locRow) {
-        setNewLocError(locErr?.code === '23505'
+        const base = locErr?.code === '23505'
           ? '같은 동/층/공간에 동일한 측정위치가 이미 있습니다.'
-          : (locErr?.message ?? '측정위치 저장 실패'));
+          : (locErr?.message ?? '측정위치 저장 실패');
+        // 이번 호출에서 site를 막 만들었는데 location 저장이 실패했다면, 재시도가
+        // "새 현장 만들기"로 되돌아가지 않고 방금 만든 그 현장을 그대로 쓴다는 것을
+        // 사용자에게 알린다(리뷰 F1).
+        setNewLocError(justCreatedSite ? `현장은 생성됐습니다. 같은 현장으로 다시 시도하세요. (${base})` : base);
         return;
       }
       const newLocation: LocationRow = {
@@ -277,7 +291,18 @@ export function UploadForm({ sites, locations, userId, initialLocationId }: Prop
           + 새 측정위치
         </button>
         {showNewLocation && (
-          <div className="mt-2 space-y-2 rounded-md border border-zinc-300 bg-white p-3 text-sm">
+          <div className="mt-2 space-y-2 rounded-md border border-zinc-300 bg-white p-3 text-sm"
+            onKeyDown={(e) => {
+              // 리뷰 F2: 이 패널은 상위 스캔 업로드 <form> 안에 중첩돼 있다. 파일·
+              // 위치·기준을 이미 골라둔 상태에서 미니폼 입력 중 Enter를 누르면 기본
+              // 동작이 상위 폼을 암묵 제출해 엉뚱한 기존 측정위치로 스캔이 올라간다.
+              // Enter를 여기서 가로채 "저장" 버튼과 같은 동작(측정위치 생성)으로
+              // 재해석한다(입력이 모두 단일 라인 input/select라 textarea 예외는 불필요).
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                if (!creatingLoc) handleCreateLocation();
+              }
+            }}>
             <div>
               <label htmlFor="new-loc-site" className="block text-xs text-zinc-500">현장 선택 또는 새 현장명</label>
               <select id="new-loc-site" value={newLocSiteId} onChange={(e) => setNewLocSiteId(e.target.value)}
