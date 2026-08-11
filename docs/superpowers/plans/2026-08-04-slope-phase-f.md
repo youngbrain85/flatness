@@ -162,7 +162,7 @@ create unique index jobs_dedup on jobs(type, (coalesce(payload->>'analysis_id', 
 **Interfaces:**
 - Produces: `render_slope_map(graded, out_path, cell_m=2.0, drain_points=None)` — `drain_points`는 `[{"x": float, "y": float}, ...]` 또는 `None`
 
-**문제**: 대시보드 Canvas 화면(`dashboard/components/analysis/slope-heatmap-view.tsx`의 `DRAIN_COLOR` 블록)은 배수구에 파란 원을 찍는데 엔진 PNG에는 없다. 판정표에서 "이 셀이 왜 역구배(재시공)인가"의 답은 "배수구가 어디 있고 물이 그 반대로 흐르기 때문"인데, **종이 PDF를 받는 발주처는 `stats.drain_points` jsonb를 볼 방법이 없다.**
+**문제**: 대시보드 Canvas 화면(`dashboard/components/analysis/slope-heatmap-view.tsx`의 `DRAIN_COLOR` 블록)은 배수구에 파란 원을 찍는데 엔진 PNG에는 없다. 판정표에서 "이 셀이 왜 역구배(재시공)인가"의 답은 "배수구가 어디 있고 물이 그 반대로 흐르기 때문"인데, **종이 PDF를 받는 쪽은 `stats.drain_points` jsonb를 볼 방법이 없다.**
 
 **싼 이유**: `judge_slope_cells`(`core/pipeline.py:171`)는 `render_slope_map`을 부르는 시점(`core/pipeline.py:239`)에 이미 지역 변수로 `drain_points`를 갖고 있다(자기 인자이고 `grade_slope_cells`에도 이미 넘긴다). 호출에 인자 하나만 더하면 된다.
 

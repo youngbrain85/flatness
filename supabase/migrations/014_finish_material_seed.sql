@@ -413,10 +413,10 @@ on conflict (ruleset_id, class_id, metric_id, mode, applies_profile) do nothing;
 --   원본: (도면)_01_LH공동주택주력평면_26형.pdf (2025.10.22)
 --   전량 pymupdf 텍스트 레이어 직접 추출. OCR 미사용, 추론으로 채운 값 없음.
 -- =============================================================================
--- 10-1) 발주처 코드체계 (site_id NULL = 전역 표준 코드집. 가짜 sites 행을 만들지 않는다)
+-- 10-1) 발행 기관 코드체계 (site_id NULL = 전역 표준 코드집. 가짜 sites 행을 만들지 않는다)
 insert into code_systems (site_id, code, issuer, name_ko, revision, source_text)
 select null, 'lh-apt-unit-2025', 'LH', 'LH 단위세대 주력평면 마감코드', '2025.10.22',
- '★F-/W-/B-/C- 접두 일련번호. 전국 표준 코드집으로 공표된 근거를 찾지 못했다. "B" 접미의 의미와 F-13 부재 이유 모두 확인 실패. 재료를 뜻하지 않고 "마감 사양 세트 ID"이며 F-14 하나가 발코니·실외기실 두 실에 공유된다 - 조회 키로 쓰면 다른 발주처 도면에서 즉시 깨진다'
+ '★F-/W-/B-/C- 접두 일련번호. 전국 표준 코드집으로 공표된 근거를 찾지 못했다. "B" 접미의 의미와 F-13 부재 이유 모두 확인 실패. 재료를 뜻하지 않고 "마감 사양 세트 ID"이며 F-14 하나가 발코니·실외기실 두 실에 공유된다 - 조회 키로 쓰면 다른 발행 기관 도면에서 즉시 깨진다'
  where not exists (select 1 from code_systems where site_id is null and code = 'lh-apt-unit-2025');
 
 -- ⚠ drawings의 유니크는 테이블 제약이 아니라 "전역/현장 부분 유니크 2종"이다
@@ -465,7 +465,7 @@ on conflict (system_id, code_set, code) do nothing;
 -- 10-3) 7쪽 시공한계도 기호 (code_set='wall-limit') — ★한 도면 안의 다른 네임스페이스
 insert into project_codes (system_id, drawing_id, code_set, code, kind, part_id, description, thickness_mm, source_page, source_text)
 select cs.id, d.id, 'wall-limit', v.code, 'finish_set'::project_code_kind, p.id, v.descr, v.thk, 7,
- '7쪽 내부벽 마감시공한계도 기호. ★4쪽 W- 코드와 다른 체계다 - code_set이 없으면 한 글자 코드 A·B·C가 다른 발주처 코드와 충돌한다'
+ '7쪽 내부벽 마감시공한계도 기호. ★4쪽 W- 코드와 다른 체계다 - code_set이 없으면 한 글자 코드 A·B·C가 다른 발행 기관 코드와 충돌한다'
  from (values ('A','THK9.5 석고보드/실크도배지마감',9.5),('B','콘크리트/실크도배지',null),
               ('C','THK15 시멘트모르타르/실크도배지',15.0),('D','THK9.5 석고보드2겹/실크도배지마감',9.5),
               ('F','THK9.5 방수석고보드/도기질타일',9.5),('G','콘크리트/내부수성페인트',null),
@@ -516,7 +516,7 @@ on conflict (system_id, code_set, code) do nothing;
 --   단열재는 마감 부위 축(바닥·벽·천장·걸레받이) 어디에도 속하지 않으므로 part는 other다.
 insert into project_codes (system_id, drawing_id, code_set, code, kind, part_id, description, thickness_mm, source_page, source_text)
 select cs.id, d.id, 'insulation-schedule', v.code, 'insulation'::project_code_kind, po.id, v.descr, v.thk, 9,
- '9쪽 단열 및 결로저감재 일람표. 부기 "* 단열재 시공기준 : 중부2", "* 외벽과 조적벽이 만나는 부위 : 주변 단열재 연장 시공", "■ 하부 시공한계 : 판넬히팅". ★코드가 한 글자 숫자라 code_set 없이는 다른 발주처 코드와 즉시 충돌한다'
+ '9쪽 단열 및 결로저감재 일람표. 부기 "* 단열재 시공기준 : 중부2", "* 외벽과 조적벽이 만나는 부위 : 주변 단열재 연장 시공", "■ 하부 시공한계 : 판넬히팅". ★코드가 한 글자 숫자라 code_set 없이는 다른 발행 기관 코드와 즉시 충돌한다'
  from (values
   ('2','구분: 외벽 간면 / 재료명: THK100 경질우레탄(1종3호)',100.0),
   ('6','구분: 발코니 벽 / 재료명: 비드법(30T)+CRC보드(4.5T)+수성페인트',null::double precision)
@@ -631,7 +631,7 @@ on conflict (drawing_id, name) do nothing;
 --         → mm 정수 반올림 → shapely.polygonize. 축척 1:40은 도면 내 치수(4500·8970mm)로 역산.
 --   좌표계: 도면 로컬 mm, 원점은 4500x8970 외곽의 좌하단. 링 배열 [외곽, 구멍...], 닫는 점 없음.
 --   ★ 이 값들은 정수 반올림된 뒤에도 3쪽 면적산출표와 0.0025 퍼센트 이내로 일치한다(015 A25가 대조).
---     그래서 area_m2(발주처 정본)를 덮어쓰지 않고, 둘이 어긋나면 회귀가 잡게 두었다.
+--     그래서 area_m2(도면 정본)를 덮어쓰지 않고, 둘이 어긋나면 회귀가 잡게 두었다.
 --   ⚠ 실외기실·복도는 면적도에 면(face)이 없어 outline이 없다 — basis='inferred'와 같은 이유다.
 update spaces sp set outline = v.rings::jsonb
   from (values
@@ -702,7 +702,7 @@ on conflict (space_id, part_id, role, layer_no) do nothing;
 --       존재할 수 있고, 그 상태에서 이 시드를 재실행하면 (a,b,kind,label) 조합이 새로우므로
 --       on conflict를 타지 않고 SH 도면에 LH 원문 label·source_text를 가진 인접행이
 --       생겼다. 동시에 SH 코드집에도 window-schedule 'SD'가 있으면 left join이 2행으로
---       늘어 어느 발주처 창호코드가 남는지가 비결정적이 된다. 이 저장소는 멱등 재실행이
+--       늘어 어느 발행 기관 창호코드가 남는지가 비결정적이 된다. 이 저장소는 멱등 재실행이
 --       전제이므로 이것은 곧바로 터지는 결함이다. 같은 파일의 10-8은 pc.drawing_id를 타고
 --       내려가 이 문제가 없었다 — 10-9만 빠져 있었다.
 --   ★ 인접 쌍과 접촉길이는 컨트롤러가 도면에서 직접 확인한 값이다(접촉길이 100mm 이상).
@@ -877,5 +877,5 @@ on conflict (space_a_id, space_b_id, kind, label) do nothing;
 --     도면 커버리지의 한계를 드러내는 게 아니라 오히려 감췄다.
 --
 -- (k) 멱등 재실행 — 이 파일을 두 번 돌려도 건수가 변하지 않아야 한다.
---   두 번째 발주처(SH) 도면을 같은 실 이름·같은 창호코드로 적재한 뒤 재실행해도
+--   두 번째 발행 기관(SH) 도면을 같은 실 이름·같은 창호코드로 적재한 뒤 재실행해도
 --   space_adjacencies는 8행 그대로이고 SH 도면에는 0행이어야 한다(10-9 조인 한정).

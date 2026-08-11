@@ -128,7 +128,7 @@ def test_HTML_에_두_모드와_트레이드오프와_한계가_실린다(built)
     assert "트레이드오프" in html
     assert "한계" in html
     assert "가정" in html, "장비 파라미터가 가정값임을 명시해야 한다 (스펙 §9-1)"
-    assert "ln n" in html, "탐욕 set cover 근사비 명시가 없다 (스펙 §9-3)"
+    assert "ln n" in html, "greedy set cover 근사비 명시가 없다 (스펙 §9-3)"
     assert "계획 커버리지" in html, "플래너 notes(정직 보고)가 실리지 않았다"
 
 

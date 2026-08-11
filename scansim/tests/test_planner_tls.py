@@ -2,12 +2,12 @@
 """Task 5: TLS 플래너(plan_tls) 테스트.
 
 계획 문서 docs/superpowers/plans/2026-08-10-scan-coverage.md Task 5 Step 1:
-(a) 빈 정사각형 방(사거리 ≥ 대각): 탐욕 set cover 가 거치점 1개로 100%
+(a) 빈 정사각형 방(사거리 ≥ 대각): greedy set cover 가 거치점 1개로 100%
 (b) 거치점 추가 시 커버리지 단조 증가 — tradeoff 곡선 비감소
 (c) 순회 경로(구간 A*)가 팽창 점유 셀을 피한다
 (d) 2-opt 후 순회 길이 ≤ NN 길이 (교차 해소 단위 테스트 포함)
 (e) L자 방(가려짐): 거치점 2개 이상
-(f) 정직한 보고 — 잔여·상한 도달·탐욕 근사(ln n) 명시가 notes 에 드러난다
+(f) 정직한 보고 — 잔여·상한 도달·greedy 근사(ln n) 명시가 notes 에 드러난다
 """
 import math
 import sys
@@ -145,7 +145,7 @@ class TestEmptySquare:
         assert plan.est_time_s == pytest.approx(cfg.tls_dwell_s)
 
     def test_greedy_approximation_noted(self):
-        # 스펙 §5: set cover 는 NP-hard, 탐욕 근사비 ln n — 산출물에 명시
+        # 스펙 §5: set cover 는 NP-hard, greedy 근사비 ln n — 산출물에 명시
         occ, cfg, plan = get_plan("square")
         assert any("ln n" in n for n in plan.notes)
 

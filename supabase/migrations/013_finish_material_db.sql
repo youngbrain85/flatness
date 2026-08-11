@@ -496,16 +496,16 @@ create trigger trg_robot_threshold_guard before insert or update on robot_thresh
   for each row execute function fn_robot_threshold_guard();
 
 -- =============================================================================
--- (5) 발주처 코드 매핑
+-- (5) 발행 기관 코드 매핑
 -- F-10B는 재료가 아니라 "마감 사양 세트 ID"이고 LH 내부 일련번호다(F-14 하나가
--- 발코니·실외기실 두 실에 공유). 조회 키로 쓰면 다른 발주처에서 즉시 깨지므로
+-- 발코니·실외기실 두 실에 공유). 조회 키로 쓰면 다른 발행 기관에서 즉시 깨지므로
 -- 표준 분류와 분리된 별도 층에 두고 project_code_layers 한 지점으로만 연결한다.
 -- ★ layers를 jsonb가 아니라 테이블로 둔 이유: jsonb 안 material_id에는 FK를 못 걸고,
 --   트리거 존재검사는 쓰기 시점 한 방향만 막는다(마감재를 지운 뒤엔 죽은 uuid가 남는다).
 -- =============================================================================
 create table if not exists code_systems (
   id uuid primary key default gen_random_uuid(),
-  site_id uuid references sites(id) on delete cascade,  -- NULL=발주처 표준 코드집(전역)
+  site_id uuid references sites(id) on delete cascade,  -- NULL=발행 기관 표준 코드집(전역)
   code text not null, issuer text not null, name_ko text not null,
   revision text not null default '',
   source_text text not null check (source_text <> ''),
@@ -518,7 +518,7 @@ drop index if exists code_systems_site_code;
 create unique index code_systems_global_code on code_systems(code) where site_id is null and is_active;
 create unique index code_systems_site_code on code_systems(site_id, code) where site_id is not null and is_active;
 
--- site_id nullable: 발주처 표준 평면 라이브러리는 실제 시공 현장이 아니므로
+-- site_id nullable: 발행 기관 표준 평면 라이브러리는 실제 시공 현장이 아니므로
 -- 가짜 sites 행을 만들게 하지 않는다.
 create table if not exists drawings (
   id uuid primary key default gen_random_uuid(),
@@ -533,12 +533,12 @@ create table if not exists drawings (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
--- ★ 도면 번호는 전역 네임스페이스가 아니다. 'A-101'·'AA-004'는 발주처를 가리지 않는
---   흔한 번호라 unique(doc_key, doc_no, revision) 하나로는 두 번째 발주처를 적재하는
+-- ★ 도면 번호는 전역 네임스페이스가 아니다. 'A-101'·'AA-004'는 발행 기관을 가리지 않는
+--   흔한 번호라 unique(doc_key, doc_no, revision) 하나로는 두 번째 발행 기관을 적재하는
 --   순간 23505가 난다(project_codes는 unique(system_id, code_set, code)로 이미 격리돼
 --   LH의 'C-8'과 SH의 'C-8'이 공존하는데 도면 층만 그 격리가 빠져 있었다).
 --   → code_systems·robot_rulesets가 쓰는 "전역/현장 부분 유니크 2종" 관례를 복제하고,
---     발주처 축(system_id)을 키에 넣는다. system_id는 nullable이라 NULL끼리 서로 다르게
+--     발행 기관 축(system_id)을 키에 넣는다. system_id는 nullable이라 NULL끼리 서로 다르게
 --     취급되는 것을 막으려고 coalesce로 고정 uuid에 접는다.
 drop index if exists drawings_global_doc;
 drop index if exists drawings_site_doc;
@@ -594,7 +594,7 @@ create table if not exists project_code_layers (
 --   닫는 점 없음 — 마지막 점은 첫 점과 이어진다고 본다).
 --   구멍이 필요한 이유: '벽체공용'은 실들을 둘러싼 띠라서 외곽링 하나로는 면적이 표현되지 않는다
 --   (외곽만 쓰면 3.3236 m2 가 아니라 세대 전체 면적이 된다).
--- ⚠ area_m2는 outline에서 계산하지 않는다 — 도면 면적표가 발주처 정본이다.
+-- ⚠ area_m2는 outline에서 계산하지 않는다 — 도면 면적표가 정본이다.
 --   다만 둘이 어긋나면 둘 중 하나가 틀린 것이므로 015 가 셰이스 공식으로 대조한다.
 -- ⚠ fl_mm/sl_mm nullable: 대상 도면이 이미 모순을 담고 있다(평면 라벨 vs 주기13).
 create table if not exists spaces (

@@ -79,7 +79,7 @@ def test_판정_행렬이_전_경계_전_등급을_덮는다(ctx):
 
 
 def test_통행_대상이_아닌_면은_도달_목록에서_빠진다(ctx):
-    """벽체공용·PD 는 실이 아니다. 도달 목록에 들어가면 발주처가 오독한다."""
+    """벽체공용·PD 는 실이 아니다. 도달 목록에 들어가면 받는 쪽이 오독한다."""
     for r in ctx["results"]:
         assert "벽체공용" not in r["reachable"] and "벽체공용" not in r["unreachable"]
         assert "PD" not in r["reachable"] and "PD" not in r["unreachable"]

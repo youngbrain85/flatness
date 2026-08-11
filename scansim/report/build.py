@@ -313,8 +313,8 @@ def build_context(dump: dict, cfg: ScanConfig, scenarios: list,
         "실제 장비 확정 시 설정 데이터(ScanConfig)만 교체한다.",
         "가구 장애물은 도면 8쪽에서 추출했고, 실 경계(0.003%)처럼 수치로 검증할 "
         "정답(가구 면적표)이 도면에 없다 — 육안 대조 PNG·스냅샷 고정으로 갈음한다.",
-        "TLS 거치점 배치의 탐욕 set cover 는 최적해를 보장하지 않는다 — "
-        "set cover 는 NP-hard 이며 탐욕 근사비는 ln n 이다.",
+        "TLS 거치점 배치의 greedy set cover 는 최적해를 보장하지 않는다 — "
+        "set cover 는 NP-hard 이며 greedy 근사비는 ln n 이다.",
         "도면의 가구 배치는 \"점선표기 시설물은 미설치 대상\"(1쪽 주기 19)일 수 "
         "있어 실제 입주 시 가구 유무가 도면으로 확정되지 않는다 — 이 보고서는 "
         "가구 배치/미배치 두 시나리오 수치를 병기한다.",

@@ -276,8 +276,8 @@ Vercel(대시보드) + Railway(워커, Docker) + Supabase(DB·Auth·Storage) 구
    > **알고 적용할 것 — 욕실·발코니 레벨의 도면 원문 모순은 해소되지 않은 채 실린다.**
    > 도면 1쪽 그래픽 라벨과 주기 13이 서로 다른 값을 주는데, 어느 쪽도 임의로 고르지
    > 않고 양쪽을 `spaces.conflict_note`·`raw` 에 보존했다. 그 위에 얹힌 판정
-   > (발코니↔실외기실)은 `unknown` 으로 나온다 — 통과가 아니다. 발주처가 정본을
-   > 확정하면 `spaces.fl_mm` 을 갱신하는 것으로 반영되며, 낡은 단차가 남으면
+   > (발코니↔실외기실)은 `unknown` 으로 나온다 — 통과가 아니다. 추후 정본이
+   > 확정되면 `spaces.fl_mm` 을 갱신하는 것으로 반영되며, 낡은 단차가 남으면
    > `v_space_step` 이 판정에서 자동 제외하고 사유를 남긴다.
 
 2. Storage 화면에서 `raw-scans`·`artifacts`·`reports` 버킷 3개 생성 확인

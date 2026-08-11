@@ -62,7 +62,7 @@ def render_slope_map(graded, out_path, cell_m=2.0, drain_points=None):
     legend_handles = [Patch(facecolor=v, label=k) for k, v in _COLOR.items()]
     if drain_points:
         # 판정표의 "왜 역구배인가"는 "배수구가 어디 있고 물이 그 반대로
-        # 흐르기 때문"인데, 종이 PDF만 받는 발주처는 stats.drain_points jsonb를
+        # 흐르기 때문"인데, 종이 PDF만 받는 쪽은 stats.drain_points jsonb를
         # 볼 방법이 없다(백로그 81) - 그림 자체에 배수구를 찍어야 자기완결적
         # 설명이 된다. 셀 패치·화살표(둘 다 zorder 기본값)보다 위에 그려야
         # 마커가 가려지지 않으므로 zorder를 높게 준다.

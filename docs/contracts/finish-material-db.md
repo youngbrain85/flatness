@@ -24,7 +24,7 @@
 | 새 물성 항목 | `finish_properties` INSERT (numeric/boolean) | 불필요 |
 | 새 로봇 등급 | `robot_classes` INSERT (`parent_id`로 상속) | 불필요 |
 | 새 판정 규칙 | `robot_thresholds` INSERT / 조합은 `threshold_groups` | 불필요 |
-| 새 발주처 코드체계 | `code_systems` + `project_codes` INSERT | 불필요 |
+| 새 발행 기관 코드체계 | `code_systems` + `project_codes` INSERT | 불필요 |
 | 새 형상 유형 | `threshold_profile` enum 확장 | **필요** (배포 후에는 별도 `_enum` 파일) |
 
 ## 판정 입력 규약 (틀리면 거짓 pass가 난다)
@@ -89,7 +89,7 @@
         class_id                       → robot_classes(id) ⊘
         ruleset_id                     → robot_rulesets(id) ⇊
 
-【발주처 코드】
+【발행 기관 코드】
   code_systems               [   1행] c1 r2
         site_id                        → sites(id) ⇊
   drawings                   [   1행] c1 r1
@@ -283,7 +283,7 @@
 (C) 적재 현황
 ══════════════════════════════════════════════════════════════════════════════
   부위 4 · 재료계열 13 · 제품군 52 (그중 LH 26형 도면 실재 15)
-  발주처 코드 매핑 54행 (미매핑 21)
+  발행 기관 코드 매핑 54행 (미매핑 21)
   공간 9 (도면확정 7 · 추론 2 · 원문모순 보유 3)
   총 테이블 33 (신규 21) · 뷰 3 · 함수 56 · RLS 정책 50
 

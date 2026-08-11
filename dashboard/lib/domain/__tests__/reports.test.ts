@@ -55,7 +55,7 @@ describe('deleteConfirmText', () => {
     expect(text).not.toMatch(/발행/);
   });
 
-  // 발행본은 발주처에 제출됐을 수 있는 기록이라 초안과 같은 문구로 지우게 하면 안 된다
+  // 발행본은 대외에 제출됐을 수 있는 기록이라 초안과 같은 문구로 지우게 하면 안 된다
   it('발행본은 발행된 기록임을 경고한다', () => {
     const text = deleteConfirmText({ status: 'finalized' });
     expect(text).toMatch(/발행/);

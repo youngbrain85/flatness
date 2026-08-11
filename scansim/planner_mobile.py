@@ -3,7 +3,7 @@
 
 팽창 자유공간 위에서 boustrophedon(왕복) 스윕 경로를 만들고, A* 로 구간을
 잇고, 내부 시뮬레이션으로 커버리지를 누적한 뒤 잔여 미커버 군집에 보완
-경유점을 탐욕적으로 추가한다. 수렴하지 못한 잔여는 notes 로 정직하게
+경유점을 greedy 방식으로 추가한다. 수렴하지 못한 잔여는 notes 로 정직하게
 보고한다 — 미커버를 커버로 접지 않는다.
 
 밀도 목표·장비 파라미터는 전부 ScanConfig 데이터다. 이 모듈의 상수는
@@ -103,7 +103,7 @@ def plan_mobile(occ: OccupancyGrid, cfg: ScanConfig,
     1) 로봇 반경 팽창 자유공간의 최대 연결 성분 위에 왕복(boustrophedon)
        스윕 — 간격은 유효 스윕폭 × SWEEP_SPACING_FACTOR, 구간 연결은 A*.
     2) 내부 시뮬레이션(관측 표본 간격 = 시뮬레이터 스텝당 이동거리)으로
-       커버리지 누적 후, 잔여 미커버 군집에 보완 경유점을 탐욕 추가
+       커버리지 누적 후, 잔여 미커버 군집에 보완 경유점을 greedy 추가
        (최대 max_repair 회). 수렴하지 못한 잔여는 notes 로 보고.
     """
     notes: list = []
@@ -270,7 +270,7 @@ def _find_viewpoint(occ: OccupancyGrid, inf: OccupancyGrid, labels: np.ndarray,
 
 
 def _repair(occ, inf, labels, main, cov, cfg, t_plan, waypoints, max_repair):
-    """잔여 미커버 군집에 보완 경유점 탐욕 추가 (waypoints·cov 에 누적).
+    """잔여 미커버 군집에 보완 경유점 greedy 추가 (waypoints·cov 에 누적).
 
     군집(연결 성분) 단위로 큰 것부터: 표본 셀 몇 개에서 시점을 찾고, 찾으면
     A* 로 이동해 셀을 정면으로 보는 접근 구간을 붙인 뒤 재시뮬레이션한다.

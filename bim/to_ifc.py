@@ -1,7 +1,7 @@
 # to_ifc.py — 마감재 DB(dump.json) → IFC4.
 #
 # 원칙: 도면에 없는 값을 지어내지 않는다.
-#   - 면적은 발주처 면적표 값(area_m2)을 Qto 에 싣는다. 폴리곤에서 재계산하지 않는다.
+#   - 면적은 도면 면적표 값(area_m2)을 Qto 에 싣는다. 폴리곤에서 재계산하지 않는다.
 #   - 천장고가 도면에 없으면 명목 높이로 돌출하되 Pset 에 '명목'이라고 적는다.
 #   - 유효 통과폭은 확정 불가다. IfcDoor.OverallWidth 에는 **문틀 내측 상한**을 싣고
 #     Pset 에 ClearWidthKnown=false 와 상한의 출처를 적는다.
@@ -114,7 +114,7 @@ for sp in sorted(D['spaces'], key=lambda x: x['name']):
         skipped.append(name)
     space_by_name[name] = space
 
-    # 발주처 정본 수량 — 폴리곤에서 재계산하지 않는다
+    # 도면 정본 수량 — 폴리곤에서 재계산하지 않는다
     if sp['area_m2'] is not None:
         ifcopenshell.api.pset.add_qto(f, product=space, name='Qto_SpaceBaseQuantities')
         q = [x for x in space.IsDefinedBy if x.is_a('IfcRelDefinesByProperties')
@@ -122,7 +122,7 @@ for sp in sorted(D['spaces'], key=lambda x: x['name']):
              and x.RelatingPropertyDefinition.Name == 'Qto_SpaceBaseQuantities'][-1].RelatingPropertyDefinition
         q.Quantities = [
             f.create_entity('IfcQuantityArea', Name='NetFloorArea', AreaValue=float(sp['area_m2']),
-                            Description='3쪽 면적산출표 인쇄값(발주처 정본). outline 에서 계산한 값이 아니다'),
+                            Description='3쪽 면적산출표 인쇄값(도면 정본). outline 에서 계산한 값이 아니다'),
             f.create_entity('IfcQuantityLength', Name='Height', LengthValue=float(h) / 1000.0,
                             Description=('4쪽 CEILING HEIGHT' if ch else '도면 미기재 - 명목값 %.0fmm' % NOMINAL_H_MM)),
         ]

@@ -1,6 +1,6 @@
 {# 로봇친화도 평가 보고서 — 5부 구성.
    스타일 규약은 worker/flatworker/report/templates/report.html.j2 와 맞춘다
-   (같은 발주처가 두 종류 보고서를 나란히 받으므로). #}
+   (같은 수신처가 두 종류 보고서를 나란히 받으므로). #}
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -131,7 +131,7 @@ li { margin-bottom: 0.8mm; }
     {% endfor %}
   </table>
   {% if ctx.conflicts %}
-  <h3>원문 모순 (미해소 · 발주처 확인 필요)</h3>
+  <h3>원문 모순 (미해소 · 추후 확정 필요)</h3>
   {% for c in ctx.conflicts %}
   <div class="warn"><strong>{{ c.name }}</strong> — {{ c.note }}</div>
   {% endfor %}

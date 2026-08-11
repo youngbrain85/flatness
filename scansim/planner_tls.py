@@ -3,11 +3,11 @@
 
 두 단계 최적화:
 1) 배치 — 팽창 자유공간 최대 성분의 격자 서브샘플 후보마다 관측 기여
-   (목표 점간격 이하로 커버하는 셀 집합)를 계산하고, 탐욕 set cover 로
+   (목표 점간격 이하로 커버하는 셀 집합)를 계산하고, greedy set cover 로
    "목표 밀도 미달 셀"이 없어질 때까지 거치점을 추가한다. set cover 는
-   NP-hard 이며 탐욕은 근사비 ln n 의 근사다 — 이 사실을 notes(산출물)에
+   NP-hard 이며 greedy 는 근사비 ln n 의 근사다 — 이 사실을 notes(산출물)에
    명시한다 (스펙 §5 요구).
-2) 순회 — 최근접 이웃(NN)으로 잇고 2-opt 로 개선한다. 거치점 간 거리와
+2) 순회 — nearest neighbor(NN)으로 잇고 2-opt 로 개선한다. 거치점 간 거리와
    구간 경로는 팽창 격자 A* (모바일 플래너와 같은 격자·팽창 재사용).
 
 커버 미완(잔여·상한 도달·관측 불가)은 notes 로 정직하게 보고한다 —
@@ -41,7 +41,7 @@ DEFAULT_MAX_STATIONS = 12
 @dataclass
 class TlsPlan:
     """TLS 스캔 계획. notes 에 근사·잔여·도달 불가 영역을 정직하게 기록."""
-    stations_mm: list = field(default_factory=list)  # [(x, y)] 탐욕 선택 순서
+    stations_mm: list = field(default_factory=list)  # [(x, y)] greedy 선택 순서
     tour_order: list = field(default_factory=list)   # stations_mm 인덱스 방문 순서
     tour_paths: list = field(default_factory=list)   # 구간별 A* 폴리라인 (n-1개)
     travel_len_mm: float = 0.0
@@ -51,7 +51,7 @@ class TlsPlan:
 
 
 def nearest_neighbor_order(dist, start: int = 0) -> list:
-    """최근접 이웃 순회 순서 (개방 경로). 동률은 낮은 인덱스 — 결정론."""
+    """nearest neighbor 순회 순서 (개방 경로). 동률은 낮은 인덱스 — 결정론."""
     n = len(dist)
     order = [start]
     remaining = set(range(n)) - {start}
@@ -99,13 +99,13 @@ def two_opt(order, dist) -> list:
 
 def plan_tls(occ: OccupancyGrid, cfg: ScanConfig,
              max_stations: int = DEFAULT_MAX_STATIONS) -> TlsPlan:
-    """TLS 거치점 배치(탐욕 set cover) + 순회(NN+2-opt, 구간 A*).
+    """TLS 거치점 배치(greedy set cover) + 순회(NN+2-opt, 구간 A*).
 
-    tradeoff = 탐욕 선택 접두열의 (거치점 수, 커버리지%) — 탐욕 누적이므로
+    tradeoff = greedy 선택 접두열의 (거치점 수, 커버리지%) — greedy 누적이므로
     비감소 곡선이다. est_time = 이동거리/주행속도 + 거치점 수 × dwell.
     """
     notes: list = [
-        "배치는 탐욕 set cover — set cover 는 NP-hard, 탐욕 근사비 ln n (스펙 §5)"
+        "배치는 greedy set cover — set cover 는 NP-hard, greedy 근사비 ln n (스펙 §5)"
     ]
     target = float(cfg.density_targets_mm["tls"])
     n_free = int(occ.free.sum())
@@ -208,7 +208,7 @@ def _candidate_covers(occ: OccupancyGrid, cfg: ScanConfig, candidates: list,
 
 def _greedy_set_cover(occ: OccupancyGrid, covers: list, n_free: int,
                       max_stations: int):
-    """탐욕 set cover. 반환 (선택 후보 인덱스, tradeoff, 잔여 마스크, 종료 사유).
+    """greedy set cover. 반환 (선택 후보 인덱스, tradeoff, 잔여 마스크, 종료 사유).
 
     매 회 "아직 미달인 셀을 가장 많이 커버하는" 후보를 선택 (동률은 낮은
     인덱스 — 결정론). 종료: 전 셀 커버(done) / 상한 도달(max) /
