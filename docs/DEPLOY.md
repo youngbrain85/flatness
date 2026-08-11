@@ -263,10 +263,15 @@ Vercel(대시보드) + Railway(워커, Docker) + Supabase(DB·Auth·Storage) 구
    `014_finish_material_seed.sql`(마감재 분류·제품군 52·로봇 임계값 29·LH 26형 도면
    데이터). **각각 한 번의 Run 으로 적용한다** — 013 Run → `Success` 확인 → 에디터
    비우기 → 014 Run. 둘 다 재실행 안전(멱등)하다. 적용 후 검증은
-   `supabase/verification/015_finish_material_regression.sql` 을 통째로 Run 하면
-   된다 — 마지막에 `★회귀 게이트 통과: 단언 38건 전부 PASS` NOTICE 가 떠야 하고,
-   하나라도 실패하면 예외로 멈춘다(이 파일은 마이그레이션이 아니라 검증 스크립트라
-   `verification/` 에 있다. 임시 테이블만 만들며 데이터를 바꾸지 않는다).
+   **`supabase/verification/015_supabase_editor.sql`** 을 통째로 Run 한다 — 성공하면
+   마지막 결과 그리드에 `PASS 38/38` 한 행이 보이고, 실패하면 `★회귀 실패: ... —
+   실패 단언: ...` 예외로 멈춘다(임시 테이블만 만들며 데이터를 바꾸지 않는다. 재실행 안전).
+
+   > ⚠ 같은 폴더의 `015_finish_material_regression.sql`(원본)은 **psql 전용**이다 —
+   > `\set`·`\echo` 메타명령 때문에 SQL Editor 에서는 첫 줄부터 42601 문법 오류가 난다
+   > (2026-08-10 실제 적용에서 확인). 편집기에는 반드시 `_supabase_editor` 판을 쓴다.
+   > 두 파일의 단언 내용은 동일하며, 편집기 판은 원본에서 생성된다
+   > (`python supabase/verification/make_editor_version.py`).
 
    > **알고 적용할 것 — 욕실·발코니 레벨의 도면 원문 모순은 해소되지 않은 채 실린다.**
    > 도면 1쪽 그래픽 라벨과 주기 13이 서로 다른 값을 주는데, 어느 쪽도 임의로 고르지
