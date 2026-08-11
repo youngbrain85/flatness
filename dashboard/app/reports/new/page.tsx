@@ -4,9 +4,11 @@ import { notFound } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { SupabaseErrorNotice } from '@/components/supabase-error';
 import { ReportCreateForm, type ReportCandidate } from '@/components/report/report-create-form';
+import { ReportLocationPicker } from '@/components/report/report-location-picker';
+import { PageHeader } from '@/components/ui/page-header';
 import { GRADE_LABEL } from '@/lib/domain/labels';
 import type {
-  AnalysisKind, JudgeState, LocationRow, ScanRow, SlopeParams, Surface, Verdict,
+  AnalysisKind, JudgeState, LocationRow, ScanRow, SiteRow, SlopeParams, Surface, Verdict,
 } from '@/lib/domain/types';
 
 export const dynamic = 'force-dynamic';
@@ -39,8 +41,33 @@ export default async function NewReportPage({ searchParams }: {
   searchParams: Promise<{ location?: string }>;
 }) {
   const { location: locationId } = await searchParams;
-  if (!locationId) notFound();
   const supabase = await createClient();
+
+  // D7 Step 1: notFound() 대신 측정위치 선택 UI를 먼저 보여준다. 선택하면
+  // ReportLocationPicker가 '/reports/new?location=...'로 다시 요청하고, 그 재요청이
+  // 이 함수를 처음부터 다시 실행해 아래 후보 쿼리를 그 location으로 새로 돈다 -
+  // 후보는 location마다 다르므로 여기서 미리 긁어 클라이언트에 들려 보낼 수 없다.
+  if (!locationId) {
+    const [sitesRes, locationsRes] = await Promise.all([
+      supabase.from('sites').select('*').order('name'),
+      supabase.from('locations').select('*'),
+    ]);
+    const listError = sitesRes.error ?? locationsRes.error;
+    if (listError) {
+      return <main className="mx-auto max-w-4xl p-6"><SupabaseErrorNotice message={listError.message} /></main>;
+    }
+    return (
+      <main className="mx-auto max-w-4xl space-y-4 p-6">
+        <PageHeader crumbs={[{ href: '/', label: '현장' }]} title="보고서 생성" />
+        <p className="text-sm text-zinc-500">보고서를 만들 측정위치를 먼저 선택하세요.</p>
+        <ReportLocationPicker
+          sites={(sitesRes.data ?? []) as SiteRow[]}
+          locations={(locationsRes.data ?? []) as LocationRow[]}
+        />
+      </main>
+    );
+  }
+
   const { data: location, error } = await supabase
     .from('locations').select('*').eq('id', locationId).maybeSingle();
   if (error) {
@@ -98,10 +125,8 @@ export default async function NewReportPage({ searchParams }: {
 
   return (
     <main className="mx-auto max-w-4xl space-y-4 p-6">
-      <div>
-        <h1 className="text-xl font-bold">보고서 생성</h1>
-        <p className="text-sm text-slate-500">{locationLabel}</p>
-      </div>
+      <PageHeader crumbs={[{ href: '/', label: '현장' }]} title="보고서 생성" />
+      <p className="text-sm text-zinc-500">{locationLabel}</p>
       {candidates.length === 0 ? (
         <p className="rounded border bg-white p-4 text-sm text-slate-600">
           이 측정위치에는 완료된 분석이 없습니다. 스캔을 업로드하고 분석이 끝난 뒤 다시 시도하세요.{' '}

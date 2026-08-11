@@ -41,22 +41,22 @@ export function ReportDeleteButton({ report, redirectTo }: {
   if (!confirming) {
     return (
       <button type="button" onClick={() => setConfirming(true)}
-        className="rounded border border-red-300 px-3 py-1.5 text-sm text-red-700 hover:bg-red-50">
+        className="rounded-md border border-red-300 px-3 py-1.5 text-sm text-red-700 hover:bg-red-50">
         삭제
       </button>
     );
   }
 
   return (
-    <div className="space-y-2 rounded border border-red-300 bg-red-50 p-3">
+    <div className="space-y-2 rounded-md border border-red-300 bg-red-50 p-3">
       <p className="text-sm text-red-800">{deleteConfirmText(report)}</p>
       <div className="flex gap-2">
         <button type="button" onClick={remove} disabled={busy}
-          className="rounded bg-red-700 px-3 py-1.5 text-sm text-white disabled:opacity-50">
+          className="rounded-md bg-red-700 px-3 py-1.5 text-sm text-white disabled:opacity-50">
           삭제 확인
         </button>
         <button type="button" onClick={() => { setConfirming(false); setError(null); }} disabled={busy}
-          className="rounded border px-3 py-1.5 text-sm disabled:opacity-50">
+          className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-50 disabled:opacity-50">
           취소
         </button>
       </div>

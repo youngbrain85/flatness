@@ -1,4 +1,5 @@
 // 보고서 도메인 규칙 (스펙 §7.6). 발행 가능 조건은 004의 finalized 트리거와 동일하게 둔다.
+import { REPORT_GEN_STATUS_LABEL, REPORT_STATUS_LABEL } from './labels';
 import type { ReportGenStatus, ReportStatus } from './types';
 
 // 경로 계약: DB에는 버킷-상대 문자열만 (스펙 §6.3)
@@ -22,6 +23,22 @@ export function canRegenerate(report: {
   status: ReportStatus; gen_status: ReportGenStatus;
 }): boolean {
   return report.status === 'draft' && report.gen_status !== 'processing';
+}
+
+// D7: 보고서 목록(Badge)·상세(StatusDot)가 같은 판단을 재사용한다. tone은 두 컴포넌트
+// tone 타입의 교집합만 쓴다(BadgeTone엔 'busy'가, StatusDot tone엔 'neutral'이 없다) -
+// 이러면 어느 쪽에 꽂아도 어댑터 없이 그대로 유효한 값이 된다. TONE 정의(badge.tsx)에서
+// unknown과 neutral은 완전히 같은 색이라 진행 중·미발행 초안 둘 다 unknown으로 묶어도
+// 시각적 손실이 없다 - 구분은 라벨 문구가 한다.
+export function reportStatusBadge(report: { status: ReportStatus; gen_status: ReportGenStatus }): {
+  tone: 'pass' | 'fail' | 'unknown'; label: string;
+} {
+  // report-progress.tsx와 같은 전제: 발행본은 재생성이 불가능해 gen_status가 다시
+  // 갱신되지 않는 잔재 정보다. 여기서도 finalized를 먼저 걸러 그 잔재를 무시한다.
+  if (report.status === 'finalized') return { tone: 'pass', label: REPORT_STATUS_LABEL.finalized };
+  if (report.gen_status === 'failed') return { tone: 'fail', label: REPORT_GEN_STATUS_LABEL.failed };
+  if (report.gen_status === 'done') return { tone: 'unknown', label: REPORT_STATUS_LABEL.draft };
+  return { tone: 'unknown', label: REPORT_GEN_STATUS_LABEL[report.gen_status] };
 }
 
 // 종합의견 초안: 분석별 의견(user_summary ?? auto_summary)을 표면 라벨과 함께 결합

@@ -53,15 +53,24 @@ export function ReportActions({ report }: {
       <div className="flex flex-wrap items-center gap-2">
         {report.pdf_path && (
           <a href={dataUrl(report.pdf_path)} download
-            className="rounded border px-3 py-1.5 text-sm hover:bg-slate-50">PDF 다운로드</a>
+            className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm text-zinc-700 hover:bg-zinc-50">
+            PDF 다운로드
+          </a>
         )}
         {canRegenerate(report) && (
           <button type="button" onClick={regenerate} disabled={busy}
-            className="rounded border px-3 py-1.5 text-sm disabled:opacity-50">PDF 다시 생성</button>
+            className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm text-zinc-700 hover:bg-zinc-50 disabled:opacity-50">
+            PDF 다시 생성
+          </button>
         )}
         {canFinalize(report) && (
+          // T2 팔레트(§3)는 주 버튼 색을 zinc-900 하나로 정한다 - 별도의 "성공"
+          // 액센트(구 emerald-700)를 두지 않는다. 발행은 이 화면의 핵심 행동이라
+          // 주 버튼 토큰을 그대로 쓴다.
           <button type="button" onClick={finalize} disabled={busy}
-            className="rounded bg-emerald-700 px-3 py-1.5 text-sm text-white disabled:opacity-50">발행</button>
+            className="rounded-md bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50">
+            발행
+          </button>
         )}
       </div>
       {report.status === 'finalized' && (

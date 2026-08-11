@@ -6,8 +6,11 @@ import { SupabaseErrorNotice } from '@/components/supabase-error';
 import { ReportActions } from '@/components/report/report-actions';
 import { ReportDeleteButton } from '@/components/report/report-delete-button';
 import { ReportProgress } from '@/components/report/report-progress';
-import { GRADE_LABEL, REPORT_STATUS_LABEL, SURFACE_LABEL } from '@/lib/domain/labels';
+import { PageHeader } from '@/components/ui/page-header';
+import { StatusDot } from '@/components/ui/status-dot';
+import { GRADE_LABEL, SURFACE_LABEL } from '@/lib/domain/labels';
 import { dataUrl } from '@/lib/domain/paths';
+import { reportStatusBadge } from '@/lib/domain/reports';
 import type { LocationRow, ReportRow, ScanRow, SiteRow, Surface, Verdict } from '@/lib/domain/types';
 
 export const dynamic = 'force-dynamic';
@@ -42,17 +45,23 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
     : { data: [] };
   const scannedAt = new Map((scans ?? []).map((s) => [s.id as string, (s as ScanRow).scanned_at]));
 
+  // D7 Step 3: scans/[id]와 같은 브레드크럼 규약(현장 홈 › 현장명 › 측정위치 라벨).
+  // loc이 없는(측정위치가 지워진 레거시) 경우에도 막다른 화면을 만들지 않고
+  // 현장 홈으로는 돌아갈 수 있게 둔다.
+  const locLabel = loc ? [loc.building, loc.floor, loc.room, loc.name].filter(Boolean).join(' / ') : null;
+  const crumbs = loc
+    ? [
+        { href: '/', label: '현장' },
+        { href: `/sites/${loc.site_id}`, label: site ? (site as SiteRow).name : '현장 상세' },
+        { label: locLabel! },
+      ]
+    : [{ href: '/', label: '현장' }];
+  const badge = reportStatusBadge(r);
+
   return (
     <main className="mx-auto max-w-5xl space-y-4 p-6">
-      <div>
-        <h1 className="text-xl font-bold">{r.title}</h1>
-        <p className="text-sm text-slate-500">
-          {site ? (site as SiteRow).name : ''}
-          {loc ? ` / ${[loc.building, loc.floor, loc.room, loc.name].filter(Boolean).join(' / ')}` : ''}
-          {' · '}{REPORT_STATUS_LABEL[r.status]}
-          {loc && <> · <Link href={`/sites/${loc.site_id}`} className="text-blue-700 hover:underline">현장 상세</Link></>}
-        </p>
-      </div>
+      <PageHeader crumbs={crumbs} title={r.title} />
+      <StatusDot tone={badge.tone} label={badge.label} />
 
       <ReportProgress reportId={r.id} initialStatus={r.gen_status} genError={r.gen_error} reportStatus={r.status} />
       <ReportActions report={{ id: r.id, status: r.status, gen_status: r.gen_status, pdf_path: r.pdf_path }} />
@@ -63,7 +72,10 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
         <ul className="space-y-1 text-sm">
           {(analyses ?? []).map((a) => (
             <li key={a.id as string} className="rounded border bg-white p-2">
-              <Link href={`/analyses/${a.id}`} className="hover:underline">
+              {/* D7: /analyses/[id]는 D6 리다이렉트가 여전히 받아주지만, analyses 행에
+                  scan_id가 이미 있으니 여기서는 그 리다이렉트 홉을 만들지 않고 스캔
+                  작업대로 바로 링크한다(?analysis=로 이 분석을 인라인 선택). */}
+              <Link href={`/scans/${a.scan_id}?analysis=${a.id}`} className="hover:underline">
                 {SURFACE_LABEL[a.surface as Surface]} · {scannedAt.get(a.scan_id as string) ?? '-'} · 판정{' '}
                 {a.overall_verdict ? GRADE_LABEL[a.overall_verdict as Verdict] : GRADE_LABEL.na}
               </Link>

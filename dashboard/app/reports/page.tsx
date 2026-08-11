@@ -2,8 +2,11 @@
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
 import { SupabaseErrorNotice } from '@/components/supabase-error';
-import { REPORT_GEN_STATUS_LABEL, REPORT_STATUS_LABEL } from '@/lib/domain/labels';
-import { ReportDeleteButton } from '@/components/report/report-delete-button';
+import { PageHeader } from '@/components/ui/page-header';
+import { EmptyState } from '@/components/ui/empty-state';
+import { Badge } from '@/components/ui/badge';
+import { tableClass } from '@/components/ui/data-table';
+import { reportStatusBadge } from '@/lib/domain/reports';
 import type { LocationRow, ReportRow } from '@/lib/domain/types';
 
 export const dynamic = 'force-dynamic';
@@ -32,36 +35,51 @@ export default async function ReportsPage({ searchParams }: {
     return [loc.id, [loc.building, loc.floor, loc.room, loc.name].filter(Boolean).join(' / ')];
   }));
 
+  // D7 Step 2: 파라미터 유무와 무관하게 항상 노출한다 - location이 있으면 그 위치를
+  // 프리필해 한 클릭 흐름(6.3)을 잇고, 없으면 /reports/new가 먼저 측정위치 선택
+  // UI를 보여준다(D7 Step 1).
+  const newReportHref = locationId ? `/reports/new?location=${locationId}` : '/reports/new';
+
   return (
     <main className="mx-auto max-w-4xl space-y-4 p-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold">보고서</h1>
-        {locationId && (
-          <Link href={`/reports/new?location=${locationId}`}
-            className="rounded bg-slate-800 px-3 py-1.5 text-sm text-white">새 보고서</Link>
-        )}
-      </div>
+      <PageHeader title="보고서" actions={
+        <Link href={newReportHref}
+          className="rounded-md bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-700">
+          새 보고서
+        </Link>
+      } />
       {reports.length === 0 ? (
-        <p className="rounded border bg-white p-4 text-sm text-slate-600">
-          아직 보고서가 없습니다. 현장 상세의 측정위치에서 보고서를 생성하세요.
-        </p>
+        <EmptyState message="보고서가 없습니다." actionHref="/reports/new" actionLabel="새 보고서 만들기" />
       ) : (
-        <ul className="space-y-2">
-          {reports.map((r) => (
-            <li key={r.id} className="flex items-start justify-between gap-3 rounded border bg-white p-3 text-sm">
-              <div>
-                <Link href={`/reports/${r.id}`} className="font-medium hover:underline">{r.title}</Link>
-                <p className="text-xs text-slate-500">
-                  {labelOf.get(r.location_id) ?? ''} · {REPORT_STATUS_LABEL[r.status]}
-                  {' · '}{REPORT_GEN_STATUS_LABEL[r.gen_status]} · {r.created_at.slice(0, 10)}
-                </p>
-              </div>
-              {/* redirectTo를 넘기지 않는다 - 이미 목록이므로 이동할 곳이 없고,
-                  삭제 후 router.refresh()로 그 자리에서 다시 그린다 */}
-              <ReportDeleteButton report={{ id: r.id, status: r.status }} />
-            </li>
-          ))}
-        </ul>
+        <div className="overflow-x-auto rounded-md border border-zinc-200 bg-white">
+          <table className={tableClass.table}>
+            <thead className={tableClass.thead}>
+              <tr>
+                <th className={tableClass.th}>제목</th>
+                <th className={tableClass.th}>측정위치</th>
+                <th className={tableClass.th}>상태</th>
+                <th className={tableClass.th}>생성일</th>
+              </tr>
+            </thead>
+            <tbody>
+              {reports.map((r) => {
+                const badge = reportStatusBadge(r);
+                return (
+                  <tr key={r.id} className={tableClass.row}>
+                    <td className={tableClass.td}>
+                      <Link href={`/reports/${r.id}`} className="font-medium text-zinc-900 hover:underline">
+                        {r.title}
+                      </Link>
+                    </td>
+                    <td className={tableClass.td}>{labelOf.get(r.location_id) ?? '-'}</td>
+                    <td className={tableClass.td}><Badge tone={badge.tone}>{badge.label}</Badge></td>
+                    <td className={`${tableClass.td} font-mono tabular-nums`}>{r.created_at.slice(0, 10)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       )}
     </main>
   );

@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { buildDraftOpinion, canFinalize, canRegenerate, deleteConfirmText, reportPdfRelPath } from '../reports';
+import {
+  buildDraftOpinion, canFinalize, canRegenerate, deleteConfirmText, reportPdfRelPath, reportStatusBadge,
+} from '../reports';
 
 describe('reportPdfRelPath', () => {
   it('버킷-상대 규약 문자열을 만든다', () => {
@@ -45,6 +47,35 @@ describe('buildDraftOpinion', () => {
       { surfaceLabel: '벽면', text: '  경계 구간 3개  ' },
     ]);
     expect(text).toBe('[바닥] 적합 구간이 대부분입니다.\n\n[벽면] 경계 구간 3개');
+  });
+});
+
+// D7: 목록(Badge)·상세(StatusDot) 양쪽에서 같은 판단을 재사용한다. 두 컴포넌트의
+// tone 타입 교집합(pass/warn/fail/unknown)만 반환해 어댑터 없이 그대로 꽂을 수 있게 한다.
+describe('reportStatusBadge', () => {
+  it('발행본은 gen_status와 무관하게 발행됨/pass다 (ReportProgress와 같은 전제: '
+    + '발행본에서 gen_status는 잔재 정보)', () => {
+    expect(reportStatusBadge({ status: 'finalized', gen_status: 'done' }))
+      .toEqual({ tone: 'pass', label: '발행됨' });
+    expect(reportStatusBadge({ status: 'finalized', gen_status: 'failed' }))
+      .toEqual({ tone: 'pass', label: '발행됨' });
+  });
+
+  it('초안 + PDF 생성 실패는 fail 톤으로 실패를 알린다', () => {
+    expect(reportStatusBadge({ status: 'draft', gen_status: 'failed' }))
+      .toEqual({ tone: 'fail', label: '생성 실패' });
+  });
+
+  it('초안 + 생성 완료(아직 미발행)는 작성 중으로 표시한다', () => {
+    expect(reportStatusBadge({ status: 'draft', gen_status: 'done' }))
+      .toEqual({ tone: 'unknown', label: '작성 중' });
+  });
+
+  it('초안 + 생성 대기/진행 중은 그 진행 문구를 그대로 보여준다', () => {
+    expect(reportStatusBadge({ status: 'draft', gen_status: 'queued' }))
+      .toEqual({ tone: 'unknown', label: 'PDF 생성 대기 중' });
+    expect(reportStatusBadge({ status: 'draft', gen_status: 'processing' }))
+      .toEqual({ tone: 'unknown', label: 'PDF 생성 중' });
   });
 });
 

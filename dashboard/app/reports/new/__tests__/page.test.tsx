@@ -8,10 +8,19 @@
 // 걸긴 하는데 결과가 틀린" 회귀를 못 잡고, select 목록에서 params를 빠뜨려 재판정
 // 차단이 조용히 무력화되는 것도 못 잡는다.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import type { ReactElement } from 'react';
 
 vi.mock('@/lib/supabase/server', () => ({ createClient: vi.fn() }));
+
+// D7 Step 1: location 없는 진입 경로가 렌더하는 ReportLocationPicker는 클라이언트
+// 컴포넌트라 useRouter가 필요하다. notFound는 실제 구현을 그대로 쓴다 - 기존
+// "위치를 찾지 못하면 404" 경로를 흉내내지 않고 실제로 던지게 둬야, 이 목이 그
+// 경로를 조용히 무력화하는 회귀를 만들지 않는다.
+vi.mock('next/navigation', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('next/navigation')>();
+  return { ...actual, useRouter: () => ({ push: vi.fn() }) };
+});
 
 // 후보가 실제로 폼까지 도달하는지 보려면 반환된 트리를 렌더해야 한다(서버 컴포넌트
 // 함수는 JSX를 돌려줄 뿐 자식을 실행하지 않는다).
@@ -57,6 +66,9 @@ function table(rows: Row[], calls?: Call[]) {
       current = current.filter((r) => (r[col] ?? null) === val);
       return obj;
     },
+    // 정렬 자체는 이 스텁의 관심사가 아니다(측정위치 선택 UI 테스트는 존재 여부만 본다) -
+    // 체인이 끊기지 않게 그대로 통과시킨다.
+    order: () => obj,
     maybeSingle: async () => ({ data: current.length ? project(current[0]) : null, error: null }),
     then: (resolve: (v: unknown) => void) => resolve({ data: current.map(project), error: null }),
   };
@@ -106,6 +118,29 @@ async function renderPage(analyses: Row[], calls?: Call[]) {
 function candidateOf(props: { candidates: Record<string, unknown>[] } | null, id: string) {
   return props?.candidates.find((c) => c.analysis_id === id);
 }
+
+// D7 Step 1: notFound() 대신 측정위치 선택 UI를 먼저 보여준다. 선택 후에는 서버
+// 재조회(?location= 붙은 재요청)로 후보를 로드하므로, 이 화면 자체는 후보 쿼리를
+// 전혀 건드리지 않는다 - 그래서 'analyses' 테이블 접근이 없어야 한다(스텁이 없는
+// 테이블 접근은 throw로 즉시 드러난다).
+describe('NewReportPage location 없는 진입 지원 (D7 Step 1)', () => {
+  beforeEach(() => { formProps.current = null; });
+
+  it('location 파라미터가 없으면 측정위치 선택 UI를 먼저 보여준다', async () => {
+    vi.mocked(createClient).mockResolvedValue({
+      from: (t: string) => {
+        if (t === 'sites') return table([{ id: 's1', name: '현장1', address: null, memo: null, created_at: '', updated_at: '' }]);
+        if (t === 'locations') return table([location]);
+        throw new Error(`예상치 못한 테이블: ${t}`);
+      },
+    } as never);
+    const el = await NewReportPage({ searchParams: Promise.resolve({}) });
+    render(el as ReactElement);
+    expect(screen.getByLabelText('측정위치')).toBeInTheDocument();
+    // 후보 로드 폼은 아직 그려지지 않는다 - location을 고르기 전이라 후보를 알 수 없다
+    expect(formProps.current).toBeNull();
+  });
+});
 
 describe('NewReportPage 후보 쿼리 (단계 C 회귀 차단 + 단계 H 구배 편입)', () => {
   beforeEach(() => { formProps.current = null; });
