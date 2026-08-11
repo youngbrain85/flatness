@@ -7,6 +7,7 @@ import { PageHeader } from '@/components/ui/page-header';
 import { MetricCard, VerdictBar } from '@/components/ui/metric-card';
 import { tableClass } from '@/components/ui/data-table';
 import { EmptyState } from '@/components/ui/empty-state';
+import { Badge } from '@/components/ui/badge';
 import type { AnalysisStatus, SiteRow, Verdict } from '@/lib/domain/types';
 
 export const dynamic = 'force-dynamic';
@@ -55,6 +56,10 @@ export default async function HomePage() {
   );
   const verdictBar = toBarCounts(verdictCounts);
   const verdictTotal = verdictBar.pass + verdictBar.warn + verdictBar.fail;
+  // 리뷰 Important: "엔진은 돌았는데 판정이 안 나온"(done인데 overall_verdict null) 현장이
+  // "분석을 안 한 현장"과 구분되지 않으면 안 된다 - VerdictBar는 pass/warn/fail 3버킷만
+  // 지원해 na를 표시할 수 없으므로 보조 텍스트/배지로 별도 노출한다.
+  const totalNaCount = summaries.reduce((n, s) => n + s.naCount, 0);
 
   return (
     <main className="p-6">
@@ -70,6 +75,11 @@ export default async function HomePage() {
         <MetricCard label="처리 중" value={inProgress} unit="건" />
         <MetricCard label="판정 분포" value={verdictTotal} unit="건">
           <VerdictBar counts={verdictBar} />
+          {totalNaCount > 0 && (
+            <p className="mt-1 text-xs text-zinc-500">
+              판정 불가 <span className="font-mono">{totalNaCount}</span>건
+            </p>
+          )}
         </MetricCard>
       </div>
       {summaries.length === 0 ? (
@@ -105,6 +115,9 @@ export default async function HomePage() {
                   <td className={`${tableClass.td} font-mono tabular-nums`}>{s.lastScannedAt ?? '-'}</td>
                   <td className={tableClass.td}>
                     <VerdictBar counts={toBarCounts(s.verdictCounts)} />
+                    {s.naCount > 0 && (
+                      <div className="mt-1"><Badge tone="unknown">불가 {s.naCount}</Badge></div>
+                    )}
                   </td>
                 </tr>
               ))}

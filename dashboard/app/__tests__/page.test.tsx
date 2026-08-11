@@ -16,6 +16,7 @@ import { createClient } from '@/lib/supabase/server';
 import HomePage from '../page';
 import { MetricCard } from '@/components/ui/metric-card';
 import { EmptyState } from '@/components/ui/empty-state';
+import { Badge } from '@/components/ui/badge';
 
 // 엘리먼트 트리를 재귀 탐색해 특정 컴포넌트/태그 타입이 쓰인 곳을 모두 모은다.
 function findAll(node: unknown, type: unknown, acc: { props: Record<string, unknown> }[] = []) {
@@ -122,6 +123,52 @@ describe('HomePage 렌더 (홈 지표 스트립 + 현장 밀도 테이블)', () 
     expect(labels).toContain('처리 중');
     const inProgressCard = metricCards.find((c) => c.props.label === '처리 중');
     expect(inProgressCard?.props.value).toBe(2); // queued+processing만(done 제외)
+  });
+
+  it('판정 불가(na) 건수를 지표 스트립 보조 텍스트와 테이블 배지로 노출한다(리뷰 픽스)', async () => {
+    // status=done인데 overall_verdict null -> "엔진은 돌았는데 판정이 안 나온" 케이스(naCount).
+    const sites = [{ id: 's1', name: '현장A', address: null, memo: null, created_at: '', updated_at: '' }];
+    const locations = [{ id: 'l1', site_id: 's1' }];
+    const scans = [{ id: 'c1', scanned_at: '2026-07-20', location_id: 'l1' }];
+    const currentAnalyses = [{ scan_id: 'c1', status: 'done', overall_verdict: null, kind: 'flatness' }];
+
+    vi.mocked(createClient).mockResolvedValue(
+      stubSupabase({ sites, locations, scans, currentAnalyses }) as never,
+    );
+
+    const el = await HomePage();
+
+    // 지표 스트립: "판정 분포" MetricCard 안 보조 텍스트에 판정 불가 건수가 잡힌다.
+    const metricCards = findAll(el, MetricCard);
+    const verdictCard = metricCards.find((c) => c.props.label === '판정 분포');
+    expect(verdictCard).toBeDefined();
+    expect(collectText(verdictCard).join('')).toContain('판정 불가');
+    expect(collectText(verdictCard).join('')).toContain('1');
+
+    // 현장 테이블: 판정 분포 셀에 Badge(tone=unknown)로 노출된다.
+    const badges = findAll(el, Badge);
+    const naBadge = badges.find((b) => b.props.tone === 'unknown');
+    expect(naBadge).toBeDefined();
+    expect(collectText(naBadge).join('')).toContain('불가');
+    expect(collectText(naBadge).join('')).toContain('1');
+  });
+
+  it('naCount가 0이면 판정 불가 보조 텍스트·배지를 렌더하지 않는다', async () => {
+    const sites = [{ id: 's1', name: '현장A', address: null, memo: null, created_at: '', updated_at: '' }];
+    const locations = [{ id: 'l1', site_id: 's1' }];
+    const scans = [{ id: 'c1', scanned_at: '2026-07-20', location_id: 'l1' }];
+    const currentAnalyses = [{ scan_id: 'c1', status: 'done', overall_verdict: 'pass', kind: 'flatness' }];
+
+    vi.mocked(createClient).mockResolvedValue(
+      stubSupabase({ sites, locations, scans, currentAnalyses }) as never,
+    );
+
+    const el = await HomePage();
+
+    expect(findAll(el, Badge)).toHaveLength(0);
+    const metricCards = findAll(el, MetricCard);
+    const verdictCard = metricCards.find((c) => c.props.label === '판정 분포');
+    expect(collectText(verdictCard).join('')).not.toContain('판정 불가');
   });
 
   it('현장이 없으면 업로드 화면으로 안내하는 빈 상태를 렌더한다', async () => {
