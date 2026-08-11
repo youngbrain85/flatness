@@ -12,7 +12,8 @@
 
 - **스펙**: `docs/superpowers/specs/2026-08-11-dashboard-console-redesign-design.md`. 충돌 시 스펙이 이긴다.
 - **이 Next.js는 관례가 다르다.** 코드 작성 전 `dashboard/node_modules/next/dist/docs/`에서 해당 기능 가이드를 읽는다(최소: fonts, redirecting, layouts-and-pages).
-- **의미색 4종 외 컬러 금지**: 적합 green-600 / 주의 amber-500 / 재시공 red-600 / 미상 zinc-400 (배지 배경 `-50`, 배지 텍스트 `-700`). 기존 `blue-700` 클래스는 전부 제거 대상.
+- **의미색 4종 외 컬러 금지**: 적합 green-600 / 주의 amber-500 / 재시공 red-600 / 미상 zinc-400 (의미색 배지는 배경 `-50`, 텍스트 `-700`). 기존 `blue-700` 클래스는 전부 제거 대상.
+  **중립(zinc) 예외 명문화**: zinc-50은 흰 카드 위에서 식별 불가라 zinc 계열 배지는 `bg-zinc-100`/`text-zinc-600`, busy 점은 `zinc-500`을 쓴다 — 이것은 의미색이 아니라 중립 상태 표시다.
 - **주 버튼**: `bg-zinc-900 hover:bg-zinc-700 text-white`. 보조 버튼: `border border-zinc-300 bg-white hover:bg-zinc-50`.
 - **수치·일시·ID·단위는 `font-mono tabular-nums`**. 본문 Noto Sans KR, 모노 Geist Mono — 둘 다 next/font/google.
 - **다크 모드 금지**(스펙 §2). 차트 라이브러리 추가 금지.
@@ -309,10 +310,11 @@ export function MetricCard({ label, value, unit, children }: {
 export function VerdictBar({ counts }: { counts: { pass: number; warn: number; fail: number } }) {
   const total = counts.pass + counts.warn + counts.fail;
   if (total === 0) return <p className="mt-2 text-xs text-zinc-400">판정 없음</p>;
+  // 색은 TONE(badge.tsx)이 유일한 정의처다 - 여기서 리터럴로 재정의하지 않는다
   const seg = [
-    { n: counts.pass, cls: 'bg-green-600' },
-    { n: counts.warn, cls: 'bg-amber-500' },
-    { n: counts.fail, cls: 'bg-red-600' },
+    { n: counts.pass, cls: TONE.pass.dot },
+    { n: counts.warn, cls: TONE.warn.dot },
+    { n: counts.fail, cls: TONE.fail.dot },
   ];
   return (
     <div className="mt-2 flex h-1.5 overflow-hidden rounded-full bg-zinc-100">
