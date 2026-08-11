@@ -12,14 +12,25 @@ interface Props {
   sites: SiteRow[];
   locations: LocationRow[];
   userId: string;
-  initialSiteId?: string;
   initialLocationId?: string;
 }
 
-export function UploadForm({ sites, locations, userId, initialSiteId, initialLocationId }: Props) {
+// 인라인 현장 생성 셀렉트의 "새 현장명 직접 입력" 값. 실제 site id(uuid)와 절대
+// 겹치지 않는다.
+const NEW_SITE_VALUE = '';
+
+// T2 토큰 (D4 브리프 Step 3): 주 버튼 zinc-900, 입력 border-zinc-300 rounded-md.
+const inputClass = 'mt-1 w-full rounded-md border border-zinc-300 px-3 py-2';
+const primaryButtonClass =
+  'rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50';
+
+export function UploadForm({ sites, locations, userId, initialLocationId }: Props) {
   const router = useRouter();
+  // 현장 목록과 측정위치 목록을 로컬 상태로 들고 있어야 인라인 생성 직후
+  // (페이지 새로고침 없이) 방금 만든 항목을 optgroup/셀렉트에 바로 반영할 수 있다.
+  const [sitesList, setSitesList] = useState<SiteRow[]>(sites);
+  const [locationsList, setLocationsList] = useState<LocationRow[]>(locations);
   const [mode, setMode] = useState<'scan' | 'import'>('scan');
-  const [siteId, setSiteId] = useState(initialSiteId ?? '');
   const [locationId, setLocationId] = useState(initialLocationId ?? '');
   const [surface, setSurface] = useState<Surface>('floor');
   const [criteria, setCriteria] = useState<CriteriaRow[]>([]);
@@ -32,8 +43,20 @@ export function UploadForm({ sites, locations, userId, initialSiteId, initialLoc
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  // 단계 D4: 현장 셀렉트를 없애고 측정위치 단일 셀렉트(optgroup)로 합쳤다. 현장은
+  // 더 이상 독립 상태가 아니라 선택된 location에서 항상 역산한다 - 예전 버그
+  // (?location=만 와도 현장 셀렉트가 비어 목록이 필터로 사라지는 문제)가 이
+  // 구조 변경만으로 자연 소멸한다.
+  const siteId = locationsList.find((l) => l.id === locationId)?.site_id ?? '';
+
+  const [showNewLocation, setShowNewLocation] = useState(false);
+  const [newLocSiteId, setNewLocSiteId] = useState(NEW_SITE_VALUE);
+  const [newSiteName, setNewSiteName] = useState('');
+  const [newLocFields, setNewLocFields] = useState({ building: '', floor: '', room: '', name: '' });
+  const [newLocError, setNewLocError] = useState<string | null>(null);
+  const [creatingLoc, setCreatingLoc] = useState(false);
+
   const effectiveSurface: Surface = mode === 'import' ? 'floor' : surface;
-  const siteLocations = locations.filter((l) => l.site_id === siteId);
 
   // 적용 기준 후보: fn_resolve_criteria는 대체(override) 시맨틱 - 현장 기준이 있으면
   // 전역 기준은 목록에 아예 나오지 않는다. 반환 목록을 그대로 후보로 쓴다.
@@ -153,6 +176,63 @@ export function UploadForm({ sites, locations, userId, initialSiteId, initialLoc
     }
   }
 
+  // 인라인 현장·측정위치 생성. insert 컬럼은 new-site-form.tsx·new-location-form.tsx와
+  // 동일하게 맞춘다 - 트림 정규화 책임도 그대로(001 주석). 층 순서(floor_order)는
+  // 이 미니 폼에는 없어 0으로 둔다(정렬용 보조값이라 나중에 현장 상세에서 조정 가능).
+  async function handleCreateLocation() {
+    setNewLocError(null);
+    const name = newLocFields.name.trim();
+    if (!name) { setNewLocError('측정위치명을 입력하세요.'); return; }
+    if (newLocSiteId === NEW_SITE_VALUE && !newSiteName.trim()) {
+      setNewLocError('새 현장명을 입력하세요.');
+      return;
+    }
+    setCreatingLoc(true);
+    const supabase = createClient();
+    try {
+      let targetSiteId = newLocSiteId;
+      if (targetSiteId === NEW_SITE_VALUE) {
+        const siteName = newSiteName.trim();
+        const { data: siteRow, error: siteErr } = await supabase.from('sites')
+          .insert({ name: siteName, address: null, memo: null })
+          .select('id').single();
+        if (siteErr || !siteRow) { setNewLocError(siteErr?.message ?? '현장 저장 실패'); return; }
+        targetSiteId = siteRow.id;
+        setSitesList((prev) => [
+          ...prev,
+          { id: siteRow.id, name: siteName, address: null, memo: null, created_at: '', updated_at: '' },
+        ]);
+      }
+      const { data: locRow, error: locErr } = await supabase.from('locations').insert({
+        site_id: targetSiteId,
+        building: newLocFields.building.trim(),
+        floor: newLocFields.floor.trim(),
+        floor_order: 0,
+        room: newLocFields.room.trim(),
+        name,
+      }).select('id').single();
+      if (locErr || !locRow) {
+        setNewLocError(locErr?.code === '23505'
+          ? '같은 동/층/공간에 동일한 측정위치가 이미 있습니다.'
+          : (locErr?.message ?? '측정위치 저장 실패'));
+        return;
+      }
+      const newLocation: LocationRow = {
+        id: locRow.id, site_id: targetSiteId,
+        building: newLocFields.building.trim(), floor: newLocFields.floor.trim(), floor_order: 0,
+        room: newLocFields.room.trim(), name, memo: null, created_at: '', updated_at: '',
+      };
+      setLocationsList((prev) => [...prev, newLocation]);
+      setLocationId(newLocation.id);
+      setShowNewLocation(false);
+      setNewLocFields({ building: '', floor: '', room: '', name: '' });
+      setNewSiteName('');
+      setNewLocSiteId(targetSiteId);
+    } finally {
+      setCreatingLoc(false);
+    }
+  }
+
   return (
     <form onSubmit={onSubmit} className="max-w-xl space-y-4">
       <div className="flex gap-4 text-sm">
@@ -166,7 +246,7 @@ export function UploadForm({ sites, locations, userId, initialSiteId, initialLoc
         </label>
       </div>
       {mode === 'import' && (
-        <p className="rounded bg-slate-100 p-2 text-xs text-slate-600">
+        <p className="rounded-md bg-slate-100 p-2 text-xs text-slate-600">
           기존 Colab 노트북 결과 CSV(X, Y, Signed_Distance_mm 컬럼 필수) 또는 범용
           연계 JSON(format: &quot;flatness-import-v1&quot;, points[].x/y/deviation_mm)을
           등록합니다. 바닥 결과만 지원하며, 결과 화면에 &quot;외부 결과&quot; 배지가
@@ -174,25 +254,70 @@ export function UploadForm({ sites, locations, userId, initialSiteId, initialLoc
         </p>
       )}
       <div>
-        <label htmlFor="site" className="block text-sm font-medium">현장</label>
-        <select id="site" required value={siteId}
-          onChange={(e) => { setSiteId(e.target.value); setLocationId(''); }}
-          className="mt-1 w-full rounded border px-3 py-2">
-          <option value="">선택...</option>
-          {sites.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-        </select>
-      </div>
-      <div>
         <label htmlFor="location" className="block text-sm font-medium">측정위치</label>
         <select id="location" required value={locationId} onChange={(e) => setLocationId(e.target.value)}
-          className="mt-1 w-full rounded border px-3 py-2">
+          className={inputClass}>
           <option value="">선택...</option>
-          {siteLocations.map((l) => (
-            <option key={l.id} value={l.id}>
-              {[l.building, l.floor, l.room, l.name].filter(Boolean).join(' / ')}
-            </option>
-          ))}
+          {sitesList.map((s) => {
+            const locs = locationsList.filter((l) => l.site_id === s.id);
+            if (locs.length === 0) return null;
+            return (
+              <optgroup key={s.id} label={s.name}>
+                {locs.map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {[l.building, l.floor, l.room, l.name].filter(Boolean).join(' / ')}
+                  </option>
+                ))}
+              </optgroup>
+            );
+          })}
         </select>
+        <button type="button" onClick={() => setShowNewLocation((v) => !v)}
+          className="mt-1 text-sm font-medium text-zinc-700 hover:text-zinc-900 hover:underline">
+          + 새 측정위치
+        </button>
+        {showNewLocation && (
+          <div className="mt-2 space-y-2 rounded-md border border-zinc-300 bg-white p-3 text-sm">
+            <div>
+              <label htmlFor="new-loc-site" className="block text-xs text-zinc-500">현장 선택 또는 새 현장명</label>
+              <select id="new-loc-site" value={newLocSiteId} onChange={(e) => setNewLocSiteId(e.target.value)}
+                className={inputClass}>
+                <option value={NEW_SITE_VALUE}>+ 새 현장 만들기</option>
+                {sitesList.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </div>
+            {newLocSiteId === NEW_SITE_VALUE && (
+              <div>
+                <label htmlFor="new-site-name" className="block text-xs text-zinc-500">새 현장명</label>
+                <input id="new-site-name" value={newSiteName} onChange={(e) => setNewSiteName(e.target.value)}
+                  className={inputClass} />
+              </div>
+            )}
+            <div className="flex flex-wrap gap-2">
+              {([
+                ['building', '동'], ['floor', '층'], ['room', '공간'], ['name', '이름'],
+              ] as const).map(([key, label]) => (
+                <div key={key}>
+                  <label htmlFor={`new-loc-${key}`} className="block text-xs text-zinc-500">{label}</label>
+                  <input id={`new-loc-${key}`} value={newLocFields[key]}
+                    onChange={(e) => setNewLocFields({ ...newLocFields, [key]: e.target.value })}
+                    className="mt-1 w-28 rounded-md border border-zinc-300 px-2 py-1.5" />
+                </div>
+              ))}
+            </div>
+            {newLocError && <p className="text-sm text-red-600">{newLocError}</p>}
+            <div className="flex gap-2">
+              <button type="button" onClick={handleCreateLocation} disabled={creatingLoc}
+                className="rounded-md bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50">
+                {creatingLoc ? '저장 중...' : '저장'}
+              </button>
+              <button type="button" onClick={() => setShowNewLocation(false)}
+                className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-50">
+                취소
+              </button>
+            </div>
+          </div>
+        )}
       </div>
       {mode === 'scan' && (
         <div className="flex gap-4 text-sm">
@@ -207,8 +332,8 @@ export function UploadForm({ sites, locations, userId, initialSiteId, initialLoc
       )}
       <div>
         <span className="block text-sm font-medium">적용 기준</span>
-        <div className="mt-1 space-y-1 rounded border bg-white p-2 text-sm">
-          {criteria.length === 0 && <p className="text-slate-500">현장을 먼저 선택하세요.</p>}
+        <div className="mt-1 space-y-1 rounded-md border border-zinc-300 bg-white p-2 text-sm">
+          {criteria.length === 0 && <p className="text-slate-500">측정위치를 먼저 선택하세요.</p>}
           {criteria.map((c) => (
             <label key={c.id} className="flex items-start gap-2">
               <input type="radio" checked={criteriaId === c.id} onChange={() => setCriteriaId(c.id)} />
@@ -225,18 +350,19 @@ export function UploadForm({ sites, locations, userId, initialSiteId, initialLoc
         <div>
           <label htmlFor="scanned-at" className="block text-sm font-medium">측정일자</label>
           <input id="scanned-at" type="date" required value={scannedAt}
-            onChange={(e) => setScannedAt(e.target.value)} className="mt-1 rounded border px-3 py-2" />
+            onChange={(e) => setScannedAt(e.target.value)}
+            className="mt-1 rounded-md border border-zinc-300 px-3 py-2 font-mono" />
         </div>
         <div className="flex-1">
           <label htmlFor="device" className="block text-sm font-medium">장비</label>
           <input id="device" value={device} onChange={(e) => setDevice(e.target.value)}
-            placeholder="예: iPhone 15 Pro + 3d Scanner App" className="mt-1 w-full rounded border px-3 py-2" />
+            placeholder="예: iPhone 15 Pro + 3d Scanner App" className={inputClass} />
         </div>
       </div>
       <div>
         <label htmlFor="operator" className="block text-sm font-medium">담당자 이름(직접 입력, 비우면 로그인 사용자)</label>
         <input id="operator" value={operatorManual} onChange={(e) => setOperatorManual(e.target.value)}
-          className="mt-1 w-full rounded border px-3 py-2" />
+          className={inputClass} />
       </div>
       {mode === 'scan' && (
         <div className="text-sm">
@@ -263,12 +389,11 @@ export function UploadForm({ sites, locations, userId, initialSiteId, initialLoc
         <input id="file" type="file" required onChange={(e) => setFile(e.target.files?.[0] ?? null)}
           className="mt-1 w-full text-sm" />
         <p className="mt-1 text-xs text-slate-500">
-          파일은 Supabase Storage에 저장됩니다. 파일당 최대 {MAX_UPLOAD_MB}MB입니다.
+          파일은 Supabase Storage에 저장됩니다. 파일당 최대 <span className="font-mono">{MAX_UPLOAD_MB}</span>MB입니다.
         </p>
       </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
-      <button type="submit" disabled={busy}
-        className="rounded bg-slate-800 px-4 py-2 text-white disabled:opacity-50">
+      <button type="submit" disabled={busy} className={primaryButtonClass}>
         {busy ? '업로드 중...' : mode === 'import' ? '가져오기 시작' : '업로드 후 사전 검사'}
       </button>
     </form>

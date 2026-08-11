@@ -79,10 +79,11 @@ function stubSupabase(
   };
 }
 
-async function selectSiteAndLocation() {
-  fireEvent.change(screen.getByLabelText('현장'), { target: { value: 's1' } });
-  await waitFor(() => expect(screen.getByText('floor-kcs')).toBeInTheDocument());
+// 단계 D4: 현장/측정위치 이중 셀렉트가 optgroup 단일 셀렉트로 바뀌었다 - 측정위치를
+// 고르면 현장은 site_id 역산으로 자동 결정되고 그 결과로 적용 기준이 뜬다.
+async function selectLocation() {
   fireEvent.change(screen.getByLabelText('측정위치'), { target: { value: 'l1' } });
+  await waitFor(() => expect(screen.getByText('floor-kcs')).toBeInTheDocument());
 }
 
 afterEach(() => {
@@ -93,7 +94,7 @@ describe('UploadForm 엔큐 실패 처리 (리뷰 Important #1)', () => {
   it('스캔 모드: precheck 엔큐 실패 시 오류를 화면에 남기고 이동하지 않는다', async () => {
     vi.mocked(createClient).mockReturnValue(stubSupabase({ code: '23505', message: 'dup' }) as never);
     const { container } = render(<UploadForm sites={[site]} locations={[location]} userId="u1" />);
-    await selectSiteAndLocation();
+    await selectLocation();
     const file = new File(['x'], 'scan.ply');
     fireEvent.change(screen.getByLabelText(/스캔 파일/), { target: { files: [file] } });
     // jsdom의 네이티브 제약 검증(required 필드)이 클릭발 암묵 제출을 막을 수 있어
@@ -109,7 +110,7 @@ describe('UploadForm 엔큐 실패 처리 (리뷰 Important #1)', () => {
     vi.mocked(createClient).mockReturnValue(stubSupabase({ code: '23505', message: 'dup' }) as never);
     const { container } = render(<UploadForm sites={[site]} locations={[location]} userId="u1" />);
     fireEvent.click(screen.getByLabelText('기존 결과 가져오기(CSV/JSON)'));
-    await selectSiteAndLocation();
+    await selectLocation();
     const file = new File(['x'], 'result.csv');
     fireEvent.change(screen.getByLabelText(/결과 파일 \(csv\/json\)/), { target: { files: [file] } });
     fireEvent.submit(container.querySelector('form')!);
@@ -128,7 +129,7 @@ describe('UploadForm 엔큐 실패 처리 (리뷰 Important #1)', () => {
     vi.mocked(createClient).mockReturnValue(
       stubSupabase({ code: '23505', message: 'dup' }, { scansUpdate }) as never);
     const { container } = render(<UploadForm sites={[site]} locations={[location]} userId="u1" />);
-    await selectSiteAndLocation();
+    await selectLocation();
     fireEvent.change(screen.getByLabelText(/스캔 파일/), {
       target: { files: [new File(['x'], 'scan.ply')] } });
     fireEvent.submit(container.querySelector('form')!);
@@ -146,7 +147,7 @@ describe('UploadForm 엔큐 실패 처리 (리뷰 Important #1)', () => {
       stubSupabase({ code: '23505', message: 'dup' }, { scansUpdate, analysesUpdate }) as never);
     const { container } = render(<UploadForm sites={[site]} locations={[location]} userId="u1" />);
     fireEvent.click(screen.getByLabelText('기존 결과 가져오기(CSV/JSON)'));
-    await selectSiteAndLocation();
+    await selectLocation();
     fireEvent.change(screen.getByLabelText(/결과 파일 \(csv\/json\)/), {
       target: { files: [new File(['x'], 'result.csv')] } });
     fireEvent.submit(container.querySelector('form')!);
@@ -169,7 +170,7 @@ describe('UploadForm 엔큐 실패 처리 (리뷰 Important #1)', () => {
         { softDeleteError: { message: '연결이 끊겼습니다' } }) as never);
     const { container } = render(<UploadForm sites={[site]} locations={[location]} userId="u1" />);
     fireEvent.click(screen.getByLabelText('기존 결과 가져오기(CSV/JSON)'));
-    await selectSiteAndLocation();
+    await selectLocation();
     fireEvent.change(screen.getByLabelText(/결과 파일 \(csv\/json\)/), {
       target: { files: [new File(['x'], 'result.csv')] } });
     fireEvent.submit(container.querySelector('form')!);
@@ -187,7 +188,7 @@ describe('UploadForm 임포트 모드 파일 형식(B4: CSV/JSON 지원)', () =>
     vi.mocked(createClient).mockReturnValue(stubSupabase(null) as never);
     const { container } = render(<UploadForm sites={[site]} locations={[location]} userId="u1" />);
     fireEvent.click(screen.getByLabelText('기존 결과 가져오기(CSV/JSON)'));
-    await selectSiteAndLocation();
+    await selectLocation();
     const file = new File(['{}'], 'result.json', { type: 'application/json' });
     fireEvent.change(screen.getByLabelText(/결과 파일 \(csv\/json\)/), { target: { files: [file] } });
     fireEvent.submit(container.querySelector('form')!);
@@ -199,7 +200,7 @@ describe('UploadForm 임포트 모드 파일 형식(B4: CSV/JSON 지원)', () =>
     vi.mocked(createClient).mockReturnValue(stubSupabase(null) as never);
     const { container } = render(<UploadForm sites={[site]} locations={[location]} userId="u1" />);
     fireEvent.click(screen.getByLabelText('기존 결과 가져오기(CSV/JSON)'));
-    await selectSiteAndLocation();
+    await selectLocation();
     const file = new File(['x'], 'scan.ply');
     fireEvent.change(screen.getByLabelText(/결과 파일 \(csv\/json\)/), { target: { files: [file] } });
     fireEvent.submit(container.querySelector('form')!);
@@ -216,7 +217,7 @@ describe('UploadForm 임포트 모드 파일 형식(B4: CSV/JSON 지원)', () =>
     vi.mocked(createClient).mockReturnValue(stubSupabase(null, { analysesInsert }) as never);
     const { container } = render(<UploadForm sites={[site]} locations={[location]} userId="u1" />);
     fireEvent.click(screen.getByLabelText('기존 결과 가져오기(CSV/JSON)'));
-    await selectSiteAndLocation();
+    await selectLocation();
     const file = new File(['{}'], 'result.json', { type: 'application/json' });
     fireEvent.change(screen.getByLabelText(/결과 파일 \(csv\/json\)/), { target: { files: [file] } });
     fireEvent.submit(container.querySelector('form')!);
@@ -239,5 +240,93 @@ describe('UploadForm 임포트 모드 파일 형식(B4: CSV/JSON 지원)', () =>
     fireEvent.click(screen.getByLabelText('융합 메시'));
 
     expect(screen.getByText(/분석 결과와 보고서에 경고가 표시됩니다/)).toBeInTheDocument();
+  });
+});
+
+// 단계 D4: 현장·측정위치 이중 셀렉트를 optgroup 단일 셀렉트로 개편한다.
+// 회귀 테스트(첫 번째 it)가 옛 버그를 잡는다 - 예전에는 location만 프리필해도
+// 현장 셀렉트가 비어 있어 measure위치 옵션 목록 자체가 필터링으로 사라졌다.
+describe('UploadForm 위치 선택 개편 (단계 D4)', () => {
+  it('location 프리필만 있어도 해당 현장이 함께 선택된다', () => {
+    render(<UploadForm sites={[site]} locations={[location]} userId="u1" initialLocationId={location.id} />);
+    const sel = screen.getByLabelText('측정위치') as HTMLSelectElement;
+    expect(sel.value).toBe(location.id);
+  });
+
+  it('새 측정위치 인라인 폼을 열 수 있다', () => {
+    render(<UploadForm sites={[site]} locations={[location]} userId="u1" />);
+    fireEvent.click(screen.getByRole('button', { name: '+ 새 측정위치' }));
+    expect(screen.getByLabelText('현장 선택 또는 새 현장명')).toBeInTheDocument();
+  });
+});
+
+describe('UploadForm 인라인 현장·측정위치 생성 (단계 D4)', () => {
+  it('기존 현장을 골라 측정위치를 추가하면 목록에 반영되고 선택된다', async () => {
+    const locationsInsert = vi.fn();
+    vi.mocked(createClient).mockReturnValue({
+      from: (table: string) => {
+        if (table === 'locations') {
+          return {
+            insert: (fields: unknown) => {
+              locationsInsert(fields);
+              return { select: () => ({ single: async () => ({ data: { id: 'l2' }, error: null }) }) };
+            },
+          };
+        }
+        throw new Error(`예상치 못한 테이블: ${table}`);
+      },
+      // 새 측정위치가 선택되면 현장이 역산되어 적용 기준 조회 이펙트가 돈다 - 이
+      // 테스트는 그 결과를 검증하지 않지만, 응답이 없으면 unhandled rejection이 된다.
+      rpc: async () => ({ data: [], error: null }),
+    } as never);
+    render(<UploadForm sites={[site]} locations={[location]} userId="u1" />);
+    fireEvent.click(screen.getByRole('button', { name: '+ 새 측정위치' }));
+    fireEvent.change(screen.getByLabelText('현장 선택 또는 새 현장명'), { target: { value: 's1' } });
+    fireEvent.change(screen.getByLabelText('이름'), { target: { value: '2층' } });
+    fireEvent.click(screen.getByRole('button', { name: '저장' }));
+
+    await waitFor(() => expect(locationsInsert).toHaveBeenCalledWith(
+      expect.objectContaining({ site_id: 's1', name: '2층' })));
+    const sel = screen.getByLabelText('측정위치') as HTMLSelectElement;
+    await waitFor(() => expect(sel.value).toBe('l2'));
+  });
+
+  it('새 현장명을 입력하면 현장부터 만든 뒤 그 현장으로 측정위치를 만든다', async () => {
+    const sitesInsert = vi.fn();
+    const locationsInsert = vi.fn();
+    vi.mocked(createClient).mockReturnValue({
+      from: (table: string) => {
+        if (table === 'sites') {
+          return {
+            insert: (fields: unknown) => {
+              sitesInsert(fields);
+              return { select: () => ({ single: async () => ({ data: { id: 's2' }, error: null }) }) };
+            },
+          };
+        }
+        if (table === 'locations') {
+          return {
+            insert: (fields: unknown) => {
+              locationsInsert(fields);
+              return { select: () => ({ single: async () => ({ data: { id: 'l2' }, error: null }) }) };
+            },
+          };
+        }
+        throw new Error(`예상치 못한 테이블: ${table}`);
+      },
+      // 새 측정위치가 선택되면 현장이 역산되어 적용 기준 조회 이펙트가 돈다 - 이
+      // 테스트는 그 결과를 검증하지 않지만, 응답이 없으면 unhandled rejection이 된다.
+      rpc: async () => ({ data: [], error: null }),
+    } as never);
+    render(<UploadForm sites={[site]} locations={[location]} userId="u1" />);
+    fireEvent.click(screen.getByRole('button', { name: '+ 새 측정위치' }));
+    fireEvent.change(screen.getByLabelText('새 현장명'), { target: { value: '신규현장' } });
+    fireEvent.change(screen.getByLabelText('이름'), { target: { value: '1층' } });
+    fireEvent.click(screen.getByRole('button', { name: '저장' }));
+
+    await waitFor(() => expect(sitesInsert).toHaveBeenCalledWith(
+      expect.objectContaining({ name: '신규현장' })));
+    await waitFor(() => expect(locationsInsert).toHaveBeenCalledWith(
+      expect.objectContaining({ site_id: 's2', name: '1층' })));
   });
 });
