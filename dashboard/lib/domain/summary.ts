@@ -3,6 +3,7 @@ import type { AnalysisStatus, SiteRow, Verdict } from './types';
 export interface SiteSummary {
   site: SiteRow;
   locationCount: number;
+  scanCount: number;
   lastScannedAt: string | null;
   verdictCounts: Record<Verdict, number>;
   // 리뷰 Important 3: 워커 overall_verdict()는 n_valid=0이면 null을 반환한다(analyses는
@@ -36,6 +37,12 @@ export function buildSiteSummaries(
         naCount += 1;
       }
     }
-    return { site, locationCount: locCount, lastScannedAt, verdictCounts, naCount };
+    return { site, locationCount: locCount, scanCount: siteScans.length, lastScannedAt, verdictCounts, naCount };
   });
+}
+
+// 처리 중(큐 대기·실행 중) 분석 건수 - 홈 지표 스트립용. kind 무필터(평활도·구배 모두
+// "처리 중"에 잡혀야 한다) - 판정 집계용 쿼리(.eq('kind','flatness'))와는 별개다.
+export function countInProgress(analyses: { status: AnalysisStatus }[]): number {
+  return analyses.filter((a) => a.status === 'queued' || a.status === 'processing').length;
 }

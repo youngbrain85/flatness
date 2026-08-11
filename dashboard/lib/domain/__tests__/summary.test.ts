@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildSiteSummaries } from '../summary';
+import { buildSiteSummaries, countInProgress } from '../summary';
 import type { SiteRow } from '../types';
 
 const site = (id: string, name: string): SiteRow =>
@@ -50,4 +50,27 @@ describe('buildSiteSummaries (홈 카드: 최근 측정일·측정위치 수·�
     const [a] = buildSiteSummaries(sites, locations, scans, analyses);
     expect(a.naCount).toBe(0); // "판정 불가"는 done인데 verdict가 null인 경우만 - 미분석·실패는 별개
   });
+  it('현장별 스캔 건수를 scanCount로 집계한다', () => {
+    const sites = [site('s1', '현장A'), site('s2', '현장B')];
+    const locations = [
+      { id: 'l1', site_id: 's1' }, { id: 'l2', site_id: 's1' }, { id: 'l3', site_id: 's2' },
+    ];
+    const scans = [
+      { id: 'c1', scanned_at: '2026-07-01', location_id: 'l1' },
+      { id: 'c2', scanned_at: '2026-07-20', location_id: 'l2' },
+      { id: 'c3', scanned_at: '2026-06-15', location_id: 'l3' },
+    ];
+    const [a, b] = buildSiteSummaries(sites, locations, scans, []);
+    expect(a.scanCount).toBe(2);
+    expect(b.scanCount).toBe(1);
+  });
+});
+
+describe('countInProgress (홈 지표 스트립: 처리 중 건수)', () => {
+  it('queued·processing만 센다', () => {
+    expect(countInProgress([
+      { status: 'queued' }, { status: 'processing' }, { status: 'done' }, { status: 'failed' },
+    ])).toBe(2);
+  });
+  it('빈 배열은 0', () => { expect(countInProgress([])).toBe(0); });
 });
