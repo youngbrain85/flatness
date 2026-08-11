@@ -12,10 +12,10 @@ vi.mock('next/navigation', () => ({
 }));
 
 import { createClient } from '@/lib/supabase/server';
-import RegistrationPage from '../page';
+import RegistrationPage, { statusTone } from '../page';
 import { RegistrationWorkbench } from '@/components/registration/registration-workbench';
 import { PageHeader } from '@/components/ui/page-header';
-import type { RegistrationRow, ScanRow } from '@/lib/domain/types';
+import type { RegistrationRow, RegistrationStatus, ScanRow } from '@/lib/domain/types';
 
 function scan(id: string, over: Partial<ScanRow> = {}): ScanRow {
   return {
@@ -159,5 +159,20 @@ describe('RegistrationPage 브레드크럼 (D8)', () => {
 
     expect((header!.props as { crumbs: { href?: string; label: string }[] }).crumbs)
       .toEqual([{ href: '/', label: '현장' }]);
+  });
+});
+
+// F2(픽스 라운드): 진행 상태 배지는 판정이 아니라 "진행이 어디까지 왔나"를
+// 보여준다 - done만 pass, failed만 fail, 나머지(대응점 대기·정합 대기·정합 중)는
+// 아직 결과가 없으니 unknown으로 접는다.
+describe('statusTone (F2)', () => {
+  it.each([
+    ['done', 'pass'],
+    ['failed', 'fail'],
+    ['awaiting_points', 'unknown'],
+    ['queued', 'unknown'],
+    ['processing', 'unknown'],
+  ] as const)('%s -> %s', (status, tone) => {
+    expect(statusTone(status as RegistrationStatus)).toBe(tone);
   });
 });

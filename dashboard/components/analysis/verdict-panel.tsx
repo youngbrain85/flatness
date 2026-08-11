@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { GRADE_COLOR, GRADE_LABEL, fmtMm, warningLabel } from '@/lib/domain/labels';
+import { GRADE_TONE } from '@/lib/domain/grade-tone';
+import { TONE } from '@/components/ui/badge';
 import { coverageLabel, isExternalImport } from '@/lib/domain/stats';
 import type { AnalysisRow, Grade, Stats } from '@/lib/domain/types';
 
@@ -23,12 +25,15 @@ export function VerdictPanel({ analysis, stats }: { analysis: AnalysisRow; stats
     <aside className="space-y-4 rounded-lg border bg-white p-4">
       <div className="flex items-center gap-2">
         {analysis.overall_verdict ? (
-          <span className="rounded px-3 py-1 text-lg font-bold text-white"
-            style={{ backgroundColor: GRADE_COLOR[analysis.overall_verdict] }}>
+          // D8 픽스: GRADE_COLOR 인라인 hex 대신 GRADE_TONE 매핑으로 얻은 tone의
+          // 정본 색(TONE.*.dot, badge.tsx)을 쓴다 - 작은 <Badge>는 이 "헤드라인
+          // 판정" 배지의 큰 시각적 비중(text-lg font-bold)을 대신하지 못해 구조는
+          // 유지하고 색상 출처만 토큰으로 옮겼다.
+          <span className={`rounded px-3 py-1 text-lg font-bold text-white ${TONE[GRADE_TONE[analysis.overall_verdict]].dot}`}>
             {GRADE_LABEL[analysis.overall_verdict]}
           </span>
         ) : (
-          <span className="rounded bg-slate-400 px-3 py-1 text-lg font-bold text-white">판정 없음</span>
+          <span className="rounded bg-zinc-400 px-3 py-1 text-lg font-bold text-white">판정 없음</span>
         )}
         {external && (
           <span className="rounded border border-purple-400 px-2 py-0.5 text-xs text-purple-700">외부 결과</span>
@@ -36,15 +41,15 @@ export function VerdictPanel({ analysis, stats }: { analysis: AnalysisRow; stats
       </div>
 
       <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-sm">
-        <dt className="text-slate-500">최대 편차(mm)</dt><dd className="font-medium">{fmtMm(stats.value_max_mm)}</dd>
-        <dt className="text-slate-500">최소(mm)</dt><dd>{fmtMm(stats.value_min_mm)}</dd>
-        <dt className="text-slate-500">평균(mm)</dt><dd>{fmtMm(stats.value_mean_mm)}</dd>
-        <dt className="text-slate-500">95퍼센타일(mm)</dt><dd>{fmtMm(stats.value_p95_mm)}</dd>
-        <dt className="text-slate-500">판정 셀(유효/전체)</dt><dd>{stats.n_valid} / {stats.n_cells}</dd>
-        <dt className="text-slate-500">{coverageLabel(stats)}</dt><dd>{stats.coverage_pct}%</dd>
+        <dt className="text-zinc-500">최대 편차(mm)</dt><dd className="font-medium">{fmtMm(stats.value_max_mm)}</dd>
+        <dt className="text-zinc-500">최소(mm)</dt><dd>{fmtMm(stats.value_min_mm)}</dd>
+        <dt className="text-zinc-500">평균(mm)</dt><dd>{fmtMm(stats.value_mean_mm)}</dd>
+        <dt className="text-zinc-500">95퍼센타일(mm)</dt><dd>{fmtMm(stats.value_p95_mm)}</dd>
+        <dt className="text-zinc-500">판정 셀(유효/전체)</dt><dd>{stats.n_valid} / {stats.n_cells}</dd>
+        <dt className="text-zinc-500">{coverageLabel(stats)}</dt><dd>{stats.coverage_pct}%</dd>
       </dl>
       {stats.reduced_span_cells > 0 && (
-        <p className="text-xs text-slate-600">축소 스팬 적용 셀 {stats.reduced_span_cells}개 (허용치 선형 환산)</p>
+        <p className="text-xs text-zinc-600">축소 스팬 적용 셀 {stats.reduced_span_cells}개 (허용치 선형 환산)</p>
       )}
 
       <div>
@@ -57,7 +62,7 @@ export function VerdictPanel({ analysis, stats }: { analysis: AnalysisRow; stats
             }} />
           ))}
         </div>
-        <p className="mt-1 text-xs text-slate-600">
+        <p className="mt-1 text-xs text-zinc-600">
           {BAR_ORDER.map((g) => `${GRADE_LABEL[g]} ${stats.grade_counts[g]}`).join(' · ')}
         </p>
       </div>
@@ -65,8 +70,8 @@ export function VerdictPanel({ analysis, stats }: { analysis: AnalysisRow; stats
       <div>
         <h3 className="text-sm font-semibold">적용 기준</h3>
         <p className="text-sm">{stats.applied_criteria.name}</p>
-        <p className="text-xs text-slate-500">{stats.applied_criteria.source}</p>
-        <p className="text-xs text-slate-600">
+        <p className="text-xs text-zinc-500">{stats.applied_criteria.source}</p>
+        <p className="text-xs text-zinc-600">
           {stats.applied_criteria.span_m !== null
             ? `${stats.applied_criteria.span_m}m당 허용 ${stats.applied_criteria.pass_mm}mm / 재시공 ${stats.applied_criteria.rework_mm}mm`
             : `수직도 허용 ${stats.applied_criteria.pass_mm}mm / 재시공 ${stats.applied_criteria.rework_mm}mm`}
@@ -89,7 +94,7 @@ export function VerdictPanel({ analysis, stats }: { analysis: AnalysisRow; stats
 
       <div>
         <h3 className="text-sm font-semibold">종합의견</h3>
-        <p className="mt-1 whitespace-pre-wrap rounded bg-slate-50 p-2 text-xs text-slate-700">
+        <p className="mt-1 whitespace-pre-wrap rounded bg-zinc-50 p-2 text-xs text-zinc-700">
           {analysis.auto_summary ?? stats.auto_summary}
         </p>
         <label htmlFor="user-summary" className="mt-2 block text-xs font-medium">종합의견(사용자 수정)</label>
@@ -98,8 +103,11 @@ export function VerdictPanel({ analysis, stats }: { analysis: AnalysisRow; stats
           className="mt-1 w-full rounded border px-2 py-1 text-sm"
           placeholder="자동 의견에 덧붙일 해석·조치 계획을 적습니다. 보고서(P4)에 함께 실립니다." />
         <div className="mt-1 flex items-center gap-2">
-          <button onClick={saveSummary} className="rounded bg-slate-800 px-3 py-1 text-sm text-white">저장</button>
-          {saved && <span className="text-xs text-slate-500">{saved}</span>}
+          <button onClick={saveSummary}
+            className="rounded-md bg-zinc-900 px-3 py-1 text-sm font-medium text-white hover:bg-zinc-700">
+            저장
+          </button>
+          {saved && <span className="text-xs text-zinc-500">{saved}</span>}
         </div>
       </div>
     </aside>

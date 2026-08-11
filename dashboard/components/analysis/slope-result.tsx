@@ -172,7 +172,7 @@ export function SlopeResult({ analysis }: { analysis: AnalysisRow }) {
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2">
-        <span className="rounded bg-slate-800 px-3 py-1 text-sm font-bold text-white">
+        <span className="rounded bg-zinc-900 px-3 py-1 text-sm font-bold text-white">
           {ANALYSIS_KIND_LABEL.slope}
         </span>
       </div>
@@ -181,16 +181,16 @@ export function SlopeResult({ analysis }: { analysis: AnalysisRow }) {
         <div className="space-y-4 rounded-lg border bg-white p-4">
           <div>
             <h3 className="text-sm font-semibold">판정 요약</h3>
-            <p className="mt-1 text-sm text-slate-700">
+            <p className="mt-1 text-sm text-zinc-700">
               {COUNT_ORDER.map((k) => `${k} ${counts[k] ?? 0}`).join(' · ')}
             </p>
-            <p className="mt-1 text-xs text-slate-500">판정 가능 비율 {(summary.coverage_pct ?? 0).toFixed(1)}%</p>
+            <p className="mt-1 text-xs text-zinc-500">판정 가능 비율 {(summary.coverage_pct ?? 0).toFixed(1)}%</p>
           </div>
 
           <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-sm">
-            <dt className="text-slate-500">평균 편차</dt><dd>{fmtDevPct(summary.mean_dev_pct)}</dd>
-            <dt className="text-slate-500">편차 표준편차</dt><dd>{fmtDevPct(summary.std_dev_pct)}</dd>
-            <dt className="text-slate-500">최대 편차</dt><dd>{fmtDevPct(summary.max_dev_pct)}</dd>
+            <dt className="text-zinc-500">평균 편차</dt><dd>{fmtDevPct(summary.mean_dev_pct)}</dd>
+            <dt className="text-zinc-500">편차 표준편차</dt><dd>{fmtDevPct(summary.std_dev_pct)}</dd>
+            <dt className="text-zinc-500">최대 편차</dt><dd>{fmtDevPct(summary.max_dev_pct)}</dd>
           </dl>
 
           {warnings.length > 0 && (
@@ -216,7 +216,7 @@ export function SlopeResult({ analysis }: { analysis: AnalysisRow }) {
             </div>
           )}
 
-          <p className="rounded border border-slate-300 bg-slate-50 p-3 text-xs text-slate-600">
+          <p className="rounded border border-zinc-300 bg-zinc-50 p-3 text-xs text-zinc-600">
             이 분석은 재판정할 수 없습니다. 구배 분석을 다시 실행하면 배수구를 지정할 수 있습니다.
           </p>
         </div>
@@ -225,7 +225,7 @@ export function SlopeResult({ analysis }: { analysis: AnalysisRow }) {
           {/* 코드리뷰(2차) I1: 방향 판정 대상이 아닌 기준에서는 클릭을 권하지 않고
               이유를 알린다. */}
           {directionAware ? (
-            <p className="text-sm text-slate-700">
+            <p className="text-sm text-zinc-700">
               배수구 위치를 클릭하세요. 클릭하면 그 지점을 기준으로 재판정 작업이 시작되고, 완료되면
               화면이 자동으로 갱신됩니다.
               {/* 코드리뷰 M5: 브리프 D3 - 엔진 PNG는 화면에 다시 그리지 않되(Canvas와
@@ -233,20 +233,22 @@ export function SlopeResult({ analysis }: { analysis: AnalysisRow }) {
               {mapPng && (
                 <>
                   {' '}
-                  <a href={dataUrl(mapPng)} download className="text-blue-700 hover:underline">
+                  <a href={dataUrl(mapPng)} download
+                    className="text-zinc-700 hover:text-zinc-900 hover:underline">
                     구배 판정 지도(PNG) 다운로드
                   </a>
                 </>
               )}
             </p>
           ) : (
-            <p className="rounded border border-slate-300 bg-slate-50 p-3 text-xs text-slate-600">
+            <p className="rounded border border-zinc-300 bg-zinc-50 p-3 text-xs text-zinc-600">
               이 기준({stats.threshold?.use ?? '적용 기준'})은 방향(역구배)을 판정하지 않습니다.
               배수구를 지정해도 방향 결과를 신뢰할 수 없어 클릭을 비활성화했습니다.
               {mapPng && (
                 <>
                   {' '}
-                  <a href={dataUrl(mapPng)} download className="text-blue-700 hover:underline">
+                  <a href={dataUrl(mapPng)} download
+                    className="text-zinc-700 hover:text-zinc-900 hover:underline">
                     구배 판정 지도(PNG) 다운로드
                   </a>
                 </>
@@ -283,7 +285,7 @@ export function SlopeResult({ analysis }: { analysis: AnalysisRow }) {
                   onDrainClick={handleDrainClick}
                 />
               ) : (
-                <p className="text-sm text-slate-500">{loadError ?? '셀 데이터 로딩 중...'}</p>
+                <p className="text-sm text-zinc-500">{loadError ?? '셀 데이터 로딩 중...'}</p>
               )}
             </section>
             <div className="lg:sticky lg:top-4 lg:self-start">
@@ -300,7 +302,7 @@ export function SlopeResult({ analysis }: { analysis: AnalysisRow }) {
                 dirPassDeg={stats.threshold?.dir_pass_deg ?? 180}
               />
             ) : (
-              <p className="text-sm text-slate-500">{loadError ?? '셀 데이터 로딩 중...'}</p>
+              <p className="text-sm text-zinc-500">{loadError ?? '셀 데이터 로딩 중...'}</p>
             )}
           </section>
         </>

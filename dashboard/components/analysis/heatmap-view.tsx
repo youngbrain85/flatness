@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { cellAt, cellPxFor, drawHeatmap, gridGeometry } from '@/lib/viz/heatmap';
 import { GRADE_COLOR, GRADE_LABEL, ZONE_STATUS_LABEL, fmtMm } from '@/lib/domain/labels';
+import { GRADE_TONE } from '@/lib/domain/grade-tone';
+import { Badge } from '@/components/ui/badge';
 import type { CellRow, Grade, Stats, Surface, WallInfo } from '@/lib/domain/types';
 
 const LEGEND: Grade[] = ['pass', 'borderline', 'repair', 'rework', 'na'];
@@ -57,7 +59,7 @@ export function HeatmapView({ surface, cells, walls, zones }: {
         <div className="flex flex-wrap gap-2 text-sm">
           {walls!.map((w) => (
             <button key={w.wall_id} onClick={() => { setWallId(w.wall_id); setSelected(null); }}
-              className={`rounded border px-3 py-1 ${wallId === w.wall_id ? 'bg-slate-800 text-white' : 'bg-white'}`}>
+              className={`rounded-md border px-3 py-1 ${wallId === w.wall_id ? 'border-zinc-900 bg-zinc-900 text-white' : 'border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-50'}`}>
               벽 {w.wall_id} ({w.length_m}m x {w.height_m}m)
             </button>
           ))}
@@ -66,7 +68,7 @@ export function HeatmapView({ surface, cells, walls, zones }: {
       {geom ? (
         <canvas ref={canvasRef} onClick={onClick} className="max-w-full cursor-crosshair rounded border bg-white" />
       ) : (
-        <p className="text-sm text-slate-500">표시할 셀 데이터가 없습니다.</p>
+        <p className="text-sm text-zinc-500">표시할 셀 데이터가 없습니다.</p>
       )}
       <div className="flex flex-wrap gap-3 text-xs">
         {LEGEND.map((g) => (
@@ -78,19 +80,16 @@ export function HeatmapView({ surface, cells, walls, zones }: {
       </div>
       {selected && (
         <dl className="grid max-w-md grid-cols-2 gap-x-4 gap-y-1 rounded border bg-white p-3 text-sm">
-          <dt className="text-slate-500">판정</dt>
+          <dt className="text-zinc-500">판정</dt>
           <dd>
-            <span className="rounded px-1.5 text-xs text-white"
-              style={{ backgroundColor: GRADE_COLOR[selected.grade] }}>
-              {GRADE_LABEL[selected.grade]}
-            </span>
+            <Badge tone={GRADE_TONE[selected.grade]}>{GRADE_LABEL[selected.grade]}</Badge>
           </dd>
-          <dt className="text-slate-500">직선자 값</dt><dd>{fmtMm(selected.value_mm)} mm</dd>
-          <dt className="text-slate-500">사용 스팬</dt><dd>{selected.span_used_m} m</dd>
-          <dt className="text-slate-500">셀 점유율</dt><dd>{Math.round(selected.occupancy * 100)}%</dd>
-          <dt className="text-slate-500">최악 지점</dt>
+          <dt className="text-zinc-500">직선자 값</dt><dd>{fmtMm(selected.value_mm)} mm</dd>
+          <dt className="text-zinc-500">사용 스팬</dt><dd>{selected.span_used_m} m</dd>
+          <dt className="text-zinc-500">셀 점유율</dt><dd>{Math.round(selected.occupancy * 100)}%</dd>
+          <dt className="text-zinc-500">최악 지점</dt>
           <dd>{selected.worst_x !== null ? `(${selected.worst_x}, ${selected.worst_y})` : '-'}</dd>
-          <dt className="text-slate-500">{surface === 'wall' ? '벽' : '구역'}</dt>
+          <dt className="text-zinc-500">{surface === 'wall' ? '벽' : '구역'}</dt>
           <dd>
             {selected.zone_id ?? '-'}
             {surface === 'floor' && zoneOf(selected.zone_id) &&

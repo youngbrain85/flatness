@@ -32,8 +32,8 @@ export function ReportProgress({ reportId, initialStatus, genError, reportStatus
     return (
       <div className="rounded border border-red-300 bg-red-50 p-3 text-sm">
         <p className="font-medium text-red-700">PDF 생성에 실패했습니다.</p>
-        {genError && <p className="mt-1 text-xs text-slate-700">사유: {genError}</p>}
-        <p className="mt-1 text-xs text-slate-600">
+        {genError && <p className="mt-1 text-xs text-zinc-700">사유: {genError}</p>}
+        <p className="mt-1 text-xs text-zinc-600">
           포함한 분석이 완료 상태인지, 워커가 실행 중인지 확인한 뒤 다시 생성하세요.
           3회 자동 재시도 후에도 실패한 상태입니다.
         </p>
@@ -41,8 +41,8 @@ export function ReportProgress({ reportId, initialStatus, genError, reportStatus
     );
   }
   return (
-    <p className="flex items-center gap-2 text-sm text-slate-600">
-      <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-blue-600" />
+    <p className="flex items-center gap-2 text-sm text-zinc-600">
+      <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-zinc-500" />
       {REPORT_GEN_STATUS_LABEL[status]}... (워커가 처리 중입니다. 이 화면은 자동 갱신됩니다)
     </p>
   );

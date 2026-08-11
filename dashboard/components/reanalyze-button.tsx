@@ -178,7 +178,7 @@ export function ReanalyzeButton({
           실내 평바닥 등, 007_slope_analysis.sql:118-133)를 보여준다. */}
       {kind === 'slope' && slopeCriteria.length > 0 && (
         <div className="w-full max-w-xs rounded border bg-white p-2 text-xs">
-          <p className="mb-1 font-medium text-slate-600">적용 기준</p>
+          <p className="mb-1 font-medium text-zinc-600">적용 기준</p>
           <div className="space-y-1">
             {slopeCriteria.map((c) => {
               // CriteriaRow.thresholds는 컴파일 타임에는 평활도 Threshold[]지만
@@ -193,8 +193,8 @@ export function ReanalyzeButton({
                     className="mt-0.5" />
                   <span>
                     {t?.use ?? c.name}
-                    {c.is_default && <em className="ml-1 not-italic text-blue-700">(기본)</em>}
-                    {!aware && <em className="ml-1 not-italic text-slate-400">- 방향 판정 안 함</em>}
+                    {c.is_default && <em className="ml-1 not-italic text-zinc-600">(기본)</em>}
+                    {!aware && <em className="ml-1 not-italic text-zinc-400">- 방향 판정 안 함</em>}
                   </span>
                 </label>
               );
@@ -208,11 +208,11 @@ export function ReanalyzeButton({
       <button type="button" onClick={onClick}
         disabled={busy || inProgress || (kind === 'slope' && !slopeCriteriaId)}
         title={inProgress ? '이미 진행 중인 분석이 끝난 뒤 다시 시도하세요.' : undefined}
-        className="rounded border px-3 py-1.5 text-sm hover:bg-slate-50 disabled:opacity-50">
+        className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm text-zinc-700 hover:bg-zinc-50 disabled:opacity-50">
         {busy ? '요청 중...' : label}
       </button>
       {inProgress && (
-        <p className="text-xs text-slate-500">진행 중인 분석이 끝난 뒤 다시 시도하세요.</p>
+        <p className="text-xs text-zinc-500">진행 중인 분석이 끝난 뒤 다시 시도하세요.</p>
       )}
       {error && <p className="text-xs text-red-600">{error}</p>}
     </div>

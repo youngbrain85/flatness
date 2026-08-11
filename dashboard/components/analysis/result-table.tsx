@@ -1,7 +1,9 @@
 // 하단 구간별 결과표
 // 구역(벽)별 max/min/mean·보수 이상 셀은 cells.json에서 재집계(computeZoneStats)
 import { computeZoneStats } from '@/lib/domain/cells';
-import { GRADE_COLOR, GRADE_LABEL, ZONE_STATUS_LABEL, fmtMm } from '@/lib/domain/labels';
+import { GRADE_LABEL, ZONE_STATUS_LABEL, fmtMm } from '@/lib/domain/labels';
+import { GRADE_TONE } from '@/lib/domain/grade-tone';
+import { Badge } from '@/components/ui/badge';
 import type { CellRow, Stats } from '@/lib/domain/types';
 
 export function ResultTable({ stats, cells }: { stats: Stats; cells: CellRow[] }) {
@@ -10,7 +12,7 @@ export function ResultTable({ stats, cells }: { stats: Stats; cells: CellRow[] }
   return (
     <div className="overflow-x-auto rounded-lg border bg-white">
       <table className="w-full text-sm">
-        <thead className="bg-slate-100 text-left text-xs text-slate-600">
+        <thead className="bg-zinc-100 text-left text-xs text-zinc-600">
           <tr>
             <th className="p-2">{isWall ? '벽' : '구역'}</th>
             {!isWall && <th className="p-2">상태</th>}
@@ -43,10 +45,7 @@ export function ResultTable({ stats, cells }: { stats: Stats; cells: CellRow[] }
                 {isWall && (
                   <td className="p-2">
                     {wall && (
-                      <span className="rounded px-1.5 text-xs text-white"
-                        style={{ backgroundColor: GRADE_COLOR[wall.plumb_grade] }}>
-                        {GRADE_LABEL[wall.plumb_grade]}
-                      </span>
+                      <Badge tone={GRADE_TONE[wall.plumb_grade]}>{GRADE_LABEL[wall.plumb_grade]}</Badge>
                     )}
                   </td>
                 )}

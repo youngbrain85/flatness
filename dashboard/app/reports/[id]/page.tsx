@@ -90,7 +90,7 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
           <iframe title="보고서 PDF 미리보기" src={dataUrl(r.pdf_path)}
             className="h-[70vh] w-full rounded border bg-white" />
         ) : (
-          <p className="text-sm text-slate-500">PDF가 아직 생성되지 않았습니다.</p>
+          <p className="text-sm text-zinc-500">PDF가 아직 생성되지 않았습니다.</p>
         )}
       </section>
     </main>

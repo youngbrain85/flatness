@@ -74,7 +74,7 @@ export function ReportActions({ report }: {
         )}
       </div>
       {report.status === 'finalized' && (
-        <p className="text-xs text-slate-600">
+        <p className="text-xs text-zinc-600">
           발행된 보고서는 수정할 수 없습니다(내용 변경은 DB에서 차단됩니다). 내용을 바꾸려면 새 보고서를 만드세요.
         </p>
       )}

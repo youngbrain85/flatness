@@ -9,11 +9,13 @@ import { ReanalyzeButton } from '@/components/reanalyze-button';
 import { ScanStatusWatcher } from '@/components/scan-status-watcher';
 import { ScanStepStrip } from '@/components/scan-step-strip';
 import { UnitConfirmForm } from '@/components/unit-confirm-form';
+import { Badge } from '@/components/ui/badge';
 import { PageHeader } from '@/components/ui/page-header';
 import {
-  ANALYSIS_KIND_LABEL, ANALYSIS_STATUS_LABEL, GRADE_COLOR, GRADE_LABEL, LINEAGE_LABEL,
+  ANALYSIS_KIND_LABEL, ANALYSIS_STATUS_LABEL, GRADE_LABEL, LINEAGE_LABEL,
   SCAN_STATUS_LABEL, SURFACE_LABEL,
 } from '@/lib/domain/labels';
+import { GRADE_TONE } from '@/lib/domain/grade-tone';
 import { isExternalImport, isSlopeStats } from '@/lib/domain/stats';
 import type { AnalysisRow, LocationRow, PhotoRow, ScanRow, SiteRow } from '@/lib/domain/types';
 
@@ -243,7 +245,7 @@ export default async function ScanPage({ params, searchParams }: {
       {s.lineage === 'registered' && (
         <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm">
           <p className="font-medium">두 스캔을 정합해 만든 병합 스캔입니다.</p>
-          <p className="mt-1 text-xs text-slate-700">
+          <p className="mt-1 text-xs text-zinc-700">
             분석하기 전에 정합이 실제로 맞았는지 확인하세요. 정합 RMSE는 수직 방향만
             보증하므로, 두 스캔이 수평으로 어긋나 있어도 수치는 정상으로 나옵니다.
             정합 화면의 겹쳐보기가 그 방향을 확인하는 유일한 수단입니다.
@@ -254,7 +256,7 @@ export default async function ScanPage({ params, searchParams }: {
               정합 결과·겹쳐보기 확인
             </Link>
           ) : (
-            <p className="mt-1 text-xs text-slate-600">
+            <p className="mt-1 text-xs text-zinc-600">
               이 스캔을 만든 정합 이력을 찾지 못했습니다(이력이 삭제됐거나 아직 반영되지
               않았습니다). 겹쳐보기를 볼 수 없으므로 이 스캔의 분석 결과를 판단 근거로
               쓸 때 주의하세요.
@@ -361,9 +363,8 @@ export default async function ScanPage({ params, searchParams }: {
                   <Link href={`/scans/${id}?analysis=${a.id}`} className="hover:underline">
                     이전 분석 <span className="font-mono">{a.created_at.slice(0, 16).replace('T', ' ')}</span>
                     {a.overall_verdict && (
-                      <span className="ml-1 rounded px-1.5 text-xs text-white"
-                        style={{ backgroundColor: GRADE_COLOR[a.overall_verdict] }}>
-                        {GRADE_LABEL[a.overall_verdict]}
+                      <span className="ml-1">
+                        <Badge tone={GRADE_TONE[a.overall_verdict]}>{GRADE_LABEL[a.overall_verdict]}</Badge>
                       </span>
                     )}
                   </Link>
@@ -402,9 +403,8 @@ export default async function ScanPage({ params, searchParams }: {
                       <Link href={`/scans/${id}?analysis=${a.id}`} className="hover:underline">
                         이전 분석 <span className="font-mono">{a.created_at.slice(0, 16).replace('T', ' ')}</span>
                         {a.overall_verdict && (
-                          <span className="ml-1 rounded px-1.5 text-xs text-white"
-                            style={{ backgroundColor: GRADE_COLOR[a.overall_verdict] }}>
-                            {GRADE_LABEL[a.overall_verdict]}
+                          <span className="ml-1">
+                            <Badge tone={GRADE_TONE[a.overall_verdict]}>{GRADE_LABEL[a.overall_verdict]}</Badge>
                           </span>
                         )}
                       </Link>
@@ -443,9 +443,10 @@ export default async function ScanPage({ params, searchParams }: {
         // "아직 완료되지 않았습니다" 안내를 그대로 복원한다. 링크는 ?analysis= 없는
         // 기본 뷰(최신 완료 분석 또는 AnalysisProgress)로 되돌아간다.
         <section className="space-y-2">
-          <p className="rounded-md border border-zinc-200 bg-white p-3 text-sm text-slate-600">
+          <p className="rounded-md border border-zinc-200 bg-white p-3 text-sm text-zinc-600">
             이 분석은 아직 완료되지 않았습니다 (상태: {ANALYSIS_STATUS_LABEL[staleSelectedAnalysis.status]}).{' '}
-            <Link href={`/scans/${id}`} className="text-blue-700 hover:underline">스캔 상세에서 진행 상태 보기</Link>
+            <Link href={`/scans/${id}`}
+              className="text-zinc-700 hover:text-zinc-900 hover:underline">스캔 상세에서 진행 상태 보기</Link>
           </p>
         </section>
       )}

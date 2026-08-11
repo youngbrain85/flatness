@@ -26,7 +26,7 @@ export function AnalysisProgress({ analysisId, initialStatus, scanId }: {
   if (status === 'done') {
     return (
       <Link href={`/scans/${scanId}?analysis=${analysisId}`}
-        className="inline-block rounded bg-emerald-700 px-3 py-1.5 text-sm text-white">
+        className="inline-block rounded-md bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-700">
         분석 완료 - 결과 보기
       </Link>
     );
@@ -35,7 +35,7 @@ export function AnalysisProgress({ analysisId, initialStatus, scanId }: {
     return (
       <div className="rounded border border-red-300 bg-red-50 p-3 text-sm">
         <p className="font-medium text-red-700">분석에 실패했습니다.</p>
-        <p className="mt-1 text-xs text-slate-600">
+        <p className="mt-1 text-xs text-zinc-600">
           지원 포맷(ply/las/laz/xyz/txt/csv/pts)·인코딩·단위 설정을 확인하세요. 상세 원인은
           워커 실행 창의 로그에 남습니다. 3회 자동 재시도 후에도 실패한 상태입니다.
         </p>
@@ -43,8 +43,8 @@ export function AnalysisProgress({ analysisId, initialStatus, scanId }: {
     );
   }
   return (
-    <p className="flex items-center gap-2 text-sm text-slate-600">
-      <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-blue-600" />
+    <p className="flex items-center gap-2 text-sm text-zinc-600">
+      <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-zinc-500" />
       {ANALYSIS_STATUS_LABEL[status]}... (워커가 처리 중입니다. 이 화면은 자동 갱신됩니다)
     </p>
   );

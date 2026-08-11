@@ -10,7 +10,8 @@ import type { LocationRow, RegistrationRow, RegistrationStatus, ScanRow, SiteRow
 
 // 진행 상태 배지는 판정이 아니라 "진행이 어디까지 왔나"를 보여준다 - 완료만 pass,
 // 실패만 fail, 나머지(대응점 대기·정합 대기·정합 중)는 아직 결과가 없으니 unknown.
-function statusTone(status: RegistrationStatus): BadgeTone {
+// export: F2 픽스 - 단위 테스트가 페이지 서버 함수를 거치지 않고 이 매핑만 직접 검증한다.
+export function statusTone(status: RegistrationStatus): BadgeTone {
   if (status === 'done') return 'pass';
   if (status === 'failed') return 'fail';
   return 'unknown';

@@ -83,7 +83,7 @@ export function SlopeHeatmapView({
         <canvas ref={canvasRef} onClick={onClick}
           className={`max-w-full rounded border bg-white ${clickable ? 'cursor-crosshair' : 'cursor-not-allowed opacity-90'}`} />
       ) : (
-        <p className="text-sm text-slate-500">표시할 셀 데이터가 없습니다.</p>
+        <p className="text-sm text-zinc-500">표시할 셀 데이터가 없습니다.</p>
       )}
       <div className="flex flex-wrap items-center gap-3 text-xs">
         {LEGEND.map((g) => (
@@ -99,8 +99,8 @@ export function SlopeHeatmapView({
         {/* 코드리뷰(2차) Minor: 엔진 PNG 제목에는 화살표 의미가 적혀 있는데
             Canvas 범례에는 없었다 - 화살표를 오르막으로 오독하면 판정 근거를
             정반대로 이해하게 된다. */}
-        <span className="text-slate-400">얇은 화살표 = 내리막(물이 흐르는) 방향</span>
-        <span className="text-slate-400">굵은 화살표 = 역구배(물이 배수구 반대로 흐름)</span>
+        <span className="text-zinc-400">얇은 화살표 = 내리막(물이 흐르는) 방향</span>
+        <span className="text-zinc-400">굵은 화살표 = 역구배(물이 배수구 반대로 흐름)</span>
       </div>
     </div>
   );

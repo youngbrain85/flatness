@@ -52,7 +52,7 @@ export function AnalysisResult({ analysis, scan, photos }: {
                ['preview3d', '3D 프리뷰'], ['photos', '현장 사진']] as const)
               .map(([key, label]) => (
                 <button key={key} onClick={() => setTab(key)}
-                  className={`rounded border px-3 py-1 ${tab === key ? 'bg-slate-800 text-white' : 'bg-white'}`}>
+                  className={`rounded-md border px-3 py-1 ${tab === key ? 'border-zinc-900 bg-zinc-900 text-white' : 'border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-50'}`}>
                   {label}
                 </button>
               ))}
@@ -61,7 +61,7 @@ export function AnalysisResult({ analysis, scan, photos }: {
             cells ? (
               <HeatmapView surface={analysis.surface} cells={cells} walls={stats.walls} zones={stats.zones} />
             ) : (
-              <p className="text-sm text-slate-500">{cellsError ?? '셀 데이터 로딩 중...'}</p>
+              <p className="text-sm text-zinc-500">{cellsError ?? '셀 데이터 로딩 중...'}</p>
             )
           )}
           {tab === 'deviation' && (
@@ -76,12 +76,12 @@ export function AnalysisResult({ analysis, scan, photos }: {
                   <img key={name} src={artifactUrl(analysis.artifacts_dir!, name)} alt={`3D 프리뷰 ${name}`}
                     className="max-w-full rounded border bg-white" />
                 ))}
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-zinc-500">
                   워커가 생성한 정적 3D 프리뷰입니다(회전·줌 가능한 뷰어는 정식 단계 백로그).
                 </p>
               </div>
             ) : (
-              <p className="text-sm text-slate-500">
+              <p className="text-sm text-zinc-500">
                 3D 프리뷰가 없습니다{analysis.surface === 'wall' ? ' (벽면 분석은 3D 프리뷰를 생성하지 않습니다)' : ''}.
               </p>
             )
@@ -100,7 +100,7 @@ export function AnalysisResult({ analysis, scan, photos }: {
       <section>
         <h2 className="mb-2 font-semibold">구간별 결과표</h2>
         {cells ? <ResultTable stats={stats} cells={cells} /> :
-          <p className="text-sm text-slate-500">{cellsError ?? '셀 데이터 로딩 중...'}</p>}
+          <p className="text-sm text-zinc-500">{cellsError ?? '셀 데이터 로딩 중...'}</p>}
       </section>
     </div>
   );

@@ -31,8 +31,8 @@ function JudgeBanner({ judge }: { judge: JudgeInfo | null }) {
   if (!judge) return null;
   if (judge.state === 'processing' || judge.state === 'queued') {
     return (
-      <p className="flex items-center gap-2 rounded border border-blue-200 bg-blue-50 p-2 text-sm text-blue-800">
-        <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-blue-600" />
+      <p className="flex items-center gap-2 rounded border border-zinc-200 bg-zinc-100 p-2 text-sm text-zinc-600">
+        <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-zinc-500" />
         재판정 {judge.state === 'processing' ? '진행 중' : '대기 중'}... 완료되면 화면이 자동으로 갱신됩니다.
       </p>
     );
@@ -43,7 +43,7 @@ function JudgeBanner({ judge }: { judge: JudgeInfo | null }) {
     return (
       <div className="rounded border border-red-300 bg-red-50 p-3 text-sm">
         <p className="font-medium text-red-700">재판정에 실패했습니다. 이전 판정 결과가 표시되고 있습니다.</p>
-        {judge.error && <p className="mt-1 text-xs text-slate-700">사유: {judge.error}</p>}
+        {judge.error && <p className="mt-1 text-xs text-zinc-700">사유: {judge.error}</p>}
       </div>
     );
   }
@@ -69,30 +69,30 @@ export function SlopeVerdictPanel({ stats, judge, drainPoints, directionAware }:
 
       <div>
         <h3 className="text-sm font-semibold">판정 요약</h3>
-        <p className="mt-1 text-sm text-slate-700">
+        <p className="mt-1 text-sm text-zinc-700">
           {COUNT_ORDER.map((k) => `${k} ${counts[k] ?? 0}`).join(' · ')}
         </p>
-        <p className="mt-1 text-xs text-slate-500">판정 가능 비율 {(summary.coverage_pct ?? 0).toFixed(1)}%</p>
+        <p className="mt-1 text-xs text-zinc-500">판정 가능 비율 {(summary.coverage_pct ?? 0).toFixed(1)}%</p>
       </div>
 
       <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-sm">
-        <dt className="text-slate-500">평균 편차</dt><dd>{fmtDevPct(summary.mean_dev_pct)}</dd>
-        <dt className="text-slate-500">편차 표준편차</dt><dd>{fmtDevPct(summary.std_dev_pct)}</dd>
-        <dt className="text-slate-500">최대 편차</dt><dd>{fmtDevPct(summary.max_dev_pct)}</dd>
+        <dt className="text-zinc-500">평균 편차</dt><dd>{fmtDevPct(summary.mean_dev_pct)}</dd>
+        <dt className="text-zinc-500">편차 표준편차</dt><dd>{fmtDevPct(summary.std_dev_pct)}</dd>
+        <dt className="text-zinc-500">최대 편차</dt><dd>{fmtDevPct(summary.max_dev_pct)}</dd>
       </dl>
 
       <div>
         <h3 className="text-sm font-semibold">현재 배수구</h3>
-        <p className="mt-1 text-sm text-slate-700">{fmtDrainPoints(drainPoints)}</p>
+        <p className="mt-1 text-sm text-zinc-700">{fmtDrainPoints(drainPoints)}</p>
         {/* 코드리뷰(2차) Minor: 재판정 실패 시 지도에는 거부된 새 배수구가 찍히는데
             히트맵·결과표는 옛 배수구 기준 판정을 보여준다 - "지금 보이는 판정이
             쓴 배수구"가 어디에도 없어 혼란스러웠다. stats.drain_points는 현재
             화면의 grade·히트맵을 낸 그 판정이 실제로 쓴 좌표다. */}
-        <p className="mt-1 text-xs text-slate-500">
+        <p className="mt-1 text-xs text-zinc-500">
           이 판정에 사용됨: {fmtDrainPointPairs(stats.drain_points)}
         </p>
         {judge?.previous_drain_points && judge.previous_drain_points.length > 0 && (
-          <p className="mt-1 text-xs text-slate-500">
+          <p className="mt-1 text-xs text-zinc-500">
             직전 배수구: {fmtDrainPoints(judge.previous_drain_points)}
           </p>
         )}
@@ -120,7 +120,7 @@ export function SlopeVerdictPanel({ stats, judge, drainPoints, directionAware }:
       {threshold && (
         <div>
           <h3 className="text-sm font-semibold">적용 기준</h3>
-          <p className="text-xs text-slate-600">
+          <p className="text-xs text-zinc-600">
             {threshold.use} · 설계 구배 {threshold.design_pct}% · 허용 {threshold.pass_pct}% ·
             {' '}재시공 {threshold.re_pct}% · 방향 허용 {threshold.dir_pass_deg}도
           </p>
@@ -140,7 +140,7 @@ export function SlopeVerdictPanel({ stats, judge, drainPoints, directionAware }:
         </div>
       )}
 
-      <p className="text-xs text-slate-500">
+      <p className="text-xs text-zinc-500">
         구역별 통계는 후속 단계에서 제공됩니다. 위 통계는 전역(바닥 전체) 기준입니다.
       </p>
     </aside>

@@ -40,7 +40,7 @@ export function SlopeResultTable({ results, designPct, dirPassDeg }: {
   return (
     <div className="overflow-x-auto rounded-lg border bg-white">
       <table className="w-full text-sm">
-        <thead className="bg-slate-100 text-left text-xs text-slate-600">
+        <thead className="bg-zinc-100 text-left text-xs text-zinc-600">
           <tr>
             <th className="p-2">위치(cx,cy)</th>
             <th className="p-2">구배(%)</th>
@@ -86,7 +86,7 @@ export function SlopeResultTable({ results, designPct, dirPassDeg }: {
                     </span>
                   )}
                 </td>
-                <td className="p-2 text-xs text-slate-500">{r.reason}</td>
+                <td className="p-2 text-xs text-zinc-500">{r.reason}</td>
               </tr>
             );
           })}

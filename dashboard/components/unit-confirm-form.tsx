@@ -97,9 +97,9 @@ export function UnitConfirmForm({ scan, userId }: { scan: ScanRow; userId: strin
 
   const form = (
     <form onSubmit={onSubmit} className="max-w-md space-y-4">
-      <p className="rounded bg-slate-100 p-3 text-sm">
+      <p className="rounded-md bg-zinc-100 p-3 text-sm">
         <span className="font-medium">{scan.original_filename ?? '(파일명 없음)'}</span>
-        <span className="block text-xs text-slate-500">
+        <span className="block text-xs text-zinc-500">
           파일 좌표의 길이 단위를 확정해야 분석을 시작할 수 있습니다. 단위가 틀리면
           결과 전체가 왜곡되므로 스캔 앱의 내보내기 설정을 확인하세요.
         </span>
@@ -114,7 +114,7 @@ export function UnitConfirmForm({ scan, userId }: { scan: ScanRow; userId: strin
       </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
       <button type="submit" disabled={busy}
-        className="rounded bg-slate-800 px-4 py-2 text-white disabled:opacity-50">
+        className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50">
         단위 확정 후 분석 시작
       </button>
     </form>
@@ -149,7 +149,7 @@ export function UnitConfirmForm({ scan, userId }: { scan: ScanRow; userId: strin
             "원본 크기로 열기" 링크와 설명 문단이 대신한다. */}
         <h2 className="sr-only">높이 뷰 (평면도)</h2>
         {viewFailed ? (
-          <p className="rounded border border-amber-300 bg-amber-50 p-3 text-xs text-slate-700">
+          <p className="rounded border border-amber-300 bg-amber-50 p-3 text-xs text-zinc-700">
             높이 뷰를 불러오지 못했습니다. 그림 없이도 단위는 확정할 수 있습니다.
             파일명과 스캔 앱의 내보내기 설정을 확인해 단위를 고르세요.
           </p>
@@ -169,11 +169,11 @@ export function UnitConfirmForm({ scan, userId }: { scan: ScanRow; userId: strin
                 alt="높이 뷰: 위에서 내려다본 점군의 상대 높이"
                 onError={() => setViewFailed(true)}
                 className="w-full rounded border bg-white" />
-              <span className="mt-1 block text-xs text-blue-700 underline">
+              <span className="mt-1 block text-xs text-zinc-700 underline">
                 원본 크기로 열기 (새 탭)
               </span>
             </a>
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-zinc-500">
               위에서 내려다본 점군의 상대 높이입니다. 축 눈금은 미터가 아니라
               <span className="font-medium"> 파일 단위</span>이므로, 눈금이 가리키는
               크기와 실제 공간 크기를 견주어 단위를 고르세요. 예를 들어 8m짜리 방인데
