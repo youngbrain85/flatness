@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server';
 import { SupabaseErrorNotice } from '@/components/supabase-error';
 import { ReportCreateForm, type ReportCandidate } from '@/components/report/report-create-form';
 import { ReportLocationPicker } from '@/components/report/report-location-picker';
+import { EmptyState } from '@/components/ui/empty-state';
 import { PageHeader } from '@/components/ui/page-header';
 import { GRADE_LABEL } from '@/lib/domain/labels';
 import type {
@@ -56,14 +57,29 @@ export default async function NewReportPage({ searchParams }: {
     if (listError) {
       return <main className="mx-auto max-w-4xl p-6"><SupabaseErrorNotice message={listError.message} /></main>;
     }
+    const allLocations = (locationsRes.data ?? []) as LocationRow[];
+    // 리뷰 F1: 측정위치가 하나도 없으면(모든 현장이 빈 현장인 경우도 포함 - 시·현장
+    // 유무와 무관하게 locations 자체가 0건인지로 판단한다) 셀렉트가 "선택..."뿐인 빈
+    // 상태로 남아 막다른 화면이 된다. 같은 파일의 "후보 0건" 분기(/upload?location=
+    // 유도)·목록 EmptyState와 같은 원칙으로, 현장·측정위치를 인라인 생성할 수 있는
+    // 업로드 화면으로 보낸다.
+    if (allLocations.length === 0) {
+      return (
+        <main className="mx-auto max-w-4xl space-y-4 p-6">
+          <PageHeader crumbs={[{ href: '/', label: '현장' }]} title="보고서 생성" />
+          <EmptyState
+            message="아직 측정위치가 없습니다. 업로드 화면에서 현장·측정위치 생성부터 스캔 업로드까지 한 번에 할 수 있습니다."
+            actionHref="/upload"
+            actionLabel="업로드로 시작"
+          />
+        </main>
+      );
+    }
     return (
       <main className="mx-auto max-w-4xl space-y-4 p-6">
         <PageHeader crumbs={[{ href: '/', label: '현장' }]} title="보고서 생성" />
         <p className="text-sm text-zinc-500">보고서를 만들 측정위치를 먼저 선택하세요.</p>
-        <ReportLocationPicker
-          sites={(sitesRes.data ?? []) as SiteRow[]}
-          locations={(locationsRes.data ?? []) as LocationRow[]}
-        />
+        <ReportLocationPicker sites={(sitesRes.data ?? []) as SiteRow[]} locations={allLocations} />
       </main>
     );
   }

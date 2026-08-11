@@ -140,6 +140,26 @@ describe('NewReportPage location 없는 진입 지원 (D7 Step 1)', () => {
     // 후보 로드 폼은 아직 그려지지 않는다 - location을 고르기 전이라 후보를 알 수 없다
     expect(formProps.current).toBeNull();
   });
+
+  // 리뷰 F1: 측정위치가 하나도 없으면(모든 현장이 빈 현장인 경우 포함) 셀렉트가
+  // "선택..."뿐인 빈 셀렉트로 남아 막다른 화면이 된다 - EmptyState로 업로드 화면
+  // (현장·측정위치 인라인 생성이 있는 곳)으로 유도한다.
+  it('측정위치가 하나도 없으면 셀렉트 대신 EmptyState로 업로드를 안내한다', async () => {
+    vi.mocked(createClient).mockResolvedValue({
+      from: (t: string) => {
+        // 현장은 있어도(빈 현장) locations가 0건이면 동일하게 막다른 화면이다.
+        if (t === 'sites') return table([{ id: 's1', name: '현장1', address: null, memo: null, created_at: '', updated_at: '' }]);
+        if (t === 'locations') return table([]);
+        throw new Error(`예상치 못한 테이블: ${t}`);
+      },
+    } as never);
+    const el = await NewReportPage({ searchParams: Promise.resolve({}) });
+    render(el as ReactElement);
+    expect(screen.getByText('아직 측정위치가 없습니다. 업로드 화면에서 현장·측정위치 생성부터 '
+      + '스캔 업로드까지 한 번에 할 수 있습니다.')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '업로드로 시작' })).toHaveAttribute('href', '/upload');
+    expect(screen.queryByLabelText('측정위치')).toBeNull();
+  });
 });
 
 describe('NewReportPage 후보 쿼리 (단계 C 회귀 차단 + 단계 H 구배 편입)', () => {
