@@ -603,7 +603,7 @@ describe('구 URL 리다이렉트', () => {
 - Modify: `dashboard/app/sites/[id]/page.tsx`(+ `components/location-tree.tsx`), `app/sites/new/page.tsx`, `app/settings/page.tsx`, `app/login/page.tsx`, `app/registrations/new/page.tsx`, `app/registrations/[id]/page.tsx` 및 이들이 쓰는 컴포넌트의 스타일 클래스
 - Test: 기존 테스트 전체 유지
 
-- [ ] **Step 1: 색·버튼 스윕** — `git grep -n "blue-700\|blue-800\|slate-" dashboard/app dashboard/components`로 전수 목록을 만들고, 주 버튼→zinc-900, 텍스트 slate-*→zinc-* 동급, 판정·상태 표시는 T2 Badge/StatusDot으로 교체. **GRADE_COLOR 인라인 스타일(판정 배지)은 의미색이므로 유지하되 가능하면 Badge tone 매핑으로 교체**(GRADE_COLOR ↔ tone 매핑표를 labels.ts 옆에 추가).
+- [ ] **Step 1: 색·버튼 스윕** — `git grep -n "blue-700\|blue-800\|slate-" dashboard/app dashboard/components`로 전수 목록을 만들고, 주 버튼→zinc-900, 텍스트 slate-*→zinc-* 동급, 판정·상태 표시는 T2 Badge/StatusDot으로 교체. **스코프는 Files 목록이 아니라 이 grep 전수 목록이다** — scans/[id]·reports/[id]·components/analysis/*·analysis-progress·reanalyze-button·unit-confirm-form·report/report-actions·report-progress 등 앞선 태스크가 남긴 파일도 포함한다(단 scans/[id]의 가드 조건·주석은 D5 제약대로 무변경, GRADE_COLOR hex 사용처는 보존). **GRADE_COLOR 인라인 스타일(판정 배지)은 의미색이므로 유지하되 가능하면 Badge tone 매핑으로 교체**(GRADE_COLOR ↔ tone 매핑표를 labels.ts 옆에 추가).
 - [ ] **Step 2: 브레드크럼** — sites/[id](현장), registrations/*(현장 › 측정위치 › 정합), settings(설정), sites/new(현장 › 새 현장)에 PageHeader 적용.
 - [ ] **Step 3: location-tree** — 스캔 행에 상태 Badge·일시 모노 적용, "스캔 업로드"·"보고서" 링크 버튼을 보조 버튼 토큰으로. 기능 무변경.
 - [ ] **Step 4: 전체 테스트 + lint** — `npx vitest run` PASS, `npx eslint .` 오류 0(경고 허용).
