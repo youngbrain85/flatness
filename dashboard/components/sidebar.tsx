@@ -11,13 +11,14 @@ export async function Sidebar() {
   const { data: { user } } = await supabase.auth.getUser();
   return (
     <>
-      <header className="flex items-center gap-3 border-b border-zinc-200 bg-white px-3 py-2 md:hidden">
+      <header className="flex w-full items-center gap-3 border-b border-zinc-200 bg-white px-3 py-2 md:hidden">
         <Link href="/" className="shrink-0 font-mono text-sm font-semibold tracking-tight">
           FLATNESS
         </Link>
         <SidebarNav variant="mobile" />
       </header>
-      <aside className="sticky top-0 hidden h-screen w-56 shrink-0 flex-col border-r border-zinc-200 bg-white md:flex">
+      {/* 리뷰 Minor 1: 설계 스펙 220px에 맞춘다(Tailwind 프리셋 w-56=224px는 폐기). */}
+      <aside className="sticky top-0 hidden h-screen w-[220px] shrink-0 flex-col border-r border-zinc-200 bg-white md:flex">
         <Link href="/" className="border-b border-zinc-200 px-4 py-4 font-mono text-sm font-semibold tracking-tight">
           FLATNESS<span className="text-zinc-400"> console</span>
         </Link>
