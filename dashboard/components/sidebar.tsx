@@ -2,13 +2,14 @@
 // 데스크톱은 좌측 고정 aside, 모바일(<md)은 상단 바 최소 구현(로고 + 4개 메뉴
 // 가로 나열, 햄버거 드로어 없음)으로 스펙 §4를 만족한다.
 import Link from 'next/link';
-import { createClient } from '@/lib/supabase/server';
+import { getRequestUser } from '@/lib/auth/request-user';
 import { LogoutButton } from './logout-button';
 import { SidebarNav } from './sidebar-nav';
 
 export async function Sidebar() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  // proxy가 검증해 실어 준 헤더만 읽는다(Auth 서버 왕복 0회) - 전 화면 공통 렌더라
+  // 여기서의 왕복 제거가 화면 전환 지연에 그대로 반영된다(perf-auth-roundtrips).
+  const user = await getRequestUser();
   return (
     <>
       <header className="flex w-full items-center gap-3 border-b border-zinc-200 bg-white px-3 py-2 md:hidden">

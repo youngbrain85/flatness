@@ -1,6 +1,7 @@
 // 정합 시작 화면 (단계 F Task 5, 스펙 §6.2 2단계)
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
+import { getRequestUser } from '@/lib/auth/request-user';
 import { createClient } from '@/lib/supabase/server';
 import { RegistrationCreateForm } from '@/components/registration/registration-create-form';
 import { PageHeader } from '@/components/ui/page-header';
@@ -13,7 +14,8 @@ export default async function NewRegistrationPage(
 ) {
   const { location: locationId } = await searchParams;
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  // proxy가 검증한 헤더를 읽는다(Auth 왕복 0회). 가드는 방어 심층으로 유지.
+  const user = await getRequestUser();
   if (!user) redirect('/login');
   if (!locationId) notFound();
 
@@ -25,17 +27,19 @@ export default async function NewRegistrationPage(
   // D8 브리프 Step 2: registrations/*는 현장 › 현장명 › 측정위치 3단계 브레드크럼
   // (scans/[id]·reports/[id]와 같은 규약). 사이트 쿼리 하나만 늘어날 뿐 후보 산출·
   // 제출 로직은 그대로다.
-  const { data: site } = await supabase.from('sites').select('*').eq('id', loc.site_id).maybeSingle();
+  // perf-auth-roundtrips: site와 scanRows는 서로 독립이라 병렬로 돈다.
+  // 벽 스캔은 범위 밖이다 - 높이 뷰가 256x1 픽셀 띠라 클릭이 성립하지 않는다.
+  const [{ data: site }, { data: scanRows }] = await Promise.all([
+    supabase.from('sites').select('*').eq('id', loc.site_id).maybeSingle(),
+    supabase.from('scans').select('*')
+      .eq('location_id', locationId).eq('surface', 'floor').is('deleted_at', null)
+      .order('scanned_at', { ascending: false }),
+  ]);
   const crumbs = [
     { href: '/', label: '현장' },
     { href: `/sites/${loc.site_id}`, label: site ? (site as SiteRow).name : '현장 상세' },
     { label: locationLabel },
   ];
-
-  // 벽 스캔은 범위 밖이다 - 높이 뷰가 256x1 픽셀 띠라 클릭이 성립하지 않는다.
-  const { data: scanRows } = await supabase.from('scans').select('*')
-    .eq('location_id', locationId).eq('surface', 'floor').is('deleted_at', null)
-    .order('scanned_at', { ascending: false });
 
   // 후보 조건은 세 가지다. 셋 다 정합의 전제이며 하나라도 빠지면 워커가 죽는다:
   //   - height_view_path: 대응점을 찍을 그림과 사이드카가 있어야 한다(설계 결정 F7).

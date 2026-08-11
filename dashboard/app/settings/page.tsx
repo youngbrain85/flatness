@@ -2,6 +2,7 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { ensureProfile } from '@/lib/auth/ensure-profile';
+import { getRequestUser } from '@/lib/auth/request-user';
 import { CriteriaList } from '@/components/settings/criteria-list';
 import { ProfileForm } from '@/components/settings/profile-form';
 import { UncertaintyForm } from '@/components/settings/uncertainty-form';
@@ -12,7 +13,9 @@ export const dynamic = 'force-dynamic';
 
 export default async function SettingsPage() {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  // proxy가 검증한 헤더를 읽는다(Auth 왕복 0회). 가드는 방어 심층으로 유지 -
+  // 헬퍼가 null을 주는 경로가 생겨도 여전히 안전해야 한다.
+  const user = await getRequestUser();
   if (!user) redirect('/login');
   const profile = await ensureProfile(supabase, user); // 로그인 직후 실패했어도 여기서 복구
   const [criteriaRes, settingRes, sitesRes] = await Promise.all([

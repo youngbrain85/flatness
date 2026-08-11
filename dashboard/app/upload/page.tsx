@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation';
+import { getRequestUser } from '@/lib/auth/request-user';
 import { createClient } from '@/lib/supabase/server';
 import { PageHeader } from '@/components/ui/page-header';
 import { UploadForm } from '@/components/upload-form';
@@ -11,7 +12,8 @@ export default async function UploadPage({ searchParams }: {
 }) {
   const { location } = await searchParams;
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  // proxy가 검증한 헤더를 읽는다(Auth 왕복 0회). 가드는 방어 심층으로 유지.
+  const user = await getRequestUser();
   if (!user) redirect('/login');
   const [sitesRes, locationsRes] = await Promise.all([
     supabase.from('sites').select('*').order('name'),

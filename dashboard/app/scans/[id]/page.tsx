@@ -1,6 +1,7 @@
 // 스캔 작업대(D5): 메타데이터 + 단계 스트립 + 상태별 다음 행동 + 단위 확정·분석 결과 인라인
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { getRequestUser } from '@/lib/auth/request-user';
 import { createClient } from '@/lib/supabase/server';
 import { AnalysisProgress } from '@/components/analysis-progress';
 import { AnalysisResult } from '@/components/analysis/analysis-result';
@@ -33,7 +34,9 @@ export default async function ScanPage({ params, searchParams }: {
   const { id } = await params;
   const { analysis: selectedId } = await searchParams;
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  // proxy가 검증한 헤더를 읽는다(Auth 왕복 0회) - 이 화면의 user는 `user &&` 게이트와
+  // 폼 userId 전달에만 쓰므로 { id, email }로 충분하다.
+  const user = await getRequestUser();
   const { data: scan } = await supabase.from('scans').select('*').eq('id', id).maybeSingle();
   if (!scan) notFound();
   const s = scan as ScanRow;

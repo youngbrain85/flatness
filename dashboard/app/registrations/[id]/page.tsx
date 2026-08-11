@@ -1,6 +1,7 @@
 // 정합 화면 (단계 F Task 5, 스펙 §7.4)
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
+import { getRequestUser } from '@/lib/auth/request-user';
 import { createClient } from '@/lib/supabase/server';
 import { RegistrationWorkbench } from '@/components/registration/registration-workbench';
 import { Badge, type BadgeTone } from '@/components/ui/badge';
@@ -22,7 +23,8 @@ export const dynamic = 'force-dynamic';
 export default async function RegistrationPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  // proxy가 검증한 헤더를 읽는다(Auth 왕복 0회). 가드는 방어 심층으로 유지.
+  const user = await getRequestUser();
   if (!user) redirect('/login');
 
   // ★ 진행 상태는 registrations에서만 읽는다(설계 결정 F10). jobs 테이블은 RLS

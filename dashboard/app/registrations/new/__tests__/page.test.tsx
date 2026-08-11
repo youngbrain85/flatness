@@ -7,6 +7,11 @@ vi.mock('next/navigation', () => ({
   notFound: () => { throw new Error('NOT_FOUND'); },
   redirect: (to: string) => { throw new Error(`REDIRECT:${to}`); },
 }));
+// perf-auth-roundtrips: 페이지는 이제 supabase.auth.getUser() 대신 proxy가 검증해
+// 실은 x-flatness-user-* 요청 헤더를 읽는다(getRequestUser) - 실제 코드가 그대로 돈다.
+vi.mock('next/headers', () => ({
+  headers: async () => new Headers({ 'x-flatness-user-id': 'u1' }),
+}));
 
 import { createClient } from '@/lib/supabase/server';
 import NewRegistrationPage from '../page';
@@ -67,7 +72,6 @@ function textOf(node: unknown): string {
 
 function mount(scans: ScanRow[], spy?: (m: string, ...a: unknown[]) => void) {
   vi.mocked(createClient).mockResolvedValue({
-    auth: { getUser: async () => ({ data: { user: { id: 'u1' } } }) },
     from: (table: string) => {
       if (table === 'locations') return chain({ data: LOCATION, error: null });
       if (table === 'sites') return chain({ data: SITE, error: null });
