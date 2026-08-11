@@ -456,13 +456,18 @@ export default async function ScanPage({ params, searchParams }: {
         // 리뷰 Important(F1): app/analyses/[id]/page.tsx 원본이 항상 보여주던
         // "아직 완료되지 않았습니다" 안내를 그대로 복원한다. 링크는 ?analysis= 없는
         // 기본 뷰(최신 완료 분석 또는 AnalysisProgress)로 되돌아간다.
-        // 최종 리뷰 M4: done+stats null(레거시) 최신 분석도 이 문구를 그대로 재사용한다
-        // (상태 칸에는 "완료"가 찍힌다 - 문구가 100% 자연스럽진 않지만, 결과도 안내도
-        // 없이 조용히 비는 것보다 낫다는 판단이다. 이 화면 다른 곳의 트레이드오프와
-        // 같은 결).
+        //
+        // 후속 리뷰(M4 문구 분기): status==='done'인데 stats가 없는(레거시) 케이스는
+        // "아직 완료되지 않았습니다 (상태: 완료)"가 자기모순이라 별도 문구로 갈랐다.
+        // resultAnalysis는 selectedAnalysis 단독으로(latest 여부와 무관하게) done && stats를
+        // 요구하므로, staleSelectedAnalysis.status==='done'이면 항상 stats가 없는 경우다
+        // (stats가 있었다면 resultAnalysis가 채워져 이 분기 자체에 들어오지 못한다) -
+        // 그래서 상태만으로 분기해도 안전하다. 미완료(대기/처리/실패) 문구는 그대로 둔다.
         <section className="space-y-2">
           <p className="rounded-md border border-zinc-200 bg-white p-3 text-sm text-zinc-600">
-            이 분석은 아직 완료되지 않았습니다 (상태: {ANALYSIS_STATUS_LABEL[staleSelectedAnalysis.status]}).{' '}
+            {staleSelectedAnalysis.status === 'done'
+              ? '분석은 완료됐지만 결과 데이터(stats)가 없습니다. 오래된 형식의 분석일 수 있으니 재분석을 권장합니다.'
+              : `이 분석은 아직 완료되지 않았습니다 (상태: ${ANALYSIS_STATUS_LABEL[staleSelectedAnalysis.status]}).`}{' '}
             <Link href={`/scans/${id}`}
               className="text-zinc-700 hover:text-zinc-900 hover:underline">스캔 상세에서 진행 상태 보기</Link>
           </p>

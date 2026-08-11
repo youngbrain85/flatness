@@ -934,7 +934,11 @@ describe('ScanPage 결과 인라인 (D5: analyses/[id] 렌더 이관)', () => {
   // status==='done'이므로 "결과 보기" 링크만 그리고, 그 링크를 눌러 돌아온 사용자는
   // 조용히 빈 화면을 본다. 안내가 나오되(a) F1 대조가 지키는 "미완료 최신은 중복 안내
   // 금지"는 깨지지 않아야 한다 - 그래서 done+stats null 이 두 조건에 모두 해당해야 한다.
-  it('M4: done인데 stats가 없는 최신 분석을 ?analysis=로 고르면 안내 문구가 뜬다(레거시 데이터)', async () => {
+  //
+  // 후속 리뷰(M4 문구 분기): 이 케이스는 status==='done'이라 "아직 완료되지
+  // 않았습니다 (상태: 완료)"를 그대로 쓰면 자기모순이다. 별도 문구("결과 데이터가
+  // 없습니다 · 재분석 권장")로 갈랐는지 여기서 확인한다.
+  it('M4: done인데 stats가 없는 최신 분석을 ?analysis=로 고르면 자기모순 없는 안내 문구가 뜬다(레거시 데이터)', async () => {
     const doneNoStats = mkAnalysis({
       id: 'f1', kind: 'flatness', status: 'done', stats: null,
     });
@@ -945,7 +949,10 @@ describe('ScanPage 결과 인라인 (D5: analyses/[id] 렌더 이관)', () => {
 
     expect(findAll(el, AnalysisResult)).toHaveLength(0);
     expect(findAll(el, SlopeResult)).toHaveLength(0);
-    expect(text).toContain('이 분석은 아직 완료되지 않았습니다');
+    expect(text).toContain('결과 데이터(stats)가 없습니다');
+    expect(text).toContain('재분석을 권장합니다');
+    // "아직 완료되지 않았습니다(상태: 완료)"류의 자기모순 문구가 남아 있으면 안 된다.
+    expect(text).not.toContain('이 분석은 아직 완료되지 않았습니다');
     // AnalysisProgress는 여전히 이 종류의 최신(f1, done)을 반영한다 - "결과 보기" 링크다.
     expect(findAll(el, AnalysisProgress).map((p) => p.props.analysisId)).toEqual(['f1']);
   });
