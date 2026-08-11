@@ -1,15 +1,20 @@
-// 스캔 상세: 메타데이터 + 상태별 다음 행동
+// 스캔 작업대(D5): 메타데이터 + 단계 스트립 + 상태별 다음 행동 + 단위 확정·분석 결과 인라인
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { AnalysisProgress } from '@/components/analysis-progress';
+import { AnalysisResult } from '@/components/analysis/analysis-result';
+import { SlopeResult } from '@/components/analysis/slope-result';
 import { ReanalyzeButton } from '@/components/reanalyze-button';
 import { ScanStatusWatcher } from '@/components/scan-status-watcher';
+import { ScanStepStrip } from '@/components/scan-step-strip';
+import { UnitConfirmForm } from '@/components/unit-confirm-form';
+import { PageHeader } from '@/components/ui/page-header';
 import {
   ANALYSIS_KIND_LABEL, GRADE_COLOR, GRADE_LABEL, LINEAGE_LABEL, SCAN_STATUS_LABEL, SURFACE_LABEL,
 } from '@/lib/domain/labels';
-import { isExternalImport } from '@/lib/domain/stats';
-import type { AnalysisRow, LocationRow, ScanRow } from '@/lib/domain/types';
+import { isExternalImport, isSlopeStats } from '@/lib/domain/stats';
+import type { AnalysisRow, LocationRow, PhotoRow, ScanRow, SiteRow } from '@/lib/domain/types';
 
 // Realtime 감시가 필요한 진행 중 상태(리뷰 Important 2) — ready/archived/failed는
 // 이미 종결됐거나(ready는 이 화면 자체에서 동기적으로 전이시킨 값) 더 이상 워커가
@@ -18,8 +23,12 @@ const WATCHED_SCAN_STATUSES = new Set(['uploaded', 'awaiting_unit_confirm']);
 
 export const dynamic = 'force-dynamic';
 
-export default async function ScanPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function ScanPage({ params, searchParams }: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ analysis?: string }>;
+}) {
   const { id } = await params;
+  const { analysis: selectedId } = await searchParams;
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   const { data: scan } = await supabase.from('scans').select('*').eq('id', id).maybeSingle();
@@ -144,29 +153,80 @@ export default async function ScanPage({ params }: { params: Promise<{ id: strin
   const provenNotImport = s.lineage === 'registered' || !!s.height_view_path;
   const showFirstFlatness = s.status === 'ready' && !latestFlatness && provenNotImport;
 
+  // D5: 단계 스트립·보고서 원클릭이 공유하는 "완료 분석 존재" 플래그. 두 종류를
+  // 모두 집계한다 - 구배만 완료된 스캔도 보고서에 넣을 수 있다.
+  const hasDoneAnalysis = !!doneFlatness || slopeAnalyses.some((a) => a.status === 'done');
+
+  // D5 결과 인라인: 기본은 최신 완료 분석(stats까지 있어야 그릴 수 있다 -
+  // app/analyses/[id]가 쓰던 `status !== 'done' || !stats` 가드와 같은 조건),
+  // ?analysis=가 있으면 사용자가 고른 그 행이다. 고른 행이 미완료면 결과를 그리지
+  // 않는다 - 최신 done으로 대체해 그리면 "이게 그 분석의 결과"라는 오해를 만든다
+  // (진행 상태는 아래 섹션의 AnalysisProgress가 이미 보여준다).
+  const selectedAnalysis = selectedId
+    ? analyses.find((a) => a.id === selectedId) ?? null
+    : analyses.find((a) => a.status === 'done' && !!a.stats) ?? null;
+  const resultAnalysis =
+    selectedAnalysis && selectedAnalysis.status === 'done' && selectedAnalysis.stats
+      ? selectedAnalysis
+      : null;
+
+  // D5: 브레드크럼의 현장명. loc이 없으면(위치가 지워진 레거시 데이터) 조회하지 않는다.
+  const siteRes = loc
+    ? await supabase.from('sites').select('*').eq('id', loc.site_id).maybeSingle()
+    : null;
+  const site = (siteRes?.data as SiteRow | null | undefined) ?? null;
+  // 현장 사진은 평활도 결과(AnalysisResult)만 쓴다 - 그 화면을 그릴 때만 조회한다.
+  const photosRes = resultAnalysis && !isSlopeStats(resultAnalysis.stats)
+    ? await supabase.from('photos').select('*').eq('scan_id', s.id)
+        .order('created_at', { ascending: false })
+    : null;
+  const photos = (photosRes?.data ?? []) as PhotoRow[];
+
+  const locLabel = loc
+    ? [loc.building, loc.floor, loc.room, loc.name].filter(Boolean).join(' / ')
+    : '-';
+  const crumbs = loc
+    ? [
+        { href: '/', label: '현장' },
+        { href: `/sites/${loc.site_id}`, label: site?.name ?? '현장 상세' },
+        { label: locLabel },
+      ]
+    : [{ href: '/', label: '현장' }];
+
   return (
     <main className="mx-auto max-w-6xl space-y-4 p-6">
-      <h1 className="text-xl font-bold">
-        스캔 상세 · {SURFACE_LABEL[s.surface]} · {s.scanned_at}
-      </h1>
-      <dl className="grid max-w-xl grid-cols-2 gap-x-4 gap-y-1 rounded border bg-white p-4 text-sm">
-        <dt className="text-slate-500">측정위치</dt>
-        <dd>{loc ? [loc.building, loc.floor, loc.room, loc.name].filter(Boolean).join(' / ') : '-'}</dd>
-        <dt className="text-slate-500">원본 파일</dt><dd>{s.original_filename ?? '-'}</dd>
-        <dt className="text-slate-500">장비</dt><dd>{s.device ?? '-'}</dd>
-        <dt className="text-slate-500">데이터 계보</dt><dd>{LINEAGE_LABEL[s.lineage]}</dd>
+      <PageHeader
+        crumbs={crumbs}
+        title={<>스캔 · {SURFACE_LABEL[s.surface]} · <span className="font-mono">{s.scanned_at}</span></>}
+        actions={hasDoneAnalysis ? (
+          <Link href={`/reports/new?location=${s.location_id}`}
+            className="rounded-md bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-700">
+            이 위치의 보고서 생성
+          </Link>
+        ) : undefined}
+      />
+      <ScanStepStrip status={s.status} hasDoneAnalysis={hasDoneAnalysis} />
+      <dl className="grid max-w-xl grid-cols-2 gap-x-4 gap-y-1 rounded-md border border-zinc-200 bg-white p-4 text-sm">
+        <dt className="text-zinc-500">측정위치</dt>
+        <dd>{locLabel}</dd>
+        <dt className="text-zinc-500">원본 파일</dt><dd>{s.original_filename ?? '-'}</dd>
+        <dt className="text-zinc-500">장비</dt><dd>{s.device ?? '-'}</dd>
+        <dt className="text-zinc-500">데이터 계보</dt><dd>{LINEAGE_LABEL[s.lineage]}</dd>
         {/* point_count는 001_schema.sql에 선언만 되고 비어 있다가 단계 E의
             precheck 잡부터 채워진다(worker/flatworker/jobs.py). 그 전에 올라온
             스캔은 계속 null이므로 '-'로 둔다. 단위 확정의 근거는 아니다
             (점 개수는 파일 단위가 m이든 mm이든 같다) - 스캔 규모를 가늠하는
             메타데이터로만 쓴다. */}
-        <dt className="text-slate-500">점 개수</dt>
-        <dd>{s.point_count === null ? '-' : s.point_count.toLocaleString('ko-KR')}</dd>
-        <dt className="text-slate-500">상태</dt><dd>{SCAN_STATUS_LABEL[s.status]}</dd>
-        <dt className="text-slate-500">단위 배율</dt><dd>{s.unit_scale ?? '미확정'}</dd>
+        <dt className="text-zinc-500">점 개수</dt>
+        <dd className="font-mono tabular-nums">
+          {s.point_count === null ? '-' : s.point_count.toLocaleString('ko-KR')}
+        </dd>
+        <dt className="text-zinc-500">상태</dt><dd>{SCAN_STATUS_LABEL[s.status]}</dd>
+        <dt className="text-zinc-500">단위 배율</dt>
+        <dd className="font-mono tabular-nums">{s.unit_scale ?? '미확정'}</dd>
       </dl>
       {s.lineage === 'registered' && (
-        <div className="rounded border border-amber-300 bg-amber-50 p-3 text-sm">
+        <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm">
           <p className="font-medium">두 스캔을 정합해 만든 병합 스캔입니다.</p>
           <p className="mt-1 text-xs text-slate-700">
             분석하기 전에 정합이 실제로 맞았는지 확인하세요. 정합 RMSE는 수직 방향만
@@ -175,7 +235,7 @@ export default async function ScanPage({ params }: { params: Promise<{ id: strin
           </p>
           {registrationId ? (
             <Link href={`/registrations/${registrationId}`}
-              className="mt-2 inline-block rounded bg-blue-700 px-3 py-1.5 text-xs text-white">
+              className="mt-2 inline-block rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-700">
               정합 결과·겹쳐보기 확인
             </Link>
           ) : (
@@ -190,30 +250,44 @@ export default async function ScanPage({ params }: { params: Promise<{ id: strin
       {WATCHED_SCAN_STATUSES.has(s.status) && (
         <ScanStatusWatcher scanId={id} initialStatus={s.status} />
       )}
-      {s.status === 'awaiting_unit_confirm' && (
-        <Link href={`/scans/${id}/confirm-unit`}
-          className="inline-block rounded bg-blue-700 px-3 py-1.5 text-sm text-white">
-          단위 확인하고 분석 시작
-        </Link>
+      {s.status === 'awaiting_unit_confirm' && user && (
+        // D5: 별도 confirm-unit 화면으로 링크하는 대신 그 화면이 렌더하던 것(높이 뷰
+        // 이미지 + 단위 확정 폼 - 둘 다 UnitConfirmForm 안에 있다)을 여기 섹션으로
+        // 렌더한다. 안내 문구는 app/scans/[id]/confirm-unit/page.tsx에서 그대로 옮겼다.
+        <section className="rounded-md border border-zinc-200 bg-white p-4">
+          <h2 className="font-semibold">단위 확인</h2>
+          <p className="mb-4 mt-1 text-sm text-zinc-600">
+            파일 좌표가 m·cm·mm 중 무엇인지 확정하는 단계입니다. 높이 뷰가 있으면 그
+            축 눈금과 실제 공간 크기를 견주어 고르고, 없으면 파일명과 스캔 앱의 내보내기
+            설정으로 판단하세요.
+          </p>
+          <UnitConfirmForm scan={s} userId={user.id} />
+        </section>
       )}
       {s.status === 'uploaded' && (
         // E1: 옛 문구는 "워커가 실행 중인지 확인하세요(python -m flatworker)"였다.
         // 운영자 지시문이지 사용자 안내가 아니다 - 대시보드만 쓰는 사용자는 워커를
         // 실행할 수도 확인할 수도 없어서, 정상적인 대기를 장애로 오인한다. 단계 E부터
         // precheck가 높이 뷰까지 렌더하므로 대기 시간 자체도 눈에 띄게 길어졌다.
-        <p className="text-sm text-slate-600">
+        <p className="rounded-md border border-zinc-200 bg-white p-3 text-sm text-zinc-600">
           사전 검사 대기 중입니다. 파일 크기에 따라 수십 초 걸릴 수 있습니다.
           이 화면을 새로고침하면 상태가 갱신됩니다.
         </p>
       )}
       {s.status === 'failed' && (
-        <div className="rounded border border-red-300 bg-red-50 p-3 text-sm">
+        <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm">
           <p className="font-medium text-red-700">사전 검사에 실패했습니다.</p>
-          <p className="mt-1 text-xs text-slate-600">
+          <p className="mt-1 text-xs text-zinc-600">
             가장 흔한 원인은 지원하지 않는 파일 포맷이나 손상·불완전한 파일입니다.
             파일을 확인한 뒤 업로드 화면에서 새 스캔으로 다시 시도하세요. 상세 원인은
             워커 실행 창의 로그에 남습니다(3회 자동 재시도 후에도 실패한 상태입니다).
           </p>
+          {/* D5: 재시도를 한 클릭으로 - 업로드 화면이 현장·측정위치를 쿼리로 프리필한다(D4). */}
+          <Link
+            href={loc ? `/upload?site=${loc.site_id}&location=${s.location_id}` : '/upload'}
+            className="mt-2 inline-block rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-700">
+            다시 업로드
+          </Link>
         </div>
       )}
       {showFirstFlatness && (
@@ -234,7 +308,7 @@ export default async function ScanPage({ params }: { params: Promise<{ id: strin
                 isImport={false} />
             )}
           </div>
-          <p className="text-sm text-slate-600">
+          <p className="text-sm text-zinc-600">
             {s.lineage === 'registered'
               ? '병합 점군은 이미 미터로 환산돼 있어 단위 확인 없이 바로 분석할 수 있습니다. 다만 정합이 실제로 맞았는지는 위 겹쳐보기로 먼저 확인하세요 - 분석은 어긋난 정합도 그대로 받아 수치를 냅니다.'
               : '단위가 확정된 스캔인데 아직 분석이 없습니다. 위 버튼으로 첫 분석을 시작하세요.'}
@@ -265,11 +339,12 @@ export default async function ScanPage({ params }: { params: Promise<{ id: strin
           </div>
           <AnalysisProgress analysisId={latestFlatness.id} initialStatus={latestFlatness.status} />
           {flatnessAnalyses.length > 1 && (
-            <ul className="text-sm text-slate-600">
+            <ul className="text-sm text-zinc-600">
               {flatnessAnalyses.slice(1).map((a) => (
                 <li key={a.id}>
-                  <Link href={`/analyses/${a.id}`} className="hover:underline">
-                    이전 분석 {a.created_at.slice(0, 16).replace('T', ' ')}
+                  {/* D5: 별도 화면 대신 같은 작업대의 ?analysis= 선택 렌더로 간다. */}
+                  <Link href={`/scans/${id}?analysis=${a.id}`} className="hover:underline">
+                    이전 분석 <span className="font-mono">{a.created_at.slice(0, 16).replace('T', ' ')}</span>
                     {a.overall_verdict && (
                       <span className="ml-1 rounded px-1.5 text-xs text-white"
                         style={{ backgroundColor: GRADE_COLOR[a.overall_verdict] }}>
@@ -305,11 +380,12 @@ export default async function ScanPage({ params }: { params: Promise<{ id: strin
             <>
               <AnalysisProgress analysisId={latestSlope.id} initialStatus={latestSlope.status} />
               {slopeAnalyses.length > 1 && (
-                <ul className="text-sm text-slate-600">
+                <ul className="text-sm text-zinc-600">
                   {slopeAnalyses.slice(1).map((a) => (
                     <li key={a.id}>
-                      <Link href={`/analyses/${a.id}`} className="hover:underline">
-                        이전 분석 {a.created_at.slice(0, 16).replace('T', ' ')}
+                      {/* D5: 별도 화면 대신 같은 작업대의 ?analysis= 선택 렌더로 간다. */}
+                      <Link href={`/scans/${id}?analysis=${a.id}`} className="hover:underline">
+                        이전 분석 <span className="font-mono">{a.created_at.slice(0, 16).replace('T', ' ')}</span>
                         {a.overall_verdict && (
                           <span className="ml-1 rounded px-1.5 text-xs text-white"
                             style={{ backgroundColor: GRADE_COLOR[a.overall_verdict] }}>
@@ -322,6 +398,28 @@ export default async function ScanPage({ params }: { params: Promise<{ id: strin
                 </ul>
               )}
             </>
+          )}
+        </section>
+      )}
+      {resultAnalysis && (
+        // D5: app/analyses/[id]/page.tsx가 하던 결과 렌더를 이 화면으로 옮겼다.
+        <section className="space-y-2">
+          <h2 className="font-semibold">
+            {ANALYSIS_KIND_LABEL[resultAnalysis.kind ?? 'flatness']} 결과
+            <span className="ml-2 font-mono text-xs font-normal text-zinc-500">
+              {resultAnalysis.created_at.slice(0, 16).replace('T', ' ')}
+              {' · '}엔진 {resultAnalysis.engine_version ?? '-'}
+            </span>
+          </h2>
+          {isSlopeStats(resultAnalysis.stats) ? (
+            // 단계 C 회귀 차단(analyses/[id]에서 이관): ?analysis=는 이 스캔의 analyses
+            // 목록에서 id로만 고르므로 어떤 쿼리 필터로도 종류를 못 거른다. stats.format
+            // 내용 기반으로 갈라 AnalysisResult로 흘려보내면 lib/domain/stats.ts의
+            // coverageLabel이 stats.meta를 옵셔널 체이닝 없이 읽어 TypeError로 페이지가
+            // 죽는다 - 구배 결과(단계 D)는 SlopeResult로.
+            <SlopeResult analysis={resultAnalysis} />
+          ) : (
+            <AnalysisResult analysis={resultAnalysis} scan={s} photos={photos} />
           )}
         </section>
       )}

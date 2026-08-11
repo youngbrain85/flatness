@@ -116,6 +116,9 @@ describe('UnitConfirmForm', () => {
     expect(analysesUpdateSpy).toHaveBeenCalledWith(
       expect.objectContaining({ deleted_at: expect.any(String) }));
     expect(pushMock).not.toHaveBeenCalled();
+    // 실패했는데 refresh하면 오류 문구를 그린 클라이언트 상태 위로 서버 렌더가
+    // 덮여 재시도 안내가 사라질 수 있다 - 성공했을 때만 refresh한다(D5).
+    expect(refreshMock).not.toHaveBeenCalled();
     // 재시도할 수 있어야 하므로 버튼이 다시 활성화된다
     expect(screen.getByRole('button', { name: '단위 확정 후 분석 시작' })).toBeEnabled();
   });
@@ -153,17 +156,19 @@ describe('UnitConfirmForm', () => {
     expect(screen.getByText(/되돌리지 못했습니다/)).toBeInTheDocument();
   });
 
-  // 회귀 방지: push 직후 refresh를 부르면 refresh가 "현재 라우트"를 다시 렌더하면서
-  // 진행 중이던 이동을 취소한다(로그인 화면에서 실제로 재현된 결함). 이동 대상인
-  // scans/[id]는 force-dynamic이고 동적 페이지의 클라이언트 캐시 staleTime 기본값은
-  // 0초(캐시 안 함)라, push만으로도 항상 서버에서 새로 받아온다. refresh는 불필요하다.
-  it('성공하면 스캔 상세로 push만 하고 refresh는 부르지 않는다', async () => {
+  // D5(스캔 작업대 통합): 이 폼은 이제 스캔 상세(/scans/[id]) 안에 인라인으로
+  // 렌더된다 - 제출 성공 후 갈 곳이 "지금 이 화면"이다. 같은 라우트로 push하면
+  // 히스토리만 한 칸 쌓이고(뒤로 가기가 확정 전 화면으로 돌아가는 착시), 서버
+  // 데이터 갱신은 refresh가 정확히 그 일을 한다. 옛 동작(별도 화면에서 push로
+  // 이동)은 "push 직후 refresh가 이동을 취소한다"는 결함 때문에 push만 했는데,
+  // 인라인이 되면서 이동 자체가 사라졌으므로 이제는 refresh만 부른다.
+  it('성공하면 refresh만 부르고 push는 부르지 않는다(같은 화면 인라인)', async () => {
     vi.mocked(createClient).mockReturnValue(stubSupabase() as never);
     render(<UnitConfirmForm scan={scan} userId="u1" />);
     fireEvent.click(screen.getByRole('button', { name: '단위 확정 후 분석 시작' }));
 
-    await vi.waitFor(() => expect(pushMock).toHaveBeenCalledWith('/scans/c1'));
-    expect(refreshMock).not.toHaveBeenCalled();
+    await vi.waitFor(() => expect(refreshMock).toHaveBeenCalled());
+    expect(pushMock).not.toHaveBeenCalled();
   });
 
   // 단계 C 회귀 차단: kind가 insert에서 빠지면 DB 기본값('flatness')에 조용히
@@ -174,7 +179,7 @@ describe('UnitConfirmForm', () => {
     render(<UnitConfirmForm scan={scan} userId="u1" />);
     fireEvent.click(screen.getByRole('button', { name: '단위 확정 후 분석 시작' }));
 
-    await vi.waitFor(() => expect(pushMock).toHaveBeenCalledWith('/scans/c1'));
+    await vi.waitFor(() => expect(refreshMock).toHaveBeenCalled());
     expect(analysesInsertSpy).toHaveBeenCalledWith(
       expect.objectContaining({ kind: 'flatness', criteria_id: 'cr1' }));
   });

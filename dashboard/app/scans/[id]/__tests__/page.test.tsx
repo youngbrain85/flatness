@@ -18,7 +18,18 @@ import { createClient } from '@/lib/supabase/server';
 import ScanPage from '../page';
 import { AnalysisProgress } from '@/components/analysis-progress';
 import { ReanalyzeButton } from '@/components/reanalyze-button';
-import type { AnalysisKind, AnalysisRow, LocationRow, ScanRow } from '@/lib/domain/types';
+import { ScanStepStrip } from '@/components/scan-step-strip';
+import { UnitConfirmForm } from '@/components/unit-confirm-form';
+import { AnalysisResult } from '@/components/analysis/analysis-result';
+import { SlopeResult } from '@/components/analysis/slope-result';
+import { PageHeader } from '@/components/ui/page-header';
+import type { AnalysisKind, AnalysisRow, LocationRow, ScanRow, SiteRow, Stats } from '@/lib/domain/types';
+
+// D5: searchParams(?analysis=)가 페이지 시그니처에 들어왔다. 모든 호출이 이 헬퍼를
+// 거쳐 같은 형태의 props를 만든다.
+function pageProps(search: { analysis?: string } = {}) {
+  return { params: Promise.resolve({ id: 'sc1' }), searchParams: Promise.resolve(search) };
+}
 
 // 엘리먼트 트리를 재귀 탐색해 특정 컴포넌트 타입이 쓰인 곳을 모두 모은다.
 // app/analyses/[id]/__tests__/page.test.tsx의 containsType과 같은 이유로 children만
@@ -57,6 +68,11 @@ const location: LocationRow = {
   memo: null, created_at: '', updated_at: '',
 };
 
+// D5: 브레드크럼의 현장명은 sites 조회에서 온다.
+const site: SiteRow = {
+  id: 'site1', name: '테스트 현장', address: null, memo: null, created_at: '', updated_at: '',
+};
+
 function mkScan(overrides: Partial<ScanRow> = {}): ScanRow {
   return {
     id: 'sc1', location_id: 'l1', surface: 'floor', scanned_at: '2026-07-20', device: null,
@@ -92,6 +108,9 @@ function stubSupabase(
       // 일반 스캔에서 이 테이블에 손대면 여기서 예외로 잡힌다(쿼리 1회 추가는
       // 모든 스캔 상세에 붙는 비용이다).
       if (table === 'registrations') return chain({ data: registration, error: null });
+      // D5: 브레드크럼 현장명(sites)과 인라인 결과의 현장 사진(photos).
+      if (table === 'sites') return chain({ data: loc ? site : null, error: null });
+      if (table === 'photos') return chain({ data: [], error: null });
       throw new Error(`예상치 못한 테이블: ${table}`);
     },
   };
@@ -103,7 +122,7 @@ describe('ScanPage 종류별 분석 섹션 배선 (단계 C 회귀 차단)', () 
     vi.mocked(createClient).mockResolvedValue(
       stubSupabase(mkScan({ surface: 'wall' }), [flatness]) as never);
 
-    const el = await ScanPage({ params: Promise.resolve({ id: 'sc1' }) });
+    const el = await ScanPage(pageProps());
     const buttons = findAll(el, ReanalyzeButton);
 
     expect(buttons).toHaveLength(1);
@@ -115,7 +134,7 @@ describe('ScanPage 종류별 분석 섹션 배선 (단계 C 회귀 차단)', () 
     vi.mocked(createClient).mockResolvedValue(
       stubSupabase(mkScan(), [flatness]) as never);
 
-    const el = await ScanPage({ params: Promise.resolve({ id: 'sc1' }) });
+    const el = await ScanPage(pageProps());
     const buttons = findAll(el, ReanalyzeButton);
 
     expect(buttons).toHaveLength(1);
@@ -139,7 +158,7 @@ describe('ScanPage 종류별 분석 섹션 배선 (단계 C 회귀 차단)', () 
     vi.mocked(createClient).mockResolvedValue(
       stubSupabase(mkScan(), [flatness]) as never);
 
-    const el = await ScanPage({ params: Promise.resolve({ id: 'sc1' }) });
+    const el = await ScanPage(pageProps());
     const buttons = findAll(el, ReanalyzeButton);
 
     expect(buttons).toHaveLength(1);
@@ -151,7 +170,7 @@ describe('ScanPage 종류별 분석 섹션 배선 (단계 C 회귀 차단)', () 
     vi.mocked(createClient).mockResolvedValue(
       stubSupabase(mkScan(), [flatness]) as never);
 
-    const el = await ScanPage({ params: Promise.resolve({ id: 'sc1' }) });
+    const el = await ScanPage(pageProps());
     const buttons = findAll(el, ReanalyzeButton);
 
     expect(buttons).toHaveLength(1);
@@ -174,7 +193,7 @@ describe('ScanPage 종류별 분석 섹션 배선 (단계 C 회귀 차단)', () 
     vi.mocked(createClient).mockResolvedValue(
       stubSupabase(mkScan(), [requeued, doneImport]) as never);
 
-    const el = await ScanPage({ params: Promise.resolve({ id: 'sc1' }) });
+    const el = await ScanPage(pageProps());
     const buttons = findAll(el, ReanalyzeButton);
 
     expect(buttons).toHaveLength(1);
@@ -193,7 +212,7 @@ describe('ScanPage 종류별 분석 섹션 배선 (단계 C 회귀 차단)', () 
     vi.mocked(createClient).mockResolvedValue(
       stubSupabase(mkScan(), [flatness]) as never);
 
-    const el = await ScanPage({ params: Promise.resolve({ id: 'sc1' }) });
+    const el = await ScanPage(pageProps());
     const buttons = findAll(el, ReanalyzeButton);
 
     expect(buttons).toHaveLength(1);
@@ -205,7 +224,7 @@ describe('ScanPage 종류별 분석 섹션 배선 (단계 C 회귀 차단)', () 
     vi.mocked(createClient).mockResolvedValue(
       stubSupabase(mkScan(), [flatness]) as never);
 
-    const el = await ScanPage({ params: Promise.resolve({ id: 'sc1' }) });
+    const el = await ScanPage(pageProps());
     const buttons = findAll(el, ReanalyzeButton);
 
     expect(buttons).toHaveLength(1);
@@ -228,7 +247,7 @@ describe('ScanPage 종류별 분석 섹션 배선 (단계 C 회귀 차단)', () 
     vi.mocked(createClient).mockResolvedValue(
       stubSupabase(mkScan(), [requeued, doneLidar]) as never);
 
-    const el = await ScanPage({ params: Promise.resolve({ id: 'sc1' }) });
+    const el = await ScanPage(pageProps());
     const buttons = findAll(el, ReanalyzeButton);
     const slopeBtn = buttons.find((b) => b.props.kind === 'slope');
 
@@ -244,7 +263,7 @@ describe('ScanPage 종류별 분석 섹션 배선 (단계 C 회귀 차단)', () 
     vi.mocked(createClient).mockResolvedValue(
       stubSupabase(mkScan(), [processingFlatness, doneSlope]) as never);
 
-    const el = await ScanPage({ params: Promise.resolve({ id: 'sc1' }) });
+    const el = await ScanPage(pageProps());
     const sections = findAll(el, 'section');
     const progresses = findAll(el, AnalysisProgress);
 
@@ -259,7 +278,7 @@ describe('ScanPage 종류별 분석 섹션 배선 (단계 C 회귀 차단)', () 
     vi.mocked(createClient).mockResolvedValue(
       stubSupabase(mkScan({ status: 'awaiting_unit_confirm' }), []) as never);
 
-    const el = await ScanPage({ params: Promise.resolve({ id: 'sc1' }) });
+    const el = await ScanPage(pageProps());
 
     expect(findAll(el, ReanalyzeButton)).toHaveLength(0);
   });
@@ -275,7 +294,7 @@ describe('ScanPage 종류별 분석 섹션 배선 (단계 C 회귀 차단)', () 
     vi.mocked(createClient).mockResolvedValue(
       stubSupabase(mkScan(), [slope, flatness]) as never);
 
-    const el = await ScanPage({ params: Promise.resolve({ id: 'sc1' }) });
+    const el = await ScanPage(pageProps());
     const buttons = findAll(el, ReanalyzeButton);
     const flatnessBtn = buttons.find((b) => b.props.kind === 'flatness');
     const slopeBtn = buttons.find((b) => b.props.kind === 'slope');
@@ -295,7 +314,7 @@ describe('ScanPage 종류별 분석 섹션 배선 (단계 C 회귀 차단)', () 
     vi.mocked(createClient).mockResolvedValue(
       stubSupabase(mkScan({ selected_criteria_id: 'current-cr' }), [flatness]) as never);
 
-    const el = await ScanPage({ params: Promise.resolve({ id: 'sc1' }) });
+    const el = await ScanPage(pageProps());
     const buttons = findAll(el, ReanalyzeButton);
     const flatnessBtn = buttons.find((b) => b.props.kind === 'flatness');
 
@@ -315,15 +334,17 @@ describe('ScanPage 종류별 분석 섹션 배선 (단계 C 회귀 차단)', () 
       // 쿼리가 이미 created_at desc이므로 그 순서대로 넘긴다.
       stubSupabase(mkScan(), [flatness2, slope2, flatness1, slope1]) as never);
 
-    const el = await ScanPage({ params: Promise.resolve({ id: 'sc1' }) });
+    const el = await ScanPage(pageProps());
     const sections = findAll(el, 'section');
     expect(sections).toHaveLength(2); // [0] 평활도, [1] 구배 (렌더 순서 고정)
     const flatnessLinks = findAll(sections[0], Link).map((l) => l.props.href);
     const slopeLinks = findAll(sections[1], Link).map((l) => l.props.href);
 
     // latest(가장 최근 1건)는 "이전 분석" 목록이 아니라 AnalysisProgress로만 표시된다.
-    expect(flatnessLinks).toEqual(['/analyses/flatness1']);
-    expect(slopeLinks).toEqual(['/analyses/slope1']);
+    // D5: 이력 링크는 별도 화면(/analyses/[id])이 아니라 같은 작업대의
+    // ?analysis= 선택 렌더로 간다(T6 리다이렉트가 이 규약을 쓴다).
+    expect(flatnessLinks).toEqual(['/scans/sc1?analysis=flatness1']);
+    expect(slopeLinks).toEqual(['/scans/sc1?analysis=slope1']);
   });
 });
 
@@ -335,7 +356,7 @@ describe('ScanPage 메타·안내 문구 (단계 E)', () => {
     vi.mocked(createClient).mockResolvedValue(
       stubSupabase(mkScan({ status: 'uploaded' }), []) as never);
 
-    const el = await ScanPage({ params: Promise.resolve({ id: 'sc1' }) });
+    const el = await ScanPage(pageProps());
     const text = collectText(el).join('');
 
     expect(text).toContain('파일 크기에 따라 수십 초 걸릴 수 있습니다');
@@ -349,7 +370,7 @@ describe('ScanPage 메타·안내 문구 (단계 E)', () => {
     vi.mocked(createClient).mockResolvedValue(
       stubSupabase(mkScan({ point_count: 1234567 }), []) as never);
 
-    const el = await ScanPage({ params: Promise.resolve({ id: 'sc1' }) });
+    const el = await ScanPage(pageProps());
     const text = collectText(el).join('');
 
     expect(text).toContain('점 개수');
@@ -370,7 +391,7 @@ describe('ScanPage 메타·안내 문구 (단계 E)', () => {
     vi.mocked(createClient).mockResolvedValue(
       stubSupabase(mkScan({ lineage: 'registered' }), [], location, { id: 'reg-9' }) as never);
 
-    const el = await ScanPage({ params: Promise.resolve({ id: 'sc1' }) });
+    const el = await ScanPage(pageProps());
     const hrefs = findAll(el, Link).map((l) => l.props.href);
     const text = collectText(el).join('');
 
@@ -383,7 +404,7 @@ describe('ScanPage 메타·안내 문구 (단계 E)', () => {
     vi.mocked(createClient).mockResolvedValue(
       stubSupabase(mkScan({ lineage: 'registered' }), [], location, null) as never);
 
-    const el = await ScanPage({ params: Promise.resolve({ id: 'sc1' }) });
+    const el = await ScanPage(pageProps());
     const hrefs = findAll(el, Link).map((l) => l.props.href);
     const text = collectText(el).join('');
 
@@ -397,7 +418,7 @@ describe('ScanPage 메타·안내 문구 (단계 E)', () => {
     vi.mocked(createClient).mockResolvedValue(
       stubSupabase(mkScan({ lineage: 'raw' }), []) as never);
 
-    const el = await ScanPage({ params: Promise.resolve({ id: 'sc1' }) });
+    const el = await ScanPage(pageProps());
 
     expect(collectText(el).join('')).not.toContain('정합해 만든 병합 스캔');
   });
@@ -406,7 +427,7 @@ describe('ScanPage 메타·안내 문구 (단계 E)', () => {
     vi.mocked(createClient).mockResolvedValue(
       stubSupabase(mkScan({ point_count: null }), []) as never);
 
-    const el = await ScanPage({ params: Promise.resolve({ id: 'sc1' }) });
+    const el = await ScanPage(pageProps());
     const text = collectText(el).join('');
 
     expect(text).toContain('점 개수');
@@ -443,7 +464,7 @@ describe('ScanPage 분석 시작 진입점 (단계 F 최종 리뷰 Critical)', (
         original_filename: 'colab_result.csv', file_format: 'csv', height_view_path: null,
       }), []) as never);
 
-    const el = await ScanPage({ params: Promise.resolve({ id: 'sc1' }) });
+    const el = await ScanPage(pageProps());
 
     expect(findAll(el, ReanalyzeButton)).toHaveLength(0);
     // 안내 문구도 새면 안 된다 - "바로 분석할 수 있다"고 말해 놓고 버튼이 없으면
@@ -458,7 +479,7 @@ describe('ScanPage 분석 시작 진입점 (단계 F 최종 리뷰 Critical)', (
         original_filename: 'result.json', file_format: 'json', height_view_path: null,
       }), []) as never);
 
-    const el = await ScanPage({ params: Promise.resolve({ id: 'sc1' }) });
+    const el = await ScanPage(pageProps());
 
     expect(findAll(el, ReanalyzeButton)).toHaveLength(0);
   });
@@ -473,7 +494,7 @@ describe('ScanPage 분석 시작 진입점 (단계 F 최종 리뷰 Critical)', (
         lineage: 'raw', status: 'ready', height_view_path: null,
       }), []) as never);
 
-    const el = await ScanPage({ params: Promise.resolve({ id: 'sc1' }) });
+    const el = await ScanPage(pageProps());
 
     expect(findAll(el, ReanalyzeButton)).toHaveLength(0);
   });
@@ -490,7 +511,7 @@ describe('ScanPage 분석 시작 진입점 (단계 F 최종 리뷰 Critical)', (
         location, { id: 'reg-9' },
       ) as never);
 
-    const el = await ScanPage({ params: Promise.resolve({ id: 'sc1' }) });
+    const el = await ScanPage(pageProps());
     const flatnessBtn = findAll(el, ReanalyzeButton).find((b) => b.props.kind === 'flatness');
 
     expect(flatnessBtn).toBeDefined();
@@ -510,7 +531,7 @@ describe('ScanPage 분석 시작 진입점 (단계 F 최종 리뷰 Critical)', (
       stubSupabase(mkScan({ lineage: 'registered', height_view_path: null }), [],
         location, { id: 'reg-9' }) as never);
 
-    const el = await ScanPage({ params: Promise.resolve({ id: 'sc1' }) });
+    const el = await ScanPage(pageProps());
     const hrefs = findAll(el, Link).map((l) => String(l.props.href));
 
     expect(hrefs.some((h) => h.includes('confirm-unit'))).toBe(false);
@@ -527,7 +548,7 @@ describe('ScanPage 분석 시작 진입점 (단계 F 최종 리뷰 Critical)', (
         height_view_path: 'artifacts/scans/sc1/height_view.png',
       }), []) as never);
 
-    const el = await ScanPage({ params: Promise.resolve({ id: 'sc1' }) });
+    const el = await ScanPage(pageProps());
     const flatnessBtn = findAll(el, ReanalyzeButton).find((b) => b.props.kind === 'flatness');
 
     expect(flatnessBtn).toBeDefined();
@@ -544,19 +565,40 @@ describe('ScanPage 분석 시작 진입점 (단계 F 최종 리뷰 Critical)', (
   // 넓히는 회귀를 아무도 못 잡고, 이 테스트가 스스로 내건 근거(위 문단)를 지키지
   // 못한다. 실제로도 이 상태의 스캔은 precheck를 끝낸 뒤이므로 값이 채워져 있는
   // 쪽이 사실에 맞다(worker의 handle_precheck가 status와 함께 한 PATCH로 넣는다).
-  it('단위 미확정 스캔은 여전히 단위 확인 링크로 보내고 직행 버튼은 띄우지 않는다', async () => {
+  it('단위 미확정 스캔은 단위 확정 폼을 인라인으로 띄우고 직행 버튼은 띄우지 않는다', async () => {
+    // D5: 별도 confirm-unit 화면으로 보내는 대신 그 화면이 렌더하던 것(높이 뷰 +
+    // UnitConfirmForm)을 이 화면 안에 섹션으로 렌더한다. confirm-unit으로 가는
+    // 링크가 남아 있으면 안 된다 - T6가 그 URL을 다시 이 화면으로 리다이렉트하므로
+    // 링크가 있으면 제자리 순환이 된다.
     vi.mocked(createClient).mockResolvedValue(
       stubSupabase(mkScan({
         status: 'awaiting_unit_confirm', unit_scale: null,
         height_view_path: 'artifacts/scans/sc1/height_view.png',
       }), []) as never);
 
-    const el = await ScanPage({ params: Promise.resolve({ id: 'sc1' }) });
+    const el = await ScanPage(pageProps());
     const hrefs = findAll(el, Link).map((l) => String(l.props.href));
+    const forms = findAll(el, UnitConfirmForm);
 
-    expect(hrefs).toContain('/scans/sc1/confirm-unit');
-    expect(collectText(el).join('')).toContain('단위 확인하고 분석 시작');
+    expect(hrefs.some((h) => h.includes('confirm-unit'))).toBe(false);
+    expect(forms).toHaveLength(1);
+    // 폼이 조회해 온 스캔 행(높이 뷰 경로 포함)을 그대로 받아야 한다.
+    expect((forms[0].props.scan as ScanRow).id).toBe('sc1');
+    expect((forms[0].props.scan as ScanRow).height_view_path)
+      .toBe('artifacts/scans/sc1/height_view.png');
+    expect(forms[0].props.userId).toBe('u1');
     expect(findAll(el, ReanalyzeButton)).toHaveLength(0);
+  });
+
+  it('단위 확정이 끝난 스캔(ready)에는 단위 확정 폼이 뜨지 않는다', async () => {
+    vi.mocked(createClient).mockResolvedValue(
+      stubSupabase(mkScan({
+        status: 'ready', height_view_path: 'artifacts/scans/sc1/height_view.png',
+      }), []) as never);
+
+    const el = await ScanPage(pageProps());
+
+    expect(findAll(el, UnitConfirmForm)).toHaveLength(0);
   });
 
   // 사전 검사 대기 중인 스캔에는 아직 raw 좌표도 단위도 없다.
@@ -572,7 +614,7 @@ describe('ScanPage 분석 시작 진입점 (단계 F 최종 리뷰 Critical)', (
         height_view_path: 'artifacts/scans/sc1/height_view.png',
       }), []) as never);
 
-    const el = await ScanPage({ params: Promise.resolve({ id: 'sc1' }) });
+    const el = await ScanPage(pageProps());
 
     expect(findAll(el, ReanalyzeButton)).toHaveLength(0);
   });
@@ -593,7 +635,7 @@ describe('ScanPage 분석 시작 진입점 (단계 F 최종 리뷰 Critical)', (
     } as unknown as ScanRow;
     vi.mocked(createClient).mockResolvedValue(stubSupabase(oddScan, []) as never);
 
-    const el = await ScanPage({ params: Promise.resolve({ id: 'sc1' }) });
+    const el = await ScanPage(pageProps());
 
     expect(findAll(el, ReanalyzeButton)).toHaveLength(0);
   });
@@ -606,7 +648,7 @@ describe('ScanPage 분석 시작 진입점 (단계 F 최종 리뷰 Critical)', (
         status: 'archived', height_view_path: 'artifacts/scans/sc1/height_view.png',
       }), []) as never);
 
-    const el = await ScanPage({ params: Promise.resolve({ id: 'sc1' }) });
+    const el = await ScanPage(pageProps());
 
     expect(findAll(el, ReanalyzeButton)).toHaveLength(0);
   });
@@ -620,10 +662,194 @@ describe('ScanPage 분석 시작 진입점 (단계 F 최종 리뷰 Critical)', (
         status: 'ready', height_view_path: 'artifacts/scans/sc1/height_view.png',
       }), [flatness]) as never);
 
-    const el = await ScanPage({ params: Promise.resolve({ id: 'sc1' }) });
+    const el = await ScanPage(pageProps());
     const flatnessBtns = findAll(el, ReanalyzeButton).filter((b) => b.props.kind === 'flatness');
 
     expect(flatnessBtns).toHaveLength(1);
     expect(flatnessBtns[0].props.latestStatus).toBe('done');
+  });
+});
+
+// ---- D5 스캔 작업대 통합 ----
+// 헤더(브레드크럼·보고서 원클릭) + 단계 스트립 배선 + 결과 인라인(?analysis= 선택).
+// 결과 분기 자체(isSlopeStats -> SlopeResult)는 app/analyses/[id]에서 이관해 온
+// 가드다 - 그 파일의 테스트가 지키던 것을 이 화면에서 다시 못 박는다.
+
+// 인라인 결과 렌더 조건(done + stats 존재)을 시험할 최소 stats. 컴포넌트 자체는
+// 실행되지 않으므로(클라이언트 컴포넌트 - 엘리먼트 트리에 타입으로만 남는다)
+// 형태 판별에 쓰이는 필드만 있으면 된다.
+const FLAT_STATS = { n_cells: 1 } as unknown as Stats;
+const SLOPE_STATS = { format: 'slope-stats-v1' } as unknown as Stats;
+
+describe('ScanPage 헤더·단계 스트립 (D5)', () => {
+  it('브레드크럼이 현장 › 현장명 › 측정위치로 이어지고 제목에 스캔 메타가 실린다', async () => {
+    vi.mocked(createClient).mockResolvedValue(stubSupabase(mkScan(), []) as never);
+
+    const el = await ScanPage(pageProps());
+    const headers = findAll(el, PageHeader);
+
+    expect(headers).toHaveLength(1);
+    expect(headers[0].props.crumbs).toEqual([
+      { href: '/', label: '현장' },
+      { href: '/sites/site1', label: '테스트 현장' },
+      { label: '1층' },
+    ]);
+    const title = collectText(headers[0].props.title).join('');
+    expect(title).toContain('스캔');
+    expect(title).toContain('바닥');
+    expect(title).toContain('2026-07-20');
+  });
+
+  it('완료된 분석이 있으면 헤더 액션에 "이 위치의 보고서 생성" 링크가 뜬다', async () => {
+    const flatness = mkAnalysis({ id: 'f1', kind: 'flatness' }); // status 기본 done
+    vi.mocked(createClient).mockResolvedValue(stubSupabase(mkScan(), [flatness]) as never);
+
+    const el = await ScanPage(pageProps());
+    const header = findAll(el, PageHeader)[0];
+    const actionHrefs = findAll(header.props.actions, Link).map((l) => String(l.props.href));
+
+    expect(actionHrefs).toContain('/reports/new?location=l1');
+  });
+
+  it('완료된 분석이 하나도 없으면 보고서 생성 액션이 없다(빈 보고서 유도 방지)', async () => {
+    const queued = mkAnalysis({ id: 'f1', kind: 'flatness', status: 'queued' });
+    vi.mocked(createClient).mockResolvedValue(stubSupabase(mkScan(), [queued]) as never);
+
+    const el = await ScanPage(pageProps());
+    const header = findAll(el, PageHeader)[0];
+
+    expect(findAll(header.props.actions, Link)).toHaveLength(0);
+  });
+
+  it('단계 스트립에 스캔 상태가 배선된다', async () => {
+    vi.mocked(createClient).mockResolvedValue(
+      stubSupabase(mkScan({ status: 'awaiting_unit_confirm', unit_scale: null }), []) as never);
+
+    const el = await ScanPage(pageProps());
+    const strips = findAll(el, ScanStepStrip);
+
+    expect(strips).toHaveLength(1);
+    expect(strips[0].props.status).toBe('awaiting_unit_confirm');
+    expect(strips[0].props.hasDoneAnalysis).toBe(false);
+  });
+
+  it.each([
+    ['평활도 done', [mkAnalysis({ id: 'f1', kind: 'flatness' as AnalysisKind })]],
+    ['구배 done', [mkAnalysis({ id: 's1', kind: 'slope' as AnalysisKind })]],
+  ])('%s 분석이 있으면 hasDoneAnalysis가 참이다(두 종류 모두 집계)', async (_l, analyses) => {
+    vi.mocked(createClient).mockResolvedValue(stubSupabase(mkScan(), analyses) as never);
+
+    const el = await ScanPage(pageProps());
+
+    expect(findAll(el, ScanStepStrip)[0].props.hasDoneAnalysis).toBe(true);
+  });
+
+  it('진행 중(queued) 분석만 있으면 hasDoneAnalysis가 거짓이다', async () => {
+    const queued = mkAnalysis({ id: 'f1', kind: 'flatness', status: 'queued' });
+    vi.mocked(createClient).mockResolvedValue(stubSupabase(mkScan(), [queued]) as never);
+
+    const el = await ScanPage(pageProps());
+
+    expect(findAll(el, ScanStepStrip)[0].props.hasDoneAnalysis).toBe(false);
+  });
+
+  it('failed 스캔에는 업로드 화면으로 가는 재시도 링크가 뜬다(현장·위치 프리필)', async () => {
+    vi.mocked(createClient).mockResolvedValue(
+      stubSupabase(mkScan({ status: 'failed' }), []) as never);
+
+    const el = await ScanPage(pageProps());
+    const hrefs = findAll(el, Link).map((l) => String(l.props.href));
+
+    expect(hrefs).toContain('/upload?site=site1&location=l1');
+    expect(collectText(el).join('')).toContain('다시 업로드');
+  });
+});
+
+describe('ScanPage 결과 인라인 (D5: analyses/[id] 렌더 이관)', () => {
+  it('기본 선택은 최신 완료 분석이다(AnalysisResult에 scan·photos까지 배선)', async () => {
+    const done = mkAnalysis({ id: 'f1', kind: 'flatness', stats: FLAT_STATS });
+    vi.mocked(createClient).mockResolvedValue(stubSupabase(mkScan(), [done]) as never);
+
+    const el = await ScanPage(pageProps());
+    const results = findAll(el, AnalysisResult);
+
+    expect(results).toHaveLength(1);
+    expect((results[0].props.analysis as AnalysisRow).id).toBe('f1');
+    expect((results[0].props.scan as ScanRow).id).toBe('sc1');
+    expect(Array.isArray(results[0].props.photos)).toBe(true);
+    expect(findAll(el, SlopeResult)).toHaveLength(0);
+  });
+
+  it('최신 done의 stats가 비었으면(레거시) stats가 있는 이전 done으로 내려간다', async () => {
+    const doneNoStats = mkAnalysis({
+      id: 'f2', kind: 'flatness', stats: null, created_at: '2026-07-25T00:00:00Z',
+    });
+    const doneWithStats = mkAnalysis({
+      id: 'f1', kind: 'flatness', stats: FLAT_STATS, created_at: '2026-07-20T00:00:00Z',
+    });
+    vi.mocked(createClient).mockResolvedValue(
+      stubSupabase(mkScan(), [doneNoStats, doneWithStats]) as never);
+
+    const el = await ScanPage(pageProps());
+    const results = findAll(el, AnalysisResult);
+
+    expect(results).toHaveLength(1);
+    expect((results[0].props.analysis as AnalysisRow).id).toBe('f1');
+  });
+
+  it('구배 stats(format: slope-stats-v1)면 SlopeResult로 분기한다(이관된 가드)', async () => {
+    const doneSlope = mkAnalysis({ id: 's1', kind: 'slope', stats: SLOPE_STATS });
+    vi.mocked(createClient).mockResolvedValue(stubSupabase(mkScan(), [doneSlope]) as never);
+
+    const el = await ScanPage(pageProps());
+    const results = findAll(el, SlopeResult);
+
+    expect(results).toHaveLength(1);
+    expect((results[0].props.analysis as AnalysisRow).id).toBe('s1');
+    expect(findAll(el, AnalysisResult)).toHaveLength(0);
+  });
+
+  it('?analysis=로 과거 분석을 고르면 그 분석을 렌더한다', async () => {
+    const newer = mkAnalysis({
+      id: 'f2', kind: 'flatness', stats: FLAT_STATS, created_at: '2026-07-25T00:00:00Z',
+    });
+    const older = mkAnalysis({
+      id: 'f1', kind: 'flatness', stats: FLAT_STATS, created_at: '2026-07-20T00:00:00Z',
+    });
+    vi.mocked(createClient).mockResolvedValue(stubSupabase(mkScan(), [newer, older]) as never);
+
+    const el = await ScanPage(pageProps({ analysis: 'f1' }));
+    const results = findAll(el, AnalysisResult);
+
+    expect(results).toHaveLength(1);
+    expect((results[0].props.analysis as AnalysisRow).id).toBe('f1');
+  });
+
+  it('?analysis=가 미완료 분석을 가리키면 결과를 그리지 않는다(진행 상태만 - 최신 done으로 대체하지 않는다)', async () => {
+    const done = mkAnalysis({
+      id: 'f1', kind: 'flatness', stats: FLAT_STATS, created_at: '2026-07-20T00:00:00Z',
+    });
+    const queued = mkAnalysis({
+      id: 'f2', kind: 'flatness', status: 'queued', stats: null, created_at: '2026-07-25T00:00:00Z',
+    });
+    vi.mocked(createClient).mockResolvedValue(stubSupabase(mkScan(), [queued, done]) as never);
+
+    const el = await ScanPage(pageProps({ analysis: 'f2' }));
+
+    // 사용자가 고른 것은 f2(진행 중)다 - 최신 done(f1)을 대신 그려 주면 "이게 f2의
+    // 결과"라는 오해를 만든다. 진행 상태는 섹션의 AnalysisProgress가 이미 보여준다.
+    expect(findAll(el, AnalysisResult)).toHaveLength(0);
+    expect(findAll(el, SlopeResult)).toHaveLength(0);
+    expect(findAll(el, AnalysisProgress).map((p) => p.props.analysisId)).toContain('f2');
+  });
+
+  it('완료 분석이 하나도 없으면 결과 인라인이 없다', async () => {
+    const queued = mkAnalysis({ id: 'f1', kind: 'flatness', status: 'queued', stats: null });
+    vi.mocked(createClient).mockResolvedValue(stubSupabase(mkScan(), [queued]) as never);
+
+    const el = await ScanPage(pageProps());
+
+    expect(findAll(el, AnalysisResult)).toHaveLength(0);
+    expect(findAll(el, SlopeResult)).toHaveLength(0);
   });
 });

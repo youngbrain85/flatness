@@ -85,11 +85,14 @@ export function UnitConfirmForm({ scan, userId }: { scan: ScanRow; userId: strin
       await failAndRevert(r.message);
       return;
     }
-    // push만 한다. 뒤에 router.refresh()를 붙이면 refresh가 "현재 라우트"를 다시
-    // 렌더하면서 진행 중이던 이동을 취소한다(로그인 화면에서 실제로 재현된 결함).
-    // scans/[id]는 force-dynamic이고 동적 페이지의 클라이언트 캐시 staleTime
-    // 기본값은 0초(캐시 안 함)라, push만으로도 항상 서버에서 새로 받아온다.
-    router.push(`/scans/${scan.id}`);
+    // D5(스캔 작업대 통합): 이 폼은 스캔 상세(/scans/[id]) 안에 인라인으로 렌더된다 -
+    // 제출 성공 후 갈 곳이 "지금 이 화면"이다. 같은 라우트로 push하면 히스토리만
+    // 한 칸 쌓이고(뒤로 가기가 확정 전 화면으로 돌아가는 착시), 서버 데이터 갱신은
+    // refresh가 정확히 그 일을 한다. 옛 동작(별도 confirm-unit 화면에서 push로 이동)
+    // 시절의 "push 직후 refresh는 이동을 취소한다"는 결함은 이동 자체가 사라지면서
+    // 함께 사라졌다. 실패 경로에서는 부르지 않는다 - 오류 문구를 그린 클라이언트
+    // 상태 위로 서버 렌더가 덮이면 재시도 안내가 사라진다.
+    router.refresh();
   }
 
   const form = (
