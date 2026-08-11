@@ -30,7 +30,8 @@ export async function GET() {
   const restMs = await timeIt(() => fetch(`${url}/rest/v1/sites?select=id&limit=1`, {
     headers: { apikey: key, Authorization: `Bearer ${key}` }, cache: 'no-store',
   }));
-  const queryMs = await timeIt(() => supabase.from('reports').select('id').limit(1));
+  // supabase 쿼리 빌더는 PromiseLike라 Promise 시그니처에 그대로 넣을 수 없다 - await로 감싼다
+  const queryMs = await timeIt(async () => { await supabase.from('reports').select('id').limit(1); });
 
   return NextResponse.json({
     region: process.env.VERCEL_REGION ?? 'unknown',
