@@ -670,6 +670,48 @@ describe('ScanPage 분석 시작 진입점 (단계 F 최종 리뷰 Critical)', (
   });
 });
 
+// 리뷰 Important(F2): D6가 app/scans/[id]/confirm-unit/page.tsx를 순수 리다이렉트로
+// 바꾸면서 그 파일의 테스트(app/scans/[id]/confirm-unit/__tests__/page.test.tsx)를
+// 지웠다. 그 테스트가 지키던 회귀 가드 2건(페이지 폭, 안내 문단)은 실제 렌더가 이미
+// D5 때 이 파일로 이관돼 있었는데도 이관되지 않은 채 빠져 있었다 - 여기서 복원한다.
+describe('ScanPage 단위 확인 인라인 (D6 이월: confirm-unit 삭제로 유실된 회귀 가드 복원)', () => {
+  // 원본 주석(단계 E 리뷰 7): "이 페이지에는 테스트가 아예 없어서, 높이 뷰가 실제로
+  // 쓰는 페이지 폭(max-w-6xl)과 안내 문단이 무방비였다. max-w-md로 되돌리면 그림이
+  // 폼 폭으로 쪼그라들어 축 눈금을 못 읽는데(이 화면의 존재 이유가 무너진다) 아무도
+  // 못 잡는다."
+  it('단계 E 리뷰 7: 페이지 폭을 max-w-6xl로 유지한다(높이 뷰 2열 배치가 쓰는 폭이다)', async () => {
+    vi.mocked(createClient).mockResolvedValue(
+      stubSupabase(mkScan({
+        status: 'awaiting_unit_confirm', unit_scale: null,
+        height_view_path: 'artifacts/scans/sc1/height_view.png',
+      }), []) as never);
+
+    const el = await ScanPage(pageProps());
+    const main = el as { type: string; props: { className: string } };
+
+    expect(main.type).toBe('main');
+    expect(main.props.className).toContain('max-w-6xl');
+    expect(main.props.className).not.toContain('max-w-md');
+  });
+
+  it.each([
+    ['높이 뷰 있음', 'artifacts/scans/sc1/height_view.png'],
+    ['높이 뷰 없음(파일명·내보내기 설정으로만 판단)', null],
+  ] as const)('%s이어도 그림 유무 양쪽을 포괄하는 안내 문단을 보여준다', async (_label, heightViewPath) => {
+    vi.mocked(createClient).mockResolvedValue(
+      stubSupabase(mkScan({
+        status: 'awaiting_unit_confirm', unit_scale: null, height_view_path: heightViewPath,
+      }), []) as never);
+
+    const el = await ScanPage(pageProps());
+    const text = collectText(el).join('');
+
+    // 그림이 있을 때: 축 눈금으로 판단 / 없을 때: 파일명·내보내기 설정으로 판단
+    expect(text).toContain('축 눈금');
+    expect(text).toContain('내보내기 설정');
+  });
+});
+
 // ---- D5 스캔 작업대 통합 ----
 // 헤더(브레드크럼·보고서 원클릭) + 단계 스트립 배선 + 결과 인라인(?analysis= 선택).
 // 결과 분기 자체(isSlopeStats -> SlopeResult)는 app/analyses/[id]에서 이관해 온
@@ -841,6 +883,48 @@ describe('ScanPage 결과 인라인 (D5: analyses/[id] 렌더 이관)', () => {
     expect(findAll(el, AnalysisResult)).toHaveLength(0);
     expect(findAll(el, SlopeResult)).toHaveLength(0);
     expect(findAll(el, AnalysisProgress).map((p) => p.props.analysisId)).toContain('f2');
+  });
+
+  // 리뷰 Important(F1): 구 /analyses/[id] URL이 "이미 새 분석에 밀려난 과거
+  // 실패/미완료 분석"을 가리키던 경우, 옛 페이지는 항상 "이 분석은 아직 완료되지
+  // 않았습니다 (상태: …)" 안내를 보여줬다. D5 이관 때는 AnalysisProgress가 latest만
+  // 반영하므로 이 과거 분석 선택에 대해서는 화면에 아무것도 뜨지 않는 회귀가 있었다.
+  it('F1: ?analysis=로 최신이 아닌 과거 실패 분석을 고르면 안내 문구를 복원해 보여준다', async () => {
+    const latestDone = mkAnalysis({
+      id: 'f2', kind: 'flatness', status: 'done', stats: FLAT_STATS, created_at: '2026-07-25T00:00:00Z',
+    });
+    const oldFailed = mkAnalysis({
+      id: 'f1', kind: 'flatness', status: 'failed', stats: null, created_at: '2026-07-20T00:00:00Z',
+    });
+    vi.mocked(createClient).mockResolvedValue(stubSupabase(mkScan(), [latestDone, oldFailed]) as never);
+
+    const el = await ScanPage(pageProps({ analysis: 'f1' }));
+    const text = collectText(el).join('');
+
+    expect(findAll(el, AnalysisResult)).toHaveLength(0);
+    expect(findAll(el, SlopeResult)).toHaveLength(0);
+    expect(text).toContain('이 분석은 아직 완료되지 않았습니다');
+    expect(text).toContain('실패');
+    // AnalysisProgress는 여전히 이 종류의 최신(f2, done)만 반영한다 - 과거 실패
+    // 분석(f1)의 자리를 대신 차지하면 안 된다(latest 진행 상태와 혼동 방지).
+    expect(findAll(el, AnalysisProgress).map((p) => p.props.analysisId)).toEqual(['f2']);
+  });
+
+  // 선택한 분석이 그 종류의 최신이면 AnalysisProgress가 이미 같은 정보를 실시간으로
+  // 보여주므로, F1 안내 문구가 중복으로 뜨면 안 된다(위 미완료 분석 테스트와 대칭).
+  it('F1 대조: ?analysis=가 그 종류의 최신(미완료)을 가리키면 안내 문구를 중복 렌더하지 않는다', async () => {
+    const done = mkAnalysis({
+      id: 'f1', kind: 'flatness', stats: FLAT_STATS, created_at: '2026-07-20T00:00:00Z',
+    });
+    const queued = mkAnalysis({
+      id: 'f2', kind: 'flatness', status: 'queued', stats: null, created_at: '2026-07-25T00:00:00Z',
+    });
+    vi.mocked(createClient).mockResolvedValue(stubSupabase(mkScan(), [queued, done]) as never);
+
+    const el = await ScanPage(pageProps({ analysis: 'f2' }));
+    const text = collectText(el).join('');
+
+    expect(text).not.toContain('이 분석은 아직 완료되지 않았습니다');
   });
 
   it('완료 분석이 하나도 없으면 결과 인라인이 없다', async () => {

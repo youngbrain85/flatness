@@ -11,7 +11,8 @@ import { ScanStepStrip } from '@/components/scan-step-strip';
 import { UnitConfirmForm } from '@/components/unit-confirm-form';
 import { PageHeader } from '@/components/ui/page-header';
 import {
-  ANALYSIS_KIND_LABEL, GRADE_COLOR, GRADE_LABEL, LINEAGE_LABEL, SCAN_STATUS_LABEL, SURFACE_LABEL,
+  ANALYSIS_KIND_LABEL, ANALYSIS_STATUS_LABEL, GRADE_COLOR, GRADE_LABEL, LINEAGE_LABEL,
+  SCAN_STATUS_LABEL, SURFACE_LABEL,
 } from '@/lib/domain/labels';
 import { isExternalImport, isSlopeStats } from '@/lib/domain/stats';
 import type { AnalysisRow, LocationRow, PhotoRow, ScanRow, SiteRow } from '@/lib/domain/types';
@@ -167,6 +168,20 @@ export default async function ScanPage({ params, searchParams }: {
     : analyses.find((a) => a.status === 'done' && !!a.stats) ?? null;
   const resultAnalysis =
     selectedAnalysis && selectedAnalysis.status === 'done' && selectedAnalysis.stats
+      ? selectedAnalysis
+      : null;
+
+  // 리뷰 Important(F1): ?analysis=가 "이미 새 분석에 밀려난 과거 미완료/실패 분석"을
+  // 가리키면(그 종류의 최신이 아니면) 아래 AnalysisProgress 섹션은 항상 latestFlatness/
+  // latestSlope만 보여주므로 그 선택에 대해 화면에 아무것도 안 뜬다. 원본
+  // app/analyses/[id]/page.tsx는 이 경우 "이 분석은 아직 완료되지 않았습니다"
+  // 안내를 항상 보여줬다 - D5 이관 때 그 안내가 조용히 사라졌던 것을 여기서 복원한다.
+  // 선택한 분석이 그 종류의 최신이면(=latestFlatness/latestSlope와 같으면) 아래
+  // AnalysisProgress가 이미 같은 정보를 실시간으로 보여주므로 중복 안내를 만들지 않는다.
+  const selectedKind = selectedAnalysis ? (selectedAnalysis.kind ?? 'flatness') : null;
+  const latestOfSelectedKind = selectedKind === 'slope' ? latestSlope : latestFlatness;
+  const staleSelectedAnalysis =
+    selectedAnalysis && !resultAnalysis && latestOfSelectedKind?.id !== selectedAnalysis.id
       ? selectedAnalysis
       : null;
 
@@ -421,6 +436,17 @@ export default async function ScanPage({ params, searchParams }: {
           ) : (
             <AnalysisResult analysis={resultAnalysis} scan={s} photos={photos} />
           )}
+        </section>
+      )}
+      {staleSelectedAnalysis && (
+        // 리뷰 Important(F1): app/analyses/[id]/page.tsx 원본이 항상 보여주던
+        // "아직 완료되지 않았습니다" 안내를 그대로 복원한다. 링크는 ?analysis= 없는
+        // 기본 뷰(최신 완료 분석 또는 AnalysisProgress)로 되돌아간다.
+        <section className="space-y-2">
+          <p className="rounded-md border border-zinc-200 bg-white p-3 text-sm text-slate-600">
+            이 분석은 아직 완료되지 않았습니다 (상태: {ANALYSIS_STATUS_LABEL[staleSelectedAnalysis.status]}).{' '}
+            <Link href={`/scans/${id}`} className="text-blue-700 hover:underline">스캔 상세에서 진행 상태 보기</Link>
+          </p>
         </section>
       )}
     </main>
