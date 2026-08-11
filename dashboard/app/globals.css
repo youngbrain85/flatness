@@ -1,20 +1,16 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #fafafa; /* zinc-50 */
+  --foreground: #18181b; /* zinc-900 */
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-noto-sans-kr);
   --font-mono: var(--font-geist-mono);
 }
 
-/* 리뷰 Important 4: 아래에 있던 @media (prefers-color-scheme: dark)와 body 규칙은
-   레이어 밖(unlayered)이라 캐스케이드상 Tailwind v4 @layer utilities 안의
-   .bg-slate-50/.text-slate-900보다 항상 우선했다 - OS가 다크 테마면 bg-white
-   카드 위에 밝은 회색 글자가 상속돼 판독 불가가 됐다. 앱은 이미 Tailwind
-   클래스로 라이트 팔레트를 확정했으므로 제거한다(폰트 지정은
-   app/layout.tsx의 body className으로 이관). */
+/* 리뷰 Important 4(이력 보존): unlayered 다크모드 규칙은 Tailwind v4 @layer보다
+   항상 우선해 판독 불가를 만들었던 사고가 있다 - 다크모드 규칙을 다시 넣지 않는다. */
