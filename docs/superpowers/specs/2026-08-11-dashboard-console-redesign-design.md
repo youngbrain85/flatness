@@ -31,6 +31,8 @@
 - **의미색(판정 전용)**: 적합 `green-600` / 주의 `amber-500` / 재시공 `red-600` /
   판정 불가·미상 `zinc-400`. 배지 배경은 각 `-50`, 텍스트는 각 `-700`.
   이 4색 외에 컬러를 쓰지 않는다(링크 hover 포함).
+  예외: '외부 결과'(임포트 출처 경고) 배지는 4종 어느 쪽으로도 오독되지 않도록
+  purple을 유지합니다(C1 사고 계열의 출처 경고).
 - **타이포**: 본문 Noto Sans KR, 수치·ID·단위·좌표·일시 = Geist Mono +
   `font-variant-numeric: tabular-nums`. 둘 다 `next/font/google`(빌드 타임 페치,
   저장소에 폰트 파일을 넣지 않는다). Pretendard는 Google Fonts에 없어 제외.

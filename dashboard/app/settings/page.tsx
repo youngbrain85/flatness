@@ -26,7 +26,10 @@ export default async function SettingsPage() {
   const siteNames = new Map((sitesRes.data ?? []).map((s) => [s.id as string, s.name as string]));
   return (
     <main className="mx-auto max-w-6xl space-y-8 p-6">
-      <PageHeader title="설정" />
+      {/* 최종 리뷰 M1: 타 상세 화면과 같은 루트 크럼 라벨('현장')로 통일한다
+          (스펙 §6.4는 "홈 ›"이라 적었지만, 실제로는 모든 화면이 '현장'을 쓴다 -
+          app/sites/[id]/page.tsx, app/scans/[id]/page.tsx 등). */}
+      <PageHeader crumbs={[{ href: '/', label: '현장' }, { label: '설정' }]} title="설정" />
       <section>
         <h2 className="mb-2 font-semibold">프로필</h2>
         <ProfileForm userId={user.id} initialName={profile.display_name} />

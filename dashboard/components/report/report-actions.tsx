@@ -78,7 +78,9 @@ export function ReportActions({ report }: {
           발행된 보고서는 수정할 수 없습니다(내용 변경은 DB에서 차단됩니다). 내용을 바꾸려면 새 보고서를 만드세요.
         </p>
       )}
-      {message && <p className="text-sm text-emerald-700">{message}</p>}
+      {/* 최종 리뷰 M3: 의미색 4종(적합/주의/재시공/판정불가) 제약 위반이던 emerald-700을
+          제거한다 - 발행 성공은 판정이 아니라 시스템 메시지이므로 중립색을 쓴다. */}
+      {message && <p className="text-sm text-zinc-600">{message}</p>}
       {error && <p className="rounded border border-red-300 bg-red-50 p-2 text-sm text-red-700">{error}</p>}
     </div>
   );

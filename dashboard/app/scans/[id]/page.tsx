@@ -182,8 +182,22 @@ export default async function ScanPage({ params, searchParams }: {
   // AnalysisProgress가 이미 같은 정보를 실시간으로 보여주므로 중복 안내를 만들지 않는다.
   const selectedKind = selectedAnalysis ? (selectedAnalysis.kind ?? 'flatness') : null;
   const latestOfSelectedKind = selectedKind === 'slope' ? latestSlope : latestFlatness;
+  // 최종 리뷰 M4: "최신이 아니면"만으로는 못 잡는 사각이 있다 - done인데 stats가
+  // 빈(레거시) 분석이 그 종류의 최신인 경우다. 그때는 latestOfSelectedKind.id ===
+  // selectedAnalysis.id라 위 조건이 거짓이 되고, resultAnalysis도 status==='done' &&
+  // stats 요구를 stats가 없어 못 채우니 거짓이다. 그 결과 AnalysisProgress(latest는
+  // done이므로 "결과 보기" 링크만 그린다)도 resultAnalysis 섹션도 아무것도 못 그려서,
+  // 사용자가 그 링크를 눌러 돌아오면 화면에 결과도 안내도 없이 조용히 비어버린다.
+  //
+  // AnalysisProgress가 이미 다루는 "미완료 최신"(대기/처리/실패)까지 이 안내로
+  // 끌어오면 안 된다 - 그러면 F1 대조 테스트가 고정한 "최신 미완료는 중복 안내
+  // 금지"를 깬다. 그래서 최신인 경우의 추가 조건은 status==='done' && !stats로
+  // 좁힌다 - 그 종류의 최신 분석 자체가 "완료됐지만 보여줄 게 없는" 상태일 때만
+  // 이 사각을 메운다.
   const staleSelectedAnalysis =
-    selectedAnalysis && !resultAnalysis && latestOfSelectedKind?.id !== selectedAnalysis.id
+    selectedAnalysis && !resultAnalysis &&
+    (latestOfSelectedKind?.id !== selectedAnalysis.id
+      || (selectedAnalysis.status === 'done' && !selectedAnalysis.stats))
       ? selectedAnalysis
       : null;
 
@@ -442,6 +456,10 @@ export default async function ScanPage({ params, searchParams }: {
         // 리뷰 Important(F1): app/analyses/[id]/page.tsx 원본이 항상 보여주던
         // "아직 완료되지 않았습니다" 안내를 그대로 복원한다. 링크는 ?analysis= 없는
         // 기본 뷰(최신 완료 분석 또는 AnalysisProgress)로 되돌아간다.
+        // 최종 리뷰 M4: done+stats null(레거시) 최신 분석도 이 문구를 그대로 재사용한다
+        // (상태 칸에는 "완료"가 찍힌다 - 문구가 100% 자연스럽진 않지만, 결과도 안내도
+        // 없이 조용히 비는 것보다 낫다는 판단이다. 이 화면 다른 곳의 트레이드오프와
+        // 같은 결).
         <section className="space-y-2">
           <p className="rounded-md border border-zinc-200 bg-white p-3 text-sm text-zinc-600">
             이 분석은 아직 완료되지 않았습니다 (상태: {ANALYSIS_STATUS_LABEL[staleSelectedAnalysis.status]}).{' '}

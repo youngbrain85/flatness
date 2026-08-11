@@ -927,6 +927,29 @@ describe('ScanPage 결과 인라인 (D5: analyses/[id] 렌더 이관)', () => {
     expect(text).not.toContain('이 분석은 아직 완료되지 않았습니다');
   });
 
+  // 최종 리뷰 M4: done인데 stats가 없는(레거시) 분석이 그 종류의 최신이면, 기존
+  // staleSelectedAnalysis 조건("최신이 아니면")은 이 케이스를 못 잡는다 -
+  // latestOfSelectedKind.id === selectedAnalysis.id라 거짓이 되고, resultAnalysis도
+  // stats가 없어 거짓이라 화면에 결과도 안내도 안 뜨는 사각이 있었다. AnalysisProgress는
+  // status==='done'이므로 "결과 보기" 링크만 그리고, 그 링크를 눌러 돌아온 사용자는
+  // 조용히 빈 화면을 본다. 안내가 나오되(a) F1 대조가 지키는 "미완료 최신은 중복 안내
+  // 금지"는 깨지지 않아야 한다 - 그래서 done+stats null 이 두 조건에 모두 해당해야 한다.
+  it('M4: done인데 stats가 없는 최신 분석을 ?analysis=로 고르면 안내 문구가 뜬다(레거시 데이터)', async () => {
+    const doneNoStats = mkAnalysis({
+      id: 'f1', kind: 'flatness', status: 'done', stats: null,
+    });
+    vi.mocked(createClient).mockResolvedValue(stubSupabase(mkScan(), [doneNoStats]) as never);
+
+    const el = await ScanPage(pageProps({ analysis: 'f1' }));
+    const text = collectText(el).join('');
+
+    expect(findAll(el, AnalysisResult)).toHaveLength(0);
+    expect(findAll(el, SlopeResult)).toHaveLength(0);
+    expect(text).toContain('이 분석은 아직 완료되지 않았습니다');
+    // AnalysisProgress는 여전히 이 종류의 최신(f1, done)을 반영한다 - "결과 보기" 링크다.
+    expect(findAll(el, AnalysisProgress).map((p) => p.props.analysisId)).toEqual(['f1']);
+  });
+
   it('완료 분석이 하나도 없으면 결과 인라인이 없다', async () => {
     const queued = mkAnalysis({ id: 'f1', kind: 'flatness', status: 'queued', stats: null });
     vi.mocked(createClient).mockResolvedValue(stubSupabase(mkScan(), [queued]) as never);
