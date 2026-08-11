@@ -31,8 +31,9 @@
 - **의미색(판정 전용)**: 적합 `green-600` / 주의 `amber-500` / 재시공 `red-600` /
   판정 불가·미상 `zinc-400`. 배지 배경은 각 `-50`, 텍스트는 각 `-700`.
   이 4색 외에 컬러를 쓰지 않는다(링크 hover 포함).
-- **타이포**: 본문 Pretendard(next/font/local 셀프호스트, fallback "Malgun Gothic") /
-  수치·ID·단위·좌표·일시 = Geist Mono + `font-variant-numeric: tabular-nums`.
+- **타이포**: 본문 Noto Sans KR, 수치·ID·단위·좌표·일시 = Geist Mono +
+  `font-variant-numeric: tabular-nums`. 둘 다 `next/font/google`(빌드 타임 페치,
+  저장소에 폰트 파일을 넣지 않는다). Pretendard는 Google Fonts에 없어 제외.
   수치는 값과 단위를 분리해 렌더한다(예: `3.2` mm — 단위는 보조색 12px).
 - **형태**: 보더 1px, 라운드 6px(rounded-md), 섀도 없음(팝오버·드로어만 sm),
   행 패딩 `py-2`(밀도 우선), 카드 패딩 `p-4`.
