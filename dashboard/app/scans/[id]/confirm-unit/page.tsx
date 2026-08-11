@@ -1,29 +1,10 @@
-import { notFound, redirect } from 'next/navigation';
-import { createClient } from '@/lib/supabase/server';
-import { UnitConfirmForm } from '@/components/unit-confirm-form';
-import type { ScanRow } from '@/lib/domain/types';
-
-export const dynamic = 'force-dynamic';
+// D6: 구 URL 보존 — 이 화면이 렌더하던 것(높이 뷰 + UnitConfirmForm)은 D5(스캔 작업대
+// 통합)가 app/scans/[id]/page.tsx의 awaiting_unit_confirm 섹션으로 이관했다. 이 파일은
+// 이제 옛 링크를 그 섹션이 있는 스캔 상세로 보내는 리다이렉트만 한다. 로그인·존재
+// 확인은 스캔 상세 페이지 자신의 가드가 이미 처리하므로 여기서 중복하지 않는다.
+import { redirect } from 'next/navigation';
 
 export default async function ConfirmUnitPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect('/login');
-  const { data: scan } = await supabase.from('scans').select('*').eq('id', id).maybeSingle();
-  if (!scan) notFound();
-  // max-w-6xl은 그대로 둔다: 단계 E부터 이 화면이 높이 뷰 PNG를 함께 그리므로
-  // 폼 하나만 있던 시절보다 훨씬 넓은 폭이 실제로 쓰인다(2열 배치 자체는
-  // UnitConfirmForm이 담당한다 - 그림 유무에 따라 열 수가 달라지기 때문이다).
-  return (
-    <main className="mx-auto max-w-6xl p-6">
-      <h1 className="text-xl font-bold">단위 확인</h1>
-      <p className="mb-4 mt-1 text-sm text-slate-600">
-        파일 좌표가 m·cm·mm 중 무엇인지 확정하는 단계입니다. 높이 뷰가 있으면 그
-        축 눈금과 실제 공간 크기를 견주어 고르고, 없으면 파일명과 스캔 앱의 내보내기
-        설정으로 판단하세요.
-      </p>
-      <UnitConfirmForm scan={scan as ScanRow} userId={user.id} />
-    </main>
-  );
+  redirect(`/scans/${id}`);
 }

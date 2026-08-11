@@ -7,9 +7,14 @@ import { useRowStatus } from '@/lib/hooks/use-row-status';
 import { ANALYSIS_STATUS_LABEL } from '@/lib/domain/labels';
 import type { AnalysisStatus } from '@/lib/domain/types';
 
-export function AnalysisProgress({ analysisId, initialStatus }: {
+export function AnalysisProgress({ analysisId, initialStatus, scanId }: {
   analysisId: string;
   initialStatus: AnalysisStatus;
+  // D6: 결과 보기 링크가 이 스캔의 작업대(?analysis= 선택 렌더)로 바로 가도록 부모가
+  // 이미 알고 있는 scanId를 받는다 - /analyses/[id]로 보내면 D6 리다이렉트가 한 홉
+  // 더 거쳐 같은 곳으로 보내지만, 이 화면 자체를 그리는 부모(app/scans/[id]/page.tsx)가
+  // scanId를 이미 갖고 있으니 그 홉을 건너뛴다.
+  scanId: string;
 }) {
   const router = useRouter();
   const status = useRowStatus('analyses', analysisId, initialStatus);
@@ -20,7 +25,7 @@ export function AnalysisProgress({ analysisId, initialStatus }: {
 
   if (status === 'done') {
     return (
-      <Link href={`/analyses/${analysisId}`}
+      <Link href={`/scans/${scanId}?analysis=${analysisId}`}
         className="inline-block rounded bg-emerald-700 px-3 py-1.5 text-sm text-white">
         분석 완료 - 결과 보기
       </Link>

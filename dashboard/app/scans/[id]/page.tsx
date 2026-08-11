@@ -337,7 +337,7 @@ export default async function ScanPage({ params, searchParams }: {
                 isImport={isImport} />
             )}
           </div>
-          <AnalysisProgress analysisId={latestFlatness.id} initialStatus={latestFlatness.status} />
+          <AnalysisProgress analysisId={latestFlatness.id} initialStatus={latestFlatness.status} scanId={id} />
           {flatnessAnalyses.length > 1 && (
             <ul className="text-sm text-zinc-600">
               {flatnessAnalyses.slice(1).map((a) => (
@@ -378,7 +378,7 @@ export default async function ScanPage({ params, searchParams }: {
           </div>
           {latestSlope && (
             <>
-              <AnalysisProgress analysisId={latestSlope.id} initialStatus={latestSlope.status} />
+              <AnalysisProgress analysisId={latestSlope.id} initialStatus={latestSlope.status} scanId={id} />
               {slopeAnalyses.length > 1 && (
                 <ul className="text-sm text-zinc-600">
                   {slopeAnalyses.slice(1).map((a) => (
