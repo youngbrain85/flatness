@@ -25,8 +25,11 @@ export function ProfileForm({ userId, initialName }: { userId: string; initialNa
         <input id="display-name" required value={name} onChange={(e) => setName(e.target.value)}
           className="mt-1 rounded border px-3 py-2" />
       </div>
-      <button type="submit" className="rounded bg-slate-800 px-3 py-2 text-sm text-white">저장</button>
-      {msg && <span className="pb-2 text-xs text-slate-500">{msg}</span>}
+      <button type="submit"
+        className="rounded-md bg-zinc-900 px-3 py-2 text-sm font-medium text-white hover:bg-zinc-700">
+        저장
+      </button>
+      {msg && <span className="pb-2 text-xs text-zinc-500">{msg}</span>}
     </form>
   );
 }

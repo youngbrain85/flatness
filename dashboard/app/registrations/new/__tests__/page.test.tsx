@@ -11,6 +11,7 @@ vi.mock('next/navigation', () => ({
 import { createClient } from '@/lib/supabase/server';
 import NewRegistrationPage from '../page';
 import { RegistrationCreateForm } from '@/components/registration/registration-create-form';
+import { PageHeader } from '@/components/ui/page-header';
 import type { ScanRow } from '@/lib/domain/types';
 
 function scan(id: string, over: Partial<ScanRow> = {}): ScanRow {
@@ -28,6 +29,10 @@ const LOCATION = {
   id: 'l1', site_id: 's1', building: '본관', floor: '1층', floor_order: 1, room: '로비',
   name: '로비', memo: null, created_at: '', updated_at: '',
 };
+
+// D8 브리프 Step 2: 현장 › 현장명 › 측정위치 3단계 브레드크럼을 위해 sites 쿼리가
+// 하나 늘었다 - 스텁이 없는 테이블 접근은 throw로 즉시 드러나므로 여기서도 채운다.
+const SITE = { id: 's1', name: '본관 현장', address: null, memo: null, created_at: '', updated_at: '' };
 
 function chain(result: { data: unknown; error: null }, spy?: (m: string, ...a: unknown[]) => void) {
   const obj: Record<string, unknown> = {
@@ -65,6 +70,7 @@ function mount(scans: ScanRow[], spy?: (m: string, ...a: unknown[]) => void) {
     auth: { getUser: async () => ({ data: { user: { id: 'u1' } } }) },
     from: (table: string) => {
       if (table === 'locations') return chain({ data: LOCATION, error: null });
+      if (table === 'sites') return chain({ data: SITE, error: null });
       if (table === 'scans') return chain({ data: scans, error: null }, spy);
       throw new Error(`예상치 못한 테이블: ${table}`);
     },
@@ -100,5 +106,23 @@ describe('NewRegistrationPage 후보 스캔', () => {
 
     expect(findByType(el, RegistrationCreateForm)).toBeNull();
     expect(textOf(el)).toContain('두 개 이상');
+  });
+});
+
+// D8 브리프 Step 2: scans/[id]·reports/[id]와 같은 3단계 브레드크럼 규약
+// (현장 홈 › 현장명 › 측정위치 라벨)을 이 화면에도 맞춘다.
+describe('NewRegistrationPage 브레드크럼 (D8)', () => {
+  it('현장 홈 › 현장명 › 측정위치 라벨을 PageHeader에 넘긴다', async () => {
+    const el = await mount([scan('a'), scan('b')]);
+    const header = findByType(el, PageHeader);
+
+    expect(header).not.toBeNull();
+    const props = header!.props as { crumbs: { href?: string; label: string }[]; title: string };
+    expect(props.crumbs).toEqual([
+      { href: '/', label: '현장' },
+      { href: '/sites/s1', label: '본관 현장' },
+      { label: '본관 / 1층 / 로비 / 로비' },
+    ]);
+    expect(props.title).toBe('스캔 정합 시작');
   });
 });

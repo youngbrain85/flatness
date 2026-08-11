@@ -8,7 +8,7 @@
 // 걸긴 하는데 결과가 틀린" 회귀를 못 잡고, select 목록에서 params를 빠뜨려 재판정
 // 차단이 조용히 무력화되는 것도 못 잡는다.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import type { ReactElement } from 'react';
 
 vi.mock('@/lib/supabase/server', () => ({ createClient: vi.fn() }));
@@ -101,10 +101,16 @@ function analysisRow(over: Row): Row {
 
 const FLATNESS = analysisRow({});
 
+// D8 이월(T7 우려사항): location-있는 경로에 3단계 브레드크럼(현장 › 현장명 ›
+// 측정위치)을 붙이면서 sites 쿼리가 하나 늘었다 - 스텁이 없는 테이블 접근은
+// throw로 즉시 드러나므로 여기서도 채워 둔다(기존 후보 산출 로직은 무변경).
+const SITE = { id: 's1', name: '현장1', address: null, memo: null, created_at: '', updated_at: '' };
+
 async function renderPage(analyses: Row[], calls?: Call[]) {
   vi.mocked(createClient).mockResolvedValue({
     from: (t: string) => {
       if (t === 'locations') return table([location]);
+      if (t === 'sites') return table([SITE]);
       if (t === 'scans') return table([scanRow('sc1', 'floor', '2026-07-20'), scanRow('sc2', 'wall', '2026-07-21')]);
       if (t === 'analyses') return table(analyses, calls);
       throw new Error(`예상치 못한 테이블: ${t}`);
@@ -159,6 +165,21 @@ describe('NewReportPage location 없는 진입 지원 (D7 Step 1)', () => {
       + '스캔 업로드까지 한 번에 할 수 있습니다.')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: '업로드로 시작' })).toHaveAttribute('href', '/upload');
     expect(screen.queryByLabelText('측정위치')).toBeNull();
+  });
+});
+
+// D8 이월(T7 우려사항): scans/[id]·reports/[id]와 같은 3단계 브레드크럼 규약을
+// location-있는 경로에도 맞춘다.
+describe('NewReportPage location-있는 경로 브레드크럼 (D8 이월)', () => {
+  beforeEach(() => { formProps.current = null; });
+
+  it('현장 홈 › 현장명 › 측정위치 라벨 3단계를 렌더한다', async () => {
+    await renderPage([]);
+    const nav = screen.getByRole('navigation');
+    expect(within(nav).getByRole('link', { name: '현장' })).toHaveAttribute('href', '/');
+    expect(within(nav).getByRole('link', { name: '현장1' })).toHaveAttribute('href', '/sites/s1');
+    // 크럼 마지막 단계(측정위치 라벨)는 링크가 아니다 - 현재 화면 자신이라 href가 없다.
+    expect(within(nav).getByText('1층')).toBeInTheDocument();
   });
 });
 

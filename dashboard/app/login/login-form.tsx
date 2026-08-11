@@ -50,10 +50,10 @@ export function LoginForm() {
       </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
       <button type="submit" disabled={busy}
-        className="w-full rounded bg-slate-800 py-2 text-white disabled:opacity-50">
+        className="w-full rounded-md bg-zinc-900 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50">
         로그인
       </button>
-      <p className="text-xs text-slate-500">
+      <p className="text-xs text-zinc-500">
         계정은 관리자가 Supabase 대시보드(Authentication)에서 생성합니다.
       </p>
     </form>

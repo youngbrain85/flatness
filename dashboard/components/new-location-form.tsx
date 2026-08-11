@@ -39,12 +39,15 @@ export function NewLocationForm({ siteId }: { siteId: string }) {
         ['room', '공간', false], ['name', '측정위치', true],
       ] as const).map(([key, label, required]) => (
         <div key={key}>
-          <label htmlFor={`loc-${key}`} className="block text-xs text-slate-500">{label}</label>
+          <label htmlFor={`loc-${key}`} className="block text-xs text-zinc-500">{label}</label>
           <input id={`loc-${key}`} required={required} value={form[key]} onChange={set(key)}
-            className="w-28 rounded border px-2 py-1" />
+            className="w-28 rounded-md border border-zinc-300 px-2 py-1" />
         </div>
       ))}
-      <button type="submit" className="rounded bg-slate-800 px-3 py-1.5 text-white">위치 추가</button>
+      <button type="submit"
+        className="rounded-md bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-700">
+        위치 추가
+      </button>
       {error && <p className="w-full text-red-600">{error}</p>}
     </form>
   );

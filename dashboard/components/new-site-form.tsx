@@ -42,7 +42,10 @@ export function NewSiteForm() {
           className="mt-1 w-full rounded border px-3 py-2" rows={3} />
       </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
-      <button type="submit" className="rounded bg-slate-800 px-4 py-2 text-white">현장 등록</button>
+      <button type="submit"
+        className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700">
+        현장 등록
+      </button>
     </form>
   );
 }

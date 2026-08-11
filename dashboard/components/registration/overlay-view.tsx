@@ -92,7 +92,7 @@ export function RegistrationOverlay({
 
   if (unavailable) {
     return (
-      <p className="rounded border border-red-300 bg-red-50 p-3 text-sm text-slate-700">
+      <p className="rounded border border-red-300 bg-red-50 p-3 text-sm text-zinc-700">
         <span className="font-medium text-red-700">{unavailable}</span>
         <span className="mt-1 block text-xs">
           겹쳐보기는 RMSE가 원리적으로 못 보는 수평 방향 어긋남을 확인하는 유일한 수단입니다.
@@ -106,20 +106,20 @@ export function RegistrationOverlay({
   return (
     <div className="space-y-2">
       {failed && (
-        <p className="rounded border border-red-300 bg-red-50 p-2 text-xs text-slate-700">
+        <p className="rounded border border-red-300 bg-red-50 p-2 text-xs text-zinc-700">
           겹쳐보기 그림을 불러오지 못했습니다. 두 스캔의 높이 뷰 산출물을 확인하세요.
           그림 없이 RMSE만으로 승인하지 마세요.
         </p>
       )}
       <canvas ref={canvasRef} className="max-w-full rounded border bg-white" />
-      <label className="flex items-center gap-2 text-xs text-slate-600">
+      <label className="flex items-center gap-2 text-xs text-zinc-600">
         <span className="whitespace-nowrap">맞춘 스캔(B) 진하기</span>
         <input type="range" min={0} max={100} value={Math.round(opacity * 100)}
           onChange={(e) => setOpacity(Number(e.target.value) / 100)}
           className="w-40" />
         <span className="tabular-nums">{Math.round(opacity * 100)}%</span>
       </label>
-      <p className="text-xs text-slate-500">
+      <p className="text-xs text-zinc-500">
         슬라이더를 좌우로 움직이며 두 그림의 벽·기둥·모서리 같은 특징이 같은 자리에
         오는지 보세요. 겹쳐지지 않고 나란히 밀려 있으면 수평으로 어긋난 정합입니다.
       </p>
@@ -131,7 +131,7 @@ export function RegistrationOverlay({
           ★ 위쪽 "수평 검증 가능성" 안내와 **같은 현상의 두 얼굴**이다 - 감도가 낮게
           나오는 평탄한 바닥이 정확히 이 그림도 안 통하는 바닥이다. 두 안내가 같은
           이야기를 하도록 문구를 맞춰 둔다. */}
-      <p className="rounded bg-slate-100 p-2 text-xs text-slate-600">
+      <p className="rounded bg-zinc-100 p-2 text-xs text-zinc-600">
         겹쳐보기의 한계: 미터급 어긋남은 확실히 드러나지만 수십 cm급은 정합된 것과
         구별하기 어렵습니다(실측 30cm 오정합의 무늬 상관 0.840 대 정합 0.896).
         평탄해서 벽·기둥·요철 같은 특징이 없는 바닥일수록 그렇습니다 - 수평 감도가 낮게

@@ -37,8 +37,11 @@ export function UncertaintyForm({ initial }: { initial: { floor: number; wall: n
         <input id="u-wall" value={wall} onChange={(e) => setWall(e.target.value)}
           className="mt-1 w-24 rounded border px-2 py-1" />
       </div>
-      <button type="submit" className="rounded bg-slate-800 px-3 py-1.5 text-white">저장</button>
-      {msg && <span className="pb-1.5 text-xs text-slate-500">{msg}</span>}
+      <button type="submit"
+        className="rounded-md bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-700">
+        저장
+      </button>
+      {msg && <span className="pb-1.5 text-xs text-zinc-500">{msg}</span>}
     </form>
   );
 }

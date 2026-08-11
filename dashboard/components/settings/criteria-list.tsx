@@ -32,11 +32,11 @@ function Row({ c, onError }: { c: CriteriaRow; onError: (m: string) => void }) {
       <div>
         <p className="text-sm font-medium">
           {c.name}
-          {c.is_default && <span className="ml-2 rounded bg-blue-100 px-1.5 text-xs text-blue-800">기본</span>}
-          <span className="ml-2 text-xs text-slate-500">{SURFACE_LABEL[c.surface]} · v{c.version}</span>
+          {c.is_default && <span className="ml-2 rounded bg-zinc-100 px-1.5 text-xs text-zinc-600">기본</span>}
+          <span className="ml-2 text-xs text-zinc-500">{SURFACE_LABEL[c.surface]} · v{c.version}</span>
         </p>
-        <p className="text-xs text-slate-500">{c.source_text}</p>
-        <p className="text-xs text-slate-600">{c.thresholds.map(thresholdSummary).join(' · ')}</p>
+        <p className="text-xs text-zinc-500">{c.source_text}</p>
+        <p className="text-xs text-zinc-600">{c.thresholds.map(thresholdSummary).join(' · ')}</p>
       </div>
       <label className="flex shrink-0 items-center gap-1 text-xs">
         <input type="checkbox" checked={active} onChange={toggle} aria-label={`${c.name} 활성`} />
@@ -69,7 +69,7 @@ export function CriteriaList({ criteria, siteNames }: {
           </ul>
         </section>
       ))}
-      <p className="text-xs text-slate-500">
+      <p className="text-xs text-zinc-500">
         기준 신설·버전 개정·현장별 재정의 추가는 데모 범위 밖입니다. Supabase SQL Editor에서
         criteria 테이블에 직접 추가하세요(부분 유니크 제약: 활성 행 기준 (surface, name) 유일).
       </p>

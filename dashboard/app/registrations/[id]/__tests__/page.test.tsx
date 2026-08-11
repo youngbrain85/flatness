@@ -14,6 +14,7 @@ vi.mock('next/navigation', () => ({
 import { createClient } from '@/lib/supabase/server';
 import RegistrationPage from '../page';
 import { RegistrationWorkbench } from '@/components/registration/registration-workbench';
+import { PageHeader } from '@/components/ui/page-header';
 import type { RegistrationRow, ScanRow } from '@/lib/domain/types';
 
 function scan(id: string, over: Partial<ScanRow> = {}): ScanRow {
@@ -26,6 +27,15 @@ function scan(id: string, over: Partial<ScanRow> = {}): ScanRow {
     deleted_at: null, created_at: '', updated_at: '', ...over,
   } as ScanRow;
 }
+
+// D8 브리프 Step 2: 현장 › 현장명 › 측정위치 3단계 브레드크럼을 위해 원본 스캔의
+// location_id로 locations·sites를 추가 조회한다 - 스텁이 없는 테이블 접근은 throw로
+// 즉시 드러나므로 여기서도 채운다.
+const LOCATION = {
+  id: 'l1', site_id: 's1', building: '본관', floor: '1층', floor_order: 1, room: '로비',
+  name: '로비', memo: null, created_at: '', updated_at: '',
+};
+const SITE = { id: 's1', name: '본관 현장', address: null, memo: null, created_at: '', updated_at: '' };
 
 const REG: RegistrationRow = {
   id: 'r1', source_scan_ids: ['scanA', 'scanB'], correspondences: [], transform: null,
@@ -80,6 +90,8 @@ function mount(o: {
       if (table === 'scans') {
         return chain({ data: o.scans ?? [scan('scanA'), scan('scanB')], error: null }, o.scansSpy);
       }
+      if (table === 'locations') return chain({ data: LOCATION, error: null });
+      if (table === 'sites') return chain({ data: SITE, error: null });
       // 설계 결정 F10: jobs는 RLS 정책이 0개라 대시보드가 못 읽는다.
       throw new Error(`예상치 못한 테이블: ${table}`);
     },
@@ -121,5 +133,31 @@ describe('RegistrationPage 배선', () => {
 
   it('없는 정합 id는 notFound로 보낸다', async () => {
     await expect(mount({ registration: null })).rejects.toThrow('NOT_FOUND');
+  });
+});
+
+// D8 브리프 Step 2: scans/[id]·reports/[id]와 같은 3단계 브레드크럼 규약
+// (현장 홈 › 현장명 › 측정위치 라벨)을 이 화면에도 맞춘다.
+describe('RegistrationPage 브레드크럼 (D8)', () => {
+  it('원본 스캔의 위치로 현장 홈 › 현장명 › 측정위치 라벨을 PageHeader에 넘긴다', async () => {
+    const el = await mount();
+    const header = findByType(el, PageHeader);
+
+    expect(header).not.toBeNull();
+    const props = header!.props as { crumbs: { href?: string; label: string }[]; title: string };
+    expect(props.crumbs).toEqual([
+      { href: '/', label: '현장' },
+      { href: '/sites/s1', label: '본관 현장' },
+      { label: '본관 / 1층 / 로비 / 로비' },
+    ]);
+    expect(props.title).toBe('스캔 정합');
+  });
+
+  it('원본 스캔이 둘 다 없으면 현장 홈 크럼만 남긴다', async () => {
+    const el = await mount({ scans: [] });
+    const header = findByType(el, PageHeader);
+
+    expect((header!.props as { crumbs: { href?: string; label: string }[] }).crumbs)
+      .toEqual([{ href: '/', label: '현장' }]);
   });
 });

@@ -79,7 +79,7 @@ export function PointPicker({
     <section className="space-y-2">
       <h3 className="text-sm font-semibold">{title}</h3>
       {viewFailed ? (
-        <p className="rounded border border-amber-300 bg-amber-50 p-3 text-xs text-slate-700">
+        <p className="rounded border border-amber-300 bg-amber-50 p-3 text-xs text-zinc-700">
           높이 뷰를 불러오지 못했습니다. 이 스캔의 산출물이 지워졌거나 아직 사전 검사가
           끝나지 않았을 수 있습니다. 스캔 상세에서 상태를 확인하세요.
         </p>
@@ -102,14 +102,14 @@ export function PointPicker({
                 left: `${((m.px + 0.5) / size.width) * 100}%`,
                 top: `${((m.py + 0.5) / size.height) * 100}%`,
               }}
-              className={`pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white px-1.5 text-[10px] font-bold leading-4 text-white ${m.pending ? 'bg-amber-600' : 'bg-blue-700'}`}>
+              className={`pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white px-1.5 text-[10px] font-bold leading-4 text-white ${m.pending ? 'bg-amber-600' : 'bg-zinc-900'}`}>
               {m.label}
             </span>
           ))}
         </div>
       )}
       {metaError && (
-        <p className="rounded border border-amber-300 bg-amber-50 p-2 text-xs text-slate-700">
+        <p className="rounded border border-amber-300 bg-amber-50 p-2 text-xs text-zinc-700">
           {metaError}
         </p>
       )}

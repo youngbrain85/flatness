@@ -92,6 +92,15 @@ export default async function NewReportPage({ searchParams }: {
   if (!location) notFound();
   const loc = location as LocationRow;
   const locationLabel = [loc.building, loc.floor, loc.room, loc.name].filter(Boolean).join(' / ');
+  // D8 이월(T7 우려사항): scans/[id]·reports/[id]와 같은 3단계 브레드크럼 규약
+  // (현장 홈 › 현장명 › 측정위치 라벨)을 이 경로에도 맞춘다. 사이트 쿼리 하나만
+  // 늘어날 뿐 후보 조회·제출 로직은 그대로다.
+  const { data: site } = await supabase.from('sites').select('*').eq('id', loc.site_id).maybeSingle();
+  const crumbs = [
+    { href: '/', label: '현장' },
+    { href: `/sites/${loc.site_id}`, label: site ? (site as SiteRow).name : '현장 상세' },
+    { label: locationLabel },
+  ];
 
   const { data: scans } = await supabase
     .from('scans').select('*').eq('location_id', locationId).is('deleted_at', null);
@@ -141,12 +150,13 @@ export default async function NewReportPage({ searchParams }: {
 
   return (
     <main className="mx-auto max-w-4xl space-y-4 p-6">
-      <PageHeader crumbs={[{ href: '/', label: '현장' }]} title="보고서 생성" />
+      <PageHeader crumbs={crumbs} title="보고서 생성" />
       <p className="text-sm text-zinc-500">{locationLabel}</p>
       {candidates.length === 0 ? (
-        <p className="rounded border bg-white p-4 text-sm text-slate-600">
+        <p className="rounded border bg-white p-4 text-sm text-zinc-600">
           이 측정위치에는 완료된 분석이 없습니다. 스캔을 업로드하고 분석이 끝난 뒤 다시 시도하세요.{' '}
-          <Link href={`/upload?location=${locationId}`} className="text-blue-700 hover:underline">스캔 업로드</Link>
+          <Link href={`/upload?location=${locationId}`}
+            className="text-zinc-700 hover:text-zinc-900 hover:underline">스캔 업로드</Link>
         </p>
       ) : (
         <ReportCreateForm locationId={locationId} locationLabel={locationLabel} candidates={candidates} />

@@ -5,6 +5,7 @@ import { ensureProfile } from '@/lib/auth/ensure-profile';
 import { CriteriaList } from '@/components/settings/criteria-list';
 import { ProfileForm } from '@/components/settings/profile-form';
 import { UncertaintyForm } from '@/components/settings/uncertainty-form';
+import { PageHeader } from '@/components/ui/page-header';
 import type { CriteriaRow } from '@/lib/domain/types';
 
 export const dynamic = 'force-dynamic';
@@ -25,14 +26,14 @@ export default async function SettingsPage() {
   const siteNames = new Map((sitesRes.data ?? []).map((s) => [s.id as string, s.name as string]));
   return (
     <main className="mx-auto max-w-6xl space-y-8 p-6">
-      <h1 className="text-xl font-bold">설정</h1>
+      <PageHeader title="설정" />
       <section>
         <h2 className="mb-2 font-semibold">프로필</h2>
         <ProfileForm userId={user.id} initialName={profile.display_name} />
       </section>
       <section>
         <h2 className="mb-2 font-semibold">측정 불확도 U</h2>
-        <p className="mb-2 text-xs text-slate-500">
+        <p className="mb-2 text-xs text-zinc-500">
           판정식의 경계 구간 폭을 결정합니다. 분석 시점 값이 결과에 스냅샷되므로 수정해도
           과거 분석·보고서는 바뀌지 않습니다. P5 반복 스캔 재현성 시험 후 갱신 예정.
         </p>

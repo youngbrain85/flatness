@@ -260,7 +260,7 @@ export function UploadForm({ sites, locations, userId, initialLocationId }: Prop
         </label>
       </div>
       {mode === 'import' && (
-        <p className="rounded-md bg-slate-100 p-2 text-xs text-slate-600">
+        <p className="rounded-md bg-zinc-100 p-2 text-xs text-zinc-600">
           기존 Colab 노트북 결과 CSV(X, Y, Signed_Distance_mm 컬럼 필수) 또는 범용
           연계 JSON(format: &quot;flatness-import-v1&quot;, points[].x/y/deviation_mm)을
           등록합니다. 바닥 결과만 지원하며, 결과 화면에 &quot;외부 결과&quot; 배지가
@@ -358,14 +358,14 @@ export function UploadForm({ sites, locations, userId, initialLocationId }: Prop
       <div>
         <span className="block text-sm font-medium">적용 기준</span>
         <div className="mt-1 space-y-1 rounded-md border border-zinc-300 bg-white p-2 text-sm">
-          {criteria.length === 0 && <p className="text-slate-500">측정위치를 먼저 선택하세요.</p>}
+          {criteria.length === 0 && <p className="text-zinc-500">측정위치를 먼저 선택하세요.</p>}
           {criteria.map((c) => (
             <label key={c.id} className="flex items-start gap-2">
               <input type="radio" checked={criteriaId === c.id} onChange={() => setCriteriaId(c.id)} />
               <span>
-                {c.name}{c.is_default && <em className="ml-1 text-xs text-blue-700">(기본)</em>}
-                {c.site_id && <em className="ml-1 text-xs text-emerald-700">(현장 기준)</em>}
-                <span className="block text-xs text-slate-500">{c.source_text}</span>
+                {c.name}{c.is_default && <em className="ml-1 text-xs text-zinc-600">(기본)</em>}
+                {c.site_id && <em className="ml-1 text-xs text-zinc-600">(현장 기준)</em>}
+                <span className="block text-xs text-zinc-500">{c.source_text}</span>
               </span>
             </label>
           ))}
@@ -413,7 +413,7 @@ export function UploadForm({ sites, locations, userId, initialLocationId }: Prop
         </label>
         <input id="file" type="file" required onChange={(e) => setFile(e.target.files?.[0] ?? null)}
           className="mt-1 w-full text-sm" />
-        <p className="mt-1 text-xs text-slate-500">
+        <p className="mt-1 text-xs text-zinc-500">
           파일은 Supabase Storage에 저장됩니다. 파일당 최대 <span className="font-mono">{MAX_UPLOAD_MB}</span>MB입니다.
         </p>
       </div>

@@ -130,14 +130,14 @@ export function ReportCreateForm({ locationId, locationLabel, candidates }: {
 
       <fieldset>
         <legend className="text-sm font-medium">포함할 분석</legend>
-        <p className="text-xs text-slate-500">
+        <p className="text-xs text-zinc-500">
           같은 측정위치의 완료된 최신 분석만 후보로 표시됩니다(평활도와 구배, 바닥과 벽면을 함께 묶을 수 있습니다).
         </p>
         <ul className="mt-2 space-y-1">
           {candidates.map((c) => (
             <li key={c.analysis_id} className="rounded border p-2 text-sm">
               {/* 종류는 **문구로** 앞세운다. 색만으로 구별하지 않는다(스펙 §7.2). */}
-              <label className={`flex items-center gap-2 ${c.blocked_reason ? 'text-slate-400' : ''}`}>
+              <label className={`flex items-center gap-2 ${c.blocked_reason ? 'text-zinc-400' : ''}`}>
                 <input type="checkbox" checked={selected.includes(c.analysis_id)}
                   disabled={!!c.blocked_reason}
                   onChange={() => toggle(c.analysis_id)} />
@@ -158,7 +158,7 @@ export function ReportCreateForm({ locationId, locationLabel, candidates }: {
 
       <div>
         <label htmlFor="report-opinion" className="block text-sm font-medium">종합의견</label>
-        <p className="text-xs text-slate-500">
+        <p className="text-xs text-zinc-500">
           비워 두면 분석별 자동 의견이 그대로 보고서에 실립니다. 스크리닝 한계 문구는 항상 자동 포함됩니다.
         </p>
         <textarea id="report-opinion" rows={8} value={opinion}
@@ -169,7 +169,7 @@ export function ReportCreateForm({ locationId, locationLabel, candidates }: {
       {error && <p className="rounded border border-red-300 bg-red-50 p-2 text-sm text-red-700">{error}</p>}
 
       <button type="submit" disabled={busy}
-        className="rounded bg-slate-800 px-4 py-2 text-sm text-white disabled:opacity-50">
+        className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50">
         {busy ? '생성 요청 중...' : '보고서 생성'}
       </button>
     </form>

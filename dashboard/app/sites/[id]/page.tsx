@@ -7,6 +7,7 @@ import { NewLocationForm } from '@/components/new-location-form';
 import { PhotoGallery } from '@/components/photo-gallery';
 import { RefreshOnUpload } from '@/components/refresh-on-upload';
 import { SupabaseErrorNotice } from '@/components/supabase-error';
+import { PageHeader } from '@/components/ui/page-header';
 import type { AnalysisStatus, LocationRow, PhotoRow, ScanRow, SiteRow, Verdict } from '@/lib/domain/types';
 
 export const dynamic = 'force-dynamic';
@@ -67,8 +68,8 @@ export default async function SitePage({ params }: { params: Promise<{ id: strin
   return (
     <main className="mx-auto max-w-6xl space-y-6 p-6">
       <div>
-        <h1 className="text-xl font-bold">{(site as SiteRow).name}</h1>
-        {(site as SiteRow).address && <p className="text-sm text-slate-500">{(site as SiteRow).address}</p>}
+        <PageHeader crumbs={[{ href: '/', label: '현장' }]} title={(site as SiteRow).name} />
+        {(site as SiteRow).address && <p className="text-sm text-zinc-500">{(site as SiteRow).address}</p>}
       </div>
       <section>
         <h2 className="mb-2 font-semibold">측정위치</h2>

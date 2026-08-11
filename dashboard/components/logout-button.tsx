@@ -12,6 +12,6 @@ export function LogoutButton() {
     window.location.assign('/login');
   }
   return (
-    <button onClick={onClick} className="text-sm text-slate-500 hover:text-slate-800">로그아웃</button>
+    <button onClick={onClick} className="text-sm text-zinc-500 hover:text-zinc-900">로그아웃</button>
   );
 }
