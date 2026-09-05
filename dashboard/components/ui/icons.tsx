@@ -22,12 +22,14 @@ const PATHS: Record<string, ReactNode> = {
   download: <path d="M12 4v12M7 11l5 5 5-5M4 20h16" />,
   external: <><path d="M14 4h6v6M20 4l-9 9" /><path d="M19 13v6a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h6" /></>,
   photo: <><rect x="3" y="5" width="18" height="14" rx="2" /><circle cx="9" cy="10" r="1.5" /><path d="M21 16l-5-5-8 8" /></>,
+  // ReportDetail 아트보드의 'PDF 다시 생성' 아이콘(T8 추가). 재분석 등 "다시 실행" 액션 공용.
+  refresh: <><path d="M20 12a8 8 0 1 1-2.3-5.7" /><path d="M20 4v5h-5" /></>,
 };
 
 export type IconName =
   | 'check-circle' | 'alert-triangle' | 'x-circle' | 'info-circle' | 'clock' | 'minus-circle'
   | 'chevron-right' | 'chevron-down' | 'chevron-left' | 'search' | 'plus' | 'upload' | 'user'
-  | 'menu' | 'logout' | 'trend' | 'download' | 'external' | 'photo';
+  | 'menu' | 'logout' | 'trend' | 'download' | 'external' | 'photo' | 'refresh';
 
 export function Icon({ name, size = 16, className, ...rest }:
   { name: IconName; size?: number } & Omit<SVGProps<SVGSVGElement>, 'name'>) {

@@ -26,10 +26,13 @@ describe('ReportLocationPicker', () => {
   beforeEach(() => { pushMock.mockClear(); });
 
   it('현장별 optgroup으로 측정위치를 묶어 보여준다', () => {
-    render(<ReportLocationPicker sites={sites} locations={locations} />);
+    const { container } = render(<ReportLocationPicker sites={sites} locations={locations} />);
     const sel = screen.getByLabelText('측정위치') as HTMLSelectElement;
     const groups = [...sel.querySelectorAll('optgroup')];
     expect(groups.map((g) => g.label)).toEqual(['현장A', '현장B']);
+    // T8: selectClass(2px cs-input-border) + SelectWrap의 chevron
+    expect(sel.className).toContain('border-cs-input-border');
+    expect(container.querySelector('[data-icon="chevron-down"]')).toBeInTheDocument();
   });
 
   it('측정위치가 없는 현장은 optgroup에서 빠진다(업로드 폼과 동일 규칙)', () => {

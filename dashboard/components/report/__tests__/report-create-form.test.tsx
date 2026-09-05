@@ -92,12 +92,19 @@ describe('ReportCreateForm', () => {
     ]);
   });
 
-  it('선택한 분석이 없으면 안내만 하고 삽입하지 않는다', async () => {
+  it('선택한 분석이 없으면 error Alert로 안내만 하고 삽입하지 않는다', async () => {
     renderForm();
     for (const box of screen.getAllByRole('checkbox')) fireEvent.click(box);
     fireEvent.click(screen.getByRole('button', { name: '보고서 생성' }));
-    expect(await screen.findByText(/1개 이상 선택/)).toBeInTheDocument();
+    const msg = await screen.findByText(/1개 이상 선택/);
+    expect(msg.closest('[data-alert]')).toHaveAttribute('data-alert', 'error');
     expect(state.inserted).toBeNull();
+  });
+
+  it('보고서 생성 버튼은 이 화면의 유일한 primary이고, 체크박스는 accent 색을 쓴다(T8)', () => {
+    renderForm();
+    expect(screen.getByRole('button', { name: '보고서 생성' }).className).toContain('bg-cs-link');
+    for (const box of screen.getAllByRole('checkbox')) expect(box.className).toContain('accent-cs-link');
   });
 
   it('중복 엔큐(23505)는 안내 문구로 바꾸되, 보고서 상세로 이동해 재시도 경로를 찾게 한다(I3)', async () => {
@@ -172,7 +179,8 @@ describe('ReportCreateForm 구배 편입 (단계 H)', () => {
     const boxes = screen.getAllByRole('checkbox') as HTMLInputElement[];
     expect(boxes[0].disabled).toBe(false);
     expect(boxes[1].disabled).toBe(true);
-    expect(screen.getByText(reason)).toBeInTheDocument();
+    // T8: 사유는 그 행 아래 warning Alert로 보인다(ReportNew 아트보드)
+    expect(screen.getByText(reason).closest('[data-alert]')).toHaveAttribute('data-alert', 'warning');
   });
 
   it('선택 불가 후보는 초기 선택에서 빠지고 제출해도 포함되지 않는다', async () => {

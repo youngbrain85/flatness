@@ -1,8 +1,10 @@
-// D7 Step 2: 목록의 "새 보고서" 버튼 상시 노출 + 빈 목록 EmptyState + tableClass
+// D7 Step 2: 목록의 "새 보고서" 버튼 상시 노출 + 빈 목록 EmptyState + ReportTable(T8)
 // 전환을 검증한다. 서버 컴포넌트 함수를 직접 호출해 렌더된 트리를 확인한다
-// (app/reports/new/__tests__/page.test.tsx와 같은 방식).
+// (app/reports/new/__tests__/page.test.tsx와 같은 방식). ReportTable은 클라이언트
+// 컴포넌트지만 render()가 그대로 실행하므로 도구 줄·상태 열까지 이 트리에서 보인다.
+// 상태 열은 within(table)로 찾는다 - 도구 줄 상태 필터의 <option> 문구가 같은 텍스트다.
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import type { ReactElement } from 'react';
 
 vi.mock('@/lib/supabase/server', () => ({ createClient: vi.fn() }));
@@ -87,7 +89,14 @@ describe('ReportsPage 새 보고서 버튼 (D7 Step 2: 파라미터 유무와 �
   });
 });
 
-describe('ReportsPage 목록 테이블 (D7 Step 2: 제목 | 측정위치 | 상태 Badge | 생성일)', () => {
+describe('ReportsPage 목록 테이블 (D7 Step 2 → T8: 제목 | 측정위치 | 상태 StatusIndicator | 생성일)', () => {
+  it('브레드크럼 현장 › 보고서와 컨테이너 카운터를 그린다', async () => {
+    mockSupabase([reportRow()], [locationRow]);
+    await renderPage();
+    expect(screen.getByRole('link', { name: '현장' })).toHaveAttribute('href', '/');
+    expect(screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent)).toContain('보고서(1)');
+  });
+
   it('제목·측정위치·생성일을 보여주고 제목이 상세로 링크한다', async () => {
     mockSupabase([reportRow()], [locationRow]);
     await renderPage();
@@ -96,15 +105,30 @@ describe('ReportsPage 목록 테이블 (D7 Step 2: 제목 | 측정위치 | 상�
     expect(screen.getByText('2026-08-01')).toBeInTheDocument();
   });
 
-  it('발행된 보고서는 발행됨 배지를 보여준다', async () => {
+  it('발행된 보고서는 발행됨(success) 상태로 보여준다', async () => {
     mockSupabase([reportRow({ status: 'finalized' })], [locationRow]);
     await renderPage();
-    expect(screen.getByText('발행됨')).toBeInTheDocument();
+    expect(within(screen.getByRole('table')).getByText('발행됨')).toHaveAttribute('data-status', 'success');
   });
 
-  it('PDF 생성에 실패한 초안은 생성 실패 배지를 보여준다', async () => {
+  it('PDF 생성에 실패한 초안은 생성 실패(error) 상태로 보여준다', async () => {
     mockSupabase([reportRow({ gen_status: 'failed' })], [locationRow]);
     await renderPage();
-    expect(screen.getByText('생성 실패')).toBeInTheDocument();
+    expect(within(screen.getByRole('table')).getByText('생성 실패')).toHaveAttribute('data-status', 'error');
+  });
+
+  it('도구 줄에 검색 입력과 상태 필터(5종)가 있다(스펙 §7-3 - 서버 조회에는 관여하지 않는다)', async () => {
+    mockSupabase([reportRow()], [locationRow]);
+    await renderPage();
+    expect(screen.getByRole('textbox', { name: '보고서 검색' })).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: '상태 필터' })).toBeInTheDocument();
+    expect(screen.getAllByRole('option')).toHaveLength(5);
+  });
+
+  it('location 필터가 걸린 목록은 도구 줄에 측정위치 라벨과 전체 보기 링크를 보여준다', async () => {
+    mockSupabase([reportRow()], [locationRow]);
+    await renderPage({ location: 'l1' });
+    expect(screen.getByText('측정위치: 101동 / 3층 / 거실')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '전체 보기' })).toHaveAttribute('href', '/reports');
   });
 });

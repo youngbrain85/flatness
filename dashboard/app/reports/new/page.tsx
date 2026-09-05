@@ -5,7 +5,10 @@ import { createClient } from '@/lib/supabase/server';
 import { SupabaseErrorNotice } from '@/components/supabase-error';
 import { ReportCreateForm, type ReportCandidate } from '@/components/report/report-create-form';
 import { ReportLocationPicker } from '@/components/report/report-location-picker';
+import { Alert } from '@/components/ui/alert';
+import { Container } from '@/components/ui/container';
 import { EmptyState } from '@/components/ui/empty-state';
+import { PAGE_MAIN } from '@/components/ui/page';
 import { PageHeader } from '@/components/ui/page-header';
 import { GRADE_LABEL } from '@/lib/domain/labels';
 import type {
@@ -55,7 +58,7 @@ export default async function NewReportPage({ searchParams }: {
     ]);
     const listError = sitesRes.error ?? locationsRes.error;
     if (listError) {
-      return <main className="mx-auto max-w-4xl p-6"><SupabaseErrorNotice message={listError.message} /></main>;
+      return <main className={PAGE_MAIN}><SupabaseErrorNotice message={listError.message} /></main>;
     }
     const allLocations = (locationsRes.data ?? []) as LocationRow[];
     // 리뷰 F1: 측정위치가 하나도 없으면(모든 현장이 빈 현장인 경우도 포함 - 시·현장
@@ -64,9 +67,10 @@ export default async function NewReportPage({ searchParams }: {
     // 유도)·목록 EmptyState와 같은 원칙으로, 현장·측정위치를 인라인 생성할 수 있는
     // 업로드 화면으로 보낸다.
     if (allLocations.length === 0) {
+      // 브레드크럼 마지막 항목은 현재 페이지(비링크, 스펙 §7-2)
       return (
-        <main className="mx-auto max-w-4xl space-y-4 p-6">
-          <PageHeader crumbs={[{ href: '/', label: '현장' }]} title="보고서 생성" />
+        <main className={PAGE_MAIN}>
+          <PageHeader crumbs={[{ href: '/', label: '현장' }, { label: '보고서 생성' }]} title="보고서 생성" />
           <EmptyState
             message="아직 측정위치가 없습니다. 업로드 화면에서 현장·측정위치 생성부터 스캔 업로드까지 한 번에 할 수 있습니다."
             actionHref="/upload"
@@ -75,11 +79,13 @@ export default async function NewReportPage({ searchParams }: {
         </main>
       );
     }
+    // 안내 문구는 '측정위치 선택' 컨테이너의 설명(스펙 §7-8: 컨테이너 헤더는 시스템 크롬)
     return (
-      <main className="mx-auto max-w-4xl space-y-4 p-6">
-        <PageHeader crumbs={[{ href: '/', label: '현장' }]} title="보고서 생성" />
-        <p className="text-sm text-zinc-500">보고서를 만들 측정위치를 먼저 선택하세요.</p>
-        <ReportLocationPicker sites={(sitesRes.data ?? []) as SiteRow[]} locations={allLocations} />
+      <main className={PAGE_MAIN}>
+        <PageHeader crumbs={[{ href: '/', label: '현장' }, { label: '보고서 생성' }]} title="보고서 생성" />
+        <Container title="측정위치 선택" description="보고서를 만들 측정위치를 먼저 선택하세요.">
+          <ReportLocationPicker sites={(sitesRes.data ?? []) as SiteRow[]} locations={allLocations} />
+        </Container>
       </main>
     );
   }
@@ -87,7 +93,7 @@ export default async function NewReportPage({ searchParams }: {
   const { data: location, error } = await supabase
     .from('locations').select('*').eq('id', locationId).maybeSingle();
   if (error) {
-    return <main className="mx-auto max-w-4xl p-6"><SupabaseErrorNotice message={error.message} /></main>;
+    return <main className={PAGE_MAIN}><SupabaseErrorNotice message={error.message} /></main>;
   }
   if (!location) notFound();
   const loc = location as LocationRow;
@@ -129,7 +135,7 @@ export default async function NewReportPage({ searchParams }: {
         .in('kind', ['flatness', 'slope']).is('deleted_at', null)
     : { data: [], error: null };
   if (analysesRes.error) {
-    return <main className="mx-auto max-w-4xl p-6"><SupabaseErrorNotice message={analysesRes.error.message} /></main>;
+    return <main className={PAGE_MAIN}><SupabaseErrorNotice message={analysesRes.error.message} /></main>;
   }
 
   const candidates: ReportCandidate[] = (analysesRes.data ?? []).map((a) => {
@@ -149,16 +155,19 @@ export default async function NewReportPage({ searchParams }: {
     };
   }).sort((a, b) => a.kind.localeCompare(b.kind) || a.surface.localeCompare(b.surface));
 
+  // 아트보드 ReportNew: h1 아래 설명이 측정위치 라벨. 후보 0건은 폼 자리에 info Alert
+  // (막다른 화면 금지 - 업로드 링크 유지). 폼 자체(컨테이너 + primary)는 ReportCreateForm이 그린다.
   return (
-    <main className="mx-auto max-w-4xl space-y-4 p-6">
-      <PageHeader crumbs={crumbs} title="보고서 생성" />
-      <p className="text-sm text-zinc-500">{locationLabel}</p>
+    <main className={PAGE_MAIN}>
+      <PageHeader crumbs={crumbs} title="보고서 생성" description={locationLabel} />
       {candidates.length === 0 ? (
-        <p className="rounded border bg-white p-4 text-sm text-zinc-600">
-          이 측정위치에는 완료된 분석이 없습니다. 스캔을 업로드하고 분석이 끝난 뒤 다시 시도하세요.{' '}
-          <Link href={`/upload?location=${locationId}`}
-            className="text-zinc-700 hover:text-zinc-900 hover:underline">스캔 업로드</Link>
-        </p>
+        <Container title="보고서 생성">
+          <Alert type="info">
+            이 측정위치에는 완료된 분석이 없습니다. 스캔을 업로드하고 분석이 끝난 뒤 다시 시도하세요.{' '}
+            <Link href={`/upload?location=${locationId}`}
+              className="font-bold text-cs-link hover:text-cs-link-hover hover:underline">스캔 업로드</Link>
+          </Alert>
+        </Container>
       ) : (
         <ReportCreateForm locationId={locationId} locationLabel={locationLabel} candidates={candidates} />
       )}

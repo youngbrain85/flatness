@@ -63,7 +63,8 @@ describe('ReportActions', () => {
     state.updateError = { message: 'PDF가 생성되지 않은 보고서는 발행할 수 없습니다 (report_id=r1)' };
     render(<ReportActions report={doneDraft} />);
     fireEvent.click(screen.getByRole('button', { name: '발행' }));
-    expect(await screen.findByText(/발행할 수 없습니다/)).toBeInTheDocument();
+    const msg = await screen.findByText(/발행할 수 없습니다/);
+    expect(msg.closest('[data-alert]')).toHaveAttribute('data-alert', 'error');
   });
 
   it('재생성은 fn_enqueue_job RPC만 호출한다(gen_status는 잡 기계장치 소유)', async () => {
@@ -73,5 +74,22 @@ describe('ReportActions', () => {
       { fn: 'fn_enqueue_job', params: { p_type: 'report', p_payload: { report_id: 'r1' } } },
     ]));
     expect(state.updated).toBeNull();
+  });
+
+  it('발행만 primary이고 다운로드·재생성은 normal 알약이다(뷰당 primary 1개)', () => {
+    // gen_status failed + pdf_path 있음: 다운로드·재생성은 있고 발행은 없다
+    render(<ReportActions report={{ ...doneDraft, gen_status: 'failed' }} />);
+    const download = screen.getByRole('link', { name: 'PDF 다운로드' });
+    expect(download).toHaveAttribute('download');
+    expect(download.className).toContain('rounded-full');
+    expect(download.className).not.toContain('bg-cs-link');
+    const regen = screen.getByRole('button', { name: 'PDF 다시 생성' });
+    expect(regen.className).toContain('border-cs-link');
+    expect(regen.className).not.toContain('bg-cs-link');
+  });
+
+  it('발행 버튼은 primary(파랑 채움)다', () => {
+    render(<ReportActions report={doneDraft} />);
+    expect(screen.getByRole('button', { name: '발행' }).className).toContain('bg-cs-link');
   });
 });

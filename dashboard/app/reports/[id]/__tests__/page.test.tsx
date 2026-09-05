@@ -1,4 +1,4 @@
-// D7 Step 3: PageHeader 브레드크럼(현장 › 측정위치) + StatusDot 상태 + "포함 분석"
+// D7 Step 3: PageHeader 브레드크럼(현장 › 측정위치) + StatusIndicator 상태(T8) + "포함 분석"
 // 링크의 /scans/[scanId]?analysis=[id] 단축(analyses 행의 scan_id로 한 홉 줄인다 -
 // D6 리다이렉트가 /analyses/[id]도 여전히 받아주지만 여기서는 애초에 그 홉을
 // 만들지 않는다)을 검증한다. 기능(다운로드·재생성·발행·삭제·진행 상태)은 이 태스크의
@@ -94,15 +94,15 @@ describe('ReportPage 브레드크럼 (D7 Step 3: 현장 › 측정위치)', () =
   });
 });
 
-describe('ReportPage 상태 배지 (D7 Step 3: reportStatusBadge 재사용)', () => {
-  it('초안 + 생성 완료는 작성 중으로 표시한다', async () => {
+describe('ReportPage 상태 표시 (D7 Step 3: reportStatusBadge 재사용 → T8 StatusIndicator)', () => {
+  it('초안 + 생성 완료는 작성 중(pending)으로 표시한다', async () => {
     await renderPage(reportRow({ status: 'draft', gen_status: 'done' }));
-    expect(screen.getByText('작성 중')).toBeInTheDocument();
+    expect(screen.getByText('작성 중')).toHaveAttribute('data-status', 'pending');
   });
 
-  it('발행본은 발행됨으로 표시한다', async () => {
+  it('발행본은 발행됨(success)으로 표시한다', async () => {
     await renderPage(reportRow({ status: 'finalized' }));
-    expect(screen.getByText('발행됨')).toBeInTheDocument();
+    expect(screen.getByText('발행됨')).toHaveAttribute('data-status', 'success');
   });
 });
 
@@ -111,5 +111,23 @@ describe('ReportPage 포함 분석 링크 (D7 참고: /scans/[scanId]?analysis=[
     await renderPage();
     const a = screen.getByRole('link', { name: /바닥.*2026-07-20.*판정/ });
     expect(a).toHaveAttribute('href', '/scans/sc1?analysis=a1');
+  });
+
+  it("'포함 분석' 컨테이너가 건수를 카운터로 보여준다(T8)", async () => {
+    await renderPage();
+    expect(screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent)).toContain('포함 분석(1)');
+  });
+});
+
+describe('ReportPage PDF 미리보기 (T8: 컨테이너 안 iframe)', () => {
+  it('PDF가 있고 생성 완료면 iframe을 그린다', async () => {
+    await renderPage();
+    expect(screen.getByTitle('보고서 PDF 미리보기')).toHaveAttribute('src', '/api/data/reports/r1/report.pdf');
+  });
+
+  it('PDF가 없으면 안내 문구를 보여준다', async () => {
+    await renderPage(reportRow({ pdf_path: null, gen_status: 'processing' }));
+    expect(screen.getByText('PDF가 아직 생성되지 않았습니다.')).toBeInTheDocument();
+    expect(screen.queryByTitle('보고서 PDF 미리보기')).toBeNull();
   });
 });

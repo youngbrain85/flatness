@@ -143,6 +143,9 @@ describe('NewReportPage location 없는 진입 지원 (D7 Step 1)', () => {
     const el = await NewReportPage({ searchParams: Promise.resolve({}) });
     render(el as ReactElement);
     expect(screen.getByLabelText('측정위치')).toBeInTheDocument();
+    // T8: 셀렉트는 '측정위치 선택' 컨테이너 안에 있고, 안내 문구는 그 컨테이너의 설명이다
+    expect(screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent)).toContain('측정위치 선택');
+    expect(screen.getByText('보고서를 만들 측정위치를 먼저 선택하세요.')).toBeInTheDocument();
     // 후보 로드 폼은 아직 그려지지 않는다 - location을 고르기 전이라 후보를 알 수 없다
     expect(formProps.current).toBeNull();
   });
@@ -180,6 +183,23 @@ describe('NewReportPage location-있는 경로 브레드크럼 (D8 이월)', () 
     expect(within(nav).getByRole('link', { name: '현장1' })).toHaveAttribute('href', '/sites/s1');
     // 크럼 마지막 단계(측정위치 라벨)는 링크가 아니다 - 현재 화면 자신이라 href가 없다.
     expect(within(nav).getByText('1층')).toBeInTheDocument();
+    expect(within(nav).queryByRole('link', { name: '1층' })).toBeNull();
+    // T8: 측정위치 라벨은 h1 아래 설명으로 한 번 더 보인다(ReportNew 아트보드) - h1은 '보고서 생성'
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('보고서 생성');
+  });
+});
+
+// T8: 완료된 분석이 0건인 측정위치는 폼 대신 info Alert + 업로드 링크(막다른 화면 금지)를
+// '보고서 생성' 컨테이너 안에 보여준다. 문구·링크는 리디자인 전과 같다.
+describe('NewReportPage 후보 0건 (T8: info Alert)', () => {
+  beforeEach(() => { formProps.current = null; });
+
+  it('안내 문구를 info Alert로 보여주고 업로드 화면으로 링크한다', async () => {
+    await renderPage([]);
+    const notice = screen.getByText(/이 측정위치에는 완료된 분석이 없습니다/);
+    expect(notice.closest('[data-alert]')).toHaveAttribute('data-alert', 'info');
+    expect(screen.getByRole('link', { name: '스캔 업로드' })).toHaveAttribute('href', '/upload?location=l1');
+    expect(formProps.current).toBeNull();
   });
 });
 

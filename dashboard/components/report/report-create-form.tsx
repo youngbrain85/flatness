@@ -2,6 +2,10 @@
 'use client';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { Alert } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { Container } from '@/components/ui/container';
+import { FormField, checkClass, inputClass, textareaClass } from '@/components/ui/form';
 import { createClient } from '@/lib/supabase/client';
 import { enqueueJob } from '@/lib/domain/jobs';
 import { ANALYSIS_KIND_LABEL, SURFACE_LABEL } from '@/lib/domain/labels';
@@ -120,58 +124,56 @@ export function ReportCreateForm({ locationId, locationLabel, candidates }: {
     router.push(`/reports/${reportId}`);
   }
 
+  // 아트보드 ReportNew: 컨테이너(헤더 없음) 안에 필드 3개, primary '보고서 생성'은 컨테이너 밖
+  // 우하단. 제출 버튼이 같은 <form> 안에 있어야 하므로 폼이 Container를 감싼다.
   return (
-    <form onSubmit={submit} className="space-y-4 rounded-lg border bg-white p-4">
-      <div>
-        <label htmlFor="report-title" className="block text-sm font-medium">보고서 제목</label>
-        <input id="report-title" value={title} onChange={(e) => setTitle(e.target.value)}
-          className="mt-1 w-full rounded border px-2 py-1 text-sm" />
+    <form onSubmit={submit} className="flex flex-col gap-5">
+      <Container>
+        <div className="flex flex-col gap-4">
+          <FormField label="보고서 제목" htmlFor="report-title">
+            <input id="report-title" value={title} onChange={(e) => setTitle(e.target.value)}
+              className={inputClass} />
+          </FormField>
+
+          <fieldset>
+            <legend className="text-sm font-bold">포함할 분석</legend>
+            <p className="text-xs leading-4 text-cs-text-secondary">
+              같은 측정위치의 완료된 최신 분석만 후보로 표시됩니다(평활도와 구배, 바닥과 벽면을 함께 묶을 수 있습니다).
+            </p>
+            <div className="mt-2 overflow-hidden rounded-lg border border-cs-divider">
+              {candidates.map((c) => (
+                <div key={c.analysis_id} className="border-b border-cs-divider px-4 py-3 last:border-b-0">
+                  {/* 종류는 **문구로** 앞세운다. 색만으로 구별하지 않는다(스펙 §7.2). */}
+                  <label className={`flex items-center gap-3 text-sm${c.blocked_reason ? ' text-cs-disabled' : ''}`}>
+                    <input type="checkbox" className={checkClass} checked={selected.includes(c.analysis_id)}
+                      disabled={!!c.blocked_reason}
+                      onChange={() => toggle(c.analysis_id)} />
+                    <span>
+                      {ANALYSIS_KIND_LABEL[c.kind]} · {SURFACE_LABEL[c.surface]} · {c.scanned_at} ·
+                      {' '}판정 {c.verdict_label}
+                    </span>
+                  </label>
+                  {c.blocked_reason && <Alert type="warning" className="mt-2">{c.blocked_reason}</Alert>}
+                </div>
+              ))}
+            </div>
+          </fieldset>
+
+          <FormField label="종합의견" htmlFor="report-opinion"
+            description="비워 두면 분석별 자동 의견이 그대로 보고서에 실립니다. 스크리닝 한계 문구는 항상 자동 포함됩니다.">
+            <textarea id="report-opinion" rows={8} value={opinion}
+              onChange={(e) => setOpinion(e.target.value)} className={textareaClass} />
+          </FormField>
+
+          {error && <Alert type="error">{error}</Alert>}
+        </div>
+      </Container>
+
+      <div className="flex justify-end gap-2">
+        <Button type="submit" variant="primary" disabled={busy}>
+          {busy ? '생성 요청 중...' : '보고서 생성'}
+        </Button>
       </div>
-
-      <fieldset>
-        <legend className="text-sm font-medium">포함할 분석</legend>
-        <p className="text-xs text-zinc-500">
-          같은 측정위치의 완료된 최신 분석만 후보로 표시됩니다(평활도와 구배, 바닥과 벽면을 함께 묶을 수 있습니다).
-        </p>
-        <ul className="mt-2 space-y-1">
-          {candidates.map((c) => (
-            <li key={c.analysis_id} className="rounded border p-2 text-sm">
-              {/* 종류는 **문구로** 앞세운다. 색만으로 구별하지 않는다(스펙 §7.2). */}
-              <label className={`flex items-center gap-2 ${c.blocked_reason ? 'text-zinc-400' : ''}`}>
-                <input type="checkbox" checked={selected.includes(c.analysis_id)}
-                  disabled={!!c.blocked_reason}
-                  onChange={() => toggle(c.analysis_id)} />
-                <span>
-                  {ANALYSIS_KIND_LABEL[c.kind]} · {SURFACE_LABEL[c.surface]} · {c.scanned_at} ·
-                  {' '}판정 {c.verdict_label}
-                </span>
-              </label>
-              {c.blocked_reason && (
-                <p className="mt-1 rounded border border-amber-300 bg-amber-50 p-2 text-xs text-amber-800">
-                  {c.blocked_reason}
-                </p>
-              )}
-            </li>
-          ))}
-        </ul>
-      </fieldset>
-
-      <div>
-        <label htmlFor="report-opinion" className="block text-sm font-medium">종합의견</label>
-        <p className="text-xs text-zinc-500">
-          비워 두면 분석별 자동 의견이 그대로 보고서에 실립니다. 스크리닝 한계 문구는 항상 자동 포함됩니다.
-        </p>
-        <textarea id="report-opinion" rows={8} value={opinion}
-          onChange={(e) => setOpinion(e.target.value)}
-          className="mt-1 w-full rounded border px-2 py-1 text-sm" />
-      </div>
-
-      {error && <p className="rounded border border-red-300 bg-red-50 p-2 text-sm text-red-700">{error}</p>}
-
-      <button type="submit" disabled={busy}
-        className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50">
-        {busy ? '생성 요청 중...' : '보고서 생성'}
-      </button>
     </form>
   );
 }

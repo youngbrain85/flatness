@@ -2,6 +2,8 @@
 'use client';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { Alert } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
 import { createClient } from '@/lib/supabase/client';
 import { deleteConfirmText } from '@/lib/domain/reports';
 import type { ReportStatus } from '@/lib/domain/types';
@@ -39,28 +41,19 @@ export function ReportDeleteButton({ report, redirectTo }: {
   }
 
   if (!confirming) {
-    return (
-      <button type="button" onClick={() => setConfirming(true)}
-        className="rounded-md border border-red-300 px-3 py-1.5 text-sm text-red-700 hover:bg-red-50">
-        삭제
-      </button>
-    );
+    return <Button onClick={() => setConfirming(true)}>삭제</Button>;
   }
 
+  // 확인 단계: error Alert 안에 문구 + 삭제 확인/취소. 둘 다 normal - 상세 화면의 primary는
+  // 발행 하나뿐이고(스펙 §4), 삭제 확인을 파랑 채움으로 만들면 발행과 구별되지 않는다.
   return (
-    <div className="space-y-2 rounded-md border border-red-300 bg-red-50 p-3">
-      <p className="text-sm text-red-800">{deleteConfirmText(report)}</p>
-      <div className="flex gap-2">
-        <button type="button" onClick={remove} disabled={busy}
-          className="rounded-md bg-red-700 px-3 py-1.5 text-sm text-white disabled:opacity-50">
-          삭제 확인
-        </button>
-        <button type="button" onClick={() => { setConfirming(false); setError(null); }} disabled={busy}
-          className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-50 disabled:opacity-50">
-          취소
-        </button>
+    <Alert type="error" className="max-w-md">
+      <p>{deleteConfirmText(report)}</p>
+      <div className="mt-2 flex gap-2">
+        <Button onClick={remove} disabled={busy}>삭제 확인</Button>
+        <Button onClick={() => { setConfirming(false); setError(null); }} disabled={busy}>취소</Button>
       </div>
-      {error && <p className="text-sm text-red-700">{error}</p>}
-    </div>
+      {error && <p className="mt-2 text-cs-error">{error}</p>}
+    </Alert>
   );
 }

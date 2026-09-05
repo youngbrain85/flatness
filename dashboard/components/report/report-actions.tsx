@@ -2,6 +2,9 @@
 'use client';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { Alert } from '@/components/ui/alert';
+import { Button, buttonClass } from '@/components/ui/button';
+import { Icon } from '@/components/ui/icons';
 import { createClient } from '@/lib/supabase/client';
 import { enqueueJob } from '@/lib/domain/jobs';
 import { dataUrl } from '@/lib/domain/paths';
@@ -48,40 +51,35 @@ export function ReportActions({ report }: {
     router.refresh();
   }
 
+  // 페이지 헤더의 액션 슬롯(우측)에 놓인다 - 버튼 줄 아래로 발행 안내·메시지·오류가 펼쳐지므로
+  // 세로 컬럼을 우측 정렬한다. 아트보드 ReportDetail: PDF 다운로드 · PDF 다시 생성 · 발행(primary).
   return (
-    <div className="space-y-2">
-      <div className="flex flex-wrap items-center gap-2">
+    <div className="flex flex-col items-end gap-2">
+      <div className="flex flex-wrap items-center justify-end gap-2">
         {report.pdf_path && (
-          <a href={dataUrl(report.pdf_path)} download
-            className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm text-zinc-700 hover:bg-zinc-50">
-            PDF 다운로드
+          <a href={dataUrl(report.pdf_path)} download className={buttonClass('normal')}>
+            <Icon name="download" />PDF 다운로드
           </a>
         )}
         {canRegenerate(report) && (
-          <button type="button" onClick={regenerate} disabled={busy}
-            className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm text-zinc-700 hover:bg-zinc-50 disabled:opacity-50">
-            PDF 다시 생성
-          </button>
+          <Button onClick={regenerate} disabled={busy}>
+            <Icon name="refresh" />PDF 다시 생성
+          </Button>
         )}
         {canFinalize(report) && (
-          // T2 팔레트(§3)는 주 버튼 색을 zinc-900 하나로 정한다 - 별도의 "성공"
-          // 액센트(구 emerald-700)를 두지 않는다. 발행은 이 화면의 핵심 행동이라
-          // 주 버튼 토큰을 그대로 쓴다.
-          <button type="button" onClick={finalize} disabled={busy}
-            className="rounded-md bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50">
-            발행
-          </button>
+          // 뷰당 primary 1개(스펙 §4) - 발행은 이 화면의 핵심 행동이라 primary는 발행뿐이다.
+          // 삭제·다운로드·재생성은 normal.
+          <Button variant="primary" onClick={finalize} disabled={busy}>발행</Button>
         )}
       </div>
       {report.status === 'finalized' && (
-        <p className="text-xs text-zinc-600">
+        <p className="text-xs leading-4 text-cs-text-secondary">
           발행된 보고서는 수정할 수 없습니다(내용 변경은 DB에서 차단됩니다). 내용을 바꾸려면 새 보고서를 만드세요.
         </p>
       )}
-      {/* 최종 리뷰 M3: 의미색 4종(적합/주의/재시공/판정불가) 제약 위반이던 emerald-700을
-          제거한다 - 발행 성공은 판정이 아니라 시스템 메시지이므로 중립색을 쓴다. */}
-      {message && <p className="text-sm text-zinc-600">{message}</p>}
-      {error && <p className="rounded border border-red-300 bg-red-50 p-2 text-sm text-red-700">{error}</p>}
+      {/* 최종 리뷰 M3: 발행 성공은 판정이 아니라 시스템 메시지이므로 판정색을 쓰지 않는다 - 보조색 텍스트. */}
+      {message && <p className="text-sm text-cs-text-secondary">{message}</p>}
+      {error && <Alert type="error" className="max-w-lg">{error}</Alert>}
     </div>
   );
 }

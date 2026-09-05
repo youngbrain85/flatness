@@ -31,7 +31,7 @@ describe('ReportProgress (코드리뷰 Important I2: 발행본의 gen_status 잔
       <ReportProgress reportId="r1" initialStatus="failed" genError="워커 오류"
         reportStatus="draft" />,
     );
-    expect(screen.getByText(/PDF 생성에 실패했습니다/)).toBeInTheDocument();
+    expect(screen.getByText(/PDF 생성에 실패했습니다/).closest('[data-alert]')).toHaveAttribute('data-alert', 'error');
   });
 
   it('reportStatus가 draft이고 생성 중이면 진행 안내를 보여준다', () => {
@@ -40,6 +40,6 @@ describe('ReportProgress (코드리뷰 Important I2: 발행본의 gen_status 잔
       <ReportProgress reportId="r1" initialStatus="processing" genError={null}
         reportStatus="draft" />,
     );
-    expect(screen.getByText(/워커가 처리 중입니다/)).toBeInTheDocument();
+    expect(screen.getByText(/워커가 처리 중입니다/)).toHaveAttribute('data-status', 'in-progress');
   });
 });

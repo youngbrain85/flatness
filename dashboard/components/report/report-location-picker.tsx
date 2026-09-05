@@ -5,6 +5,7 @@
 // "현장별로 묶고, 측정위치가 0개인 현장은 목록에서 뺀다".
 'use client';
 import { useRouter } from 'next/navigation';
+import { FormField, SelectWrap, selectClass } from '@/components/ui/form';
 import type { LocationRow, SiteRow } from '@/lib/domain/types';
 
 export function ReportLocationPicker({ sites, locations }: {
@@ -14,27 +15,30 @@ export function ReportLocationPicker({ sites, locations }: {
   const router = useRouter();
   return (
     <div className="max-w-md">
-      <label htmlFor="report-location" className="block text-sm font-medium">측정위치</label>
-      <select id="report-location" defaultValue=""
-        onChange={(e) => {
-          if (e.target.value) router.push(`/reports/new?location=${e.target.value}`);
-        }}
-        className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2">
-        <option value="">선택...</option>
-        {sites.map((s) => {
-          const locs = locations.filter((l) => l.site_id === s.id);
-          if (locs.length === 0) return null;
-          return (
-            <optgroup key={s.id} label={s.name}>
-              {locs.map((l) => (
-                <option key={l.id} value={l.id}>
-                  {[l.building, l.floor, l.room, l.name].filter(Boolean).join(' / ')}
-                </option>
-              ))}
-            </optgroup>
-          );
-        })}
-      </select>
+      <FormField label="측정위치" htmlFor="report-location">
+        <SelectWrap>
+          <select id="report-location" defaultValue=""
+            onChange={(e) => {
+              if (e.target.value) router.push(`/reports/new?location=${e.target.value}`);
+            }}
+            className={selectClass}>
+            <option value="">선택...</option>
+            {sites.map((s) => {
+              const locs = locations.filter((l) => l.site_id === s.id);
+              if (locs.length === 0) return null;
+              return (
+                <optgroup key={s.id} label={s.name}>
+                  {locs.map((l) => (
+                    <option key={l.id} value={l.id}>
+                      {[l.building, l.floor, l.room, l.name].filter(Boolean).join(' / ')}
+                    </option>
+                  ))}
+                </optgroup>
+              );
+            })}
+          </select>
+        </SelectWrap>
+      </FormField>
     </div>
   );
 }

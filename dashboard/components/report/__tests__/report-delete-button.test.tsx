@@ -32,13 +32,16 @@ function stubSupabase(
 afterEach(() => { vi.clearAllMocks(); });
 
 describe('ReportDeleteButton', () => {
-  it('첫 클릭에는 지우지 않고 확인 단계를 보여준다', () => {
+  it('첫 클릭에는 지우지 않고 확인 단계(error Alert)를 보여준다', () => {
     const spy = vi.fn();
     vi.mocked(createClient).mockReturnValue(stubSupabase(null, spy) as never);
     render(<ReportDeleteButton report={{ id: 'r1', status: 'draft' }} />);
 
+    // T8: 삭제 버튼은 normal 알약(primary는 상세 화면의 발행뿐)
+    expect(screen.getByRole('button', { name: '삭제' }).className).toContain('border-cs-link');
     fireEvent.click(screen.getByRole('button', { name: '삭제' }));
-    expect(screen.getByText(/삭제할까요/)).toBeInTheDocument();
+    expect(screen.getByText(/삭제할까요/).closest('[data-alert]')).toHaveAttribute('data-alert', 'error');
+    expect(screen.getByRole('button', { name: '삭제 확인' }).className).not.toContain('bg-cs-link');
     expect(spy).not.toHaveBeenCalled();
   });
 
