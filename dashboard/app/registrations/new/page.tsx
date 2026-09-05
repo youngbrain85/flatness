@@ -1,9 +1,11 @@
 // 정합 시작 화면 (단계 F Task 5, 스펙 §6.2 2단계)
-import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { getRequestUser } from '@/lib/auth/request-user';
 import { createClient } from '@/lib/supabase/server';
 import { RegistrationCreateForm } from '@/components/registration/registration-create-form';
+import { Alert } from '@/components/ui/alert';
+import { LinkButton } from '@/components/ui/button';
+import { PAGE_MAIN } from '@/components/ui/page';
 import { PageHeader } from '@/components/ui/page-header';
 import type { LocationRow, ScanRow, SiteRow } from '@/lib/domain/types';
 
@@ -51,27 +53,25 @@ export default async function NewRegistrationPage(
     (s) => !!s.height_view_path && s.unit_scale !== null && s.status === 'ready',
   );
 
+  // 아트보드 RegistrationNew: 안내문은 h1 아래 설명(PageHeader description) - 문구는 그대로.
+  const description = `${locationLabel} 측정위치의 바닥 스캔 두 개를 하나로 합칩니다. 같은 공간을 나눠 찍은 스캔에서 같은 지점을 번갈아 찍어 대응점을 만들고, 그 대응점으로 정합한 뒤 서브셀 중앙값 점군 하나로 병합합니다.`;
+
   return (
-    <main className="mx-auto max-w-4xl space-y-4 p-6">
-      <PageHeader crumbs={crumbs} title="스캔 정합 시작" />
-      <p className="text-sm text-zinc-600">
-        {locationLabel}
-        {' '}측정위치의 바닥 스캔 두 개를 하나로 합칩니다. 같은 공간을 나눠 찍은 스캔에서
-        같은 지점을 번갈아 찍어 대응점을 만들고, 그 대응점으로 정합한 뒤 서브셀 중앙값
-        점군 하나로 병합합니다.
-      </p>
+    <main className={PAGE_MAIN}>
+      <PageHeader crumbs={crumbs} title="스캔 정합 시작" description={description} />
       {candidates.length < 2 ? (
-        <div className="rounded border border-amber-300 bg-amber-50 p-4 text-sm">
-          <p className="font-medium">정합할 수 있는 스캔이 두 개 이상 필요합니다.</p>
-          <p className="mt-1 text-xs text-zinc-700">
+        // 막다른 화면 금지: 후보가 모자라면 업로드로 가는 버튼이 이 뷰의 유일한(primary) 행동이다.
+        <Alert type="warning" title="정합할 수 있는 스캔이 두 개 이상 필요합니다.">
+          <p>
             후보가 되려면 바닥 스캔이면서 사전 검사가 끝나 높이 뷰가 있고 단위가 확정된
             (분석 준비됨) 상태여야 합니다. 현재 이 측정위치의 후보는 {candidates.length}개입니다.
           </p>
-          <Link href={`/upload?site=${loc.site_id}&location=${loc.id}`}
-            className="mt-2 inline-block rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-700">
-            스캔 업로드
-          </Link>
-        </div>
+          <div className="mt-3">
+            <LinkButton href={`/upload?site=${loc.site_id}&location=${loc.id}`} variant="primary">
+              스캔 업로드
+            </LinkButton>
+          </div>
+        </Alert>
       ) : (
         <RegistrationCreateForm scans={candidates} userId={user.id} />
       )}

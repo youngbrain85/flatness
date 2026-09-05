@@ -1,18 +1,22 @@
 // 정합 화면 (단계 F Task 5, 스펙 §7.4)
-import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { getRequestUser } from '@/lib/auth/request-user';
 import { createClient } from '@/lib/supabase/server';
 import { RegistrationWorkbench } from '@/components/registration/registration-workbench';
-import { Badge, type BadgeTone } from '@/components/ui/badge';
+import { Alert } from '@/components/ui/alert';
+import { LinkButton } from '@/components/ui/button';
+import { PAGE_MAIN } from '@/components/ui/page';
 import { PageHeader } from '@/components/ui/page-header';
+import { StatusIndicator, TONE_STATUS } from '@/components/ui/status-indicator';
 import { REGISTRATION_STATUS_LABEL } from '@/lib/domain/labels';
 import type { LocationRow, RegistrationRow, RegistrationStatus, ScanRow, SiteRow } from '@/lib/domain/types';
 
 // 진행 상태 배지는 판정이 아니라 "진행이 어디까지 왔나"를 보여준다 - 완료만 pass,
 // 실패만 fail, 나머지(대응점 대기·정합 대기·정합 중)는 아직 결과가 없으니 unknown.
 // export: F2 픽스 - 단위 테스트가 페이지 서버 함수를 거치지 않고 이 매핑만 직접 검증한다.
-export function statusTone(status: RegistrationStatus): BadgeTone {
+// 반환 타입을 세 톤으로 좁힌 것은 TONE_STATUS(pass/warn/fail/unknown/busy) 색인을 위해서다 -
+// 매핑 자체는 그대로다.
+export function statusTone(status: RegistrationStatus): 'pass' | 'fail' | 'unknown' {
   if (status === 'done') return 'pass';
   if (status === 'failed') return 'fail';
   return 'unknown';
@@ -66,28 +70,29 @@ export default async function RegistrationPage({ params }: { params: Promise<{ i
   }
 
   return (
-    <main className="mx-auto max-w-6xl space-y-4 p-6">
-      <PageHeader crumbs={crumbs} title="스캔 정합" actions={
-        <Badge tone={statusTone(registration.status)}>{REGISTRATION_STATUS_LABEL[registration.status]}</Badge>
+    <main className={PAGE_MAIN}>
+      {/* 아트보드 RegistrationDetail: h1 '스캔 정합' + 진행 상태 StatusIndicator(배지 → 상태 표시기) */}
+      <PageHeader crumbs={crumbs} title="스캔 정합" description={
+        <StatusIndicator type={TONE_STATUS[statusTone(registration.status)]}>
+          {REGISTRATION_STATUS_LABEL[registration.status]}
+        </StatusIndicator>
       } />
       {scanA && scanB ? (
         <RegistrationWorkbench registration={registration} scanA={scanA} scanB={scanB} />
       ) : (
         // registrations.source_scan_ids는 배열이라 FK가 없다 - 원본 스캔이 지워지면
         // 죽은 id가 남는 것을 007이 이력 테이블로서 의도적으로 허용했다. 화면이 견딘다.
-        <div className="rounded border border-amber-300 bg-amber-50 p-4 text-sm">
-          <p className="font-medium">원본 스캔을 찾을 수 없습니다.</p>
-          <p className="mt-1 text-xs text-zinc-700">
+        <Alert type="warning" title="원본 스캔을 찾을 수 없습니다.">
+          <p>
             정합에 쓰인 스캔이 삭제된 것 같습니다. 이 정합 이력은 남지만 대응점을 다시
             찍을 수는 없습니다. 새 정합을 시작하세요.
           </p>
           {registration.result_scan_id && (
-            <Link href={`/scans/${registration.result_scan_id}`}
-              className="mt-2 inline-block text-xs text-zinc-700 hover:text-zinc-900 underline">
-              이 정합이 만든 병합 스캔 열기
-            </Link>
+            <div className="mt-3">
+              <LinkButton href={`/scans/${registration.result_scan_id}`}>이 정합이 만든 병합 스캔 열기</LinkButton>
+            </div>
           )}
-        </div>
+        </Alert>
       )}
     </main>
   );

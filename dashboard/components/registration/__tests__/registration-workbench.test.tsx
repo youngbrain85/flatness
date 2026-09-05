@@ -141,6 +141,7 @@ describe('RegistrationWorkbench 대응점 수집 (스펙 §7.4)', () => {
     mount(reg(), {}, scan({ id: 'sb', height_view_path: null }));
 
     expect(screen.getByText(/정합을 시작할 수 없습니다/)).toBeInTheDocument();
+    expect(screen.getByText(/정합을 시작할 수 없습니다/).closest('[data-alert]')).toHaveAttribute('data-alert', 'warning');
     expect(screen.queryByRole('button', { name: /정합 실행/ })).toBeNull();
   });
 
@@ -161,7 +162,11 @@ describe('RegistrationWorkbench 대응점 수집 (스펙 §7.4)', () => {
     pickPair(250, 150);
     pickPair(450, 50);
 
-    expect(screen.getByRole('button', { name: /정합 실행/ })).toBeEnabled();
+    const run = screen.getByRole('button', { name: /정합 실행/ });
+    expect(run).toBeEnabled();
+    // 대응점 지정 뷰의 유일한 primary. 안내문은 info Alert.
+    expect(run.className).toContain('bg-cs-link');
+    expect(screen.getByText(/번갈아 클릭해 쌍을 만드세요/).closest('[data-alert]')).toHaveAttribute('data-alert', 'info');
   });
 
   // Task 4 계약: a = source_scan_ids[0], b = [1], 값은 각 파일 단위 월드 좌표.
@@ -234,7 +239,10 @@ describe('RegistrationWorkbench 대응점 수집 (스펙 §7.4)', () => {
 describe('RegistrationWorkbench 진행·실패 표시 (설계 결정 F10)', () => {
   it.each(['queued', 'processing'] as const)('%s면 진행 중임을 알린다', async (status) => {
     mount(reg({ status }));
-    expect(await screen.findByText(/정합 중|정합 대기 중/)).toBeInTheDocument();
+    const indicator = await screen.findByText(/정합 중|정합 대기 중/);
+    expect(indicator).toBeInTheDocument();
+    // 진행 상태는 StatusIndicator in-progress - 스타일이 아니라 의미 속성으로 읽는다
+    expect(indicator).toHaveAttribute('data-status', 'in-progress');
     expect(screen.queryByRole('button', { name: /정합 실행/ })).toBeNull();
   });
 
@@ -245,6 +253,9 @@ describe('RegistrationWorkbench 진행·실패 표시 (설계 결정 F10)', () =
       error_text: '중첩이 부족합니다(약 6%). 두 스캔이 실제로 겹치는지 확인하세요.',
     }));
     expect(await screen.findByText(/중첩이 부족합니다\(약 6%\)/)).toBeInTheDocument();
+    // 실패는 error Alert, 다음 행동(대응점 다시 찍기)이 이 뷰의 primary
+    expect(screen.getByText(/정합에 실패했습니다/).closest('[data-alert]')).toHaveAttribute('data-alert', 'error');
+    expect(screen.getByRole('button', { name: /대응점 다시 찍기/ }).className).toContain('bg-cs-link');
   });
 });
 
@@ -277,6 +288,23 @@ describe('RegistrationWorkbench 결과 표시 (스펙 §9.3.2·§9.3.4)', () => 
     await screen.findByText(/1\.01/);
     expect(screen.getByRole('heading', { name: /겹쳐보기/ })).toBeInTheDocument();
     expect(container.querySelector('canvas')).not.toBeNull();
+  });
+
+  // 아트보드 RegistrationDetail: 컨테이너 '정합 결과'(KeyValuePairs 3열 + warning Alert) →
+  // 컨테이너 '겹쳐보기'(체크박스 checkClass, disabled 버튼, 보조색 안내문). 컨테이너는 정확히 둘.
+  it('정합 결과·겹쳐보기를 컨테이너와 Cloudscape 프리미티브로 그린다', async () => {
+    const { container } = mount(done);
+    await screen.findByText(/1\.01/);
+
+    expect(screen.getByRole('heading', { level: 2, name: '정합 결과' })).toBeInTheDocument();
+    expect(container.querySelectorAll('.rounded-cs-container')).toHaveLength(2);
+    expect(screen.getByText('정합 잔차 RMSE').className).toContain('font-bold');
+    expect(screen.getByText(/1\.01/).className).toContain('font-mono');
+    expect(screen.getByText(/수직 방향 일치만 보증/).closest('[data-alert]')).toHaveAttribute('data-alert', 'warning');
+    expect(screen.getByRole('checkbox', { name: /포개지는/ }).className).toContain('accent-cs-link');
+    expect(screen.getByRole('button', { name: /병합 스캔/ }).className).toContain('border-cs-disabled');
+    expect(screen.getByRole('button', { name: /대응점 다시 찍기/ }).className).toContain('text-cs-link');
+    expect(screen.getByText(/시스템 차원의 승인 절차가 아닙니다/).className).toContain('text-cs-text-secondary');
   });
 
   // ★ 리뷰 C2: overlay-view.test.tsx는 컴포넌트를 직접 마운트해 그 안쪽 배선만 잠근다.
@@ -463,9 +491,10 @@ describe('RegistrationWorkbench 수평 검증 가능성 안내', () => {
     for (const word of ['오류', '이상', '실패']) {
       expect(box.textContent).not.toContain(word);
     }
-    // 경고 색(빨강)으로 칠하지 않는다 - 실패 박스와 같은 무게로 보이면 안 된다.
-    expect(box.className).not.toMatch(/red/);
-    expect(container.querySelector('.border-red-300')).toBeNull();
+    // 정보 알림(info)으로 제시한다 - 실패 알림(error)과 같은 무게로 보이면 안 된다.
+    // 스타일 문자열 대신 Alert의 의미 속성(data-alert)으로 읽는다.
+    expect(box.closest('[data-alert]')).toHaveAttribute('data-alert', 'info');
+    expect(container.querySelector('[data-alert="error"]')).toBeNull();
   });
 
   // I4·I5와 하나의 이야기여야 한다: 감도가 낮은 바닥이 정확히 겹쳐보기도 안 통하는 바닥이다.

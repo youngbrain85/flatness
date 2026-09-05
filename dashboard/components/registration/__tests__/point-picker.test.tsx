@@ -56,6 +56,7 @@ describe('PointPicker 클릭 -> 월드 좌표 (설계 결정 F7)', () => {
     const img = screen.getByRole('img', { name: /A 스캔/ });
     expect(img).toHaveAttribute('src', PLAIN_URL);
     expect(img).not.toHaveAttribute('src', DECORATED_URL);
+    expect(img.className).toContain('border-cs-divider');
   });
 
   it('클릭 픽셀을 사이드카 좌표 계약으로 환산해 넘긴다', () => {
@@ -92,6 +93,7 @@ describe('PointPicker 클릭 -> 월드 좌표 (설계 결정 F7)', () => {
 
     expect(onPick).not.toHaveBeenCalled();
     expect(screen.getByText(/높이 값이 없어/)).toBeInTheDocument();
+    expect(screen.getByText(/높이 값이 없어/).closest('[data-alert]')).toHaveAttribute('data-alert', 'error');
   });
 
   it('disabled면 클릭을 무시한다(정합 실행 중 등)', () => {
@@ -106,9 +108,16 @@ describe('PointPicker 클릭 -> 월드 좌표 (설계 결정 F7)', () => {
     expect(screen.getByText('2')).toBeInTheDocument();
   });
 
+  it('확정 마커는 cs-link, 짝을 기다리는 마커는 cs-warning으로 구분한다', () => {
+    renderPicker({ markers: [{ px: 0, py: 2, label: '1' }, { px: 4, py: 0, label: '2', pending: true }] });
+    expect(screen.getByText('1').className).toContain('bg-cs-link');
+    expect(screen.getByText('2').className).toContain('bg-cs-warning');
+  });
+
   it('사이드카가 없으면 클릭을 받지 않고 이유를 밝힌다', () => {
     const { onPick } = renderPicker({ meta: null, metaError: '좌표 정보를 불러오지 못했습니다.' });
     expect(screen.getByText(/좌표 정보를 불러오지 못했습니다/)).toBeInTheDocument();
+    expect(screen.getByText(/좌표 정보를 불러오지 못했습니다/).closest('[data-alert]')).toHaveAttribute('data-alert', 'warning');
     const img = screen.queryByRole('img', { name: /A 스캔/ });
     if (img) fireEvent.click(img, { clientX: 50, clientY: 250 });
     expect(onPick).not.toHaveBeenCalled();
@@ -125,6 +134,7 @@ describe('PointPicker 클릭 -> 월드 좌표 (설계 결정 F7)', () => {
         onPick={vi.fn()} />);
       expect(screen.queryByRole('img', { name: /A 스캔/ })).toBeNull();
       expect(screen.getByText(/높이 뷰를 불러오지 못했습니다/)).toBeInTheDocument();
+      expect(screen.getByText(/높이 뷰를 불러오지 못했습니다/).closest('[data-alert]')).toHaveAttribute('data-alert', 'warning');
     } finally {
       complete.mockRestore();
       nw.mockRestore();

@@ -21,7 +21,11 @@ vi.mock('next/headers', () => ({
 import { createClient } from '@/lib/supabase/server';
 import RegistrationPage, { statusTone } from '../page';
 import { RegistrationWorkbench } from '@/components/registration/registration-workbench';
+import { Alert } from '@/components/ui/alert';
+import { LinkButton } from '@/components/ui/button';
+import { PAGE_MAIN } from '@/components/ui/page';
 import { PageHeader } from '@/components/ui/page-header';
+import { StatusIndicator } from '@/components/ui/status-indicator';
 import type { RegistrationRow, RegistrationStatus, ScanRow } from '@/lib/domain/types';
 
 function scan(id: string, over: Partial<ScanRow> = {}): ScanRow {
@@ -46,7 +50,8 @@ const SITE = { id: 's1', name: '본관 현장', address: null, memo: null, creat
 
 const REG: RegistrationRow = {
   id: 'r1', source_scan_ids: ['scanA', 'scanB'], correspondences: [], transform: null,
-  rmse_mm: null, iterations: null, overlap_ratio: null, status: 'awaiting_points',
+  rmse_mm: null, iterations: null, overlap_ratio: null, horizontal_sensitivity: null,
+  status: 'awaiting_points',
   error_text: null, result_scan_id: null, created_by: null, created_at: '', updated_at: '',
 };
 
@@ -80,7 +85,10 @@ function textOf(node: unknown): string {
   if (typeof node === 'string' || typeof node === 'number') return String(node);
   if (Array.isArray(node)) return node.map(textOf).join('');
   if (!node || typeof node !== 'object') return '';
-  return textOf((node as ReactElement & { props?: { children?: unknown } }).props?.children);
+  // Cloudscape 프리미티브(Alert·PageHeader)는 문구를 title/description prop으로 받는다 -
+  // children만 걷으면 제목 문장('원본 스캔을 찾을 수 없습니다.')을 놓친다.
+  const props = (node as ReactElement<{ title?: unknown; description?: unknown; children?: unknown }>).props;
+  return [props?.title, props?.description, props?.children].map(textOf).join('');
 }
 
 function mount(o: {
@@ -135,6 +143,15 @@ describe('RegistrationPage 배선', () => {
 
     expect(findByType(el, RegistrationWorkbench)).toBeNull();
     expect(textOf(el)).toContain('원본 스캔');
+    expect((findByType(el, Alert)!.props as { type: string }).type).toBe('warning');
+  });
+
+  it('원본 스캔이 없어도 병합 스캔이 남아 있으면 그 링크를 LinkButton으로 낸다', async () => {
+    const el = await mount({ registration: { ...REG, result_scan_id: 'merged-9' }, scans: [] });
+    const link = findByType(el, LinkButton);
+    expect(link).not.toBeNull();
+    expect((link!.props as { href: string }).href).toBe('/scans/merged-9');
+    expect(textOf(link)).toBe('이 정합이 만든 병합 스캔 열기');
   });
 
   it('없는 정합 id는 notFound로 보낸다', async () => {
@@ -157,6 +174,22 @@ describe('RegistrationPage 브레드크럼 (D8)', () => {
       { label: '본관 / 1층 / 로비 / 로비' },
     ]);
     expect(props.title).toBe('스캔 정합');
+  });
+
+  // 아트보드 RegistrationDetail: h1 옆 진행 상태는 배지가 아니라 StatusIndicator. 색·아이콘은
+  // statusTone(F2) → TONE_STATUS 매핑으로 정해진다(done→success, failed→error, 나머지→pending).
+  it.each([
+    ['awaiting_points', 'pending', '대응점 지정 대기'],
+    ['done', 'success', '정합 완료'],
+    ['failed', 'error', '정합 실패'],
+  ] as const)('%s 상태를 PageHeader description의 StatusIndicator(%s)로 그린다', async (status, type, label) => {
+    const el = await mount({ registration: { ...REG, status } });
+    expect(el.type).toBe('main');
+    expect((el.props as { className: string }).className).toBe(PAGE_MAIN);
+    const desc = (findByType(el, PageHeader)!.props as { description: ReactElement }).description;
+    expect(desc.type).toBe(StatusIndicator);
+    expect((desc.props as { type: string }).type).toBe(type);
+    expect((desc.props as { children: string }).children).toBe(label);
   });
 
   it('원본 스캔이 둘 다 없으면 현장 홈 크럼만 남긴다', async () => {

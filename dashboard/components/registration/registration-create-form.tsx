@@ -6,6 +6,10 @@
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { Alert } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { Container } from '@/components/ui/container';
+import { FormField, SelectWrap, selectClass } from '@/components/ui/form';
 import type { ScanRow } from '@/lib/domain/types';
 
 function optionLabel(s: ScanRow): string {
@@ -47,30 +51,32 @@ export function RegistrationCreateForm({ scans, userId }: { scans: ScanRow[]; us
   }
 
   return (
-    <form onSubmit={onSubmit} className="max-w-xl space-y-4">
-      <div>
-        <label htmlFor="scan-a" className="block text-sm font-medium">
-          기준 스캔 (A) - 이 스캔의 좌표계를 유지합니다
-        </label>
-        <select id="scan-a" value={aId} onChange={(e) => setAId(e.target.value)}
-          className="mt-1 w-full rounded border px-3 py-2">
-          {scans.map((s) => <option key={s.id} value={s.id}>{optionLabel(s)}</option>)}
-        </select>
+    // 아트보드 RegistrationNew: 컨테이너 '스캔 선택' 안에 A/B 셀렉트(필드 max-w 640px),
+    // 컨테이너 밖 우측 정렬 primary. 옛 라벨 "기준 스캔 (A) - 이 스캔의 좌표계를 유지합니다"는
+    // " - " 앞뒤를 라벨/설명으로 나눠 옮겼다(문구는 그대로).
+    <form onSubmit={onSubmit} className="flex flex-col gap-5">
+      <Container title="스캔 선택">
+        <div className="flex max-w-[640px] flex-col gap-4">
+          <FormField label="기준 스캔 (A)" htmlFor="scan-a" description="이 스캔의 좌표계를 유지합니다">
+            <SelectWrap>
+              <select id="scan-a" value={aId} onChange={(e) => setAId(e.target.value)} className={selectClass}>
+                {scans.map((s) => <option key={s.id} value={s.id}>{optionLabel(s)}</option>)}
+              </select>
+            </SelectWrap>
+          </FormField>
+          <FormField label="맞출 스캔 (B)" htmlFor="scan-b" description="A에 맞춰 회전·이동합니다">
+            <SelectWrap>
+              <select id="scan-b" value={bId} onChange={(e) => setBId(e.target.value)} className={selectClass}>
+                {scans.map((s) => <option key={s.id} value={s.id}>{optionLabel(s)}</option>)}
+              </select>
+            </SelectWrap>
+          </FormField>
+          {error && <Alert type="error">{error}</Alert>}
+        </div>
+      </Container>
+      <div className="flex items-center justify-end gap-2">
+        <Button type="submit" variant="primary" disabled={busy}>대응점 찍기 시작</Button>
       </div>
-      <div>
-        <label htmlFor="scan-b" className="block text-sm font-medium">
-          맞출 스캔 (B) - A에 맞춰 회전·이동합니다
-        </label>
-        <select id="scan-b" value={bId} onChange={(e) => setBId(e.target.value)}
-          className="mt-1 w-full rounded border px-3 py-2">
-          {scans.map((s) => <option key={s.id} value={s.id}>{optionLabel(s)}</option>)}
-        </select>
-      </div>
-      {error && <p className="text-sm text-red-600">{error}</p>}
-      <button type="submit" disabled={busy}
-        className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50">
-        대응점 찍기 시작
-      </button>
     </form>
   );
 }

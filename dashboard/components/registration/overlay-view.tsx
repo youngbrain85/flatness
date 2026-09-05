@@ -11,6 +11,7 @@
 //   슬라이더로 B를 켰다 껐다 하며 비교하는 것이 표준적인 육안 대조 방법이다.
 'use client';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { Alert } from '@/components/ui/alert';
 import { plainPngUrl } from '@/lib/domain/height-view';
 import type { HeightViewMeta } from '@/lib/domain/height-view';
 import { imageCornersM, overlayAffine, overlayView } from '@/lib/domain/registration';
@@ -92,52 +93,58 @@ export function RegistrationOverlay({
 
   if (unavailable) {
     return (
-      <p className="rounded border border-red-300 bg-red-50 p-3 text-sm text-zinc-700">
-        <span className="font-medium text-red-700">{unavailable}</span>
-        <span className="mt-1 block text-xs">
-          겹쳐보기는 RMSE가 원리적으로 못 보는 수평 방향 어긋남을 확인하는 유일한 수단입니다.
-          그림 없이 수치만으로 이 정합을 승인하지 마세요. 스캔 산출물을 복구한 뒤 이 화면을
-          새로고침하거나, 대응점을 다시 찍어 정합을 다시 실행하세요.
-        </span>
-      </p>
+      <Alert type="error" title={unavailable}>
+        겹쳐보기는 RMSE가 원리적으로 못 보는 수평 방향 어긋남을 확인하는 유일한 수단입니다.
+        그림 없이 수치만으로 이 정합을 승인하지 마세요. 스캔 산출물을 복구한 뒤 이 화면을
+        새로고침하거나, 대응점을 다시 찍어 정합을 다시 실행하세요.
+      </Alert>
     );
   }
 
   return (
-    <div className="space-y-2">
-      {failed && (
-        <p className="rounded border border-red-300 bg-red-50 p-2 text-xs text-zinc-700">
-          겹쳐보기 그림을 불러오지 못했습니다. 두 스캔의 높이 뷰 산출물을 확인하세요.
-          그림 없이 RMSE만으로 승인하지 마세요.
+    // 아트보드 RegistrationDetail '겹쳐보기' 본문: 좌 562px 캔버스 틀(1px 구분선, radius 8px) /
+    // 우 flex-1 설명(슬라이더 줄 → 안내 → 한계 Alert). 좁은 화면(<lg)은 세로 스택.
+    <div className="flex flex-col items-start gap-5 lg:flex-row">
+      <div className="flex w-full shrink-0 flex-col gap-1 lg:w-[562px]">
+        {failed && (
+          <Alert type="error">
+            겹쳐보기 그림을 불러오지 못했습니다. 두 스캔의 높이 뷰 산출물을 확인하세요.
+            그림 없이 RMSE만으로 승인하지 마세요.
+          </Alert>
+        )}
+        <div className="flex overflow-hidden rounded-lg border border-cs-divider bg-white">
+          <canvas ref={canvasRef} className="max-w-full" />
+        </div>
+      </div>
+      <div className="flex min-w-0 flex-1 flex-col gap-3">
+        <label className="flex items-center gap-2 text-xs leading-4 text-cs-text-secondary">
+          <span className="whitespace-nowrap">맞춘 스캔(B) 진하기</span>
+          <input type="range" min={0} max={100} value={Math.round(opacity * 100)}
+            onChange={(e) => setOpacity(Number(e.target.value) / 100)}
+            className="w-40 accent-cs-link" />
+          <span className="tabular-nums">{Math.round(opacity * 100)}%</span>
+        </label>
+        <p className="text-xs leading-4 text-cs-text-secondary">
+          슬라이더를 좌우로 움직이며 두 그림의 벽·기둥·모서리 같은 특징이 같은 자리에
+          오는지 보세요. 겹쳐지지 않고 나란히 밀려 있으면 수평으로 어긋난 정합입니다.
         </p>
-      )}
-      <canvas ref={canvasRef} className="max-w-full rounded border bg-white" />
-      <label className="flex items-center gap-2 text-xs text-zinc-600">
-        <span className="whitespace-nowrap">맞춘 스캔(B) 진하기</span>
-        <input type="range" min={0} max={100} value={Math.round(opacity * 100)}
-          onChange={(e) => setOpacity(Number(e.target.value) / 100)}
-          className="w-40" />
-        <span className="tabular-nums">{Math.round(opacity * 100)}%</span>
-      </label>
-      <p className="text-xs text-zinc-500">
-        슬라이더를 좌우로 움직이며 두 그림의 벽·기둥·모서리 같은 특징이 같은 자리에
-        오는지 보세요. 겹쳐지지 않고 나란히 밀려 있으면 수평으로 어긋난 정합입니다.
-      </p>
-      {/* ★ 리뷰 I4·I5: 이 그림을 최종 심급으로 읽으면 안 된다. 겹친 영역 무늬의 상관을
-          실측하면 미터급은 확실히 드러나지만(정합 +0.896 대 3m +0.129) 30cm급은 정합과
-          거의 구별되지 않고(+0.840), 특징이 없는 완전 평면에서는 신호 자체가 0이다
-          (+0.014 대 +0.043). 한계를 밝히지 않으면 "겹쳐 봤으니 괜찮다"가 근거 없는
-          안심이 된다.
-          ★ 위쪽 "수평 검증 가능성" 안내와 **같은 현상의 두 얼굴**이다 - 감도가 낮게
-          나오는 평탄한 바닥이 정확히 이 그림도 안 통하는 바닥이다. 두 안내가 같은
-          이야기를 하도록 문구를 맞춰 둔다. */}
-      <p className="rounded bg-zinc-100 p-2 text-xs text-zinc-600">
-        겹쳐보기의 한계: 미터급 어긋남은 확실히 드러나지만 수십 cm급은 정합된 것과
-        구별하기 어렵습니다(실측 30cm 오정합의 무늬 상관 0.840 대 정합 0.896).
-        평탄해서 벽·기둥·요철 같은 특징이 없는 바닥일수록 그렇습니다 - 수평 감도가 낮게
-        나오는 바닥이 정확히 이 경우입니다. 이 방향의 보장은 결국 대응점을 넓게 분산해
-        찍었는가에 달려 있습니다.
-      </p>
+        {/* ★ 리뷰 I4·I5: 이 그림을 최종 심급으로 읽으면 안 된다. 겹친 영역 무늬의 상관을
+            실측하면 미터급은 확실히 드러나지만(정합 +0.896 대 3m +0.129) 30cm급은 정합과
+            거의 구별되지 않고(+0.840), 특징이 없는 완전 평면에서는 신호 자체가 0이다
+            (+0.014 대 +0.043). 한계를 밝히지 않으면 "겹쳐 봤으니 괜찮다"가 근거 없는
+            안심이 된다.
+            ★ 위쪽 "수평 검증 가능성" 안내와 **같은 현상의 두 얼굴**이다 - 감도가 낮게
+            나오는 평탄한 바닥이 정확히 이 그림도 안 통하는 바닥이다. 두 안내가 같은
+            이야기를 하도록 문구를 맞춰 둔다.
+            리디자인: 회색 박스 → info Alert(스펙 §7-8). 경고(warning)가 아니다 - 늑대소년 방지. */}
+        <Alert type="info">
+          겹쳐보기의 한계: 미터급 어긋남은 확실히 드러나지만 수십 cm급은 정합된 것과
+          구별하기 어렵습니다(실측 30cm 오정합의 무늬 상관 0.840 대 정합 0.896).
+          평탄해서 벽·기둥·요철 같은 특징이 없는 바닥일수록 그렇습니다 - 수평 감도가 낮게
+          나오는 바닥이 정확히 이 경우입니다. 이 방향의 보장은 결국 대응점을 넓게 분산해
+          찍었는가에 달려 있습니다.
+        </Alert>
+      </div>
     </div>
   );
 }

@@ -15,6 +15,7 @@
 // lib/domain/height-view.ts(단일 정본)에 있고 이 파일은 그것을 호출만 한다.
 'use client';
 import { useEffect, useRef, useState } from 'react';
+import { Alert } from '@/components/ui/alert';
 import { imageSize, pixelToWorld, plainPngUrl } from '@/lib/domain/height-view';
 import type { HeightViewMeta, PickedPoint } from '@/lib/domain/height-view';
 
@@ -76,13 +77,13 @@ export function PointPicker({
   const size = meta ? imageSize(meta) : null;
 
   return (
-    <section className="space-y-2">
-      <h3 className="text-sm font-semibold">{title}</h3>
+    <section className="flex flex-col gap-2">
+      <h3 className="text-sm font-bold">{title}</h3>
       {viewFailed ? (
-        <p className="rounded border border-amber-300 bg-amber-50 p-3 text-xs text-zinc-700">
+        <Alert type="warning">
           높이 뷰를 불러오지 못했습니다. 이 스캔의 산출물이 지워졌거나 아직 사전 검사가
           끝나지 않았을 수 있습니다. 스캔 상세에서 상태를 확인하세요.
-        </p>
+        </Alert>
       ) : (
         <div className="relative inline-block w-full">
           {/* 로컬 route 서빙 이미지 - 데모에서 next/image 최적화 불필요
@@ -95,25 +96,23 @@ export function PointPicker({
             // image-rendering: pixelated - 격자 1칸이 1픽셀이라 확대하면 뭉개진다.
             // 셀 경계가 보여야 사용자가 "어느 칸을 찍는지" 알 수 있다.
             style={{ imageRendering: 'pixelated' }}
-            className={`block w-full rounded border bg-white ${clickable ? 'cursor-crosshair' : 'cursor-not-allowed opacity-90'}`} />
+            className={`block w-full rounded-lg border border-cs-divider bg-white ${clickable ? 'cursor-crosshair' : 'cursor-not-allowed opacity-90'}`} />
+          {/* 마커: 확정 쌍은 cs-link, 반대쪽을 기다리는 점은 cs-warning. img 바로 다음 span이어야
+              한다 - 작업대 테스트가 img.parentElement의 첫 span을 마커로 읽는다. */}
           {size && markers.map((m) => (
             <span key={`${m.label}-${m.px}-${m.py}`}
               style={{
                 left: `${((m.px + 0.5) / size.width) * 100}%`,
                 top: `${((m.py + 0.5) / size.height) * 100}%`,
               }}
-              className={`pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white px-1.5 text-[10px] font-bold leading-4 text-white ${m.pending ? 'bg-amber-600' : 'bg-zinc-900'}`}>
+              className={`pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white px-1.5 text-[10px] font-bold leading-4 text-white ${m.pending ? 'bg-cs-warning' : 'bg-cs-link'}`}>
               {m.label}
             </span>
           ))}
         </div>
       )}
-      {metaError && (
-        <p className="rounded border border-amber-300 bg-amber-50 p-2 text-xs text-zinc-700">
-          {metaError}
-        </p>
-      )}
-      {cellError && <p className="text-xs text-red-600">{cellError}</p>}
+      {metaError && <Alert type="warning">{metaError}</Alert>}
+      {cellError && <Alert type="error">{cellError}</Alert>}
     </section>
   );
 }

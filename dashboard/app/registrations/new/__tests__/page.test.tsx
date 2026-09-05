@@ -16,6 +16,9 @@ vi.mock('next/headers', () => ({
 import { createClient } from '@/lib/supabase/server';
 import NewRegistrationPage from '../page';
 import { RegistrationCreateForm } from '@/components/registration/registration-create-form';
+import { Alert } from '@/components/ui/alert';
+import { LinkButton } from '@/components/ui/button';
+import { PAGE_MAIN } from '@/components/ui/page';
 import { PageHeader } from '@/components/ui/page-header';
 import type { ScanRow } from '@/lib/domain/types';
 
@@ -67,7 +70,10 @@ function textOf(node: unknown): string {
   if (typeof node === 'string' || typeof node === 'number') return String(node);
   if (Array.isArray(node)) return node.map(textOf).join('');
   if (!node || typeof node !== 'object') return '';
-  return textOf((node as ReactElement & { props?: { children?: unknown } }).props?.children);
+  // Cloudscape 프리미티브(Alert·PageHeader)는 문구를 title/description prop으로 받는다 -
+  // children만 걷으면 제목 문장('… 두 개 이상 필요합니다.')을 놓친다.
+  const props = (node as ReactElement<{ title?: unknown; description?: unknown; children?: unknown }>).props;
+  return [props?.title, props?.description, props?.children].map(textOf).join('');
 }
 
 function mount(scans: ScanRow[], spy?: (m: string, ...a: unknown[]) => void) {
@@ -110,6 +116,15 @@ describe('NewRegistrationPage 후보 스캔', () => {
 
     expect(findByType(el, RegistrationCreateForm)).toBeNull();
     expect(textOf(el)).toContain('두 개 이상');
+    expect(textOf(el)).toContain('후보는 1개');
+    // 안내는 warning Alert + 막다른 화면 금지(업로드로 가는 primary LinkButton)
+    const alert = findByType(el, Alert);
+    expect(alert).not.toBeNull();
+    expect((alert!.props as { type: string; title: string }).type).toBe('warning');
+    expect((alert!.props as { title: string }).title).toBe('정합할 수 있는 스캔이 두 개 이상 필요합니다.');
+    const upload = findByType(el, LinkButton);
+    expect((upload!.props as { href: string }).href).toBe('/upload?site=s1&location=l1');
+    expect((upload!.props as { variant: string }).variant).toBe('primary');
   });
 });
 
@@ -128,5 +143,15 @@ describe('NewRegistrationPage 브레드크럼 (D8)', () => {
       { label: '본관 / 1층 / 로비 / 로비' },
     ]);
     expect(props.title).toBe('스캔 정합 시작');
+  });
+
+  // 아트보드 RegistrationNew: 안내문은 h1 아래 설명(PageHeader description), 본문은 공용 PAGE_MAIN.
+  it('안내문을 PageHeader description으로, 본문을 PAGE_MAIN으로 그린다', async () => {
+    const el = await mount([scan('a'), scan('b')]);
+    expect(el.type).toBe('main');
+    expect((el.props as { className: string }).className).toBe(PAGE_MAIN);
+    const props = findByType(el, PageHeader)!.props as { description: string };
+    expect(props.description).toContain('본관 / 1층 / 로비 / 로비 측정위치의 바닥 스캔 두 개를 하나로 합칩니다');
+    expect(props.description).toContain('서브셀 중앙값 점군 하나로 병합합니다.');
   });
 });

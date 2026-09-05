@@ -91,6 +91,14 @@ describe('RegistrationOverlay 그리기 배선', () => {
     expect(calls[1].alpha).toBeLessThan(1);
   });
 
+  // 아트보드 RegistrationDetail: 캔버스는 1px 구분선 틀(radius 8px) 안, 슬라이더는 accent 색.
+  it('캔버스는 cs-divider 틀 안에, 슬라이더는 accent-cs-link로 그린다', async () => {
+    const { container, calls } = mount();
+    await vi.waitFor(() => expect(calls).toHaveLength(2));
+    expect(container.querySelector('canvas')?.parentElement?.className).toContain('border-cs-divider');
+    expect(screen.getByRole('slider').className).toContain('accent-cs-link');
+  });
+
   // 위 (2)의 기대값을 같은 함수로 계산하므로, 인자 오전달과 별개로 "회전이 실제로
   // 실린 행렬인가"를 절대량으로 한 번 더 못 박는다. transform을 null로 두거나 회전을
   // 떨어뜨리면 b·c가 0이 된다.
@@ -126,6 +134,7 @@ describe('RegistrationOverlay 그리기 배선', () => {
 
     expect(container.querySelector('canvas')).toBeNull();
     expect(screen.getByText(/좌표 정보\(사이드카\)를 불러오지 못해/)).toBeInTheDocument();
+    expect(screen.getByText(/좌표 정보\(사이드카\)를 불러오지 못해/).closest('[data-alert]')).toHaveAttribute('data-alert', 'error');
     expect(screen.getByText(/수치만으로 이 정합을 승인하지 마세요/)).toBeInTheDocument();
     expect(calls).toHaveLength(0);
   });
@@ -137,13 +146,16 @@ describe('RegistrationOverlay 그리기 배선', () => {
 
     expect(container.querySelector('canvas')).toBeNull();
     expect(screen.getByText(/정합 변환이 저장되지 않아/)).toBeInTheDocument();
+    expect(screen.getByText(/정합 변환이 저장되지 않아/).closest('[data-alert]')).toHaveAttribute('data-alert', 'error');
     expect(calls).toHaveLength(0);
   });
 
   it('그림 로딩이 실패하면 경고를 띄운다', async () => {
     FakeImage.fail = true;
     mount();
-    expect(await screen.findByText(/겹쳐보기 그림을 불러오지 못했습니다/)).toBeInTheDocument();
+    const warn = await screen.findByText(/겹쳐보기 그림을 불러오지 못했습니다/);
+    expect(warn).toBeInTheDocument();
+    expect(warn.closest('[data-alert]')).toHaveAttribute('data-alert', 'error');
   });
 
   // 리뷰 I4·I5: 이 그림이 최종 심급처럼 읽히면 안 된다(30cm급은 정합과 구분 불가,
@@ -153,6 +165,8 @@ describe('RegistrationOverlay 그리기 배선', () => {
     mount();
     const limit = screen.getByText(/수십 cm급은 정합된 것과/);
     expect(limit).toBeInTheDocument();
+    // 리디자인 결정: 회색 박스였던 한계 안내를 info Alert로 올린다(스펙 §7-8). 경고가 아니다.
+    expect(limit.closest('[data-alert]')).toHaveAttribute('data-alert', 'info');
     expect(limit).toHaveTextContent('수평 감도가 낮게 나오는 바닥이 정확히 이 경우');
     expect(limit).toHaveTextContent('대응점을 넓게 분산해 찍었는가');
   });

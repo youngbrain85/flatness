@@ -70,6 +70,8 @@ describe('RegistrationCreateForm', () => {
     fireEvent.click(screen.getByRole('button', { name: /대응점 찍기 시작/ }));
 
     expect(await screen.findByText(/서로 다른 스캔/)).toBeInTheDocument();
+    // 검증 실패는 error Alert로 - 스타일 문자열이 아니라 의미 속성으로 읽는다
+    expect(screen.getByText(/서로 다른 스캔/).closest('[data-alert]')).toHaveAttribute('data-alert', 'error');
     expect(insertSpy).not.toHaveBeenCalled();
     expect(pushMock).not.toHaveBeenCalled();
   });
@@ -83,5 +85,25 @@ describe('RegistrationCreateForm', () => {
 
     expect(await screen.findByText(/권한이 없습니다/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /대응점 찍기 시작/ })).toBeEnabled();
+  });
+
+  // Cloudscape 리스킨(아트보드 RegistrationNew): 컨테이너 '스캔 선택' 안 FormField 두 개
+  // (라벨/설명 분리), 컨테이너 밖 우측 primary. 검증·제출 로직은 위 세 테스트가 그대로 잠근다.
+  it('컨테이너 "스캔 선택" 안에 A/B 셀렉트를 FormField로, 밖에 primary 제출 버튼을 그린다', () => {
+    vi.mocked(createClient).mockReturnValue(stubSupabase() as never);
+    render(<RegistrationCreateForm scans={SCANS} userId="u1" />);
+
+    expect(screen.getByRole('heading', { level: 2, name: '스캔 선택' })).toBeInTheDocument();
+    const a = screen.getByLabelText('기준 스캔 (A)');
+    const b = screen.getByLabelText('맞출 스캔 (B)');
+    expect(a.className).toContain('border-cs-input-border');
+    expect(b.className).toContain('appearance-none');
+    expect(screen.getByText('이 스캔의 좌표계를 유지합니다').className).toContain('text-cs-text-secondary');
+    expect(screen.getByText('A에 맞춰 회전·이동합니다')).toBeInTheDocument();
+    // 셀렉트 옵션 문구(optionLabel, ISO 원문)는 그대로 - 두 셀렉트에 하나씩
+    expect(screen.getAllByRole('option', { name: '동쪽.ply · 2026-08-01' })).toHaveLength(2);
+    const submit = screen.getByRole('button', { name: /대응점 찍기 시작/ });
+    expect(submit.className).toContain('bg-cs-link');
+    expect(submit.className).toContain('rounded-full');
   });
 });
