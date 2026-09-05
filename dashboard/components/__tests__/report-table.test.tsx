@@ -7,17 +7,18 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import { ReportTable, type ReportTableRow } from '../report-table';
 
 const rows: ReportTableRow[] = [
-  { id: 'r1', title: '거실 평활도 보고서', locationLabel: '101동 / 3층 / 거실', tone: 'unknown', statusLabel: '작성 중', createdAt: '2026-09-03' },
-  { id: 'r2', title: '안방 구배 보고서', locationLabel: '101동 / 3층 / 안방', tone: 'pass', statusLabel: '발행됨', createdAt: '2026-09-01' },
-  { id: 'r3', title: '거실 구배 보고서', locationLabel: '102동 / 5층 / 거실', tone: 'fail', statusLabel: '생성 실패', createdAt: '2026-08-30' },
+  { id: 'r1', title: '거실 평활도 보고서', locationLabel: '101동 / 3층 / 거실', statusType: 'pending', statusLabel: '작성 중', genStatus: 'done', createdAt: '2026-09-03' },
+  { id: 'r2', title: '안방 구배 보고서', locationLabel: '101동 / 3층 / 안방', statusType: 'success', statusLabel: '발행됨', genStatus: 'done', createdAt: '2026-09-01' },
+  { id: 'r3', title: '거실 구배 보고서', locationLabel: '102동 / 5층 / 거실', statusType: 'error', statusLabel: '생성 실패', genStatus: 'failed', createdAt: '2026-08-30' },
 ];
 
 // 상태 필터용 픽스처 - reportStatusBadge가 낼 수 있는 상태 5종(작성 중·발행됨·생성 실패·PDF 생성 중·
-// PDF 생성 대기 중)이 한 번씩 나온다. 뒤의 두 행은 tone이 'unknown'으로 '작성 중'과 같다 - 라벨로만 갈린다.
+// PDF 생성 대기 중)이 한 번씩 나온다. 아트보드(Reports.dc.html)는 'PDF 생성 중'만 clock(in-progress)으로
+// 구분하고 'PDF 생성 대기 중'은 '작성 중'과 같은 minus-circle(pending)이다 - 둘은 gen_status로 갈린다.
 const statusRows: ReportTableRow[] = [
   ...rows,
-  { id: 'r4', title: '복도 평활도 보고서', locationLabel: '102동 / 5층 / 복도', tone: 'unknown', statusLabel: 'PDF 생성 중', createdAt: '2026-08-28' },
-  { id: 'r5', title: '주방 구배 보고서', locationLabel: '103동 / 1층 / 주방', tone: 'unknown', statusLabel: 'PDF 생성 대기 중', createdAt: '2026-08-27' },
+  { id: 'r4', title: '복도 평활도 보고서', locationLabel: '102동 / 5층 / 복도', statusType: 'in-progress', statusLabel: 'PDF 생성 중', genStatus: 'processing', createdAt: '2026-08-28' },
+  { id: 'r5', title: '주방 구배 보고서', locationLabel: '103동 / 1층 / 주방', statusType: 'pending', statusLabel: 'PDF 생성 대기 중', genStatus: 'queued', createdAt: '2026-08-27' },
 ];
 
 // 상태 열은 테이블 안에서 찾는다 - 상태 필터의 <option> 문구('작성 중' 등)가 같은 텍스트라
@@ -53,8 +54,11 @@ describe('ReportTable 열 (아트보드 Reports: 제목·측정위치·상태·�
     { label: '작성 중', status: 'pending' },
     { label: '발행됨', status: 'success' },
     { label: '생성 실패', status: 'error' },
-  ])('상태 "$label"은 StatusIndicator $status 로 그린다(reportStatusBadge tone → TONE_STATUS)', ({ label, status }) => {
-    render(<ReportTable rows={rows} />);
+    // 아트보드 Reports.dc.html: 'PDF 생성 중'만 clock, '대기 중'은 '작성 중'과 같은 minus-circle
+    { label: 'PDF 생성 중', status: 'in-progress' },
+    { label: 'PDF 생성 대기 중', status: 'pending' },
+  ])('상태 "$label"은 StatusIndicator $status 로 그린다(서버가 고른 statusType 그대로)', ({ label, status }) => {
+    render(<ReportTable rows={statusRows} />);
     expect(statusCell(label)).toHaveAttribute('data-status', status);
   });
 });
@@ -120,6 +124,18 @@ describe('ReportTable 상태 필터 (클라이언트 필터 - 스펙 §7-3, 검�
     pickFilter('전체');
     expect(reportTitles()).toEqual(['안방 구배 보고서', '거실 구배 보고서', '주방 구배 보고서']);
     expect(screen.getByText('총 3건')).toBeInTheDocument();
+  });
+
+  it('필터는 라벨 문구가 아니라 gen_status로 가른다(라벨이 바뀌어도 새지 않는다)', () => {
+    // 라벨만 바꾼 두 행 - '작성 중'/'PDF 생성 대기 중'이라는 문구가 없어도 각 필터가 제 행을 고른다
+    render(<ReportTable rows={[
+      { id: 'x1', title: '초안 하나', locationLabel: '-', statusType: 'pending', statusLabel: '초안', genStatus: 'done', createdAt: '2026-09-04' },
+      { id: 'x2', title: '대기 하나', locationLabel: '-', statusType: 'pending', statusLabel: '대기', genStatus: 'queued', createdAt: '2026-09-04' },
+    ]} />);
+    pickFilter('작성 중');
+    expect(reportTitles()).toEqual(['초안 하나']);
+    pickFilter('PDF 생성 중·대기');
+    expect(reportTitles()).toEqual(['대기 하나']);
   });
 
   it('필터만으로 행이 남지 않아도 같은 안내 행을 그린다', () => {

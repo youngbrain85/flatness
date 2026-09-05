@@ -100,12 +100,14 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
         </ul>
       </Container>
 
-      <Container title="PDF 미리보기" padded={false}>
+      {/* 아트보드 ReportDetail: 본문에 20px 여백을 두고 미리보기를 라운드 8로 그 안쪽에 놓는다
+          (컨테이너에 꽉 채우지 않는다) - Container의 padded 기본값이 그 여백이다. */}
+      <Container title="PDF 미리보기">
         {r.pdf_path && r.gen_status === 'done' ? (
           <iframe title="보고서 PDF 미리보기" src={dataUrl(r.pdf_path)}
-            className="block h-[70vh] w-full rounded-b-cs-container bg-white" />
+            className="block h-[70vh] w-full rounded-lg bg-white" />
         ) : (
-          <p className="p-5 text-sm text-cs-text-secondary">PDF가 아직 생성되지 않았습니다.</p>
+          <p className="text-sm text-cs-text-secondary">PDF가 아직 생성되지 않았습니다.</p>
         )}
       </Container>
     </main>

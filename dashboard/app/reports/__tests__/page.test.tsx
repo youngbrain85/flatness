@@ -72,6 +72,17 @@ describe('ReportsPage 빈 목록 (D7 Step 2)', () => {
     await renderPage();
     expect(screen.getByText('보고서가 없습니다.')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: '새 보고서 만들기' })).toHaveAttribute('href', '/reports/new');
+    // location 필터가 없으면 풀 필터도 없다
+    expect(screen.queryByRole('link', { name: '전체 보기' })).toBeNull();
+  });
+
+  it('location 필터가 걸린 채 0건이어도 프리필을 잃지 않고 전체 보기로 필터를 풀 수 있다', async () => {
+    mockSupabase([], [locationRow]);
+    await renderPage({ location: 'l1' });
+    // 헤더 '새 보고서'가 없는 화면이라 EmptyState의 primary가 프리필을 이어야 한다
+    expect(screen.getByRole('link', { name: '새 보고서 만들기' }))
+      .toHaveAttribute('href', '/reports/new?location=l1');
+    expect(screen.getByRole('link', { name: '전체 보기' })).toHaveAttribute('href', '/reports');
   });
 });
 
@@ -115,6 +126,20 @@ describe('ReportsPage 목록 테이블 (D7 Step 2 → T8: 제목 | 측정위치 
     mockSupabase([reportRow({ gen_status: 'failed' })], [locationRow]);
     await renderPage();
     expect(within(screen.getByRole('table')).getByText('생성 실패')).toHaveAttribute('data-status', 'error');
+  });
+
+  it('PDF 생성 중인 초안은 clock(in-progress)으로 보여준다(아트보드 Reports)', async () => {
+    mockSupabase([reportRow({ gen_status: 'processing' })], [locationRow]);
+    await renderPage();
+    expect(within(screen.getByRole('table')).getByText('PDF 생성 중'))
+      .toHaveAttribute('data-status', 'in-progress');
+  });
+
+  it('PDF 생성 대기 중인 초안은 작성 중과 같은 pending(minus-circle)이다', async () => {
+    mockSupabase([reportRow({ gen_status: 'queued' })], [locationRow]);
+    await renderPage();
+    expect(within(screen.getByRole('table')).getByText('PDF 생성 대기 중'))
+      .toHaveAttribute('data-status', 'pending');
   });
 
   it('도구 줄에 검색 입력과 상태 필터(5종)가 있다(스펙 §7-3 - 서버 조회에는 관여하지 않는다)', async () => {

@@ -9,26 +9,30 @@ import { useState } from 'react';
 import { Icon } from '@/components/ui/icons';
 import { inputClass, selectClass, SelectWrap } from '@/components/ui/form';
 import { tableClass, TableToolbar } from '@/components/ui/data-table';
-import { StatusIndicator, TONE_STATUS } from '@/components/ui/status-indicator';
-import { REPORT_STATUS_LABEL } from '@/lib/domain/labels';
-
-/** reportStatusBadge(lib/domain/reports.ts)가 돌려주는 tone과 같은 집합. */
-export type ReportTone = 'pass' | 'fail' | 'unknown';
+import { StatusIndicator, type StatusType } from '@/components/ui/status-indicator';
+import type { ReportGenStatus } from '@/lib/domain/types';
 
 export interface ReportTableRow {
   id: string;
   title: string;
   locationLabel: string;
-  tone: ReportTone;
+  /**
+   * 서버(app/reports/page.tsx)가 고른 StatusIndicator 종류. reportStatusBadge는 작성 중·PDF 생성 중·
+   * PDF 생성 대기 중을 모두 unknown 톤으로 묶지만, 아트보드(Reports.dc.html)는 'PDF 생성 중'만
+   * clock(in-progress)으로 구분한다 - 그 판단을 서버에서 끝내 여기서는 그대로 그리기만 한다.
+   */
+  statusType: StatusType;
   statusLabel: string;
+  /** reports.gen_status 원본 - 상태 필터가 '작성 중'과 'PDF 생성 중·대기'를 라벨 문구가 아니라 이 값으로 가른다 */
+  genStatus: ReportGenStatus;
   /** 'YYYY-MM-DD' - 서버(app/reports/page.tsx)가 created_at.slice(0, 10)으로 만든다 */
   createdAt: string;
 }
 
 // 상태 필터 선택지 - 값은 reportStatusBadge가 낼 수 있는 상태 중 어느 것인지, 라벨은 화면 문구.
-// 행에는 tone·statusLabel만 실리므로(판단은 서버가 reportStatusBadge로 끝냈다) 그 둘로 되짚는다:
-// pass = 발행됨, fail = 생성 실패, unknown은 REPORT_STATUS_LABEL.draft('작성 중', gen_status done 초안)와
-// 그 밖(REPORT_GEN_STATUS_LABEL의 queued/processing = 'PDF 생성 대기 중'/'PDF 생성 중')으로 갈린다.
+// 판단은 서버가 reportStatusBadge로 끝냈으므로 여기서는 statusType과 gen_status로 되짚는다:
+// success = 발행됨, error = 생성 실패, in-progress = PDF 생성 중, pending은 gen_status가 done이면
+// 작성 중(초안), 아니면 PDF 생성 대기 중이다.
 export type ReportFilter = 'all' | 'draft' | 'finalized' | 'failed' | 'generating';
 const FILTERS: { value: ReportFilter; label: string }[] = [
   { value: 'all', label: '전체' },
@@ -40,10 +44,13 @@ const FILTERS: { value: ReportFilter; label: string }[] = [
 
 function matchesFilter(row: ReportTableRow, f: ReportFilter): boolean {
   switch (f) {
-    case 'finalized': return row.tone === 'pass';
-    case 'failed': return row.tone === 'fail';
-    case 'draft': return row.tone === 'unknown' && row.statusLabel === REPORT_STATUS_LABEL.draft;
-    case 'generating': return row.tone === 'unknown' && row.statusLabel !== REPORT_STATUS_LABEL.draft;
+    case 'finalized': return row.statusType === 'success';
+    case 'failed': return row.statusType === 'error';
+    // 초안 계열(pending/in-progress)만 여기서 갈린다 - PDF 생성이 끝난(done) 것이 '작성 중'이고
+    // 나머지(queued/processing)가 'PDF 생성 중·대기'다. 라벨 문구는 보지 않는다.
+    case 'draft': return row.statusType === 'pending' && row.genStatus === 'done';
+    case 'generating':
+      return (row.statusType === 'pending' || row.statusType === 'in-progress') && row.genStatus !== 'done';
     default: return true;
   }
 }
@@ -106,7 +113,7 @@ export function ReportTable({ rows, locationFilter = null }: {
                 </td>
                 <td className={tableClass.td}>{r.locationLabel}</td>
                 <td className={tableClass.td}>
-                  <StatusIndicator type={TONE_STATUS[r.tone]}>{r.statusLabel}</StatusIndicator>
+                  <StatusIndicator type={r.statusType}>{r.statusLabel}</StatusIndicator>
                 </td>
                 {/* 아트보드: 생성일은 mono 13px, 좌측 정렬(수치 열의 tdNum은 우측 정렬이라 쓰지 않는다) */}
                 <td className={`${tableClass.td} font-mono text-[13px] text-cs-nav-text tabular-nums`}>{r.createdAt}</td>

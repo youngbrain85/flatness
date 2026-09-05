@@ -125,9 +125,22 @@ describe('ReportPage PDF 미리보기 (T8: 컨테이너 안 iframe)', () => {
     expect(screen.getByTitle('보고서 PDF 미리보기')).toHaveAttribute('src', '/api/data/reports/r1/report.pdf');
   });
 
+  it('미리보기는 컨테이너 본문 여백 안에 라운드 8로 놓인다(아트보드 ReportDetail: padding 20 + radius 8)', async () => {
+    await renderPage();
+    const frame = screen.getByTitle('보고서 PDF 미리보기');
+    expect(frame.className).toContain('rounded-lg');
+    // 컨테이너에 꽉 채우지 않는다 - padded={false} + 아래 모서리만 둥근 옛 배치가 아니다
+    expect(frame.className).not.toContain('rounded-b-cs-container');
+    expect(frame.parentElement?.className).toContain('p-5'); // Container padded 기본값
+  });
+
   it('PDF가 없으면 안내 문구를 보여준다', async () => {
     await renderPage(reportRow({ pdf_path: null, gen_status: 'processing' }));
-    expect(screen.getByText('PDF가 아직 생성되지 않았습니다.')).toBeInTheDocument();
+    const notice = screen.getByText('PDF가 아직 생성되지 않았습니다.');
+    expect(notice).toBeInTheDocument();
+    // 여백은 컨테이너가 준다 - 안내 문구가 자체 p-5를 덧대지 않는다
+    expect(notice.className).not.toContain('p-5');
+    expect(notice.parentElement?.className).toContain('p-5');
     expect(screen.queryByTitle('보고서 PDF 미리보기')).toBeNull();
   });
 });
