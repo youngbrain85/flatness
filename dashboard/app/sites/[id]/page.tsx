@@ -83,10 +83,20 @@ export default async function SitePage({ params }: { params: Promise<{ id: strin
       <Container title="새 측정위치">
         <NewLocationForm siteId={id} />
       </Container>
-      {/* 아트보드: 헤더 아래 업로더 줄, 그 아래 구분선 + 갤러리 그리드. padded={false}로 두 줄을
-          직접 배치한다(Container 헤더의 하단 구분선은 프리미티브 공통이라 그대로 둔다). */}
-      <Container title="현장 사진" counter={photos.length} padded={false}>
+      {/* 코드리뷰(Important): 아트보드(SiteDetail.dc.html:333-349)의 '현장 사진' 컨테이너는
+          구분선이 하나(업로더 줄과 그리드 사이)뿐이고, 헤더 아래에는 구분선이 없다
+          ('측정위치'/'새 측정위치'와 달리). title을 Container에 넘기면 공용 프리미티브가
+          헤더 아래에 border-b를 무조건 그려 구분선이 두 개가 되므로, 여기서는 title을
+          넘기지 않고 padded={false}로 제목·업로더 줄·구분선+그리드를 직접 배치한다.
+          h2/카운터 클래스는 container.tsx 헤더의 것을 그대로 옮겨 시각적으로 동일하게 한다. */}
+      <Container padded={false}>
         <div className="px-5 py-3">
+          <h2 className="text-lg font-bold leading-[22px]">
+            현장 사진
+            <span className="ml-1.5 font-normal text-cs-text-secondary">({photos.length})</span>
+          </h2>
+        </div>
+        <div className="px-5 pb-3">
           <RefreshOnUpload target={{ site_id: id }} />
         </div>
         <div className="border-t border-cs-divider p-5">

@@ -22,6 +22,17 @@ function findAll(node: unknown, type: unknown, acc: { props: Record<string, unkn
   return acc;
 }
 
+// 코드리뷰(Important) 회귀 차단: 렌더되지 않은 엘리먼트 트리에서 className들을 전부 모은다
+// (render()로 그릴 수 없는 async 서버 컴포넌트라 DOM querySelector를 쓸 수 없다).
+function collectClassNames(node: unknown, acc: string[] = []): string[] {
+  if (node == null || typeof node !== 'object') return acc;
+  if (Array.isArray(node)) { node.forEach((n) => collectClassNames(n, acc)); return acc; }
+  const el = node as { props?: { className?: string; children?: unknown } };
+  if (typeof el.props?.className === 'string') acc.push(el.props.className);
+  collectClassNames(el.props?.children, acc);
+  return acc;
+}
+
 function chain(result: { data: unknown; error: null }, eqSpy?: (col: string, val: unknown) => void) {
   const obj: Record<string, unknown> = {
     select: () => obj, order: () => obj, is: () => obj, in: () => obj,
@@ -99,7 +110,42 @@ describe('SitePage 화면 구조 (Cloudscape)', () => {
     expect(header.props.title).toBe('세종 M2블록 아파트');
     expect(header.props.description).toBe('세종시 다정동');
     expect(header.props.crumbs).toEqual([{ href: '/', label: '현장' }, { label: '세종 M2블록 아파트' }]);
+    // 코드리뷰(Important): '현장 사진' Container는 더 이상 title/counter를 받지 않는다(아래
+    // 전용 테스트가 검증하듯, 헤더를 직접 그려 아트보드대로 구분선을 하나만 둔다).
     const containers = findAll(el, Container).map((c) => [c.props.title, c.props.counter]);
-    expect(containers).toEqual([['측정위치', 1], ['새 측정위치', undefined], ['현장 사진', 2]]);
+    expect(containers).toEqual([['측정위치', 1], ['새 측정위치', undefined], [undefined, undefined]]);
+  });
+
+  // 코드리뷰(Important): SiteDetail.dc.html:333-349는 '현장 사진' 컨테이너에 구분선을 하나만
+  // 두고(업로더 줄과 그리드 사이), 헤더 아래에는 두지 않는다('측정위치'/'새 측정위치'와 다름).
+  // title을 Container에 넘기면 공용 프리미티브가 헤더 아래 border-b를 무조건 그려 구분선이
+  // 두 개가 되므로, 페이지가 title 없이 padded={false}로 헤더·업로더 줄·구분선을 직접 그리는지 검증한다.
+  it('현장 사진 컨테이너: 헤더 구분선 없음 + 구분선은 업로더 줄과 그리드 사이 하나뿐', async () => {
+    const site = { id: 's1', name: '현장1', address: null, memo: null, created_at: '', updated_at: '' };
+    const photo = { id: 'p1', scan_id: null, location_id: null, site_id: 's1', file_path: 'a.jpg', caption: null, taken_at: null, created_at: '' };
+    vi.mocked(createClient).mockResolvedValue(stub(site, [], [photo, { ...photo, id: 'p2' }]) as never);
+
+    const el = await SitePage({ params: Promise.resolve({ id: 's1' }) });
+
+    const containers = findAll(el, Container);
+    const photoContainer = containers[2];
+    expect(photoContainer.props.title).toBeUndefined();
+    expect(photoContainer.props.padded).toBe(false);
+
+    const classNames = collectClassNames(photoContainer.props.children);
+    // border-b(헤더 밑 구분선)는 없어야 하고, border-t(그리드 위 구분선)는 정확히 하나여야 한다.
+    expect(classNames.some((c) => c.includes('border-b'))).toBe(false);
+    const topDividers = classNames.filter((c) => c.includes('border-t') && c.includes('border-cs-divider'));
+    expect(topDividers).toHaveLength(1);
+
+    // 헤더는 container.tsx의 h2/카운터 클래스를 그대로 복사해 시각적으로 동일해야 한다.
+    const [heading] = findAll(photoContainer.props.children, 'h2');
+    const headingEl = heading as unknown as { props: { className: string; children: unknown[] } };
+    expect(headingEl.props.className).toContain('text-lg');
+    expect(headingEl.props.className).toContain('font-bold');
+    const [text, counterSpan] = headingEl.props.children as [string, { props: { className: string } }];
+    expect(text).toBe('현장 사진');
+    expect(counterSpan.props.className).toContain('font-normal');
+    expect(counterSpan.props.className).toContain('text-cs-text-secondary');
   });
 });
