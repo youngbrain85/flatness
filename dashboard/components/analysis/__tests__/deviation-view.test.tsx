@@ -43,4 +43,13 @@ describe('DeviationView (정밀 편차맵 탭)', () => {
     expect(screen.queryByText(/재분석하면 생성됩니다/)).not.toBeInTheDocument();
     expect(screen.queryByText(/정밀 편차맵이 없습니다/)).not.toBeInTheDocument();
   });
+
+  // Cloudscape 리스킨(T7): 캡션 nav-text, 안내 보조색, 이미지 보더 cs-divider
+  it('캡션·안내·이미지 보더가 cs 토큰이고 구 팔레트 클래스가 없다', () => {
+    const { container } = render(<DeviationView artifactsDir="artifacts/an1" paths={['deviation.png']} isImport={false} />);
+    expect(screen.getByText('정밀 편차맵(10cm)').className).toContain('text-cs-nav-text');
+    expect(screen.getByText(/판정 등급 산출에는 사용되지 않으며/).className).toContain('text-cs-text-secondary');
+    expect(container.querySelector('img')?.className).toContain('border-cs-divider');
+    expect(container.innerHTML).not.toMatch(/zinc-/);
+  });
 });

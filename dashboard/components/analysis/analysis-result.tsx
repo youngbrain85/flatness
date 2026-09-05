@@ -1,9 +1,11 @@
-// C안 전체 골격
+// C안 전체 골격 - Cloudscape 리스킨(T7). 컨테이너('평활도 결과' 헤더)는 페이지가 그리고(T6),
+// 이 컴포넌트는 그 본문(TabBar → 3:2 그리드[히트맵 | 판정 패널] → 구간별 결과표)만 그린다.
 'use client';
 import { useEffect, useState } from 'react';
 import { artifactUrl } from '@/lib/domain/paths';
 import { isExternalImport } from '@/lib/domain/stats';
 import type { AnalysisRow, CellRow, PhotoRow, ScanRow, Stats } from '@/lib/domain/types';
+import { TabBar } from '@/components/ui/tab-bar';
 import { HeatmapView } from './heatmap-view';
 import { DeviationView } from './deviation-view';
 import { VerdictPanel } from './verdict-panel';
@@ -12,6 +14,19 @@ import { PhotoGallery } from '@/components/photo-gallery';
 import { RefreshOnUpload } from '@/components/refresh-on-upload';
 
 type Tab = 'heatmap' | 'deviation' | 'preview3d' | 'photos';
+
+// 탭 순서·문구는 기존 그대로(아트보드 ScanDone의 4탭과 같다)
+const TABS: { id: Tab; label: string }[] = [
+  { id: 'heatmap', label: '히트맵' },
+  { id: 'deviation', label: '정밀 편차맵' },
+  { id: 'preview3d', label: '3D 프리뷰' },
+  { id: 'photos', label: '현장 사진' },
+];
+
+// 3:2 그리드(아트보드 minmax(0,3fr) minmax(0,2fr), gap 20px). md 미만은 세로 스택(스펙 §5).
+// slope-result.tsx가 같은 문자열을 갖는다(구배 화면이 평활도 모듈 전체를 끌어오지 않도록 import 대신 복제).
+const RESULT_GRID = 'grid items-start gap-5 md:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]';
+const MUTED = 'text-sm text-cs-text-secondary';
 
 export function AnalysisResult({ analysis, scan, photos }: {
   analysis: AnalysisRow;
@@ -44,24 +59,15 @@ export function AnalysisResult({ analysis, scan, photos }: {
   const isImport = isExternalImport(analysis.engine_version, stats.meta);
 
   return (
-    <div className="space-y-4">
-      <div className="grid gap-4 lg:grid-cols-3">
-        <section className="lg:col-span-2">
-          <div className="mb-2 flex gap-2 text-sm">
-            {([['heatmap', '히트맵'], ['deviation', '정밀 편차맵'],
-               ['preview3d', '3D 프리뷰'], ['photos', '현장 사진']] as const)
-              .map(([key, label]) => (
-                <button key={key} onClick={() => setTab(key)}
-                  className={`rounded-md border px-3 py-1 ${tab === key ? 'border-zinc-900 bg-zinc-900 text-white' : 'border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-50'}`}>
-                  {label}
-                </button>
-              ))}
-          </div>
+    <div className="flex flex-col gap-5">
+      <div className={RESULT_GRID}>
+        <section className="flex min-w-0 flex-col gap-4">
+          <TabBar tabs={TABS} active={tab} onChange={setTab} />
           {tab === 'heatmap' && (
             cells ? (
               <HeatmapView surface={analysis.surface} cells={cells} walls={stats.walls} zones={stats.zones} />
             ) : (
-              <p className="text-sm text-zinc-500">{cellsError ?? '셀 데이터 로딩 중...'}</p>
+              <p className={MUTED}>{cellsError ?? '셀 데이터 로딩 중...'}</p>
             )
           )}
           {tab === 'deviation' && (
@@ -69,38 +75,39 @@ export function AnalysisResult({ analysis, scan, photos }: {
           )}
           {tab === 'preview3d' && (
             preview3d.length > 0 ? (
-              <div className="space-y-3">
+              <div className="flex flex-col gap-3">
                 {preview3d.map((name) => (
                   // 로컬 route 서빙 이미지 - 데모에서 next/image 최적화 불필요
                   // eslint-disable-next-line @next/next/no-img-element
                   <img key={name} src={artifactUrl(analysis.artifacts_dir!, name)} alt={`3D 프리뷰 ${name}`}
-                    className="max-w-full rounded border bg-white" />
+                    className="max-w-full rounded-lg border border-cs-divider bg-white" />
                 ))}
-                <p className="text-xs text-zinc-500">
+                <p className="text-xs leading-4 text-cs-text-secondary">
                   워커가 생성한 정적 3D 프리뷰입니다(회전·줌 가능한 뷰어는 정식 단계 백로그).
                 </p>
               </div>
             ) : (
-              <p className="text-sm text-zinc-500">
+              <p className={MUTED}>
                 3D 프리뷰가 없습니다{analysis.surface === 'wall' ? ' (벽면 분석은 3D 프리뷰를 생성하지 않습니다)' : ''}.
               </p>
             )
           )}
           {tab === 'photos' && (
-            <div className="space-y-2">
+            <div className="flex flex-col gap-2">
               <RefreshOnUpload target={{ scan_id: scan.id }} />
               <PhotoGallery photos={photos} />
             </div>
           )}
         </section>
-        <div className="lg:sticky lg:top-4 lg:self-start">
+        <div className="min-w-0 md:sticky md:top-5 md:self-start">
           <VerdictPanel analysis={analysis} stats={stats} />
         </div>
       </div>
-      <section>
-        <h2 className="mb-2 font-semibold">구간별 결과표</h2>
+      <section className="flex flex-col gap-2">
+        {/* 컨테이너 제목이 h2이므로 본문 소제목은 h3 */}
+        <h3 className="text-base font-bold leading-5">구간별 결과표</h3>
         {cells ? <ResultTable stats={stats} cells={cells} /> :
-          <p className="text-sm text-zinc-500">{cellsError ?? '셀 데이터 로딩 중...'}</p>}
+          <p className={MUTED}>{cellsError ?? '셀 데이터 로딩 중...'}</p>}
       </section>
     </div>
   );

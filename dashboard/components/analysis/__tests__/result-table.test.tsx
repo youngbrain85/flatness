@@ -18,14 +18,26 @@ const cell = (zone: number | null, v: number, grade: CellRow['grade']): CellRow 
   occupancy: 1, grade, worst_x: null, worst_y: null, zone_id: zone,
 });
 
+const floorStats: Stats = {
+  ...base,
+  zones: [{ zone_id: 1, level_m: 0.002, area_m2: 12.5, status: 'ok', plane_abc: [0, 0, 0] }],
+  meta: { file: 'f', n_points: 1, surface: 'floor' },
+};
+
+const wallStats: Stats = {
+  ...base, zones: [],
+  walls: [{
+    wall_id: 1, n_cells: 2, height_m: 2.4, length_m: 5.1, plumbness_mm: 8.5,
+    plumb_grade: 'pass',
+    plane_abc: [0, 0, 0],
+    frame: { p0: [0, 0], direction: [1, 0], normal: [0, 1], u_min: 0, u_max: 5.1, z_min: 0, z_max: 2.4 },
+  }],
+  meta: { file: 'f', n_points: 1, surface: 'wall' },
+};
+
 describe('ResultTable (하단 구간별 결과표 - 스펙 §5.1.7 필드와 동일 컬럼)', () => {
   it('floor: 구역별 행에 레벨·면적·상태·집계를 렌더한다', () => {
-    const stats: Stats = {
-      ...base,
-      zones: [{ zone_id: 1, level_m: 0.002, area_m2: 12.5, status: 'ok', plane_abc: [0, 0, 0] }],
-      meta: { file: 'f', n_points: 1, surface: 'floor' },
-    };
-    render(<ResultTable stats={stats} cells={[cell(1, 10, 'repair'), cell(1, 1, 'pass')]} />);
+    render(<ResultTable stats={floorStats} cells={[cell(1, 10, 'repair'), cell(1, 1, 'pass')]} />);
     expect(screen.getByText('구역 1')).toBeInTheDocument();
     expect(screen.getByText('정상')).toBeInTheDocument();
     expect(screen.getByText('12.5')).toBeInTheDocument();  // 면적
@@ -33,19 +45,35 @@ describe('ResultTable (하단 구간별 결과표 - 스펙 §5.1.7 필드와 동
     expect(screen.getByText(/1 \(50%\)/)).toBeInTheDocument(); // 보수 이상 셀(비율)
   });
   it('wall: 벽별 행에 수직도·수직도 등급을 렌더한다', () => {
-    const stats: Stats = {
-      ...base, zones: [],
-      walls: [{
-        wall_id: 1, n_cells: 2, height_m: 2.4, length_m: 5.1, plumbness_mm: 8.5,
-        plumb_grade: 'pass',
-        plane_abc: [0, 0, 0],
-        frame: { p0: [0, 0], direction: [1, 0], normal: [0, 1], u_min: 0, u_max: 5.1, z_min: 0, z_max: 2.4 },
-      }],
-      meta: { file: 'f', n_points: 1, surface: 'wall' },
-    };
-    render(<ResultTable stats={stats} cells={[cell(1, 3, 'pass'), cell(1, 5, 'pass')]} />);
+    render(<ResultTable stats={wallStats} cells={[cell(1, 3, 'pass'), cell(1, 5, 'pass')]} />);
     expect(screen.getByText('벽 1')).toBeInTheDocument();
     expect(screen.getByText('8.50')).toBeInTheDocument(); // 수직도 mm
     expect(screen.getAllByText('적합').length).toBeGreaterThan(0); // plumb_grade
+  });
+});
+
+// Cloudscape 리스킨(T7): tableClass 프리셋(헤더 40px 700, 행 44px, 수치 열 우측 mono) + StatusIndicator
+describe('ResultTable Cloudscape 해부 (T7)', () => {
+  it('헤더는 h-10 700, 수치 열은 text-right mono, 행 구분은 cs-divider, 첫 열은 700이다', () => {
+    const { container } = render(<ResultTable stats={floorStats} cells={[cell(1, 10, 'repair')]} />);
+    expect(container.firstElementChild?.className).toContain('border-cs-divider');
+    const th = screen.getByRole('columnheader', { name: '최대(mm)' });
+    expect(th.className).toContain('h-10');
+    expect(th.className).toContain('font-bold');
+    expect(th.className).toContain('text-right');
+    expect(screen.getByRole('columnheader', { name: '상태' }).className).not.toContain('text-right');
+    // 셀이 하나뿐인 픽스처라 최대·최소·평균이 모두 10.00이다 - 첫 수치 td(최대)로 해부를 본다
+    const td = screen.getAllByText('10.00')[0];
+    expect(td.className).toContain('font-mono');
+    expect(td.className).toContain('text-right');
+    expect(td.className).toContain('h-11');
+    expect(td.closest('tr')?.className).toContain('border-cs-divider');
+    expect(screen.getByText('구역 1').className).toContain('font-bold');
+    expect(container.innerHTML).not.toMatch(/zinc-/);
+  });
+  it('wall: 수직도 판정은 StatusIndicator(data-status=success)로 그린다', () => {
+    render(<ResultTable stats={wallStats} cells={[cell(1, 3, 'pass')]} />);
+    expect(screen.getByText('적합')).toHaveAttribute('data-status', 'success');
+    expect(screen.getByRole('columnheader', { name: '수직도(mm)' }).className).toContain('text-right');
   });
 });

@@ -2,8 +2,12 @@
 // 역구배 표시. 판정 로직은 없다 - joinSlopeCells가 이미 조인해 낸 grade·dev_pct·
 // correction_mm을 그대로 표로 옮기고, 보정 방향 문구만 slope-direction.ts로
 // 계산한다(임계값 비교 없음 - 리트머스 통과).
+// Cloudscape 리스킨(T7): tableClass + StatusIndicator/Badge. 색은 SLOPE_GRADE_TONE(시스템 톤)으로만.
 import { correctionDirectionLabel } from '@/lib/domain/slope-direction';
-import { SLOPE_GRADE_COLOR } from '@/lib/domain/slope-heatmap';
+import { SLOPE_GRADE_TONE } from '@/lib/domain/grade-tone';
+import { Badge } from '@/components/ui/badge';
+import { tableClass } from '@/components/ui/data-table';
+import { StatusIndicator, TONE_STATUS } from '@/components/ui/status-indicator';
 import type { SlopeCellResult } from '@/lib/domain/slope-judged';
 
 function fmtPct(v: number | null): string {
@@ -38,18 +42,18 @@ export function SlopeResultTable({ results, designPct, dirPassDeg }: {
   ));
 
   return (
-    <div className="overflow-x-auto rounded-lg border bg-white">
-      <table className="w-full text-sm">
-        <thead className="bg-zinc-100 text-left text-xs text-zinc-600">
+    <div className="overflow-x-auto rounded-lg border border-cs-divider bg-white">
+      <table className={tableClass.table}>
+        <thead className={tableClass.thead}>
           <tr>
-            <th className="p-2">위치(cx,cy)</th>
-            <th className="p-2">구배(%)</th>
-            <th className="p-2">설계 대비 편차(%)</th>
-            <th className="p-2">보정</th>
-            <th className="p-2">등급</th>
-            <th className="p-2">역구배 여부</th>
-            <th className="p-2">방향 편차</th>
-            <th className="p-2">사유</th>
+            <th className={tableClass.th}>위치(cx,cy)</th>
+            <th className={tableClass.thNum}>구배(%)</th>
+            <th className={tableClass.thNum}>설계 대비 편차(%)</th>
+            <th className={tableClass.th}>보정</th>
+            <th className={tableClass.th}>등급</th>
+            <th className={tableClass.th}>역구배 여부</th>
+            <th className={tableClass.th}>방향 편차</th>
+            <th className={tableClass.th}>사유</th>
           </tr>
         </thead>
         <tbody>
@@ -57,36 +61,27 @@ export function SlopeResultTable({ results, designPct, dirPassDeg }: {
             const correction = correctionDirectionLabel(r.cell, r.correction_mm, designPct, r.reverse);
             const dirDeviation = directionDeviationLabel(r.dir_err_deg, dirPassDeg, r.reverse);
             return (
-              <tr key={`${r.cell.cx},${r.cell.cy}`} className="border-t">
-                <td className="p-2 font-medium">({r.cell.cx}, {r.cell.cy})</td>
-                <td className="p-2">{fmtPct(r.cell.slope_pct)}</td>
-                <td className="p-2">{fmtPct(r.dev_pct)}</td>
-                <td className="p-2">{correction ?? '-'}</td>
-                <td className="p-2">
+              <tr key={`${r.cell.cx},${r.cell.cy}`} className={tableClass.row}>
+                <td className={`${tableClass.td} font-mono font-bold tabular-nums`}>({r.cell.cx}, {r.cell.cy})</td>
+                <td className={tableClass.tdNum}>{fmtPct(r.cell.slope_pct)}</td>
+                <td className={tableClass.tdNum}>{fmtPct(r.dev_pct)}</td>
+                <td className={tableClass.td}>{correction ?? '-'}</td>
+                <td className={tableClass.td}>
                   {/* 코드리뷰 M1: jsonb는 무결성을 보장하지 않는다 - grade가 알 수 없는
-                      문자열이어도 배지가 안 보이는 조용한 오표시 대신 판정불가 회색으로
+                      문자열이어도 표시가 안 보이는 조용한 오표시 대신 판정불가(pending)로
                       강제한다(slopeCellFillColor의 ok=false 강제와 같은 관례). */}
-                  <span className="rounded px-1.5 text-xs text-white"
-                    style={{ backgroundColor: SLOPE_GRADE_COLOR[r.grade] ?? SLOPE_GRADE_COLOR.판정불가 }}>
+                  <StatusIndicator type={TONE_STATUS[SLOPE_GRADE_TONE[r.grade] ?? 'unknown']}>
                     {r.grade}
-                  </span>
+                  </StatusIndicator>
                 </td>
-                <td className="p-2">
+                <td className={tableClass.td}>
                   {/* 색만으로는 안 드러나므로(스펙 §7.2) 별도 배지로 표시한다 */}
-                  {r.reverse && (
-                    <span className="rounded border border-red-400 bg-red-50 px-1.5 text-xs font-semibold text-red-700">
-                      역구배
-                    </span>
-                  )}
+                  {r.reverse && <Badge tone="fail">역구배</Badge>}
                 </td>
-                <td className="p-2">
-                  {dirDeviation && (
-                    <span className="rounded border border-amber-400 bg-amber-50 px-1.5 text-xs font-semibold text-amber-800">
-                      {dirDeviation}
-                    </span>
-                  )}
+                <td className={tableClass.td}>
+                  {dirDeviation && <Badge tone="warn">{dirDeviation}</Badge>}
                 </td>
-                <td className="p-2 text-xs text-zinc-500">{r.reason}</td>
+                <td className={`${tableClass.td} text-xs text-cs-text-secondary`}>{r.reason}</td>
               </tr>
             );
           })}

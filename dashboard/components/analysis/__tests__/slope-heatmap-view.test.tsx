@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, render } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { SlopeHeatmapView } from '../slope-heatmap-view';
 import type { SlopeCellResult } from '@/lib/domain/slope-judged';
 import type { SlopeCellRow } from '@/lib/domain/types';
@@ -124,5 +124,30 @@ describe('SlopeHeatmapView -> drawSlopeHeatmap 배선 (코드리뷰 R-19: revers
     expect(strokeWidths).not.toContain(2.2);
 
     getContextSpy.mockRestore();
+  });
+});
+
+// Cloudscape 리스킨(T7): 캔버스·범례 색은 엔진 PNG와 같은 SLOPE_GRADE_COLOR hex 그대로,
+// 크롬(보더·안내 문구)만 토큰.
+describe('SlopeHeatmapView Cloudscape 해부 (T7)', () => {
+  it('캔버스 보더 cs-divider, 범례 스와치 5종은 SLOPE_GRADE_COLOR, 화살표 안내는 보조색', () => {
+    const { container } = render(
+      <SlopeHeatmapView results={[result()]} cellM={2.0} drainPoints={[]} clickable onDrainClick={vi.fn()} />,
+    );
+    expect(container.querySelector('canvas')?.className).toContain('border-cs-divider');
+    expect(container.querySelector('canvas')?.className).toContain('cursor-crosshair');
+    const swatches = container.querySelectorAll('[data-grade]');
+    expect(Array.from(swatches).map((s) => s.getAttribute('data-grade'))).toEqual(['적합', '경계', '보수', '재시공', '판정불가']);
+    expect(swatches[0]).toHaveStyle({ backgroundColor: 'rgb(61, 139, 61)' }); // #3d8b3d
+    expect(container.querySelector('[data-legend="drain"]')).toHaveStyle({ backgroundColor: 'rgb(26, 115, 232)' }); // #1a73e8
+    expect(screen.getByText(/얇은 화살표/).className).toContain('text-cs-text-secondary');
+    expect(container.innerHTML).not.toMatch(/zinc-/);
+  });
+
+  it('clickable=false면 not-allowed 커서를 쓴다', () => {
+    const { container } = render(
+      <SlopeHeatmapView results={[result()]} cellM={2.0} drainPoints={[]} clickable={false} onDrainClick={vi.fn()} />,
+    );
+    expect(container.querySelector('canvas')?.className).toContain('cursor-not-allowed');
   });
 });

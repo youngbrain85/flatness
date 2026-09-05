@@ -1,13 +1,16 @@
-// 히트맵 탭(셀 클릭 상세 포함)
+// 히트맵 탭(셀 클릭 상세 포함) - Cloudscape 리스킨(T7).
+// 캔버스·범례 색은 산출물 팔레트 GRADE_COLOR 그대로(스펙 §3 예외·§7-4: PDF와 같은 색), 크롬만 토큰.
 'use client';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { cellAt, cellPxFor, drawHeatmap, gridGeometry } from '@/lib/viz/heatmap';
 import { GRADE_COLOR, GRADE_LABEL, ZONE_STATUS_LABEL, fmtMm } from '@/lib/domain/labels';
 import { GRADE_TONE } from '@/lib/domain/grade-tone';
 import { Badge } from '@/components/ui/badge';
+import { TabBar } from '@/components/ui/tab-bar';
 import type { CellRow, Grade, Stats, Surface, WallInfo } from '@/lib/domain/types';
 
 const LEGEND: Grade[] = ['pass', 'borderline', 'repair', 'rework', 'na'];
+const DT = 'text-cs-text-secondary';
 
 export function HeatmapView({ surface, cells, walls, zones }: {
   surface: Surface;
@@ -54,42 +57,46 @@ export function HeatmapView({ surface, cells, walls, zones }: {
   const zoneOf = (zoneId: number | null) => zones.find((z) => z.zone_id === zoneId);
 
   return (
-    <div className="space-y-3">
+    <div className="flex flex-col gap-3">
       {surface === 'wall' && (walls?.length ?? 0) > 0 && (
-        <div className="flex flex-wrap gap-2 text-sm">
-          {walls!.map((w) => (
-            <button key={w.wall_id} onClick={() => { setWallId(w.wall_id); setSelected(null); }}
-              className={`rounded-md border px-3 py-1 ${wallId === w.wall_id ? 'border-zinc-900 bg-zinc-900 text-white' : 'border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-50'}`}>
-              벽 {w.wall_id} ({w.length_m}m x {w.height_m}m)
-            </button>
-          ))}
-        </div>
+        // 벽 선택: 기존 토글 버튼을 TabBar(role=tab)로. TabBar의 id는 string이라 wall_id(number)는
+        // String()/Number()로 오간다(정수 id라 왕복 손실 없음). 선택 로직(setWallId + 상세 초기화)은 그대로.
+        <TabBar
+          tabs={walls!.map((w) => ({ id: String(w.wall_id), label: `벽 ${w.wall_id} (${w.length_m}m x ${w.height_m}m)` }))}
+          active={String(wallId)}
+          onChange={(id) => { setWallId(Number(id)); setSelected(null); }}
+        />
       )}
       {geom ? (
-        <canvas ref={canvasRef} onClick={onClick} className="max-w-full cursor-crosshair rounded border bg-white" />
+        <canvas ref={canvasRef} onClick={onClick}
+          className="max-w-full cursor-crosshair rounded-lg border border-cs-divider bg-white" />
       ) : (
-        <p className="text-sm text-zinc-500">표시할 셀 데이터가 없습니다.</p>
+        <p className="text-sm text-cs-text-secondary">표시할 셀 데이터가 없습니다.</p>
       )}
-      <div className="flex flex-wrap gap-3 text-xs">
+      {/* 범례: 12px 사각 스와치 5종 = GRADE_COLOR hex(캔버스·PDF와 같은 색).
+          text-xs leading-4는 항목 span 자체에 둔다 - 테스트의 getByText('적합')는 자기 텍스트 노드를 가진
+          이 span을 돌려주므로 부모 div에만 두면 클래스 단언이 잡지 못한다. */}
+      <div className="flex flex-wrap gap-x-3 gap-y-1">
         {LEGEND.map((g) => (
-          <span key={g} className="flex items-center gap-1">
-            <span className="inline-block h-3 w-3 rounded-sm" style={{ backgroundColor: GRADE_COLOR[g] }} />
+          <span key={g} className="inline-flex items-center gap-1 text-xs leading-4">
+            <span aria-hidden data-grade={g} className="inline-block h-3 w-3 rounded-sm"
+              style={{ backgroundColor: GRADE_COLOR[g] }} />
             {GRADE_LABEL[g]}
           </span>
         ))}
       </div>
       {selected && (
-        <dl className="grid max-w-md grid-cols-2 gap-x-4 gap-y-1 rounded border bg-white p-3 text-sm">
-          <dt className="text-zinc-500">판정</dt>
+        <dl className="grid max-w-md grid-cols-2 gap-x-4 gap-y-1 rounded-lg border border-cs-divider bg-white p-3 text-sm">
+          <dt className={DT}>판정</dt>
           <dd>
             <Badge tone={GRADE_TONE[selected.grade]}>{GRADE_LABEL[selected.grade]}</Badge>
           </dd>
-          <dt className="text-zinc-500">직선자 값</dt><dd>{fmtMm(selected.value_mm)} mm</dd>
-          <dt className="text-zinc-500">사용 스팬</dt><dd>{selected.span_used_m} m</dd>
-          <dt className="text-zinc-500">셀 점유율</dt><dd>{Math.round(selected.occupancy * 100)}%</dd>
-          <dt className="text-zinc-500">최악 지점</dt>
-          <dd>{selected.worst_x !== null ? `(${selected.worst_x}, ${selected.worst_y})` : '-'}</dd>
-          <dt className="text-zinc-500">{surface === 'wall' ? '벽' : '구역'}</dt>
+          <dt className={DT}>직선자 값</dt><dd className="font-mono tabular-nums">{fmtMm(selected.value_mm)} mm</dd>
+          <dt className={DT}>사용 스팬</dt><dd className="font-mono tabular-nums">{selected.span_used_m} m</dd>
+          <dt className={DT}>셀 점유율</dt><dd className="font-mono tabular-nums">{Math.round(selected.occupancy * 100)}%</dd>
+          <dt className={DT}>최악 지점</dt>
+          <dd className="font-mono tabular-nums">{selected.worst_x !== null ? `(${selected.worst_x}, ${selected.worst_y})` : '-'}</dd>
+          <dt className={DT}>{surface === 'wall' ? '벽' : '구역'}</dt>
           <dd>
             {selected.zone_id ?? '-'}
             {surface === 'floor' && zoneOf(selected.zone_id) &&

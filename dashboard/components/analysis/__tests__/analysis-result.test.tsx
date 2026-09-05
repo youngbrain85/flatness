@@ -38,13 +38,18 @@ const scan: ScanRow = {
   created_at: '2026-07-20', updated_at: '2026-07-20',
 };
 
+// cells.json fetch는 히트맵 탭 전용이라 빈 배열로 스텁한다
+function stubCellsFetch() {
+  vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => [] } as unknown as Response)));
+}
+
 describe('AnalysisResult 정밀 편차맵 탭', () => {
   it('탭을 누르면 stats.deviation_paths의 이미지를 보여준다', async () => {
-    // cells.json fetch는 히트맵 탭 전용이라 빈 배열로 스텁한다
-    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => [] } as unknown as Response)));
+    stubCellsFetch();
 
     render(<AnalysisResult analysis={analysis} scan={scan} photos={[]} />);
-    fireEvent.click(screen.getByRole('button', { name: '정밀 편차맵' }));
+    // Cloudscape 리스킨(T7): 탭은 TabBar(role=tab)다 - 동작(클릭 -> 이미지)은 그대로
+    fireEvent.click(screen.getByRole('tab', { name: '정밀 편차맵' }));
 
     await waitFor(() => {
       const img = screen.getByAltText('정밀 편차맵(10cm)') as HTMLImageElement;
@@ -53,11 +58,11 @@ describe('AnalysisResult 정밀 편차맵 탭', () => {
   });
 
   it('편차맵이 없는 분석에서는 안내 문구를 보여준다', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => [] } as unknown as Response)));
+    stubCellsFetch();
     const without = { ...analysis, stats: { ...stats, deviation_paths: undefined } };
 
     render(<AnalysisResult analysis={without} scan={scan} photos={[]} />);
-    fireEvent.click(screen.getByRole('button', { name: '정밀 편차맵' }));
+    fireEvent.click(screen.getByRole('tab', { name: '정밀 편차맵' }));
 
     await waitFor(() => {
       expect(screen.getByText(/정밀 편차맵이 없습니다/)).toBeInTheDocument();
@@ -65,7 +70,7 @@ describe('AnalysisResult 정밀 편차맵 탭', () => {
   });
 
   it('임포트(Colab) 결과에서는 편차맵 재분석을 권하지 않는다 (스펙 §8/계약 §2: 임포트 경로는 편차맵 미생성)', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => [] } as unknown as Response)));
+    stubCellsFetch();
     const imported: AnalysisRow = {
       ...analysis, engine_version: 'external-colab-v1',
       stats: { ...stats, deviation_paths: undefined,
@@ -73,11 +78,34 @@ describe('AnalysisResult 정밀 편차맵 탭', () => {
     };
 
     render(<AnalysisResult analysis={imported} scan={scan} photos={[]} />);
-    fireEvent.click(screen.getByRole('button', { name: '정밀 편차맵' }));
+    fireEvent.click(screen.getByRole('tab', { name: '정밀 편차맵' }));
 
     await waitFor(() => {
       expect(screen.getByText(/외부\(Colab\) 임포트 결과에는 정밀 편차맵을 생성하지 않습니다/)).toBeInTheDocument();
     });
     expect(screen.queryByText(/재분석하면 생성됩니다/)).not.toBeInTheDocument();
+  });
+});
+
+// Cloudscape 리스킨(T7): 컨테이너는 페이지(T6)가 그리고 이 컴포넌트는 본문만 그린다 -
+// TabBar → 3:2 그리드(좌 히트맵 / 우 판정 패널) → 구간별 결과표.
+describe('AnalysisResult Cloudscape 본문 (T7)', () => {
+  it('TabBar 4탭(히트맵 활성) + 3:2 그리드 + 구간별 결과표 제목, 구 팔레트 클래스 없음', async () => {
+    stubCellsFetch();
+    const { container } = render(<AnalysisResult analysis={analysis} scan={scan} photos={[]} />);
+
+    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['히트맵', '정밀 편차맵', '3D 프리뷰', '현장 사진']);
+    expect(screen.getByRole('tab', { name: '히트맵' })).toHaveAttribute('aria-selected', 'true');
+
+    const root = container.firstElementChild as HTMLElement;
+    expect(root.className).toContain('flex flex-col gap-5');
+    const grid = root.firstElementChild as HTMLElement;
+    expect(grid.className).toContain('md:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]');
+    expect(grid.className).toContain('gap-5');
+    expect(screen.getByRole('heading', { level: 3, name: '구간별 결과표' })).toBeInTheDocument();
+
+    // 빈 cells가 도착하면 히트맵 자리에는 "표시할 셀 데이터가 없습니다." (fetch 이펙트를 기다려 act 경고를 막는다)
+    await waitFor(() => expect(screen.getByText('표시할 셀 데이터가 없습니다.')).toBeInTheDocument());
+    expect(container.innerHTML).not.toMatch(/zinc-|amber-|red-|green-|purple-/);
   });
 });

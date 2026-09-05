@@ -53,13 +53,15 @@ describe('SlopeResultTable (스펙 §7.2·§5.3: 구배 %, 설계 대비 편차,
     expect(screen.getByText(/방향 전면 재시공 필요/)).toBeInTheDocument();
   });
 
-  // ★ 코드리뷰 M1: jsonb 무결성 미보장 - grade가 SLOPE_GRADE_COLOR에 없는
-  // 문자열이어도 배지가 안 보이는 조용한 오표시 대신 판정불가 회색으로 강제한다.
-  it('SLOPE_GRADE_COLOR에 없는 미지 등급 문자열도 판정불가 색으로 폴백해 배지를 보여준다', () => {
+  // ★ 코드리뷰 M1: jsonb 무결성 미보장 - grade가 SLOPE_GRADE_TONE에 없는
+  // 문자열이어도 배지가 안 보이는 조용한 오표시 대신 판정불가(pending)로 강제한다.
+  // (T7: 화면 배지는 SLOPE_GRADE_COLOR hex가 아니라 시스템 톤 - 캔버스만 hex를 쓴다)
+  it('SLOPE_GRADE_TONE에 없는 미지 등급 문자열도 판정불가(pending)로 폴백해 표시한다', () => {
     const rows = [result({ grade: '알수없음' as unknown as SlopeCellResult['grade'] })];
     render(<SlopeResultTable results={rows} designPct={2.0} dirPassDeg={30} />);
     const badge = screen.getByText('알수없음');
-    expect(badge).toHaveStyle({ backgroundColor: 'rgb(158, 158, 158)' }); // #9e9e9e = 판정불가
+    expect(badge).toHaveAttribute('data-status', 'pending');
+    expect(badge.className).toContain('text-cs-na');
   });
 
   it('측정 불가(ok=false) 셀은 구배·보정에 "-"를 보여준다', () => {
@@ -123,5 +125,27 @@ describe('SlopeResultTable (스펙 §7.2·§5.3: 구배 %, 설계 대비 편차,
       render(<SlopeResultTable results={rows} designPct={2.0} dirPassDeg={30} />);
       expect(screen.queryByText(/초과/)).not.toBeInTheDocument();
     });
+  });
+});
+
+// Cloudscape 리스킨(T7): 등급 StatusIndicator, 역구배 fail Badge, 방향 편차 warn Badge, tableClass 수치 열.
+describe('SlopeResultTable Cloudscape 해부 (T7)', () => {
+  it('등급은 StatusIndicator, 역구배·방향 편차는 Badge 톤, 수치 열은 우측 mono, 사유는 보조색', () => {
+    const rows = [
+      result({ dir_err_deg: 45.3 }),
+      result({ cell: cell({ cx: 1 }), grade: '재시공', reason: '역구배(물이 배수구 반대로 흐름)', reverse: true }),
+    ];
+    const { container } = render(<SlopeResultTable results={rows} designPct={2.0} dirPassDeg={30} />);
+    expect(screen.getByText('적합')).toHaveAttribute('data-status', 'success');
+    expect(screen.getByText('재시공')).toHaveAttribute('data-status', 'error');
+    expect(screen.getByText('역구배').className).toContain('bg-cs-error-bg');
+    expect(screen.getByText('45.3도(허용 30도 초과)').className).toContain('bg-cs-warning-bg');
+    const th = screen.getByRole('columnheader', { name: '구배(%)' });
+    expect(th.className).toContain('text-right');
+    expect(th.className).toContain('h-10');
+    expect(screen.getAllByText('1.50%')[0].className).toContain('font-mono');
+    expect(screen.getByText('크기·방향 모두 허용 안').className).toContain('text-cs-text-secondary');
+    expect(screen.getByText('(0, 0)').className).toContain('font-bold');
+    expect(container.innerHTML).not.toMatch(/zinc-|amber-|red-/);
   });
 });

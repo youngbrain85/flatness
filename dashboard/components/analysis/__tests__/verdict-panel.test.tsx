@@ -30,6 +30,11 @@ const analysis = {
   deleted_at: null, created_at: '2026-07-28T00:00:00Z', created_by: null, kind: 'flatness',
 } as AnalysisRow;
 
+const imported = {
+  ...analysis, engine_version: 'external-colab-v1',
+  stats: { ...stats, meta: { ...stats.meta, source: 'colab-import' } },
+} as AnalysisRow;
+
 describe('VerdictPanel (C안 우측 고정 패널)', () => {
   it('종합 판정 배지·핵심 수치·기준·경고·종합의견을 렌더한다', () => {
     render(<VerdictPanel analysis={analysis} stats={stats} />);
@@ -54,11 +59,69 @@ describe('VerdictPanel (C안 우측 고정 패널)', () => {
     expect(screen.queryByText('fused_mesh_smoothed')).not.toBeInTheDocument();
   });
   it('임포트 결과면 외부 결과 배지를 보여준다', () => {
-    const imp = {
-      ...analysis, engine_version: 'external-colab-v1',
-      stats: { ...stats, meta: { ...stats.meta, source: 'colab-import' } },
-    } as AnalysisRow;
-    render(<VerdictPanel analysis={imp} stats={imp.stats!} />);
+    render(<VerdictPanel analysis={imported} stats={imported.stats!} />);
     expect(screen.getByText('외부 결과')).toBeInTheDocument();
+  });
+});
+
+// Cloudscape 리스킨(T7): 동작은 위 describe가 지키고 여기서는 해부(프리미티브·토큰·의미 속성)만 본다.
+describe('VerdictPanel Cloudscape 해부 (T7)', () => {
+  it('판정 헤드라인은 StatusIndicator(data-status=error, 18px 700)이고 외부 결과 배지는 external 톤이다', () => {
+    render(<VerdictPanel analysis={imported} stats={imported.stats!} />);
+    const head = screen.getByText('보수');
+    expect(head).toHaveAttribute('data-status', 'error');
+    expect(head.className).toContain('font-bold');
+    // text-lg 금지: Tailwind v4는 .text-lg를 .text-sm보다 앞에 내보내 StatusIndicator의 text-sm이 이긴다
+    expect(head.className).toContain('text-[18px]');
+    expect(head.className).not.toContain('text-lg');
+    const badge = screen.getByText('외부 결과');
+    expect(badge.className).toContain('bg-cs-external-bg');
+    expect(badge.className).toContain('text-cs-external');
+  });
+
+  it('overall_verdict가 없으면 pending 헤드라인 "판정 없음"을 그린다', () => {
+    render(<VerdictPanel analysis={{ ...analysis, overall_verdict: null } as AnalysisRow} stats={stats} />);
+    expect(screen.getByText('판정 없음')).toHaveAttribute('data-status', 'pending');
+    expect(screen.queryByText('외부 결과')).not.toBeInTheDocument();
+  });
+
+  it('수치는 KeyValuePairs 2열(라벨 700, 값 mono tabular, 최대 편차만 700)이다', () => {
+    const { container } = render(<VerdictPanel analysis={analysis} stats={stats} />);
+    expect(container.querySelector('dl')?.className).toContain('grid-cols-2');
+    expect(screen.getByText('최대 편차(mm)').className).toContain('font-bold');
+    expect(screen.getByText('12.34').className).toContain('font-mono');
+    expect(screen.getByText('12.34').className).toContain('font-bold');
+    expect(screen.getByText('0.50').className).not.toContain('font-bold');
+    expect(screen.getByText('36 / 40').className).toContain('tabular-nums');
+  });
+
+  it('등급 분포 바는 5등급 세그먼트(GRADE_COLOR hex, 비율 폭)이고 경고는 warning Alert 안에 있다', () => {
+    const { container } = render(<VerdictPanel analysis={analysis} stats={stats} />);
+    const segs = container.querySelectorAll('[data-grade]');
+    expect(Array.from(segs).map((s) => s.getAttribute('data-grade'))).toEqual(['pass', 'borderline', 'repair', 'rework', 'na']);
+    expect(segs[0]).toHaveStyle({ backgroundColor: 'rgb(46, 125, 50)' }); // GRADE_COLOR.pass #2e7d32
+    expect((segs[0] as HTMLElement).style.width).toBe('75%');            // 30/40
+    expect(segs[0].parentElement?.className).toContain('bg-cs-divider');
+    expect(screen.getByText('적합 30 · 경계 4 · 보수 2 · 재시공 0 · 판정 불가 4')).toBeInTheDocument();
+    const alert = container.querySelector('[data-alert="warning"]') as HTMLElement;
+    expect(alert).not.toBeNull();
+    expect(alert.textContent).toContain('70% 미만');
+  });
+
+  it('적용 기준 코드는 mono, 종합의견 textarea는 textareaClass, 저장은 normal 버튼이고 이 패널에 primary는 없다', () => {
+    render(<VerdictPanel analysis={analysis} stats={stats} />);
+    expect(screen.getByText('floor-kcs-exposed').className).toContain('font-mono');
+    expect(screen.getByLabelText('종합의견(사용자 수정)').className).toContain('border-cs-input-border');
+    // 뷰당 primary 1개(스펙 §4): ScanDone 뷰의 primary는 헤더의 '이 위치의 보고서 생성'(T6)이므로 저장은 normal
+    const save = screen.getByRole('button', { name: '저장' });
+    expect(save.className).toContain('border-cs-link');
+    expect(save.className).not.toContain('bg-cs-link');
+    expect(save.className).toContain('rounded-full');
+    expect(screen.getAllByRole('button').filter((b) => b.className.includes('bg-cs-link'))).toHaveLength(0);
+  });
+
+  it('구 팔레트 클래스(zinc/amber/purple/red/green)가 남아 있지 않다', () => {
+    const { container } = render(<VerdictPanel analysis={imported} stats={imported.stats!} />);
+    expect(container.innerHTML).not.toMatch(/zinc-|amber-|purple-|red-|green-/);
   });
 });

@@ -130,3 +130,34 @@ describe('SlopeVerdictPanel 재판정 진행 배너 (브리프 D5 상태표)', (
     expect(screen.getByText(/구역별 통계는 후속 단계/)).toBeInTheDocument();
   });
 });
+
+// Cloudscape 리스킨(T7): 진행 배너 StatusIndicator(in-progress), 실패 배너 error Alert,
+// 편차 통계 KeyValuePairs 2열, 배수구 힌트 cs-warning, 경고 warning Alert.
+describe('SlopeVerdictPanel Cloudscape 해부 (T7)', () => {
+  it('진행 배너는 StatusIndicator in-progress, 실패 배너는 error Alert다', () => {
+    const { rerender } = render(
+      <SlopeVerdictPanel stats={stats} judge={{ state: 'processing', at: 't0' }} drainPoints={[]} directionAware />,
+    );
+    expect(screen.getByText(/재판정 진행 중/)).toHaveAttribute('data-status', 'in-progress');
+    rerender(
+      <SlopeVerdictPanel stats={stats} judge={{ state: 'failed', at: 't0', error: '사유X' }} drainPoints={[]} directionAware />,
+    );
+    expect(screen.getByText(/재판정에 실패했습니다/).closest('[data-alert]')).toHaveAttribute('data-alert', 'error');
+    expect(screen.getByText(/사유: 사유X/)).toBeInTheDocument();
+  });
+
+  it('편차 통계는 KeyValuePairs 2열, 배수구 미지정 안내는 cs-warning, 경고는 warning Alert, 구 팔레트 없음', () => {
+    const { container } = render(
+      <SlopeVerdictPanel stats={{ ...stats, direction_judged: false, warnings: ['w1'] }} judge={null}
+        drainPoints={[{ x: 3.2, y: 5.1 }]} directionAware />,
+    );
+    expect(container.firstElementChild?.className).toContain('rounded-cs-container');
+    expect(container.querySelector('dl')?.className).toContain('grid-cols-2');
+    expect(screen.getByText('평균 편차').className).toContain('font-bold');
+    expect(screen.getByText('(3.2, 5.1)').className).toContain('font-mono');
+    expect(screen.getByText(/지도에서 배수구 위치를 클릭하세요/).className).toContain('text-cs-warning');
+    expect(screen.getByText('w1').closest('[data-alert]')).toHaveAttribute('data-alert', 'warning'); // 미지 코드는 원문(warningLabel)
+    expect(screen.getByText(/구역별 통계는 후속 단계/).className).toContain('text-cs-text-secondary');
+    expect(container.innerHTML).not.toMatch(/zinc-|amber-|red-/);
+  });
+});

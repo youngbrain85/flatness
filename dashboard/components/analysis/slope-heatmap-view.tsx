@@ -78,29 +78,32 @@ export function SlopeHeatmapView({
   }
 
   return (
-    <div className="space-y-3">
+    <div className="flex flex-col gap-3">
       {bounds ? (
         <canvas ref={canvasRef} onClick={onClick}
-          className={`max-w-full rounded border bg-white ${clickable ? 'cursor-crosshair' : 'cursor-not-allowed opacity-90'}`} />
+          className={`max-w-full rounded-lg border border-cs-divider bg-white ${clickable ? 'cursor-crosshair' : 'cursor-not-allowed opacity-90'}`} />
       ) : (
-        <p className="text-sm text-zinc-500">표시할 셀 데이터가 없습니다.</p>
+        <p className="text-sm text-cs-text-secondary">표시할 셀 데이터가 없습니다.</p>
       )}
-      <div className="flex flex-wrap items-center gap-3 text-xs">
+      {/* 범례: 12px 사각 스와치 = SLOPE_GRADE_COLOR hex(캔버스·엔진 PNG와 같은 색) */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs leading-4">
         {LEGEND.map((g) => (
-          <span key={g} className="flex items-center gap-1">
-            <span className="inline-block h-3 w-3 rounded-sm" style={{ backgroundColor: SLOPE_GRADE_COLOR[g] }} />
+          <span key={g} className="inline-flex items-center gap-1">
+            <span aria-hidden data-grade={g} className="inline-block h-3 w-3 rounded-sm"
+              style={{ backgroundColor: SLOPE_GRADE_COLOR[g] }} />
             {g}
           </span>
         ))}
-        <span className="flex items-center gap-1">
-          <span className="inline-block h-3 w-3 rounded-full" style={{ backgroundColor: DRAIN_COLOR }} />
+        <span className="inline-flex items-center gap-1">
+          <span aria-hidden data-legend="drain" className="inline-block h-3 w-3 rounded-full"
+            style={{ backgroundColor: DRAIN_COLOR }} />
           배수구
         </span>
         {/* 코드리뷰(2차) Minor: 엔진 PNG 제목에는 화살표 의미가 적혀 있는데
             Canvas 범례에는 없었다 - 화살표를 오르막으로 오독하면 판정 근거를
             정반대로 이해하게 된다. */}
-        <span className="text-zinc-400">얇은 화살표 = 내리막(물이 흐르는) 방향</span>
-        <span className="text-zinc-400">굵은 화살표 = 역구배(물이 배수구 반대로 흐름)</span>
+        <span className="text-cs-text-secondary">얇은 화살표 = 내리막(물이 흐르는) 방향</span>
+        <span className="text-cs-text-secondary">굵은 화살표 = 역구배(물이 배수구 반대로 흐름)</span>
       </div>
     </div>
   );

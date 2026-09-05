@@ -80,6 +80,12 @@ describe('SlopeResult - cells_json 없는 분석(D7): slope-placeholder.tsx 방�
     expect(screen.getByText('이 분석은 재판정할 수 없습니다. 구배 분석을 다시 실행하면 배수구를 지정할 수 있습니다.')).toBeInTheDocument();
     // 클릭 안내(배수구 클릭 상단 안내)는 재판정 불가 분기에서는 보이지 않아야 한다.
     expect(screen.queryByText(/배수구 위치를 클릭하세요/)).not.toBeInTheDocument();
+    // Cloudscape 리스킨(T7): 안내는 info Alert, 경고 목록은 warning Alert, 종류 배지는 neutral Badge
+    expect(screen.getByText(/이 분석은 재판정할 수 없습니다/).closest('[data-alert]')).toHaveAttribute('data-alert', 'info');
+    expect(screen.getByText(/방향\(역구배\)을 판정하지 않았습니다/).closest('[data-alert]')).toHaveAttribute('data-alert', 'warning');
+    expect(screen.getByText('구배').className).toContain('bg-cs-divider');
+    expect(screen.getByText('경고').className).toContain('font-bold');
+    expect(document.body.innerHTML).not.toMatch(/zinc-|amber-|red-/);
   });
 
   it('전 셀 판정불가(편차 통계 3종 전부 null)면 숫자 대신 안내 문구를 보여준다', () => {
@@ -290,6 +296,9 @@ describe('SlopeResult - cells_json/judged_json 있는 분석: 히트맵/결과�
     await waitFor(() => {
       expect(screen.getByText(/이미 같은 대상의 작업이 대기 중이거나 실행 중입니다/)).toBeInTheDocument();
     });
+    // Cloudscape 리스킨(T7): 클릭 오류는 error Alert(role=alert)
+    expect(screen.getByText(/이미 같은 대상의 작업이 대기 중이거나 실행 중입니다/).closest('[data-alert]'))
+      .toHaveAttribute('data-alert', 'error');
   });
 
   // ★ 코드리뷰가 지적한 미탐지 변이(R-11): judge?.at을 fetch effect 의존성에서
@@ -577,6 +586,8 @@ describe('SlopeResult - fetch 실패/형식 불량/조인 누락 경로 (코드�
     await waitFor(() => {
       expect(screen.getByText(/1개 셀이 화면에서 빠졌습니다/)).toBeInTheDocument();
     });
+    // Cloudscape 리스킨(T7): 셀 누락 배너는 warning Alert
+    expect(screen.getByText(/1개 셀이 화면에서 빠졌습니다/).closest('[data-alert]')).toHaveAttribute('data-alert', 'warning');
   });
 
   // ★ 코드리뷰(2차) I2(1차 라운드 번호): 성공적으로 로드된 뒤 재판정으로 재fetch가
