@@ -12,8 +12,10 @@ const { supabaseStub, removeChannelMock, channelStub } = vi.hoisted(() => {
   const supabaseStub = {
     channel: vi.fn(() => channelStub),
     removeChannel: removeChannelMock,
+    // data를 null 리터럴로 두면 반환 타입이 { data: null }로 좁혀져 아래 테스트들의
+    // mockImplementation({ data: { status } })가 tsc에서 거부된다(T12 검증 게이트).
     from: vi.fn(() => ({
-      select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null }) }) }),
+      select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null as Record<string, string> | null }) }) }),
     })),
   };
   return { supabaseStub, removeChannelMock, channelStub };

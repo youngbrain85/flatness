@@ -13,7 +13,8 @@ const STATUS: Record<StatusType, { icon: IconName; color: string }> = {
   info: { icon: 'info-circle', color: 'text-cs-link' },
 };
 
-// Badge 톤(pass/warn/fail/unknown/busy) -> 상태 타입. StatusDot 소비자가 이 표로 옮겨온다.
+// Badge 톤(pass/warn/fail/unknown/busy) -> 상태 타입. 상태를 점으로 그리던 옛 컴포넌트의
+// 소비자는 전부 이 표를 거쳐 StatusIndicator로 옮겨왔다(T12에서 옛 파일 삭제).
 export const TONE_STATUS: Record<'pass' | 'warn' | 'fail' | 'unknown' | 'busy', StatusType> = {
   pass: 'success', warn: 'warning', fail: 'error', unknown: 'pending', busy: 'in-progress',
 };

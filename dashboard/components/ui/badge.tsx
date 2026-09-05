@@ -1,4 +1,4 @@
-// 판정·상태 배지. TONE은 색의 유일한 정의처(VerdictBar·StatusDot 호환 dot 필드 포함).
+// 판정·상태 배지. TONE은 색의 유일한 정의처(VerdictBar·StatusIndicator 호환 dot 필드 포함).
 export const TONE = {
   pass:     { bg: 'bg-cs-success-bg',  text: 'text-cs-success',        dot: 'bg-cs-success' },
   warn:     { bg: 'bg-cs-warning-bg',  text: 'text-cs-warning',        dot: 'bg-cs-warning' },
@@ -10,7 +10,7 @@ export const TONE = {
   external: { bg: 'bg-cs-external-bg', text: 'text-cs-external',       dot: 'bg-cs-external' },
 } as const;
 
-// Badge는 busy를 제외한 톤만 허용(busy는 StatusDot/StatusIndicator 전용)
+// Badge는 busy를 제외한 톤만 허용(busy는 StatusIndicator(TONE_STATUS) 전용)
 export type BadgeTone = Exclude<keyof typeof TONE, 'busy'>;
 
 export function Badge({ tone, children }: { tone: BadgeTone; children: React.ReactNode }) {

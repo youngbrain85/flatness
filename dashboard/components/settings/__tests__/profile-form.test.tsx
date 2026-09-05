@@ -37,7 +37,7 @@ describe('ProfileForm', () => {
     expect(btn.className).toContain('border-cs-link');
     expect(btn.className).not.toContain('bg-cs-link');
     expect(screen.getByLabelText('표시 이름').className).toContain('border-cs-input-border');
-    // 안내 메시지는 보조색(옛 text-zinc-500 -> text-cs-text-secondary)
+    // 안내 메시지는 보조색 토큰(text-cs-text-secondary)
     fireEvent.change(screen.getByLabelText('표시 이름'), { target: { value: ' ' } });
     fireEvent.click(btn);
     expect((await screen.findByText('표시 이름을 입력하세요')).className).toContain('text-cs-text-secondary');

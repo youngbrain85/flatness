@@ -50,8 +50,8 @@ describe('buildDraftOpinion', () => {
   });
 });
 
-// D7: 목록(Badge)·상세(StatusDot) 양쪽에서 같은 판단을 재사용한다. 두 컴포넌트의
-// tone 타입 교집합(pass/warn/fail/unknown)만 반환해 어댑터 없이 그대로 꽂을 수 있게 한다.
+// D7: 목록(Badge)·상세(StatusIndicator, TONE_STATUS로 변환) 양쪽에서 같은 판단을 재사용한다.
+// 두 표의 교집합(pass/warn/fail/unknown)만 반환해 어댑터 없이 그대로 꽂을 수 있게 한다.
 describe('reportStatusBadge', () => {
   it('발행본은 gen_status와 무관하게 발행됨/pass다 (ReportProgress와 같은 전제: '
     + '발행본에서 gen_status는 잔재 정보)', () => {
