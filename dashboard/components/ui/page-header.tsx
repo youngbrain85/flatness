@@ -1,23 +1,18 @@
-import Link from 'next/link';
+// 페이지 헤더: 브레드크럼(선택) + h1 24px/30px 700 + 설명(선택) + 우측 액션.
+import { Breadcrumbs, type Crumb } from './breadcrumbs';
 
-export function PageHeader({ crumbs, title, actions }: {
-  crumbs?: { href?: string; label: string }[]; title: React.ReactNode; actions?: React.ReactNode;
+export function PageHeader({ crumbs, title, description, actions }: {
+  crumbs?: Crumb[]; title: React.ReactNode; description?: React.ReactNode; actions?: React.ReactNode;
 }) {
   return (
-    <div className="mb-4">
-      {crumbs && crumbs.length > 0 && (
-        <nav className="mb-1 flex items-center gap-1 text-xs text-zinc-500">
-          {crumbs.map((c, i) => (
-            <span key={i} className="flex items-center gap-1">
-              {i > 0 && <span aria-hidden>›</span>}
-              {c.href ? <Link href={c.href} className="hover:text-zinc-900 hover:underline">{c.label}</Link> : <span>{c.label}</span>}
-            </span>
-          ))}
-        </nav>
-      )}
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-lg font-semibold">{title}</h1>
-        {actions && <div className="flex items-center gap-2">{actions}</div>}
+    <div className="flex flex-col gap-5">
+      {crumbs && crumbs.length > 0 && <Breadcrumbs items={crumbs} />}
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="flex min-w-0 flex-col gap-1">
+          <h1 className="text-2xl font-bold leading-[30px]">{title}</h1>
+          {description && <p className="text-sm text-cs-text-secondary">{description}</p>}
+        </div>
+        {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
       </div>
     </div>
   );
