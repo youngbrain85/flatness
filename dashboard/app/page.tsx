@@ -1,13 +1,18 @@
-// 홈(계측 콘솔) - 지표 스트립 + 현장 밀도 테이블
-import Link from 'next/link';
+// 홈(현장 목록) - PageHeader + 개요 KeyValuePairs + 현장 테이블(클라이언트 도구 줄).
+// 아트보드: docs/design/cloudscape/Main.dc.html (브레드크럼 없음 - 스펙 §7-2).
+// 조회·집계 로직은 무변경 - 처리 중 조회에 scan_id를 더한 표시용 확장(스펙 §2)만.
 import { createClient } from '@/lib/supabase/server';
 import { buildSiteSummaries, countInProgress } from '@/lib/domain/summary';
 import { SupabaseErrorNotice } from '@/components/supabase-error';
+import { SiteTable, type SiteTableRow } from '@/components/site-table';
+import { PAGE_MAIN } from '@/components/ui/page';
 import { PageHeader } from '@/components/ui/page-header';
-import { MetricCard, VerdictBar } from '@/components/ui/metric-card';
-import { tableClass } from '@/components/ui/data-table';
+import { LinkButton } from '@/components/ui/button';
+import { Icon } from '@/components/ui/icons';
+import { Container } from '@/components/ui/container';
+import { KeyValuePairs, StatValue } from '@/components/ui/key-value';
+import { VerdictBar, VerdictLegend } from '@/components/ui/verdict-bar';
 import { EmptyState } from '@/components/ui/empty-state';
-import { Badge } from '@/components/ui/badge';
 import type { AnalysisStatus, SiteRow, Verdict } from '@/lib/domain/types';
 
 export const dynamic = 'force-dynamic';
@@ -31,20 +36,24 @@ export default async function HomePage() {
       .eq('is_current', true).eq('kind', 'flatness').is('deleted_at', null),
     // 처리 중 지표는 kind 무필터 - 평활도·구배 분석 모두 "처리 중"에 잡혀야 한다.
     // 위 판정 집계 쿼리(kind='flatness')와는 목적이 다른 별도 쿼리다.
-    supabase.from('analyses').select('status').in('status', ['queued', 'processing']).is('deleted_at', null),
+    // scan_id는 테이블 상태 열의 현장별 "처리 중 n건"용(표시용 조회 확장 - 스펙 §2).
+    supabase.from('analyses').select('status, scan_id').in('status', ['queued', 'processing']).is('deleted_at', null),
   ]);
   const firstError = sitesRes.error ?? locationsRes.error ?? scansRes.error ?? analysesRes.error ?? inProgressRes.error;
   if (firstError) {
-    return <main className="p-6"><SupabaseErrorNotice message={firstError.message} /></main>;
+    return <main className={PAGE_MAIN}><SupabaseErrorNotice message={firstError.message} /></main>;
   }
+  // 처리 중 행 하나로 개요 지표(countInProgress)와 현장별 건수(buildSiteSummaries)를 모두 만든다.
+  const inProgressRows = (inProgressRes.data ?? []) as { status: AnalysisStatus; scan_id: string }[];
   const summaries = buildSiteSummaries(
     (sitesRes.data ?? []) as SiteRow[],
     locationsRes.data ?? [],
     scansRes.data ?? [],
     (analysesRes.data ?? []) as { scan_id: string; status: AnalysisStatus; overall_verdict: Verdict | null }[],
+    inProgressRows,
   );
   const totalScans = (scansRes.data ?? []).length;
-  const inProgress = countInProgress((inProgressRes.data ?? []) as { status: AnalysisStatus }[]);
+  const inProgress = countInProgress(inProgressRows);
   const verdictCounts = summaries.reduce(
     (acc, s) => ({
       pass: acc.pass + s.verdictCounts.pass,
@@ -58,72 +67,53 @@ export default async function HomePage() {
   const verdictTotal = verdictBar.pass + verdictBar.warn + verdictBar.fail;
   // 리뷰 Important: "엔진은 돌았는데 판정이 안 나온"(done인데 overall_verdict null) 현장이
   // "분석을 안 한 현장"과 구분되지 않으면 안 된다 - VerdictBar는 pass/warn/fail 3버킷만
-  // 지원해 na를 표시할 수 없으므로 보조 텍스트/배지로 별도 노출한다.
+  // 지원해 na를 표시할 수 없으므로 개요 범례('불가 n' - 0이면 생략)와 테이블 상태 열
+  // ('판정 불가 n건')로 별도 노출한다.
   const totalNaCount = summaries.reduce((n, s) => n + s.naCount, 0);
+  // SiteSummary를 클라이언트 테이블 행(직렬화 가능한 평면 객체)으로 접는다
+  const rows: SiteTableRow[] = summaries.map((s) => ({
+    id: s.site.id, name: s.site.name, locationCount: s.locationCount, scanCount: s.scanCount,
+    lastScannedAt: s.lastScannedAt, counts: toBarCounts(s.verdictCounts), na: s.naCount, inProgress: s.inProgressCount,
+  }));
 
   return (
-    <main className="p-6">
+    <main className={PAGE_MAIN}>
+      {/* 홈에는 브레드크럼 없음(스펙 §7-2). 이 뷰의 primary는 '새 현장' 하나 - 여기는 normal(기본) */}
       <PageHeader title="현장" actions={
-        <Link href="/sites/new"
-          className="rounded-md bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-700">
-          새 현장
-        </Link>
+        <LinkButton href="/upload"><Icon name="upload" />스캔 업로드</LinkButton>
       } />
-      <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <MetricCard label="현장" value={summaries.length} unit="곳" />
-        <MetricCard label="스캔" value={totalScans} unit="건" />
-        <MetricCard label="처리 중" value={inProgress} unit="건" />
-        <MetricCard label="판정 분포" value={verdictTotal} unit="건">
-          <VerdictBar counts={verdictBar} />
-          {totalNaCount > 0 && (
-            <p className="mt-1 text-xs text-zinc-500">
-              판정 불가 <span className="font-mono">{totalNaCount}</span>건
-            </p>
-          )}
-        </MetricCard>
-      </div>
+      <Container title="개요">
+        <KeyValuePairs columns={4} items={[
+          { label: '현장', value: <StatValue value={summaries.length} unit="곳" /> },
+          { label: '스캔', value: <StatValue value={totalScans} unit="건" /> },
+          { label: '처리 중', value: <StatValue value={inProgress} unit="건" /> },
+          {
+            label: '판정 분포',
+            value: (
+              // 아트보드: 이 열만 세로 gap 8px(수치 → 8px 바 → 범례)
+              <div className="flex flex-col gap-2">
+                <StatValue value={verdictTotal} unit="건" />
+                <VerdictBar counts={verdictBar} />
+                <VerdictLegend counts={verdictBar} na={totalNaCount > 0 ? totalNaCount : undefined} />
+              </div>
+            ),
+          },
+        ]} />
+      </Container>
       {summaries.length === 0 ? (
         // 이전 3단계 안내(현장 등록 -> 측정위치 -> 업로드)의 취지는 유지하되, 버튼은
         // 업로드 셀프서비스 흐름(단계 D4)에 맞춰 업로드 화면으로 바로 보낸다(브리프 Step 4).
+        // 이 분기에서는 EmptyState의 primary가 이 뷰의 유일한 primary다('새 현장' 컨테이너는 없다).
         <EmptyState
           message="아직 등록된 현장이 없습니다. 업로드 화면에서 현장 생성까지 한 번에 할 수 있습니다."
           actionHref="/upload"
           actionLabel="스캔 업로드로 시작"
         />
       ) : (
-        <div className="overflow-x-auto rounded-md border border-zinc-200 bg-white">
-          <table className={tableClass.table}>
-            <thead className={tableClass.thead}>
-              <tr>
-                <th className={tableClass.th}>이름</th>
-                <th className={tableClass.thNum}>측정위치</th>
-                <th className={tableClass.thNum}>스캔</th>
-                <th className={tableClass.th}>최근 측정일</th>
-                <th className={tableClass.th}>판정 분포</th>
-              </tr>
-            </thead>
-            <tbody>
-              {summaries.map((s) => (
-                <tr key={s.site.id} className={tableClass.row}>
-                  <td className={tableClass.td}>
-                    <Link href={`/sites/${s.site.id}`} className="font-medium text-zinc-900 hover:underline">
-                      {s.site.name}
-                    </Link>
-                  </td>
-                  <td className={tableClass.tdNum}>{s.locationCount}</td>
-                  <td className={tableClass.tdNum}>{s.scanCount}</td>
-                  <td className={`${tableClass.td} font-mono tabular-nums`}>{s.lastScannedAt ?? '-'}</td>
-                  <td className={tableClass.td}>
-                    <VerdictBar counts={toBarCounts(s.verdictCounts)} />
-                    {s.naCount > 0 && (
-                      <div className="mt-1"><Badge tone="unknown">불가 {s.naCount}</Badge></div>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <Container title="현장" counter={summaries.length} padded={false}
+          actions={<LinkButton href="/sites/new" variant="primary"><Icon name="plus" />새 현장</LinkButton>}>
+          <SiteTable rows={rows} />
+        </Container>
       )}
     </main>
   );

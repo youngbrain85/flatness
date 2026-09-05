@@ -10,6 +10,9 @@ export interface SiteSummary {
   // done·is_current). 이전에는 이 "판정 불가" 건이 verdictCounts 어디에도 잡히지 않아
   // 홈 카드 집계에서 조용히 누락됐다 - 별도 카운트로 분리해 총계에 포함시킨다.
   naCount: number;
+  // 현장별 처리 중(큐 대기·실행 중) 분석 건수 - 홈 테이블 상태 열("처리 중 n건")용.
+  // 판정 집계(currentAnalyses, kind='flatness')와 달리 kind 무필터 행을 받는다(countInProgress와 같은 출처).
+  inProgressCount: number;
 }
 
 export function buildSiteSummaries(
@@ -17,6 +20,9 @@ export function buildSiteSummaries(
   locations: { id: string; site_id: string }[],
   scans: { id: string; scanned_at: string; location_id: string }[],
   currentAnalyses: { scan_id: string; status: AnalysisStatus; overall_verdict: Verdict | null }[],
+  // 처리 중 분석 행. 상태 필터는 호출자의 쿼리(.in('status', ['queued','processing']))가 담당하므로
+  // 여기서는 scan_id만 본다. 생략하면 inProgressCount는 0 - 기존 4인자 호출 호환.
+  inProgress: { scan_id: string }[] = [],
 ): SiteSummary[] {
   const siteOfLocation = new Map(locations.map((l) => [l.id, l.site_id]));
   const siteOfScan = new Map(
@@ -37,7 +43,12 @@ export function buildSiteSummaries(
         naCount += 1;
       }
     }
-    return { site, locationCount: locCount, scanCount: siteScans.length, lastScannedAt, verdictCounts, naCount };
+    // 판정 집계와 같은 siteOfScan 맵을 재사용한다 - 어느 현장의 스캔도 아닌 scan_id(삭제된 스캔 등)는
+    // 어디에도 잡히지 않는다.
+    const inProgressCount = inProgress.filter((a) => siteOfScan.get(a.scan_id) === site.id).length;
+    return {
+      site, locationCount: locCount, scanCount: siteScans.length, lastScannedAt, verdictCounts, naCount, inProgressCount,
+    };
   });
 }
 
