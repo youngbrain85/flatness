@@ -3,6 +3,9 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import { Button } from '@/components/ui/button';
+import { FormField, inputClass } from '@/components/ui/form';
+import { Icon } from '@/components/ui/icons';
 
 export function NewLocationForm({ siteId }: { siteId: string }) {
   const router = useRouter();
@@ -32,23 +35,27 @@ export function NewLocationForm({ siteId }: { siteId: string }) {
     router.refresh();
   }
 
+  // 아트보드(SiteDetail '새 측정위치'): 필드 폭 동 120 · 층 120 · 층 순서 140 · 공간 140 · 측정위치 200,
+  // 하단 정렬 + gap 16px. '위치 추가'는 현장 상세 뷰의 유일한 primary(스펙 §6).
   return (
-    <form onSubmit={onSubmit} className="flex flex-wrap items-end gap-2 text-sm">
+    <form onSubmit={onSubmit} className="flex flex-wrap items-end gap-4 text-sm">
       {([
-        ['building', '동', false], ['floor', '층', false], ['floorOrder', '층 순서(정수)', false],
-        ['room', '공간', false], ['name', '측정위치', true],
-      ] as const).map(([key, label, required]) => (
-        <div key={key}>
-          <label htmlFor={`loc-${key}`} className="block text-xs text-zinc-500">{label}</label>
-          <input id={`loc-${key}`} required={required} value={form[key]} onChange={set(key)}
-            className="w-28 rounded-md border border-zinc-300 px-2 py-1" />
+        ['building', '동', false, 'w-[120px]'], ['floor', '층', false, 'w-[120px]'],
+        ['floorOrder', '층 순서(정수)', false, 'w-[140px]'],
+        ['room', '공간', false, 'w-[140px]'], ['name', '측정위치', true, 'w-[200px]'],
+      ] as const).map(([key, label, required, width]) => (
+        <div key={key} className={width}>
+          <FormField label={label} htmlFor={`loc-${key}`}>
+            <input id={`loc-${key}`} required={required} value={form[key]} onChange={set(key)}
+              className={key === 'floorOrder' ? `${inputClass} tabular-nums` : inputClass} />
+          </FormField>
         </div>
       ))}
-      <button type="submit"
-        className="rounded-md bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-700">
+      <Button type="submit" variant="primary">
+        <Icon name="plus" />
         위치 추가
-      </button>
-      {error && <p className="w-full text-red-600">{error}</p>}
+      </Button>
+      {error && <p className="w-full text-cs-error">{error}</p>}
     </form>
   );
 }

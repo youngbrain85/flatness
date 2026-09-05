@@ -2,6 +2,10 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import { Button } from '@/components/ui/button';
+import { Container } from '@/components/ui/container';
+import { FormField, inputClass, textareaClass } from '@/components/ui/form';
+import { Icon } from '@/components/ui/icons';
 
 export function NewSiteForm() {
   const router = useRouter();
@@ -24,28 +28,30 @@ export function NewSiteForm() {
     router.push(`/sites/${data.id}`);
   }
 
+  // 아트보드(SiteNew): 필드 3개(폭 448px)는 헤더 없는 컨테이너 안, 제출 버튼은 컨테이너 밖 우측 하단.
+  // 제출 버튼이 <form> 안에 있어야 하므로 form이 컨테이너와 버튼 줄을 함께 감싼다.
   return (
-    <form onSubmit={onSubmit} className="max-w-md space-y-3">
-      <div>
-        <label htmlFor="name" className="block text-sm font-medium">현장명 (필수)</label>
-        <input id="name" required value={name} onChange={(e) => setName(e.target.value)}
-          className="mt-1 w-full rounded border px-3 py-2" />
+    <form onSubmit={onSubmit} className="flex flex-col gap-5">
+      <Container>
+        <div className="flex w-full max-w-[448px] flex-col gap-4">
+          <FormField label="현장명 (필수)" htmlFor="name">
+            <input id="name" required value={name} onChange={(e) => setName(e.target.value)} className={inputClass} />
+          </FormField>
+          <FormField label="주소" htmlFor="address">
+            <input id="address" value={address} onChange={(e) => setAddress(e.target.value)} className={inputClass} />
+          </FormField>
+          <FormField label="메모" htmlFor="memo">
+            <textarea id="memo" value={memo} onChange={(e) => setMemo(e.target.value)} className={textareaClass} rows={3} />
+          </FormField>
+          {error && <p className="text-sm text-cs-error">{error}</p>}
+        </div>
+      </Container>
+      <div className="flex items-center justify-end gap-2">
+        <Button type="submit" variant="primary">
+          <Icon name="plus" />
+          현장 등록
+        </Button>
       </div>
-      <div>
-        <label htmlFor="address" className="block text-sm font-medium">주소</label>
-        <input id="address" value={address} onChange={(e) => setAddress(e.target.value)}
-          className="mt-1 w-full rounded border px-3 py-2" />
-      </div>
-      <div>
-        <label htmlFor="memo" className="block text-sm font-medium">메모</label>
-        <textarea id="memo" value={memo} onChange={(e) => setMemo(e.target.value)}
-          className="mt-1 w-full rounded border px-3 py-2" rows={3} />
-      </div>
-      {error && <p className="text-sm text-red-600">{error}</p>}
-      <button type="submit"
-        className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700">
-        현장 등록
-      </button>
     </form>
   );
 }

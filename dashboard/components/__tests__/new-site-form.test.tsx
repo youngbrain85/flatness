@@ -48,7 +48,24 @@ describe('NewSiteForm', () => {
     fireEvent.change(screen.getByLabelText('현장명 (필수)'), { target: { value: '중복' } });
     fireEvent.click(screen.getByRole('button', { name: '현장 등록' }));
 
-    expect(await screen.findByText(/중복된 현장명입니다/)).toBeInTheDocument();
+    const notice = await screen.findByText(/중복된 현장명입니다/);
+    expect(notice).toBeInTheDocument();
+    expect(notice.className).toContain('text-cs-error');
     expect(pushMock).not.toHaveBeenCalled();
+  });
+
+  // Cloudscape 재스킨(T4), 아트보드 SiteNew: 필드 3개는 컨테이너(<section>) 안 FormField,
+  // 제출 버튼은 컨테이너 **밖** 우측 하단의 primary. 동작 단언(위 두 it)은 그대로다.
+  it('폼 해부: 컨테이너 안 FormField 3개 + 컨테이너 밖 primary "현장 등록"', () => {
+    const { container } = render(<NewSiteForm />);
+    const section = container.querySelector('section');
+    expect(section?.className).toContain('shadow-cs-container');
+    expect(screen.getByText('현장명 (필수)').className).toContain('font-bold');
+    expect(screen.getByLabelText('현장명 (필수)').className).toContain('border-cs-input-border');
+    expect(screen.getByLabelText('주소').className).toContain('border-cs-input-border');
+    expect(screen.getByLabelText('메모').className).toContain('min-h-24');
+    const submit = screen.getByRole('button', { name: '현장 등록' });
+    expect(submit.className).toContain('bg-cs-link');
+    expect(section?.contains(submit)).toBe(false);
   });
 });
