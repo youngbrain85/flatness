@@ -1,6 +1,8 @@
 'use client';
 import { useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { Button } from '@/components/ui/button';
+import { FormField, inputClass } from '@/components/ui/form';
 
 export function ProfileForm({ userId, initialName }: { userId: string; initialName: string }) {
   const [name, setName] = useState(initialName);
@@ -18,18 +20,18 @@ export function ProfileForm({ userId, initialName }: { userId: string; initialNa
     setMsg(error ? `저장 실패: ${error.message}` : '저장되었습니다');
   }
 
+  // 아트보드 Settings: 필드 320px + 저장 버튼, 하단 정렬, gap 12px.
+  // 이 뷰의 primary는 U 저장 하나(스펙 §6 Settings)이므로 프로필 저장은 normal(뷰당 primary 1개 규칙).
   return (
-    <form onSubmit={onSubmit} className="flex items-end gap-2">
-      <div>
-        <label htmlFor="display-name" className="block text-sm font-medium">표시 이름</label>
-        <input id="display-name" required value={name} onChange={(e) => setName(e.target.value)}
-          className="mt-1 rounded border px-3 py-2" />
+    <form onSubmit={onSubmit} className="flex flex-wrap items-end gap-3">
+      <div className="w-80">
+        <FormField label="표시 이름" htmlFor="display-name">
+          <input id="display-name" required value={name} onChange={(e) => setName(e.target.value)}
+            className={inputClass} />
+        </FormField>
       </div>
-      <button type="submit"
-        className="rounded-md bg-zinc-900 px-3 py-2 text-sm font-medium text-white hover:bg-zinc-700">
-        저장
-      </button>
-      {msg && <span className="pb-2 text-xs text-zinc-500">{msg}</span>}
+      <Button type="submit">저장</Button>
+      {msg && <span className="pb-1.5 text-xs text-cs-text-secondary">{msg}</span>}
     </form>
   );
 }

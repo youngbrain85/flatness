@@ -2,6 +2,11 @@
 'use client';
 import { useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { Button } from '@/components/ui/button';
+import { FormField, inputClass } from '@/components/ui/form';
+
+// 수치 입력은 mono + tabular(스펙 §3). 아트보드 폭 96px = w-24.
+const numberInputClass = `${inputClass} font-mono tabular-nums`;
 
 export function UncertaintyForm({ initial }: { initial: { floor: number; wall: number } }) {
   const [floor, setFloor] = useState(String(initial.floor));
@@ -25,23 +30,21 @@ export function UncertaintyForm({ initial }: { initial: { floor: number; wall: n
       : '저장되었습니다 (이후 분석부터 적용)');
   }
 
+  // 저장은 이 뷰의 primary(스펙 §6 Settings: "바닥/벽면 입력 + primary 저장" - 뷰당 primary 1개).
   return (
-    <form onSubmit={onSubmit} className="flex items-end gap-2 text-sm">
-      <div>
-        <label htmlFor="u-floor" className="block font-medium">바닥 U(mm)</label>
-        <input id="u-floor" value={floor} onChange={(e) => setFloor(e.target.value)}
-          className="mt-1 w-24 rounded border px-2 py-1" />
+    <form onSubmit={onSubmit} className="flex flex-wrap items-end gap-3">
+      <div className="w-24">
+        <FormField label="바닥 U(mm)" htmlFor="u-floor">
+          <input id="u-floor" value={floor} onChange={(e) => setFloor(e.target.value)} className={numberInputClass} />
+        </FormField>
       </div>
-      <div>
-        <label htmlFor="u-wall" className="block font-medium">벽면 U(mm)</label>
-        <input id="u-wall" value={wall} onChange={(e) => setWall(e.target.value)}
-          className="mt-1 w-24 rounded border px-2 py-1" />
+      <div className="w-24">
+        <FormField label="벽면 U(mm)" htmlFor="u-wall">
+          <input id="u-wall" value={wall} onChange={(e) => setWall(e.target.value)} className={numberInputClass} />
+        </FormField>
       </div>
-      <button type="submit"
-        className="rounded-md bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-700">
-        저장
-      </button>
-      {msg && <span className="pb-1.5 text-xs text-zinc-500">{msg}</span>}
+      <Button type="submit" variant="primary">저장</Button>
+      {msg && <span className="pb-1.5 text-xs text-cs-text-secondary">{msg}</span>}
     </form>
   );
 }
