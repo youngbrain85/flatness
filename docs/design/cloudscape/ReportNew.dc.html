@@ -1,0 +1,170 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;700&family=Noto+Sans+KR:wght@400;700&display=swap">
+  <style>
+    body { margin: 0; background: #ffffff; }
+    a { color: #0972d3; text-decoration: none; }
+    a:hover { color: #033160; text-decoration: underline; }
+    table { border-collapse: collapse; }
+    *, *::before, *::after { box-sizing: border-box; }
+  </style>
+</helmet>
+<div style="position: relative; width: 1440px; height: 1380px; overflow: hidden; background: #ffffff; color: #000716; font-family: 'Open Sans', 'Noto Sans KR', 'Helvetica Neue', Roboto, Arial, sans-serif; font-size: 14px; line-height: 20px; display: flex; flex-direction: column;">
+
+  <header style="display: flex; align-items: center; gap: 24px; height: 44px; flex-shrink: 0; padding: 0 20px; background: #0f1b2a; color: #ffffff;">
+    <a href="#" style="display: flex; align-items: center; gap: 10px; color: #ffffff; font-size: 16px; font-weight: 700; letter-spacing: 0.02em;">
+      <span style="display: flex; align-items: center; justify-content: center; width: 24px; height: 24px;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 17l6-6 4 4 8-8"></path><path d="M14 7h7v7"></path></svg>
+      </span>
+      <span>FLATNESS</span>
+    </a>
+    <div style="display: flex; align-items: center; gap: 20px; margin-left: auto;">
+      <button style="display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 4px; background: transparent; border: 0; color: #d1d5db; font-size: 14px; font-weight: 700; cursor: pointer;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6"></path></svg>
+        <span>[사용자 이메일]</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg>
+      </button>
+    </div>
+  </header>
+
+  <div style="display: flex; flex: 1; min-height: 0;">
+
+    <nav style="display: flex; flex-direction: column; width: 280px; flex-shrink: 0; background: #ffffff; border-right: 1px solid #e9ebed;">
+      <div style="padding: 20px 28px 12px; border-bottom: 1px solid #e9ebed; font-size: 16px; line-height: 20px; font-weight: 700;">평활도 분석 콘솔</div>
+      <div style="display: flex; flex-direction: column; padding: 12px 0;">
+        <a href="#" style="display: flex; align-items: center; padding: 8px 28px; color: #414d5c;">현장</a>
+        <a href="#" style="display: flex; align-items: center; padding: 8px 28px; color: #0972d3; font-weight: 700;">보고서</a>
+        <a href="#" style="display: flex; align-items: center; padding: 8px 28px; color: #414d5c;">업로드</a>
+      </div>
+      <div style="height: 1px; margin: 0 28px; background: #e9ebed;"></div>
+      <div style="display: flex; flex-direction: column; padding: 12px 0;">
+        <a href="#" style="display: flex; align-items: center; padding: 8px 28px; color: #414d5c;">설정</a>
+        <a href="#" style="display: flex; align-items: center; padding: 8px 28px; color: #414d5c;">로그아웃</a>
+      </div>
+    </nav>
+
+    <main style="display: flex; flex-direction: column; gap: 20px; flex: 1; min-width: 0; padding: 20px 40px 40px;">
+
+      <nav style="display: flex; align-items: center; gap: 8px; font-size: 14px;">
+        <a href="#" style="color: #0972d3;">현장</a>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#5f6b7a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>
+        <a href="#" style="color: #0972d3;">세종 M2블록 아파트</a>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#5f6b7a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>
+        <span style="color: #5f6b7a;">101동 / 3층 / 301호 / 거실</span>
+      </nav>
+
+      <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;">
+        <div style="display: flex; flex-direction: column; gap: 4px;">
+          <h1 style="margin: 0; font-size: 24px; line-height: 30px; font-weight: 700;">보고서 생성</h1>
+          <p style="margin: 0; color: #5f6b7a;">101동 / 3층 / 301호 / 거실</p>
+        </div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; background: #ffffff; border-radius: 16px; box-shadow: 0 1px 1px 1px #e9ebed, 0 1px 8px 2px rgba(0, 7, 22, 0.12);">
+        <div style="display: flex; flex-direction: column; gap: 16px; padding: 20px;">
+
+          <div style="display: flex; flex-direction: column; gap: 4px;">
+            <label style="font-weight: 700;">보고서 제목</label>
+            <div style="display: flex; align-items: center; height: 32px; padding: 0 8px; border: 2px solid #8c8c94; border-radius: 8px; background: #ffffff; color: #000716;">101동 / 3층 / 301호 / 거실 평활도 분석 보고서</div>
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            <div style="display: flex; flex-direction: column;">
+              <span style="font-weight: 700;">포함할 분석</span>
+              <span style="font-size: 12px; line-height: 16px; color: #5f6b7a;">같은 측정위치의 완료된 최신 분석만 후보로 표시됩니다(평활도와 구배, 바닥과 벽면을 함께 묶을 수 있습니다).</span>
+            </div>
+            <div style="display: flex; flex-direction: column; border: 1px solid #e9ebed; border-radius: 8px; overflow: hidden;">
+              <div style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid #e9ebed;">
+                <span style="display: flex; align-items: center; justify-content: center; width: 16px; height: 16px; flex-shrink: 0; border: 2px solid #0972d3; border-radius: 2px; background: #0972d3; color: #ffffff;">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg>
+                </span>
+                <span>평활도 · 바닥 · 2026-09-03 10:42 · 판정 경계</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid #e9ebed;">
+                <span style="display: flex; align-items: center; justify-content: center; width: 16px; height: 16px; flex-shrink: 0; border: 2px solid #0972d3; border-radius: 2px; background: #0972d3; color: #ffffff;">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg>
+                </span>
+                <span>평활도 · 바닥 · 2026-08-27 15:10 · 판정 적합</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid #e9ebed;">
+                <span style="display: flex; align-items: center; justify-content: center; width: 16px; height: 16px; flex-shrink: 0; border: 2px solid #0972d3; border-radius: 2px; background: #0972d3; color: #ffffff;">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg>
+                </span>
+                <span>평활도 · 바닥 · 2026-08-12 09:58 · 판정 재시공</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid #e9ebed;">
+                <span style="display: flex; align-items: center; justify-content: center; width: 16px; height: 16px; flex-shrink: 0; border: 2px solid #0972d3; border-radius: 2px; background: #0972d3; color: #ffffff;">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg>
+                </span>
+                <span>평활도 · 벽면 · 2026-08-20 13:35 · 판정 적합</span>
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 8px; padding: 12px 16px;">
+                <div style="display: flex; align-items: center; gap: 12px; color: #9ba7b6;">
+                  <span style="display: flex; align-items: center; justify-content: center; width: 16px; height: 16px; flex-shrink: 0; border: 2px solid #9ba7b6; border-radius: 2px; background: #ffffff;"></span>
+                  <span>구배 · 바닥 · 2026-09-03 10:42 · 판정 보수</span>
+                </div>
+                <div style="display: flex; align-items: flex-start; gap: 12px; padding: 12px 16px; border: 2px solid #8d6605; border-radius: 12px; background: #fffce9; color: #000716;">
+                  <span style="display: flex; align-items: center; height: 20px; flex-shrink: 0; color: #8d6605;">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l10 18H2L12 3z"></path><path d="M12 10v4M12 17.5v.5"></path></svg>
+                  </span>
+                  <span>재판정 중이라 지금은 보고서에 넣을 수 없습니다. 지금 넣으면 곧 덮어쓰일 이전 판정이 발행본에 그대로 박제됩니다. 재판정이 끝난 뒤 이 화면을 새로고침하세요.</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            <div style="display: flex; flex-direction: column;">
+              <label style="font-weight: 700;">종합의견</label>
+              <span style="font-size: 12px; line-height: 16px; color: #5f6b7a;">비워 두면 분석별 자동 의견이 그대로 보고서에 실립니다. 스크리닝 한계 문구는 항상 자동 포함됩니다.</span>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 20px; min-height: 96px; padding: 8px; border: 2px solid #8c8c94; border-radius: 8px; background: #ffffff; color: #000716;">
+              <div style="display: flex; flex-direction: column;">
+                <span>[평활도 바닥] 바닥면 평활도 분석 결과, 판정 셀 40개(유효 36개) 중 적합 30개, 경계 6개, 보수 0개, 재시공 0개, 판정 불가 4개로 나타났습니다. 적용 기준은 floor-kcs-exposed(허용 7mm, 불확도 U=5mm)입니다.</span>
+                <span>최대 편차는 9.57mm로 좌표 (3.5, 4.5) (구역 1) 부근에서 관측되었습니다.</span>
+                <span>일부 구간이 경계 판정입니다. 현장 재확인(실물 직선자 검측)을 권장합니다.</span>
+                <span>일부 구간은 공간 제약으로 축소 스팬(허용치 선형 환산)으로 판정되었습니다.</span>
+                <span>본 결과는 모바일 LiDAR 기반 스크리닝이며 공식 검측(실물 직선자·레벨 측량)을 대체하지 않습니다.</span>
+              </div>
+              <div style="display: flex; flex-direction: column;">
+                <span>[평활도 바닥] 바닥면 평활도 분석 결과, 판정 셀 40개(유효 37개) 중 적합 37개, 경계 0개, 보수 0개, 재시공 0개, 판정 불가 3개로 나타났습니다. 적용 기준은 floor-kcs-exposed(허용 7mm, 불확도 U=5mm)입니다.</span>
+                <span>최대 편차는 1.84mm로 좌표 (2.5, 1.5) (구역 1) 부근에서 관측되었습니다.</span>
+                <span>전 구간이 적용 기준을 만족합니다.</span>
+                <span>본 결과는 모바일 LiDAR 기반 스크리닝이며 공식 검측(실물 직선자·레벨 측량)을 대체하지 않습니다.</span>
+              </div>
+              <div style="display: flex; flex-direction: column;">
+                <span>[평활도 바닥] 바닥면 평활도 분석 결과, 판정 셀 40개(유효 38개) 중 적합 9개, 경계 14개, 보수 12개, 재시공 3개, 판정 불가 2개로 나타났습니다. 적용 기준은 floor-kcs-exposed(허용 7mm, 불확도 U=5mm)입니다.</span>
+                <span>최대 편차는 23.6mm로 좌표 (0.5, 3.5) (구역 1) 부근에서 관측되었습니다.</span>
+                <span>재시공 검토 대상 구간이 존재합니다. 정밀 검측 및 시공 검토가 필요합니다.</span>
+                <span>본 결과는 모바일 LiDAR 기반 스크리닝이며 공식 검측(실물 직선자·레벨 측량)을 대체하지 않습니다.</span>
+              </div>
+              <div style="display: flex; flex-direction: column;">
+                <span>[평활도 벽면] 벽면 평활도 분석 결과, 판정 셀 96개(유효 94개) 중 적합 94개, 경계 0개, 보수 0개, 재시공 0개, 판정 불가 2개로 나타났습니다. 적용 기준은 [기준명](허용 [허용치]mm, 불확도 U=[불확도]mm)입니다.</span>
+                <span>최대 편차는 1.36mm로 좌표 (1.2, 0.8) (벽 2) 부근에서 관측되었습니다.</span>
+                <span>전 구간이 적용 기준을 만족합니다.</span>
+                <span>수직도는 스캔 좌표계의 z축 기준 상대 지표입니다(중력 보정 아님).</span>
+                <span>본 결과는 모바일 LiDAR 기반 스크리닝이며 공식 검측(실물 직선자·레벨 측량)을 대체하지 않습니다.</span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <div style="display: flex; align-items: center; justify-content: flex-end; gap: 8px;">
+        <a href="#" style="display: inline-flex; align-items: center; height: 32px; padding: 0 20px; border: 2px solid #0972d3; border-radius: 20px; background: #0972d3; color: #ffffff; font-weight: 700;">보고서 생성</a>
+      </div>
+
+    </main>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

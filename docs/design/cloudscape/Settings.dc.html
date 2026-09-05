@@ -1,0 +1,373 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;700&family=Noto+Sans+KR:wght@400;700&display=swap">
+  <style>
+    body { margin: 0; background: #ffffff; }
+    a { color: #0972d3; text-decoration: none; }
+    a:hover { color: #033160; text-decoration: underline; }
+    table { border-collapse: collapse; }
+    *, *::before, *::after { box-sizing: border-box; }
+  </style>
+</helmet>
+<div style="position: relative; width: 1440px; height: 1840px; overflow: hidden; background: #ffffff; color: #000716; font-family: 'Open Sans', 'Noto Sans KR', 'Helvetica Neue', Roboto, Arial, sans-serif; font-size: 14px; line-height: 20px; display: flex; flex-direction: column;">
+
+  <header style="display: flex; align-items: center; gap: 24px; height: 44px; flex-shrink: 0; padding: 0 20px; background: #0f1b2a; color: #ffffff;">
+    <a href="#" style="display: flex; align-items: center; gap: 10px; color: #ffffff; font-size: 16px; font-weight: 700; letter-spacing: 0.02em;">
+      <span style="display: flex; align-items: center; justify-content: center; width: 24px; height: 24px;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 17l6-6 4 4 8-8"></path><path d="M14 7h7v7"></path></svg>
+      </span>
+      <span>FLATNESS</span>
+    </a>
+    <div style="display: flex; align-items: center; gap: 20px; margin-left: auto;">
+      <button style="display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 4px; background: transparent; border: 0; color: #d1d5db; font-size: 14px; font-weight: 700; cursor: pointer;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6"></path></svg>
+        <span>[사용자 이메일]</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg>
+      </button>
+    </div>
+  </header>
+
+  <div style="display: flex; flex: 1; min-height: 0;">
+
+    <nav style="display: flex; flex-direction: column; width: 280px; flex-shrink: 0; background: #ffffff; border-right: 1px solid #e9ebed;">
+      <div style="padding: 20px 28px 12px; border-bottom: 1px solid #e9ebed; font-size: 16px; line-height: 20px; font-weight: 700;">평활도 분석 콘솔</div>
+      <div style="display: flex; flex-direction: column; padding: 12px 0;">
+        <a href="#" style="display: flex; align-items: center; padding: 8px 28px; color: #414d5c;">현장</a>
+        <a href="#" style="display: flex; align-items: center; padding: 8px 28px; color: #414d5c;">보고서</a>
+        <a href="#" style="display: flex; align-items: center; padding: 8px 28px; color: #414d5c;">업로드</a>
+      </div>
+      <div style="height: 1px; margin: 0 28px; background: #e9ebed;"></div>
+      <div style="display: flex; flex-direction: column; padding: 12px 0;">
+        <a href="#" style="display: flex; align-items: center; padding: 8px 28px; color: #0972d3; font-weight: 700;">설정</a>
+        <a href="#" style="display: flex; align-items: center; padding: 8px 28px; color: #414d5c;">로그아웃</a>
+      </div>
+    </nav>
+
+    <main style="display: flex; flex-direction: column; gap: 20px; flex: 1; min-width: 0; padding: 20px 40px 40px;">
+
+      <nav style="display: flex; align-items: center; gap: 8px; font-size: 14px;">
+        <a href="#" style="color: #0972d3;">현장</a>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#5f6b7a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>
+        <span style="color: #5f6b7a;">설정</span>
+      </nav>
+
+      <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;">
+        <h1 style="margin: 0; font-size: 24px; line-height: 30px; font-weight: 700;">설정</h1>
+      </div>
+
+      <div style="display: flex; flex-direction: column; background: #ffffff; border-radius: 16px; box-shadow: 0 1px 1px 1px #e9ebed, 0 1px 8px 2px rgba(0, 7, 22, 0.12);">
+        <div style="padding: 12px 20px; border-bottom: 1px solid #e9ebed;">
+          <span style="font-size: 18px; line-height: 22px; font-weight: 700;">프로필</span>
+        </div>
+        <div style="display: flex; align-items: flex-end; gap: 12px; padding: 20px;">
+          <div style="display: flex; flex-direction: column; gap: 4px; width: 320px;">
+            <label style="font-weight: 700;">표시 이름</label>
+            <div style="display: flex; align-items: center; height: 32px; box-sizing: border-box; padding: 0 8px; border: 2px solid #8c8c94; border-radius: 8px; background: #ffffff;">[표시 이름]</div>
+          </div>
+          <a href="#" style="display: inline-flex; align-items: center; height: 32px; box-sizing: border-box; padding: 0 20px; border: 2px solid #0972d3; border-radius: 20px; background: #0972d3; color: #ffffff; font-weight: 700;">저장</a>
+        </div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; background: #ffffff; border-radius: 16px; box-shadow: 0 1px 1px 1px #e9ebed, 0 1px 8px 2px rgba(0, 7, 22, 0.12);">
+        <div style="padding: 12px 20px; border-bottom: 1px solid #e9ebed;">
+          <span style="font-size: 18px; line-height: 22px; font-weight: 700;">측정 불확도 U</span>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 16px; padding: 20px;">
+          <p style="margin: 0; color: #5f6b7a;">판정식의 경계 구간 폭을 결정합니다. 분석 시점 값이 결과에 스냅샷되므로 수정해도 과거 분석·보고서는 바뀌지 않습니다. P5 반복 스캔 재현성 시험 후 갱신 예정.</p>
+          <div style="display: flex; align-items: flex-end; gap: 12px;">
+            <div style="display: flex; flex-direction: column; gap: 4px; width: 96px;">
+              <label style="font-weight: 700;">바닥 U(mm)</label>
+              <div style="display: flex; align-items: center; height: 32px; box-sizing: border-box; padding: 0 8px; border: 2px solid #8c8c94; border-radius: 8px; background: #ffffff; font-variant-numeric: tabular-nums;">5.0</div>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 4px; width: 96px;">
+              <label style="font-weight: 700;">벽면 U(mm)</label>
+              <div style="display: flex; align-items: center; height: 32px; box-sizing: border-box; padding: 0 8px; border: 2px solid #8c8c94; border-radius: 8px; background: #ffffff; font-variant-numeric: tabular-nums;">8.0</div>
+            </div>
+            <a href="#" style="display: inline-flex; align-items: center; height: 32px; box-sizing: border-box; padding: 0 20px; border: 2px solid #0972d3; border-radius: 20px; background: #0972d3; color: #ffffff; font-weight: 700;">저장</a>
+          </div>
+        </div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; background: #ffffff; border-radius: 16px; box-shadow: 0 1px 1px 1px #e9ebed, 0 1px 8px 2px rgba(0, 7, 22, 0.12); overflow: hidden;">
+        <div style="padding: 12px 20px; border-bottom: 1px solid #e9ebed;">
+          <span style="font-size: 18px; line-height: 22px; font-weight: 700;">판정 기준</span>
+        </div>
+        <div style="display: flex; align-items: baseline; gap: 6px; padding: 12px 20px;">
+          <span style="font-size: 16px; line-height: 20px; font-weight: 700;">전역 기본 기준</span>
+          <span style="font-size: 16px; line-height: 20px; color: #5f6b7a;">(16)</span>
+        </div>
+
+        <table style="width: 100%;">
+          <thead>
+            <tr style="height: 40px; border-bottom: 1px solid #e9ebed; border-top: 1px solid #e9ebed;">
+              <th style="padding: 0 20px; text-align: left; font-weight: 700;">기준 · 출처</th>
+              <th style="padding: 0 20px; text-align: left; font-weight: 700;">표면 · 버전</th>
+              <th style="padding: 0 20px; text-align: left; font-weight: 700;">임계값</th>
+              <th style="padding: 0 20px; text-align: left; font-weight: 700;">활성</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr style="border-bottom: 1px solid #e9ebed;">
+              <td style="padding: 12px 20px; vertical-align: middle;">
+                <div style="display: flex; flex-direction: column;">
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-family: Monaco, Menlo, Consolas, 'Courier New', monospace; font-size: 13px; font-weight: 700;">floor-kcs-exposed</span>
+                    <span style="display: inline-flex; align-items: center; height: 18px; padding: 0 6px; border-radius: 4px; background: #e9ebed; color: #414d5c; font-size: 12px; line-height: 16px; font-weight: 700;">기본</span>
+                  </div>
+                  <span style="display: block; font-size: 12px; line-height: 16px; color: #5f6b7a;">KCS 14 20 10 표 3.7-1 (제물치장·얇은 마감)</span>
+                </div>
+              </td>
+              <td style="padding: 12px 20px; vertical-align: middle; white-space: nowrap; color: #414d5c;">바닥 · v1</td>
+              <td style="padding: 12px 20px; vertical-align: middle; white-space: nowrap; font-variant-numeric: tabular-nums;">3m당 허용 7mm / 재시공 21mm</td>
+              <td style="padding: 12px 20px; vertical-align: middle;">
+                <span style="display: flex; align-items: center; justify-content: center; width: 16px; height: 16px; box-sizing: border-box; border: 2px solid #0972d3; border-radius: 2px; background: #0972d3; color: #ffffff;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7"></path></svg></span>
+              </td>
+            </tr>
+            <tr style="border-bottom: 1px solid #e9ebed;">
+              <td style="padding: 12px 20px; vertical-align: middle;">
+                <div style="display: flex; flex-direction: column;">
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-family: Monaco, Menlo, Consolas, 'Courier New', monospace; font-size: 13px; font-weight: 700;">floor-kcs-finish7minus</span>
+                  </div>
+                  <span style="display: block; font-size: 12px; line-height: 16px; color: #5f6b7a;">KCS 14 20 10 표 3.7-1 (마감두께 7mm 미만)</span>
+                </div>
+              </td>
+              <td style="padding: 12px 20px; vertical-align: middle; white-space: nowrap; color: #414d5c;">바닥 · v1</td>
+              <td style="padding: 12px 20px; vertical-align: middle; white-space: nowrap; font-variant-numeric: tabular-nums;">3m당 허용 10mm / 재시공 30mm</td>
+              <td style="padding: 12px 20px; vertical-align: middle;">
+                <span style="display: flex; align-items: center; justify-content: center; width: 16px; height: 16px; box-sizing: border-box; border: 2px solid #0972d3; border-radius: 2px; background: #0972d3; color: #ffffff;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7"></path></svg></span>
+              </td>
+            </tr>
+            <tr style="border-bottom: 1px solid #e9ebed;">
+              <td style="padding: 12px 20px; vertical-align: middle;">
+                <div style="display: flex; flex-direction: column;">
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-family: Monaco, Menlo, Consolas, 'Courier New', monospace; font-size: 13px; font-weight: 700;">floor-kcs-finish7plus</span>
+                  </div>
+                  <span style="display: block; font-size: 12px; line-height: 16px; color: #5f6b7a;">KCS 14 20 10 표 3.7-1 (마감두께 7mm 이상)</span>
+                </div>
+              </td>
+              <td style="padding: 12px 20px; vertical-align: middle; white-space: nowrap; color: #414d5c;">바닥 · v1</td>
+              <td style="padding: 12px 20px; vertical-align: middle; white-space: nowrap; font-variant-numeric: tabular-nums;">1m당 허용 10mm / 재시공 30mm</td>
+              <td style="padding: 12px 20px; vertical-align: middle;">
+                <span style="display: flex; align-items: center; justify-content: center; width: 16px; height: 16px; box-sizing: border-box; border: 2px solid #0972d3; border-radius: 2px; background: #0972d3; color: #ffffff;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7"></path></svg></span>
+              </td>
+            </tr>
+            <tr style="border-bottom: 1px solid #e9ebed;">
+              <td style="padding: 12px 20px; vertical-align: middle;">
+                <div style="display: flex; flex-direction: column;">
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-family: Monaco, Menlo, Consolas, 'Courier New', monospace; font-size: 13px; font-weight: 700;">floor-lh-exposed</span>
+                  </div>
+                  <span style="display: block; font-size: 12px; line-height: 16px; color: #5f6b7a;">LHCS 14 20 10 05 표 3.11-7 (제물치장·도장·벽지)</span>
+                </div>
+              </td>
+              <td style="padding: 12px 20px; vertical-align: middle; white-space: nowrap; color: #414d5c;">바닥 · v1</td>
+              <td style="padding: 12px 20px; vertical-align: middle; white-space: nowrap; font-variant-numeric: tabular-nums;">3m당 허용 6mm / 재시공 18mm</td>
+              <td style="padding: 12px 20px; vertical-align: middle;">
+                <span style="display: flex; align-items: center; justify-content: center; width: 16px; height: 16px; box-sizing: border-box; border: 2px solid #0972d3; border-radius: 2px; background: #0972d3; color: #ffffff;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7"></path></svg></span>
+              </td>
+            </tr>
+            <tr style="border-bottom: 1px solid #e9ebed;">
+              <td style="padding: 12px 20px; vertical-align: middle;">
+                <div style="display: flex; flex-direction: column;">
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-family: Monaco, Menlo, Consolas, 'Courier New', monospace; font-size: 13px; font-weight: 700;">floor-lh-thick</span>
+                  </div>
+                  <span style="display: block; font-size: 12px; line-height: 16px; color: #5f6b7a;">LHCS 14 20 10 05 표 3.11-7 (마감 13mm 초과)</span>
+                </div>
+              </td>
+              <td style="padding: 12px 20px; vertical-align: middle; white-space: nowrap; color: #414d5c;">바닥 · v1</td>
+              <td style="padding: 12px 20px; vertical-align: middle; white-space: nowrap; font-variant-numeric: tabular-nums;">3m당 허용 10mm / 재시공 30mm</td>
+              <td style="padding: 12px 20px; vertical-align: middle;">
+                <span style="display: flex; align-items: center; justify-content: center; width: 16px; height: 16px; box-sizing: border-box; border: 2px solid #0972d3; border-radius: 2px; background: #0972d3; color: #ffffff;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7"></path></svg></span>
+              </td>
+            </tr>
+            <tr style="border-bottom: 1px solid #e9ebed;">
+              <td style="padding: 12px 20px; vertical-align: middle;">
+                <div style="display: flex; flex-direction: column;">
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-family: Monaco, Menlo, Consolas, 'Courier New', monospace; font-size: 13px; font-weight: 700;">floor-molit-cushion</span>
+                  </div>
+                  <span style="display: block; font-size: 12px; line-height: 16px; color: #5f6b7a;">국토부 바닥충격음 고시 (완충재 바탕)</span>
+                </div>
+              </td>
+              <td style="padding: 12px 20px; vertical-align: middle; white-space: nowrap; color: #414d5c;">바닥 · v1</td>
+              <td style="padding: 12px 20px; vertical-align: middle; white-space: nowrap; font-variant-numeric: tabular-nums;">3m당 허용 7mm / 재시공 21mm</td>
+              <td style="padding: 12px 20px; vertical-align: middle;">
+                <span style="display: flex; align-items: center; justify-content: center; width: 16px; height: 16px; box-sizing: border-box; border: 2px solid #0972d3; border-radius: 2px; background: #0972d3; color: #ffffff;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7"></path></svg></span>
+              </td>
+            </tr>
+            <tr style="border-bottom: 1px solid #e9ebed;">
+              <td style="padding: 12px 20px; vertical-align: middle;">
+                <div style="display: flex; flex-direction: column;">
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-family: Monaco, Menlo, Consolas, 'Courier New', monospace; font-size: 13px; font-weight: 700;">slope-bathroom</span>
+                  </div>
+                  <span style="display: block; font-size: 12px; line-height: 16px; color: #5f6b7a;">KCS 41 48 01 타일공사 §3.1(11)① 마. "바닥면은 물고임이 없도록 구배를 유지하되, 1/100을 넘지 않도록 한다" [원문대조]. 하한은 정성 규정이라 수치 근거 없음</span>
+                </div>
+              </td>
+              <td style="padding: 12px 20px; vertical-align: middle; white-space: nowrap; color: #414d5c;">바닥 · v1</td>
+              <td style="padding: 12px 20px; vertical-align: middle; white-space: nowrap; font-variant-numeric: tabular-nums;">설계 0.5% · 적합 ±0.5%p · 재시공 1.5%p 초과</td>
+              <td style="padding: 12px 20px; vertical-align: middle;">
+                <span style="display: flex; align-items: center; justify-content: center; width: 16px; height: 16px; box-sizing: border-box; border: 2px solid #0972d3; border-radius: 2px; background: #0972d3; color: #ffffff;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7"></path></svg></span>
+              </td>
+            </tr>
+            <tr style="border-bottom: 1px solid #e9ebed;">
+              <td style="padding: 12px 20px; vertical-align: middle;">
+                <div style="display: flex; flex-direction: column;">
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-family: Monaco, Menlo, Consolas, 'Courier New', monospace; font-size: 13px; font-weight: 700;">slope-indoor-level</span>
+                    <span style="display: inline-flex; align-items: center; height: 18px; padding: 0 6px; border-radius: 4px; background: #e9ebed; color: #414d5c; font-size: 12px; line-height: 16px; font-weight: 700;">기본</span>
+                  </div>
+                  <span style="display: block; font-size: 12px; line-height: 16px; color: #5f6b7a;">설계 구배 0%(의도적 구배 없음). 허용폭은 기준 문서 근거가 없는 용역 설정값. 방향 판정 대상이 아니므로 배수구를 지정하지 말 것</span>
+                </div>
+              </td>
+              <td style="padding: 12px 20px; vertical-align: middle; white-space: nowrap; color: #414d5c;">바닥 · v1</td>
+              <td style="padding: 12px 20px; vertical-align: middle; white-space: nowrap; font-variant-numeric: tabular-nums;">설계 0% · 적합 ±1%p · 재시공 3%p 초과</td>
+              <td style="padding: 12px 20px; vertical-align: middle;">
+                <span style="display: flex; align-items: center; justify-content: center; width: 16px; height: 16px; box-sizing: border-box; border: 2px solid #0972d3; border-radius: 2px; background: #0972d3; color: #ffffff;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7"></path></svg></span>
+              </td>
+            </tr>
+            <tr style="border-bottom: 1px solid #e9ebed;">
+              <td style="padding: 12px 20px; vertical-align: middle;">
+                <div style="display: flex; flex-direction: column;">
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-family: Monaco, Menlo, Consolas, 'Courier New', monospace; font-size: 13px; font-weight: 700;">slope-parking</span>
+                  </div>
+                  <span style="display: block; font-size: 12px; line-height: 16px; color: #5f6b7a;">KDS 44 70 05 주차장 §4.1.3(3)① 가로방향 3% 이하 [원문대조, 상한만]. 배수를 위한 최소 구배 규정은 존재하지 않는다. 도로법상 도로의 주차장 기준이므로 건축물 부설주차장에는 준용</span>
+                </div>
+              </td>
+              <td style="padding: 12px 20px; vertical-align: middle; white-space: nowrap; color: #414d5c;">바닥 · v1</td>
+              <td style="padding: 12px 20px; vertical-align: middle; white-space: nowrap; font-variant-numeric: tabular-nums;">설계 1.5% · 적합 ±1.5%p · 재시공 4.5%p 초과</td>
+              <td style="padding: 12px 20px; vertical-align: middle;">
+                <span style="display: flex; align-items: center; justify-content: center; width: 16px; height: 16px; box-sizing: border-box; border: 2px solid #0972d3; border-radius: 2px; background: #0972d3; color: #ffffff;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7"></path></svg></span>
+              </td>
+            </tr>
+            <tr style="border-bottom: 1px solid #e9ebed;">
+              <td style="padding: 12px 20px; vertical-align: middle;">
+                <div style="display: flex; flex-direction: column;">
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-family: Monaco, Menlo, Consolas, 'Courier New', monospace; font-size: 13px; font-weight: 700;">slope-roof-exposed</span>
+                  </div>
+                  <span style="display: block; font-size: 12px; line-height: 16px; color: #5f6b7a;">KCS 41 40 01 방수공사일반 §3.1.3(1) 노출방수(top coat 마감 또는 무마감) 1/50~1/20 [원문대조]. 재시공 임계는 저장소 관례(적합폭 3배), 방향 허용각은 용역 설정값</span>
+                </div>
+              </td>
+              <td style="padding: 12px 20px; vertical-align: middle; white-space: nowrap; color: #414d5c;">바닥 · v1</td>
+              <td style="padding: 12px 20px; vertical-align: middle; white-space: nowrap; font-variant-numeric: tabular-nums;">설계 3.5% · 적합 ±1.5%p · 재시공 4.5%p 초과</td>
+              <td style="padding: 12px 20px; vertical-align: middle;">
+                <span style="display: flex; align-items: center; justify-content: center; width: 16px; height: 16px; box-sizing: border-box; border: 2px solid #0972d3; border-radius: 2px; background: #0972d3; color: #ffffff;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7"></path></svg></span>
+              </td>
+            </tr>
+            <tr style="border-bottom: 1px solid #e9ebed;">
+              <td style="padding: 12px 20px; vertical-align: middle;">
+                <div style="display: flex; flex-direction: column;">
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-family: Monaco, Menlo, Consolas, 'Courier New', monospace; font-size: 13px; font-weight: 700;">slope-roof-protected</span>
+                  </div>
+                  <span style="display: block; font-size: 12px; line-height: 16px; color: #5f6b7a;">KCS 41 40 01 방수공사일반 §3.1.3(1) 비노출(보호층) 1/100~1/50 [원문대조]. KCS 41 56 01 §1.5.2(3)의 1/50 이상과 상충하므로 지붕 전체 판정에는 노출방수 기준 검토 필요</span>
+                </div>
+              </td>
+              <td style="padding: 12px 20px; vertical-align: middle; white-space: nowrap; color: #414d5c;">바닥 · v1</td>
+              <td style="padding: 12px 20px; vertical-align: middle; white-space: nowrap; font-variant-numeric: tabular-nums;">설계 1.5% · 적합 ±0.5%p · 재시공 1.5%p 초과</td>
+              <td style="padding: 12px 20px; vertical-align: middle;">
+                <span style="display: flex; align-items: center; justify-content: center; width: 16px; height: 16px; box-sizing: border-box; border: 2px solid #0972d3; border-radius: 2px; background: #0972d3; color: #ffffff;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7"></path></svg></span>
+              </td>
+            </tr>
+            <tr style="border-bottom: 1px solid #e9ebed;">
+              <td style="padding: 12px 20px; vertical-align: middle;">
+                <div style="display: flex; flex-direction: column;">
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-family: Monaco, Menlo, Consolas, 'Courier New', monospace; font-size: 13px; font-weight: 700;">wall-kcs-plumb</span>
+                  </div>
+                  <span style="display: block; font-size: 12px; line-height: 16px; color: #5f6b7a;">KCS 21 50 05 §3.2.2 (H≤30m)</span>
+                </div>
+              </td>
+              <td style="padding: 12px 20px; vertical-align: middle; white-space: nowrap; color: #414d5c;">벽면 · v1</td>
+              <td style="padding: 12px 20px; vertical-align: middle; white-space: nowrap; font-variant-numeric: tabular-nums;">수직도 허용 25mm / 재시공 75mm</td>
+              <td style="padding: 12px 20px; vertical-align: middle;">
+                <span style="display: flex; align-items: center; justify-content: center; width: 16px; height: 16px; box-sizing: border-box; border: 2px solid #0972d3; border-radius: 2px; background: #0972d3; color: #ffffff;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7"></path></svg></span>
+              </td>
+            </tr>
+            <tr style="border-bottom: 1px solid #e9ebed;">
+              <td style="padding: 12px 20px; vertical-align: middle;">
+                <div style="display: flex; flex-direction: column;">
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-family: Monaco, Menlo, Consolas, 'Courier New', monospace; font-size: 13px; font-weight: 700;">wall-kcs-tilt-exposed</span>
+                  </div>
+                  <span style="display: block; font-size: 12px; line-height: 16px; color: #5f6b7a;">KCS 21 50 05 §3.2.6 (노출 모서리·줄눈)</span>
+                </div>
+              </td>
+              <td style="padding: 12px 20px; vertical-align: middle; white-space: nowrap; color: #414d5c;">벽면 · v1</td>
+              <td style="padding: 12px 20px; vertical-align: middle; white-space: nowrap; font-variant-numeric: tabular-nums;">3m당 허용 6mm / 재시공 18mm</td>
+              <td style="padding: 12px 20px; vertical-align: middle;">
+                <span style="display: flex; align-items: center; justify-content: center; width: 16px; height: 16px; box-sizing: border-box; border: 2px solid #0972d3; border-radius: 2px; background: #0972d3; color: #ffffff;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7"></path></svg></span>
+              </td>
+            </tr>
+            <tr style="border-bottom: 1px solid #e9ebed;">
+              <td style="padding: 12px 20px; vertical-align: middle;">
+                <div style="display: flex; flex-direction: column;">
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-family: Monaco, Menlo, Consolas, 'Courier New', monospace; font-size: 13px; font-weight: 700;">wall-kcs-tilt-other</span>
+                    <span style="display: inline-flex; align-items: center; height: 18px; padding: 0 6px; border-radius: 4px; background: #e9ebed; color: #414d5c; font-size: 12px; line-height: 16px; font-weight: 700;">기본</span>
+                  </div>
+                  <span style="display: block; font-size: 12px; line-height: 16px; color: #5f6b7a;">KCS 21 50 05 §3.2.6 (기타)</span>
+                </div>
+              </td>
+              <td style="padding: 12px 20px; vertical-align: middle; white-space: nowrap; color: #414d5c;">벽면 · v1</td>
+              <td style="padding: 12px 20px; vertical-align: middle; white-space: nowrap; font-variant-numeric: tabular-nums;">3m당 허용 9mm / 재시공 27mm</td>
+              <td style="padding: 12px 20px; vertical-align: middle;">
+                <span style="display: flex; align-items: center; justify-content: center; width: 16px; height: 16px; box-sizing: border-box; border: 2px solid #0972d3; border-radius: 2px; background: #0972d3; color: #ffffff;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7"></path></svg></span>
+              </td>
+            </tr>
+            <tr style="border-bottom: 1px solid #e9ebed;">
+              <td style="padding: 12px 20px; vertical-align: middle;">
+                <div style="display: flex; flex-direction: column;">
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-family: Monaco, Menlo, Consolas, 'Courier New', monospace; font-size: 13px; font-weight: 700;">wall-plaster-base</span>
+                  </div>
+                  <span style="display: block; font-size: 12px; line-height: 16px; color: #5f6b7a;">주택건설 전문시방서 31310 (미장 바탕면)</span>
+                </div>
+              </td>
+              <td style="padding: 12px 20px; vertical-align: middle; white-space: nowrap; color: #414d5c;">벽면 · v1</td>
+              <td style="padding: 12px 20px; vertical-align: middle; white-space: nowrap; font-variant-numeric: tabular-nums;">3m당 허용 6mm / 재시공 18mm</td>
+              <td style="padding: 12px 20px; vertical-align: middle;">
+                <span style="display: flex; align-items: center; justify-content: center; width: 16px; height: 16px; box-sizing: border-box; border: 2px solid #0972d3; border-radius: 2px; background: #0972d3; color: #ffffff;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7"></path></svg></span>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding: 12px 20px; vertical-align: middle;">
+                <div style="display: flex; flex-direction: column;">
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-family: Monaco, Menlo, Consolas, 'Courier New', monospace; font-size: 13px; font-weight: 700;">wall-plaster-surface</span>
+                  </div>
+                  <span style="display: block; font-size: 12px; line-height: 16px; color: #5f6b7a;">주택건설 전문시방서 31310 (미장 바름면)</span>
+                </div>
+              </td>
+              <td style="padding: 12px 20px; vertical-align: middle; white-space: nowrap; color: #414d5c;">벽면 · v1</td>
+              <td style="padding: 12px 20px; vertical-align: middle; white-space: nowrap; font-variant-numeric: tabular-nums;">3m당 허용 3mm / 재시공 9mm</td>
+              <td style="padding: 12px 20px; vertical-align: middle;">
+                <span style="display: flex; align-items: center; justify-content: center; width: 16px; height: 16px; box-sizing: border-box; border: 2px solid #0972d3; border-radius: 2px; background: #0972d3; color: #ffffff;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7"></path></svg></span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div style="padding: 20px; border-top: 1px solid #e9ebed;">
+          <p style="margin: 0; font-size: 12px; line-height: 16px; color: #5f6b7a;">기준 신설·버전 개정·현장별 재정의 추가는 데모 범위 밖입니다. Supabase SQL Editor에서 criteria 테이블에 직접 추가하세요(부분 유니크 제약: 활성 행 기준 (surface, name) 유일).</p>
+        </div>
+      </div>
+
+    </main>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

@@ -1,0 +1,274 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;700&family=Noto+Sans+KR:wght@400;700&display=swap">
+  <style>
+    body { margin: 0; background: #ffffff; }
+    a { color: #0972d3; text-decoration: none; }
+    a:hover { color: #033160; text-decoration: underline; }
+    table { border-collapse: collapse; }
+    *, *::before, *::after { box-sizing: border-box; }
+  </style>
+</helmet>
+<div style="position: relative; width: 1440px; height: 1240px; overflow: hidden; background: #ffffff; color: #000716; font-family: 'Open Sans', 'Noto Sans KR', 'Helvetica Neue', Roboto, Arial, sans-serif; font-size: 14px; line-height: 20px; display: flex; flex-direction: column;">
+
+  <header style="display: flex; align-items: center; gap: 24px; height: 44px; flex-shrink: 0; padding: 0 20px; background: #0f1b2a; color: #ffffff;">
+    <a href="#" style="display: flex; align-items: center; gap: 10px; color: #ffffff; font-size: 16px; font-weight: 700; letter-spacing: 0.02em;">
+      <span style="display: flex; align-items: center; justify-content: center; width: 24px; height: 24px;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 17l6-6 4 4 8-8"></path><path d="M14 7h7v7"></path></svg>
+      </span>
+      <span>FLATNESS</span>
+    </a>
+    <div style="display: flex; align-items: center; gap: 20px; margin-left: auto;">
+      <button style="display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 4px; background: transparent; border: 0; color: #d1d5db; font-size: 14px; font-weight: 700; cursor: pointer;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6"></path></svg>
+        <span>[사용자 이메일]</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg>
+      </button>
+    </div>
+  </header>
+
+  <div style="display: flex; flex: 1; min-height: 0;">
+
+    <nav style="display: flex; flex-direction: column; width: 280px; flex-shrink: 0; background: #ffffff; border-right: 1px solid #e9ebed;">
+      <div style="padding: 20px 28px 12px; border-bottom: 1px solid #e9ebed; font-size: 16px; line-height: 20px; font-weight: 700;">평활도 분석 콘솔</div>
+      <div style="display: flex; flex-direction: column; padding: 12px 0;">
+        <a href="#" style="display: flex; align-items: center; padding: 8px 28px; color: #0972d3; font-weight: 700;">현장</a>
+        <a href="#" style="display: flex; align-items: center; padding: 8px 28px; color: #414d5c;">보고서</a>
+        <a href="#" style="display: flex; align-items: center; padding: 8px 28px; color: #414d5c;">업로드</a>
+      </div>
+      <div style="height: 1px; margin: 0 28px; background: #e9ebed;"></div>
+      <div style="display: flex; flex-direction: column; padding: 12px 0;">
+        <a href="#" style="display: flex; align-items: center; padding: 8px 28px; color: #414d5c;">설정</a>
+        <a href="#" style="display: flex; align-items: center; padding: 8px 28px; color: #414d5c;">로그아웃</a>
+      </div>
+    </nav>
+
+    <main style="display: flex; flex-direction: column; gap: 20px; flex: 1; min-width: 0; padding: 20px 40px 40px;">
+
+      <nav style="display: flex; align-items: center; gap: 8px; font-size: 14px;">
+        <a href="#" style="color: #0972d3;">현장</a>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#5f6b7a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>
+        <a href="#" style="color: #0972d3;">세종 M2블록 아파트</a>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#5f6b7a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>
+        <span style="color: #5f6b7a;">101동 / 3층 / 301호 / 거실</span>
+      </nav>
+
+      <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;">
+        <div style="display: flex; flex-direction: column; gap: 4px;">
+          <h1 style="margin: 0; display: flex; align-items: baseline; gap: 10px; font-size: 24px; line-height: 30px; font-weight: 700;">
+            <span>스캔 · 바닥 ·</span>
+            <span style="font-family: Monaco, Menlo, Consolas, 'Courier New', monospace; font-size: 22px;">2026-09-03 10:42</span>
+          </h1>
+        </div>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 12px; font-size: 14px; line-height: 20px;">
+        <span style="display: inline-flex; align-items: center; gap: 6px; color: #037f0c;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M8 12.5l2.5 2.5L16 9.5"></path></svg>
+          <span>업로드</span>
+        </span>
+        <span style="width: 40px; height: 1px; background: #e9ebed;"></span>
+        <span style="display: inline-flex; align-items: center; gap: 6px; color: #037f0c;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M8 12.5l2.5 2.5L16 9.5"></path></svg>
+          <span>사전 검사</span>
+        </span>
+        <span style="width: 40px; height: 1px; background: #e9ebed;"></span>
+        <span style="display: inline-flex; align-items: center; gap: 6px; color: #0972d3; font-weight: 700;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>
+          <span>단위 확정</span>
+        </span>
+        <span style="width: 40px; height: 1px; background: #e9ebed;"></span>
+        <span style="display: inline-flex; align-items: center; gap: 6px; color: #9ba7b6;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M8 12h8"></path></svg>
+          <span>분석</span>
+        </span>
+        <span style="width: 40px; height: 1px; background: #e9ebed;"></span>
+        <span style="display: inline-flex; align-items: center; gap: 6px; color: #9ba7b6;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M8 12h8"></path></svg>
+          <span>완료</span>
+        </span>
+      </div>
+
+      <div style="display: flex; flex-direction: column; background: #ffffff; border-radius: 16px; box-shadow: 0 1px 1px 1px #e9ebed, 0 1px 8px 2px rgba(0, 7, 22, 0.12);">
+        <div style="padding: 12px 20px; border-bottom: 1px solid #e9ebed;">
+          <span style="font-size: 18px; line-height: 22px; font-weight: 700;">스캔 정보</span>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px; padding: 20px;">
+          <div style="display: flex; flex-direction: column; gap: 4px;">
+            <span style="font-weight: 700;">측정위치</span>
+            <span>101동 / 3층 / 301호 / 거실</span>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 4px; padding-left: 20px; border-left: 1px solid #e9ebed;">
+            <span style="font-weight: 700;">원본 파일</span>
+            <span style="font-family: Monaco, Menlo, Consolas, 'Courier New', monospace; font-size: 13px;">scan_101_301_living.csv</span>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 4px; padding-left: 20px; border-left: 1px solid #e9ebed;">
+            <span style="font-weight: 700;">장비</span>
+            <span>[장비명]</span>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 4px; padding-left: 20px; border-left: 1px solid #e9ebed;">
+            <span style="font-weight: 700;">데이터 계보</span>
+            <span>원시 점군</span>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 4px;">
+            <span style="font-weight: 700;">점 개수</span>
+            <span style="font-family: Monaco, Menlo, Consolas, 'Courier New', monospace; font-size: 13px; font-variant-numeric: tabular-nums;">1,248,320</span>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 4px; padding-left: 20px; border-left: 1px solid #e9ebed;">
+            <span style="font-weight: 700;">상태</span>
+            <span style="display: inline-flex; align-items: center; gap: 6px; color: #5f6b7a;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M8 12h8"></path></svg>
+              <span>단위 확인 대기</span>
+            </span>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 4px; padding-left: 20px; border-left: 1px solid #e9ebed;">
+            <span style="font-weight: 700;">단위 배율</span>
+            <span style="font-family: Monaco, Menlo, Consolas, 'Courier New', monospace; font-size: 13px;">미확정</span>
+          </div>
+        </div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; background: #ffffff; border-radius: 16px; box-shadow: 0 1px 1px 1px #e9ebed, 0 1px 8px 2px rgba(0, 7, 22, 0.12);">
+        <div style="padding: 12px 20px; border-bottom: 1px solid #e9ebed;">
+          <span style="font-size: 18px; line-height: 22px; font-weight: 700;">단위 확인</span>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 16px; padding: 20px;">
+          <p style="margin: 0; color: #5f6b7a;">파일 좌표가 m·cm·mm 중 무엇인지 확정하는 단계입니다. 높이 뷰가 있으면 그 축 눈금과 실제 공간 크기를 견주어 고르고, 없으면 파일명과 스캔 앱의 내보내기 설정으로 판단하세요.</p>
+
+          <div style="display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 24px; align-items: start;">
+
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+              <svg width="610" height="458" viewBox="0 0 610 458" style="display: block; width: 100%; height: auto; border: 1px solid #e9ebed; border-radius: 8px; background: #ffffff;" aria-hidden="true">
+                <defs>
+                  <linearGradient id="hv-ramp" x1="0" y1="1" x2="0" y2="0">
+                    <stop offset="0" stop-color="#ffffff"></stop>
+                    <stop offset="1" stop-color="#0972d3"></stop>
+                  </linearGradient>
+                </defs>
+                <text x="290" y="30" text-anchor="middle" font-size="14" font-weight="700" fill="#000716" font-family="'Open Sans', 'Noto Sans KR', sans-serif">높이 뷰 (평면도)</text>
+                <rect x="60" y="50" width="460" height="350" fill="#ffffff" stroke="#8c8c94" stroke-width="1"></rect>
+                <rect x="60" y="50" width="57.5" height="58.3" fill="#0972d3" fill-opacity="0.4"></rect>
+                <rect x="117.5" y="50" width="57.5" height="58.3" fill="#0972d3" fill-opacity="0.4"></rect>
+                <rect x="175" y="50" width="57.5" height="58.3" fill="#0972d3" fill-opacity="0.56"></rect>
+                <rect x="232.5" y="50" width="57.5" height="58.3" fill="#0972d3" fill-opacity="0.56"></rect>
+                <rect x="290" y="50" width="57.5" height="58.3" fill="#0972d3" fill-opacity="0.72"></rect>
+                <rect x="347.5" y="50" width="57.5" height="58.3" fill="#0972d3" fill-opacity="0.72"></rect>
+                <rect x="405" y="50" width="57.5" height="58.3" fill="#0972d3" fill-opacity="0.86"></rect>
+                <rect x="462.5" y="50" width="57.5" height="58.3" fill="#0972d3" fill-opacity="0.86"></rect>
+                <rect x="60" y="108.3" width="57.5" height="58.3" fill="#0972d3" fill-opacity="0.24"></rect>
+                <rect x="117.5" y="108.3" width="57.5" height="58.3" fill="#0972d3" fill-opacity="0.4"></rect>
+                <rect x="175" y="108.3" width="57.5" height="58.3" fill="#0972d3" fill-opacity="0.4"></rect>
+                <rect x="232.5" y="108.3" width="57.5" height="58.3" fill="#0972d3" fill-opacity="0.56"></rect>
+                <rect x="290" y="108.3" width="57.5" height="58.3" fill="#0972d3" fill-opacity="0.72"></rect>
+                <rect x="347.5" y="108.3" width="57.5" height="58.3" fill="#0972d3" fill-opacity="0.86"></rect>
+                <rect x="405" y="108.3" width="57.5" height="58.3" fill="#0972d3" fill-opacity="0.86"></rect>
+                <rect x="462.5" y="108.3" width="57.5" height="58.3" fill="#0972d3" fill-opacity="1"></rect>
+                <rect x="60" y="166.6" width="57.5" height="58.3" fill="#0972d3" fill-opacity="0.24"></rect>
+                <rect x="117.5" y="166.6" width="57.5" height="58.3" fill="#0972d3" fill-opacity="0.24"></rect>
+                <rect x="175" y="166.6" width="57.5" height="58.3" fill="#0972d3" fill-opacity="0.4"></rect>
+                <rect x="232.5" y="166.6" width="57.5" height="58.3" fill="#0972d3" fill-opacity="0.56"></rect>
+                <rect x="290" y="166.6" width="57.5" height="58.3" fill="#0972d3" fill-opacity="0.72"></rect>
+                <rect x="347.5" y="166.6" width="57.5" height="58.3" fill="#0972d3" fill-opacity="0.86"></rect>
+                <rect x="405" y="166.6" width="57.5" height="58.3" fill="#0972d3" fill-opacity="1"></rect>
+                <rect x="462.5" y="166.6" width="57.5" height="58.3" fill="#0972d3" fill-opacity="1"></rect>
+                <rect x="60" y="224.9" width="57.5" height="58.3" fill="#0972d3" fill-opacity="0.24"></rect>
+                <rect x="117.5" y="224.9" width="57.5" height="58.3" fill="#0972d3" fill-opacity="0.4"></rect>
+                <rect x="175" y="224.9" width="57.5" height="58.3" fill="#0972d3" fill-opacity="0.4"></rect>
+                <rect x="232.5" y="224.9" width="57.5" height="58.3" fill="#0972d3" fill-opacity="0.56"></rect>
+                <rect x="290" y="224.9" width="57.5" height="58.3" fill="#0972d3" fill-opacity="0.56"></rect>
+                <rect x="347.5" y="224.9" width="57.5" height="58.3" fill="#0972d3" fill-opacity="0.86"></rect>
+                <rect x="405" y="224.9" width="57.5" height="58.3" fill="#0972d3" fill-opacity="1"></rect>
+                <rect x="462.5" y="224.9" width="57.5" height="58.3" fill="#0972d3" fill-opacity="1"></rect>
+                <rect x="60" y="283.2" width="57.5" height="58.3" fill="#0972d3" fill-opacity="0.12"></rect>
+                <rect x="117.5" y="283.2" width="57.5" height="58.3" fill="#0972d3" fill-opacity="0.24"></rect>
+                <rect x="175" y="283.2" width="57.5" height="58.3" fill="#0972d3" fill-opacity="0.4"></rect>
+                <rect x="232.5" y="283.2" width="57.5" height="58.3" fill="#0972d3" fill-opacity="0.4"></rect>
+                <rect x="290" y="283.2" width="57.5" height="58.3" fill="#0972d3" fill-opacity="0.56"></rect>
+                <rect x="347.5" y="283.2" width="57.5" height="58.3" fill="#0972d3" fill-opacity="0.72"></rect>
+                <rect x="405" y="283.2" width="57.5" height="58.3" fill="#0972d3" fill-opacity="1"></rect>
+                <rect x="462.5" y="283.2" width="57.5" height="58.3" fill="#0972d3" fill-opacity="1"></rect>
+                <rect x="60" y="341.5" width="57.5" height="58.5" fill="#e9ebed"></rect>
+                <rect x="117.5" y="341.5" width="57.5" height="58.5" fill="#e9ebed"></rect>
+                <rect x="175" y="341.5" width="57.5" height="58.5" fill="#0972d3" fill-opacity="0.24"></rect>
+                <rect x="232.5" y="341.5" width="57.5" height="58.5" fill="#0972d3" fill-opacity="0.4"></rect>
+                <rect x="290" y="341.5" width="57.5" height="58.5" fill="#0972d3" fill-opacity="0.56"></rect>
+                <rect x="347.5" y="341.5" width="57.5" height="58.5" fill="#0972d3" fill-opacity="0.72"></rect>
+                <rect x="405" y="341.5" width="57.5" height="58.5" fill="#0972d3" fill-opacity="0.86"></rect>
+                <rect x="462.5" y="341.5" width="57.5" height="58.5" fill="#0972d3" fill-opacity="1"></rect>
+                <path d="M60 400v6M175 400v6M290 400v6M405 400v6M520 400v6M54 400h6M54 283h6M54 166h6M54 50h6" stroke="#5f6b7a" stroke-width="1"></path>
+                <text x="60" y="422" text-anchor="middle" font-size="11" fill="#5f6b7a" font-family="'Open Sans', sans-serif">0</text>
+                <text x="175" y="422" text-anchor="middle" font-size="11" fill="#5f6b7a" font-family="'Open Sans', sans-serif">2000</text>
+                <text x="290" y="422" text-anchor="middle" font-size="11" fill="#5f6b7a" font-family="'Open Sans', sans-serif">4000</text>
+                <text x="405" y="422" text-anchor="middle" font-size="11" fill="#5f6b7a" font-family="'Open Sans', sans-serif">6000</text>
+                <text x="520" y="422" text-anchor="middle" font-size="11" fill="#5f6b7a" font-family="'Open Sans', sans-serif">8000</text>
+                <text x="48" y="404" text-anchor="end" font-size="11" fill="#5f6b7a" font-family="'Open Sans', sans-serif">0</text>
+                <text x="48" y="287" text-anchor="end" font-size="11" fill="#5f6b7a" font-family="'Open Sans', sans-serif">2000</text>
+                <text x="48" y="170" text-anchor="end" font-size="11" fill="#5f6b7a" font-family="'Open Sans', sans-serif">4000</text>
+                <text x="48" y="54" text-anchor="end" font-size="11" fill="#5f6b7a" font-family="'Open Sans', sans-serif">6000</text>
+                <text x="290" y="446" text-anchor="middle" font-size="11" fill="#5f6b7a" font-family="'Open Sans', 'Noto Sans KR', sans-serif">x (파일 단위)</text>
+                <rect x="546" y="50" width="14" height="350" fill="url(#hv-ramp)" stroke="#8c8c94" stroke-width="1"></rect>
+                <text x="566" y="56" font-size="11" fill="#5f6b7a" font-family="'Open Sans', 'Noto Sans KR', sans-serif">높음</text>
+                <text x="566" y="402" font-size="11" fill="#5f6b7a" font-family="'Open Sans', 'Noto Sans KR', sans-serif">낮음</text>
+              </svg>
+              <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; font-size: 12px; line-height: 16px;">
+                <span style="color: #5f6b7a;">산출물 PNG 자리</span>
+                <a href="#" style="display: inline-flex; align-items: center; gap: 4px; color: #0972d3; font-weight: 700;">
+                  <span>원본 크기로 열기 (새 탭)</span>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 13v6H5V6h6"></path></svg>
+                </a>
+              </div>
+              <p style="margin: 0; font-size: 12px; line-height: 16px; color: #5f6b7a;">위에서 내려다본 점군의 상대 높이입니다. 축 눈금은 미터가 아니라 <span style="font-weight: 700; color: #000716;">파일 단위</span>이므로, 눈금이 가리키는 크기와 실제 공간 크기를 견주어 단위를 고르세요. 예를 들어 8m짜리 방인데 눈금이 8000까지 간다면 mm입니다. 점이 성겨 색이 거의 없거나 "유효 데이터 없음" 경고가 찍힌 그림이어도 축 눈금은 유효하니 눈금만 보고 판단하면 됩니다.</p>
+            </div>
+
+            <form style="display: flex; flex-direction: column; gap: 16px;">
+              <div style="display: flex; align-items: flex-start; gap: 12px; padding: 12px 16px; border: 2px solid #0972d3; border-radius: 12px; background: #f2f8fd;">
+                <span style="display: flex; align-items: center; height: 20px; flex-shrink: 0; color: #0972d3;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 11v5M12 8v.5"></path></svg></span>
+                <div style="display: flex; flex-direction: column; gap: 4px;">
+                  <span style="font-weight: 700; font-family: Monaco, Menlo, Consolas, 'Courier New', monospace; font-size: 13px;">scan_101_301_living.csv</span>
+                  <span style="font-size: 12px; line-height: 16px; color: #5f6b7a;">파일 좌표의 길이 단위를 확정해야 분석을 시작할 수 있습니다. 단위가 틀리면 결과 전체가 왜곡되므로 스캔 앱의 내보내기 설정을 확인하세요.</span>
+                </div>
+              </div>
+
+              <div style="display: flex; flex-direction: column; gap: 8px;">
+                <span style="font-weight: 700;">파일 좌표 단위</span>
+                <div style="display: flex; flex-direction: column; gap: 8px;">
+                  <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                    <span style="display: flex; align-items: center; justify-content: center; width: 16px; height: 16px; box-sizing: border-box; border: 2px solid #8c8c94; border-radius: 50%; background: #ffffff;"></span>
+                    <span>m(미터)</span>
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                    <span style="display: flex; align-items: center; justify-content: center; width: 16px; height: 16px; box-sizing: border-box; border: 2px solid #8c8c94; border-radius: 50%; background: #ffffff;"></span>
+                    <span>cm(센티미터)</span>
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                    <span style="display: flex; align-items: center; justify-content: center; width: 16px; height: 16px; box-sizing: border-box; border: 2px solid #0972d3; border-radius: 50%; background: #ffffff;"><span style="width: 8px; height: 8px; border-radius: 50%; background: #0972d3;"></span></span>
+                    <span>mm(밀리미터)</span>
+                  </label>
+                </div>
+              </div>
+
+              <div style="display: flex;">
+                <button type="button" style="display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 20px; border: 2px solid #0972d3; border-radius: 20px; background: #0972d3; color: #ffffff; font-family: inherit; font-size: 14px; font-weight: 700; cursor: pointer;">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 12.5l2.5 2.5L16 9.5"></path><circle cx="12" cy="12" r="9"></circle></svg>
+                  <span>단위 확정 후 분석 시작</span>
+                </button>
+              </div>
+            </form>
+
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

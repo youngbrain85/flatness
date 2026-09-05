@@ -1,0 +1,150 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;700&family=Noto+Sans+KR:wght@400;700&display=swap">
+  <style>
+    body { margin: 0; background: #ffffff; }
+    a { color: #0972d3; text-decoration: none; }
+    a:hover { color: #033160; text-decoration: underline; }
+    table { border-collapse: collapse; }
+    *, *::before, *::after { box-sizing: border-box; }
+  </style>
+</helmet>
+<div style="position: relative; width: 1440px; height: 1080px; overflow: hidden; background: #ffffff; color: #000716; font-family: 'Open Sans', 'Noto Sans KR', 'Helvetica Neue', Roboto, Arial, sans-serif; font-size: 14px; line-height: 20px; display: flex; flex-direction: column;">
+
+  <header style="display: flex; align-items: center; gap: 24px; height: 44px; flex-shrink: 0; padding: 0 20px; background: #0f1b2a; color: #ffffff;">
+    <a href="#" style="display: flex; align-items: center; gap: 10px; color: #ffffff; font-size: 16px; font-weight: 700; letter-spacing: 0.02em;">
+      <span style="display: flex; align-items: center; justify-content: center; width: 24px; height: 24px;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 17l6-6 4 4 8-8"></path><path d="M14 7h7v7"></path></svg>
+      </span>
+      <span>FLATNESS</span>
+    </a>
+    <div style="display: flex; align-items: center; gap: 20px; margin-left: auto;">
+      <button style="display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 4px; background: transparent; border: 0; color: #d1d5db; font-size: 14px; font-weight: 700; cursor: pointer;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6"></path></svg>
+        <span>[사용자 이메일]</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg>
+      </button>
+    </div>
+  </header>
+
+  <div style="display: flex; flex: 1; min-height: 0;">
+
+    <nav style="display: flex; flex-direction: column; width: 280px; flex-shrink: 0; background: #ffffff; border-right: 1px solid #e9ebed;">
+      <div style="padding: 20px 28px 12px; border-bottom: 1px solid #e9ebed; font-size: 16px; line-height: 20px; font-weight: 700;">평활도 분석 콘솔</div>
+      <div style="display: flex; flex-direction: column; padding: 12px 0;">
+        <a href="#" style="display: flex; align-items: center; padding: 8px 28px; color: #414d5c;">현장</a>
+        <a href="#" style="display: flex; align-items: center; padding: 8px 28px; color: #0972d3; font-weight: 700;">보고서</a>
+        <a href="#" style="display: flex; align-items: center; padding: 8px 28px; color: #414d5c;">업로드</a>
+      </div>
+      <div style="height: 1px; margin: 0 28px; background: #e9ebed;"></div>
+      <div style="display: flex; flex-direction: column; padding: 12px 0;">
+        <a href="#" style="display: flex; align-items: center; padding: 8px 28px; color: #414d5c;">설정</a>
+        <a href="#" style="display: flex; align-items: center; padding: 8px 28px; color: #414d5c;">로그아웃</a>
+      </div>
+    </nav>
+
+    <main style="display: flex; flex-direction: column; gap: 20px; flex: 1; min-width: 0; padding: 20px 40px 40px;">
+
+      <nav style="display: flex; align-items: center; gap: 8px; font-size: 14px;">
+        <a href="#" style="color: #0972d3;">현장</a>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#5f6b7a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>
+        <a href="#" style="color: #0972d3;">세종 M2블록 아파트</a>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#5f6b7a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>
+        <span style="color: #5f6b7a;">101동 / 3층 / 301호 / 거실</span>
+      </nav>
+
+      <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;">
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <h1 style="margin: 0; font-size: 24px; line-height: 30px; font-weight: 700;">세종 M2블록 101동 301호 거실 평활도 보고서</h1>
+          <span style="display: inline-flex; align-items: center; gap: 6px; color: #5f6b7a;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M8 12h8"></path></svg>작성 중</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
+          <a href="#" style="display: inline-flex; align-items: center; height: 32px; padding: 0 20px; border: 2px solid #0972d3; border-radius: 20px; color: #0972d3; font-weight: 700; background: transparent;">삭제</a>
+          <a href="#" style="display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 20px; border: 2px solid #0972d3; border-radius: 20px; color: #0972d3; font-weight: 700; background: transparent;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v12M7 11l5 5 5-5M4 20h16"></path></svg>
+            <span>PDF 다운로드</span>
+          </a>
+          <a href="#" style="display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 20px; border: 2px solid #0972d3; border-radius: 20px; color: #0972d3; font-weight: 700; background: transparent;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.7"></path><path d="M20 4v5h-5"></path></svg>
+            <span>PDF 다시 생성</span>
+          </a>
+          <a href="#" style="display: inline-flex; align-items: center; height: 32px; padding: 0 20px; border: 2px solid #0972d3; border-radius: 20px; background: #0972d3; color: #ffffff; font-weight: 700;">발행</a>
+        </div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; background: #ffffff; border-radius: 16px; box-shadow: 0 1px 1px 1px #e9ebed, 0 1px 8px 2px rgba(0, 7, 22, 0.12); overflow: hidden;">
+        <div style="display: flex; align-items: baseline; gap: 6px; padding: 12px 20px; border-bottom: 1px solid #e9ebed;">
+          <span style="font-size: 18px; line-height: 22px; font-weight: 700;">포함 분석</span>
+          <span style="font-size: 18px; line-height: 22px; color: #5f6b7a;">(2)</span>
+        </div>
+        <div style="display: flex; flex-direction: column;">
+          <div style="display: flex; align-items: center; height: 44px; padding: 0 20px; border-bottom: 1px solid #e9ebed;">
+            <a href="#" style="color: #0972d3; font-weight: 700;">바닥 · 2026-09-03 10:42 · 판정 경계</a>
+          </div>
+          <div style="display: flex; align-items: center; height: 44px; padding: 0 20px;">
+            <a href="#" style="color: #0972d3; font-weight: 700;">벽면 · 2026-08-20 13:35 · 판정 적합</a>
+          </div>
+        </div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; background: #ffffff; border-radius: 16px; box-shadow: 0 1px 1px 1px #e9ebed, 0 1px 8px 2px rgba(0, 7, 22, 0.12); overflow: hidden;">
+        <div style="padding: 12px 20px; border-bottom: 1px solid #e9ebed;">
+          <span style="font-size: 18px; line-height: 22px; font-weight: 700;">PDF 미리보기</span>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 8px; padding: 20px;">
+          <svg width="1040" height="520" viewBox="0 0 1040 520" aria-hidden="true" style="display: block; width: 100%; height: 520px; border-radius: 8px;">
+            <rect x="0" y="0" width="1040" height="520" fill="#e9ebed"></rect>
+            <rect x="350" y="20" width="340" height="480" fill="#ffffff" stroke="#9ba7b6" stroke-width="1"></rect>
+            <rect x="374" y="44" width="200" height="12" fill="#414d5c"></rect>
+            <rect x="374" y="64" width="140" height="6" fill="#9ba7b6"></rect>
+            <rect x="374" y="76" width="110" height="6" fill="#9ba7b6"></rect>
+            <rect x="374" y="98" width="292" height="6" fill="#e9ebed"></rect>
+            <rect x="374" y="110" width="292" height="6" fill="#e9ebed"></rect>
+            <rect x="374" y="122" width="220" height="6" fill="#e9ebed"></rect>
+            <rect x="374" y="134" width="260" height="6" fill="#e9ebed"></rect>
+            <g fill="#ffffff" stroke="#e9ebed" stroke-width="1">
+              <rect x="374" y="156" width="24" height="16"></rect><rect x="398" y="156" width="24" height="16"></rect><rect x="422" y="156" width="24" height="16"></rect><rect x="446" y="156" width="24" height="16"></rect><rect x="470" y="156" width="24" height="16"></rect><rect x="494" y="156" width="24" height="16"></rect><rect x="518" y="156" width="24" height="16"></rect><rect x="542" y="156" width="24" height="16"></rect><rect x="566" y="156" width="24" height="16"></rect><rect x="590" y="156" width="24" height="16"></rect><rect x="614" y="156" width="24" height="16"></rect><rect x="638" y="156" width="24" height="16"></rect>
+              <rect x="374" y="172" width="24" height="16"></rect><rect x="398" y="172" width="24" height="16"></rect><rect x="422" y="172" width="24" height="16"></rect><rect x="446" y="172" width="24" height="16"></rect><rect x="470" y="172" width="24" height="16"></rect><rect x="494" y="172" width="24" height="16"></rect><rect x="518" y="172" width="24" height="16"></rect><rect x="542" y="172" width="24" height="16"></rect><rect x="566" y="172" width="24" height="16"></rect><rect x="590" y="172" width="24" height="16"></rect><rect x="614" y="172" width="24" height="16"></rect><rect x="638" y="172" width="24" height="16"></rect>
+              <rect x="374" y="188" width="24" height="16"></rect><rect x="398" y="188" width="24" height="16"></rect><rect x="422" y="188" width="24" height="16"></rect><rect x="446" y="188" width="24" height="16"></rect><rect x="470" y="188" width="24" height="16"></rect><rect x="494" y="188" width="24" height="16"></rect><rect x="518" y="188" width="24" height="16"></rect><rect x="542" y="188" width="24" height="16"></rect><rect x="566" y="188" width="24" height="16"></rect><rect x="590" y="188" width="24" height="16"></rect><rect x="614" y="188" width="24" height="16"></rect><rect x="638" y="188" width="24" height="16"></rect>
+              <rect x="374" y="204" width="24" height="16"></rect><rect x="398" y="204" width="24" height="16"></rect><rect x="422" y="204" width="24" height="16"></rect><rect x="446" y="204" width="24" height="16"></rect><rect x="470" y="204" width="24" height="16"></rect><rect x="494" y="204" width="24" height="16"></rect><rect x="518" y="204" width="24" height="16"></rect><rect x="542" y="204" width="24" height="16"></rect><rect x="566" y="204" width="24" height="16"></rect><rect x="590" y="204" width="24" height="16"></rect><rect x="614" y="204" width="24" height="16"></rect><rect x="638" y="204" width="24" height="16"></rect>
+              <rect x="374" y="220" width="24" height="16"></rect><rect x="398" y="220" width="24" height="16"></rect><rect x="422" y="220" width="24" height="16"></rect><rect x="446" y="220" width="24" height="16"></rect><rect x="470" y="220" width="24" height="16"></rect><rect x="494" y="220" width="24" height="16"></rect><rect x="518" y="220" width="24" height="16"></rect><rect x="542" y="220" width="24" height="16"></rect><rect x="566" y="220" width="24" height="16"></rect><rect x="590" y="220" width="24" height="16"></rect><rect x="614" y="220" width="24" height="16"></rect><rect x="638" y="220" width="24" height="16"></rect>
+              <rect x="374" y="236" width="24" height="16"></rect><rect x="398" y="236" width="24" height="16"></rect><rect x="422" y="236" width="24" height="16"></rect><rect x="446" y="236" width="24" height="16"></rect><rect x="470" y="236" width="24" height="16"></rect><rect x="494" y="236" width="24" height="16"></rect><rect x="518" y="236" width="24" height="16"></rect><rect x="542" y="236" width="24" height="16"></rect><rect x="566" y="236" width="24" height="16"></rect><rect x="590" y="236" width="24" height="16"></rect><rect x="614" y="236" width="24" height="16"></rect><rect x="638" y="236" width="24" height="16"></rect>
+            </g>
+            <g fill="#037f0c" fill-opacity="0.35">
+              <rect x="374" y="156" width="24" height="16"></rect><rect x="398" y="156" width="24" height="16"></rect><rect x="422" y="172" width="24" height="16"></rect><rect x="470" y="188" width="24" height="16"></rect><rect x="518" y="204" width="24" height="16"></rect><rect x="590" y="220" width="24" height="16"></rect><rect x="638" y="236" width="24" height="16"></rect><rect x="446" y="236" width="24" height="16"></rect><rect x="566" y="156" width="24" height="16"></rect>
+            </g>
+            <g fill="#8d6605" fill-opacity="0.45">
+              <rect x="494" y="172" width="24" height="16"></rect><rect x="518" y="172" width="24" height="16"></rect><rect x="614" y="204" width="24" height="16"></rect>
+            </g>
+            <rect x="374" y="268" width="292" height="10" fill="#e9ebed"></rect>
+            <rect x="374" y="286" width="292" height="6" fill="#e9ebed"></rect>
+            <rect x="374" y="298" width="292" height="6" fill="#e9ebed"></rect>
+            <rect x="374" y="310" width="292" height="6" fill="#e9ebed"></rect>
+            <rect x="374" y="322" width="292" height="6" fill="#e9ebed"></rect>
+            <rect x="374" y="348" width="120" height="8" fill="#414d5c"></rect>
+            <rect x="374" y="364" width="292" height="6" fill="#e9ebed"></rect>
+            <rect x="374" y="376" width="292" height="6" fill="#e9ebed"></rect>
+            <rect x="374" y="388" width="270" height="6" fill="#e9ebed"></rect>
+            <rect x="374" y="400" width="292" height="6" fill="#e9ebed"></rect>
+            <rect x="374" y="412" width="180" height="6" fill="#e9ebed"></rect>
+            <rect x="374" y="436" width="292" height="6" fill="#e9ebed"></rect>
+            <rect x="374" y="448" width="240" height="6" fill="#e9ebed"></rect>
+            <rect x="374" y="478" width="160" height="5" fill="#9ba7b6"></rect>
+          </svg>
+          <span style="font-size: 12px; line-height: 16px; color: #5f6b7a;">보고서 PDF 미리보기 자리 · reports/rp_4a1e/report.pdf</span>
+        </div>
+      </div>
+
+    </main>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

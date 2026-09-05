@@ -1,0 +1,258 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;700&family=Noto+Sans+KR:wght@400;700&display=swap">
+  <style>
+    body { margin: 0; background: #ffffff; }
+    a { color: #0972d3; text-decoration: none; }
+    a:hover { color: #033160; text-decoration: underline; }
+    table { border-collapse: collapse; }
+    *, *::before, *::after { box-sizing: border-box; }
+  </style>
+</helmet>
+<div style="position: relative; width: 1440px; height: 900px; overflow: hidden; background: #ffffff; color: #000716; font-family: 'Open Sans', 'Noto Sans KR', 'Helvetica Neue', Roboto, Arial, sans-serif; font-size: 14px; line-height: 20px; display: flex; flex-direction: column;">
+
+  <header style="display: flex; align-items: center; gap: 24px; height: 44px; flex-shrink: 0; padding: 0 20px; background: #0f1b2a; color: #ffffff;">
+    <a href="#" style="display: flex; align-items: center; gap: 10px; color: #ffffff; font-size: 16px; font-weight: 700; letter-spacing: 0.02em;">
+      <span style="display: flex; align-items: center; justify-content: center; width: 24px; height: 24px;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 17l6-6 4 4 8-8"></path><path d="M14 7h7v7"></path></svg>
+      </span>
+      <span>FLATNESS</span>
+    </a>
+    <div style="display: flex; align-items: center; gap: 20px; margin-left: auto;">
+      <button style="display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 4px; background: transparent; border: 0; color: #d1d5db; font-size: 14px; font-weight: 700; cursor: pointer;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6"></path></svg>
+        <span>[사용자 이메일]</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg>
+      </button>
+    </div>
+  </header>
+
+  <div style="display: flex; flex: 1; min-height: 0;">
+
+    <nav style="display: flex; flex-direction: column; width: 280px; flex-shrink: 0; background: #ffffff; border-right: 1px solid #e9ebed;">
+      <div style="padding: 20px 28px 12px; border-bottom: 1px solid #e9ebed; font-size: 16px; line-height: 20px; font-weight: 700;">평활도 분석 콘솔</div>
+      <div style="display: flex; flex-direction: column; padding: 12px 0;">
+        <a href="#" style="display: flex; align-items: center; padding: 8px 28px; color: #0972d3; font-weight: 700;">현장</a>
+        <a href="#" style="display: flex; align-items: center; padding: 8px 28px; color: #414d5c;">보고서</a>
+        <a href="#" style="display: flex; align-items: center; padding: 8px 28px; color: #414d5c;">업로드</a>
+      </div>
+      <div style="height: 1px; margin: 0 28px; background: #e9ebed;"></div>
+      <div style="display: flex; flex-direction: column; padding: 12px 0;">
+        <a href="#" style="display: flex; align-items: center; padding: 8px 28px; color: #414d5c;">설정</a>
+        <a href="#" style="display: flex; align-items: center; padding: 8px 28px; color: #414d5c;">로그아웃</a>
+      </div>
+    </nav>
+
+    <main style="display: flex; flex-direction: column; gap: 20px; flex: 1; min-width: 0; padding: 20px 40px 40px;">
+
+      <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;">
+        <div style="display: flex; flex-direction: column; gap: 4px;">
+          <h1 style="margin: 0; font-size: 24px; line-height: 30px; font-weight: 700;">현장</h1>
+        </div>
+        <a href="#" style="display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 20px; border: 2px solid #0972d3; border-radius: 20px; color: #0972d3; font-weight: 700; background: transparent;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M4 20h16"></path></svg>
+          <span>스캔 업로드</span>
+        </a>
+      </div>
+
+      <div style="display: flex; flex-direction: column; background: #ffffff; border-radius: 16px; box-shadow: 0 1px 1px 1px #e9ebed, 0 1px 8px 2px rgba(0, 7, 22, 0.12);">
+        <div style="padding: 12px 20px; border-bottom: 1px solid #e9ebed;">
+          <span style="font-size: 18px; line-height: 22px; font-weight: 700;">개요</span>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px; padding: 20px;">
+          <div style="display: flex; flex-direction: column; gap: 4px;">
+            <span style="font-weight: 700;">현장</span>
+            <div style="display: flex; align-items: baseline; gap: 4px;">
+              <span style="font-size: 28px; line-height: 32px; font-weight: 700; font-variant-numeric: tabular-nums;">6</span>
+              <span style="color: #5f6b7a;">곳</span>
+            </div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 4px; padding-left: 20px; border-left: 1px solid #e9ebed;">
+            <span style="font-weight: 700;">스캔</span>
+            <div style="display: flex; align-items: baseline; gap: 4px;">
+              <span style="font-size: 28px; line-height: 32px; font-weight: 700; font-variant-numeric: tabular-nums;">130</span>
+              <span style="color: #5f6b7a;">건</span>
+            </div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 4px; padding-left: 20px; border-left: 1px solid #e9ebed;">
+            <span style="font-weight: 700;">처리 중</span>
+            <div style="display: flex; align-items: baseline; gap: 4px;">
+              <span style="font-size: 28px; line-height: 32px; font-weight: 700; font-variant-numeric: tabular-nums;">3</span>
+              <span style="color: #5f6b7a;">건</span>
+            </div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 8px; padding-left: 20px; border-left: 1px solid #e9ebed;">
+            <span style="font-weight: 700;">판정 분포</span>
+            <div style="display: flex; align-items: baseline; gap: 4px;">
+              <span style="font-size: 28px; line-height: 32px; font-weight: 700; font-variant-numeric: tabular-nums;">123</span>
+              <span style="color: #5f6b7a;">건</span>
+            </div>
+            <div style="display: flex; height: 8px; overflow: hidden; border-radius: 4px; background: #e9ebed;">
+              <div style="width: 75.6%; background: #037f0c;"></div>
+              <div style="width: 17.1%; background: #8d6605;"></div>
+              <div style="width: 7.3%; background: #d91515;"></div>
+            </div>
+            <div style="display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 12px; line-height: 16px; color: #5f6b7a; font-variant-numeric: tabular-nums;">
+              <span style="display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;"><span style="width: 8px; height: 8px; border-radius: 50%; background: #037f0c;"></span>적합 93</span>
+              <span style="display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;"><span style="width: 8px; height: 8px; border-radius: 50%; background: #8d6605;"></span>주의 21</span>
+              <span style="display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;"><span style="width: 8px; height: 8px; border-radius: 50%; background: #d91515;"></span>재시공 9</span>
+              <span style="display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;"><span style="width: 8px; height: 8px; border-radius: 50%; background: #7d8998;"></span>불가 3</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; background: #ffffff; border-radius: 16px; box-shadow: 0 1px 1px 1px #e9ebed, 0 1px 8px 2px rgba(0, 7, 22, 0.12); overflow: hidden;">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 20px;">
+          <div style="display: flex; align-items: baseline; gap: 6px;">
+            <span style="font-size: 18px; line-height: 22px; font-weight: 700;">현장</span>
+            <span style="font-size: 18px; line-height: 22px; color: #5f6b7a;">(6)</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <a href="#" style="display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 20px; border: 2px solid #0972d3; border-radius: 20px; background: #0972d3; color: #ffffff; font-weight: 700;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+              <span>새 현장</span>
+            </a>
+          </div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 12px; padding: 0 20px 12px;">
+          <div style="display: flex; align-items: center; gap: 8px; width: 360px; height: 32px; padding: 0 8px; border: 2px solid #8c8c94; border-radius: 8px; color: #5f6b7a;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg>
+            <span>현장 검색</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 8px 0 12px; border: 2px solid #8c8c94; border-radius: 8px; color: #000716;">
+            <span>판정: 전체</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#5f6b7a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg>
+          </div>
+          <div style="display: flex; align-items: center; gap: 12px; margin-left: auto; color: #5f6b7a;">
+            <span style="display: inline-flex; align-items: center; gap: 8px; font-variant-numeric: tabular-nums;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9ba7b6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"></path></svg>
+              <span style="color: #000716; font-weight: 700;">1</span>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9ba7b6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>
+            </span>
+            <span style="width: 1px; height: 20px; background: #e9ebed;"></span>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0972d3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"></path></svg>
+          </div>
+        </div>
+
+        <table style="width: 100%;">
+          <thead>
+            <tr style="height: 40px; border-bottom: 1px solid #e9ebed; border-top: 1px solid #e9ebed;">
+              <th style="padding: 0 20px; text-align: left; font-weight: 700;">현장명</th>
+              <th style="padding: 0 20px; text-align: right; font-weight: 700;">측정위치</th>
+              <th style="padding: 0 20px; text-align: right; font-weight: 700;">스캔</th>
+              <th style="padding: 0 20px; text-align: left; font-weight: 700;">
+                <span style="display: inline-flex; align-items: center; gap: 6px;">최근 측정일<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#5f6b7a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg></span>
+              </th>
+              <th style="padding: 0 20px; text-align: left; font-weight: 700;">판정 분포 <span style="font-weight: 400; color: #5f6b7a;">적합 · 주의 · 재시공</span></th>
+              <th style="padding: 0 20px; text-align: left; font-weight: 700;">상태</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr style="height: 44px; border-bottom: 1px solid #e9ebed;">
+              <td style="padding: 0 20px;"><a href="#" style="color: #0972d3; font-weight: 700;">세종 M2블록 아파트</a></td>
+              <td style="padding: 0 20px; text-align: right; font-variant-numeric: tabular-nums;">14</td>
+              <td style="padding: 0 20px; text-align: right; font-variant-numeric: tabular-nums;">42</td>
+              <td style="padding: 0 20px; font-family: Monaco, Menlo, Consolas, 'Courier New', monospace; font-size: 13px; color: #414d5c;">2026-09-03</td>
+              <td style="padding: 0 20px;">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                  <div style="display: flex; width: 120px; height: 8px; overflow: hidden; border-radius: 4px; background: #e9ebed;"><div style="width: 79.5%; background: #037f0c;"></div><div style="width: 15.4%; background: #8d6605;"></div><div style="width: 5.1%; background: #d91515;"></div></div>
+                  <span style="font-size: 12px; color: #5f6b7a; font-variant-numeric: tabular-nums;">31 · 6 · 2</span>
+                </div>
+              </td>
+              <td style="padding: 0 20px;">
+                <span style="display: inline-flex; align-items: center; gap: 6px; color: #5f6b7a;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>처리 중 3건</span>
+              </td>
+            </tr>
+            <tr style="height: 44px; border-bottom: 1px solid #e9ebed;">
+              <td style="padding: 0 20px;"><a href="#" style="color: #0972d3; font-weight: 700;">대전 도안 A1블록</a></td>
+              <td style="padding: 0 20px; text-align: right; font-variant-numeric: tabular-nums;">9</td>
+              <td style="padding: 0 20px; text-align: right; font-variant-numeric: tabular-nums;">27</td>
+              <td style="padding: 0 20px; font-family: Monaco, Menlo, Consolas, 'Courier New', monospace; font-size: 13px; color: #414d5c;">2026-09-01</td>
+              <td style="padding: 0 20px;">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                  <div style="display: flex; width: 120px; height: 8px; overflow: hidden; border-radius: 4px; background: #e9ebed;"><div style="width: 76.9%; background: #037f0c;"></div><div style="width: 19.2%; background: #8d6605;"></div><div style="width: 3.8%; background: #d91515;"></div></div>
+                  <span style="font-size: 12px; color: #5f6b7a; font-variant-numeric: tabular-nums;">20 · 5 · 1</span>
+                </div>
+              </td>
+              <td style="padding: 0 20px;">
+                <span style="display: inline-flex; align-items: center; gap: 6px; color: #037f0c;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M8 12.5l2.5 2.5L16 9.5"></path></svg>완료</span>
+              </td>
+            </tr>
+            <tr style="height: 44px; border-bottom: 1px solid #e9ebed;">
+              <td style="padding: 0 20px;"><a href="#" style="color: #0972d3; font-weight: 700;">청주 오송 B2블록</a></td>
+              <td style="padding: 0 20px; text-align: right; font-variant-numeric: tabular-nums;">7</td>
+              <td style="padding: 0 20px; text-align: right; font-variant-numeric: tabular-nums;">21</td>
+              <td style="padding: 0 20px; font-family: Monaco, Menlo, Consolas, 'Courier New', monospace; font-size: 13px; color: #414d5c;">2026-08-28</td>
+              <td style="padding: 0 20px;">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                  <div style="display: flex; width: 120px; height: 8px; overflow: hidden; border-radius: 4px; background: #e9ebed;"><div style="width: 71.4%; background: #037f0c;"></div><div style="width: 19%; background: #8d6605;"></div><div style="width: 9.5%; background: #d91515;"></div></div>
+                  <span style="font-size: 12px; color: #5f6b7a; font-variant-numeric: tabular-nums;">15 · 4 · 2</span>
+                </div>
+              </td>
+              <td style="padding: 0 20px;">
+                <span style="display: inline-flex; align-items: center; gap: 6px; color: #037f0c;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M8 12.5l2.5 2.5L16 9.5"></path></svg>완료</span>
+              </td>
+            </tr>
+            <tr style="height: 44px; border-bottom: 1px solid #e9ebed;">
+              <td style="padding: 0 20px;"><a href="#" style="color: #0972d3; font-weight: 700;">천안 성성 3블록</a></td>
+              <td style="padding: 0 20px; text-align: right; font-variant-numeric: tabular-nums;">5</td>
+              <td style="padding: 0 20px; text-align: right; font-variant-numeric: tabular-nums;">18</td>
+              <td style="padding: 0 20px; font-family: Monaco, Menlo, Consolas, 'Courier New', monospace; font-size: 13px; color: #414d5c;">2026-08-25</td>
+              <td style="padding: 0 20px;">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                  <div style="display: flex; width: 120px; height: 8px; overflow: hidden; border-radius: 4px; background: #e9ebed;"><div style="width: 66.7%; background: #037f0c;"></div><div style="width: 16.7%; background: #8d6605;"></div><div style="width: 16.6%; background: #d91515;"></div></div>
+                  <span style="font-size: 12px; color: #5f6b7a; font-variant-numeric: tabular-nums;">12 · 3 · 3</span>
+                </div>
+              </td>
+              <td style="padding: 0 20px;">
+                <span style="display: inline-flex; align-items: center; gap: 6px; color: #037f0c;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M8 12.5l2.5 2.5L16 9.5"></path></svg>완료</span>
+              </td>
+            </tr>
+            <tr style="height: 44px; border-bottom: 1px solid #e9ebed;">
+              <td style="padding: 0 20px;"><a href="#" style="color: #0972d3; font-weight: 700;">한밭대 시험동</a></td>
+              <td style="padding: 0 20px; text-align: right; font-variant-numeric: tabular-nums;">3</td>
+              <td style="padding: 0 20px; text-align: right; font-variant-numeric: tabular-nums;">12</td>
+              <td style="padding: 0 20px; font-family: Monaco, Menlo, Consolas, 'Courier New', monospace; font-size: 13px; color: #414d5c;">2026-08-20</td>
+              <td style="padding: 0 20px;">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                  <div style="display: flex; width: 120px; height: 8px; overflow: hidden; border-radius: 4px; background: #e9ebed;"><div style="width: 75%; background: #037f0c;"></div><div style="width: 16.7%; background: #8d6605;"></div><div style="width: 8.3%; background: #d91515;"></div></div>
+                  <span style="font-size: 12px; color: #5f6b7a; font-variant-numeric: tabular-nums;">9 · 2 · 1</span>
+                </div>
+              </td>
+              <td style="padding: 0 20px;">
+                <span style="display: inline-flex; align-items: center; gap: 6px; color: #037f0c;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M8 12.5l2.5 2.5L16 9.5"></path></svg>완료</span>
+              </td>
+            </tr>
+            <tr style="height: 44px;">
+              <td style="padding: 0 20px;"><a href="#" style="color: #0972d3; font-weight: 700;">공주 월송 1블록</a></td>
+              <td style="padding: 0 20px; text-align: right; font-variant-numeric: tabular-nums;">4</td>
+              <td style="padding: 0 20px; text-align: right; font-variant-numeric: tabular-nums;">10</td>
+              <td style="padding: 0 20px; font-family: Monaco, Menlo, Consolas, 'Courier New', monospace; font-size: 13px; color: #414d5c;">2026-08-14</td>
+              <td style="padding: 0 20px;">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                  <div style="display: flex; width: 120px; height: 8px; overflow: hidden; border-radius: 4px; background: #e9ebed;"><div style="width: 85.7%; background: #037f0c;"></div><div style="width: 14.3%; background: #8d6605;"></div></div>
+                  <span style="font-size: 12px; color: #5f6b7a; font-variant-numeric: tabular-nums;">6 · 1 · 0</span>
+                </div>
+              </td>
+              <td style="padding: 0 20px;">
+                <span style="display: inline-flex; align-items: center; gap: 6px; color: #8d6605;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l10 18H2L12 3z"></path><path d="M12 10v4M12 17.5v.5"></path></svg>판정 불가 3건</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+    </main>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

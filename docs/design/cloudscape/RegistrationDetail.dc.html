@@ -1,0 +1,183 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;700&family=Noto+Sans+KR:wght@400;700&display=swap">
+  <style>
+    body { margin: 0; background: #ffffff; }
+    a { color: #0972d3; text-decoration: none; }
+    a:hover { color: #033160; text-decoration: underline; }
+    table { border-collapse: collapse; }
+    *, *::before, *::after { box-sizing: border-box; }
+  </style>
+</helmet>
+<div style="position: relative; width: 1440px; height: 1400px; overflow: hidden; background: #ffffff; color: #000716; font-family: 'Open Sans', 'Noto Sans KR', 'Helvetica Neue', Roboto, Arial, sans-serif; font-size: 14px; line-height: 20px; display: flex; flex-direction: column;">
+
+  <header style="display: flex; align-items: center; gap: 24px; height: 44px; flex-shrink: 0; padding: 0 20px; background: #0f1b2a; color: #ffffff;">
+    <a href="#" style="display: flex; align-items: center; gap: 10px; color: #ffffff; font-size: 16px; font-weight: 700; letter-spacing: 0.02em;">
+      <span style="display: flex; align-items: center; justify-content: center; width: 24px; height: 24px;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 17l6-6 4 4 8-8"></path><path d="M14 7h7v7"></path></svg>
+      </span>
+      <span>FLATNESS</span>
+    </a>
+    <div style="display: flex; align-items: center; gap: 20px; margin-left: auto;">
+      <button style="display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 4px; background: transparent; border: 0; color: #d1d5db; font-size: 14px; font-weight: 700; cursor: pointer;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6"></path></svg>
+        <span>[사용자 이메일]</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg>
+      </button>
+    </div>
+  </header>
+
+  <div style="display: flex; flex: 1; min-height: 0;">
+
+    <nav style="display: flex; flex-direction: column; width: 280px; flex-shrink: 0; background: #ffffff; border-right: 1px solid #e9ebed;">
+      <div style="padding: 20px 28px 12px; border-bottom: 1px solid #e9ebed; font-size: 16px; line-height: 20px; font-weight: 700;">평활도 분석 콘솔</div>
+      <div style="display: flex; flex-direction: column; padding: 12px 0;">
+        <a href="#" style="display: flex; align-items: center; padding: 8px 28px; color: #0972d3; font-weight: 700;">현장</a>
+        <a href="#" style="display: flex; align-items: center; padding: 8px 28px; color: #414d5c;">보고서</a>
+        <a href="#" style="display: flex; align-items: center; padding: 8px 28px; color: #414d5c;">업로드</a>
+      </div>
+      <div style="height: 1px; margin: 0 28px; background: #e9ebed;"></div>
+      <div style="display: flex; flex-direction: column; padding: 12px 0;">
+        <a href="#" style="display: flex; align-items: center; padding: 8px 28px; color: #414d5c;">설정</a>
+        <a href="#" style="display: flex; align-items: center; padding: 8px 28px; color: #414d5c;">로그아웃</a>
+      </div>
+    </nav>
+
+    <main style="display: flex; flex-direction: column; gap: 20px; flex: 1; min-width: 0; padding: 20px 40px 40px;">
+
+      <nav style="display: flex; align-items: center; gap: 8px; font-size: 14px;">
+        <a href="#" style="color: #0972d3;">현장</a>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#5f6b7a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>
+        <a href="#" style="color: #0972d3;">세종 M2블록 아파트</a>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#5f6b7a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>
+        <span style="color: #5f6b7a;">101동 / 3층 / 301호 / 거실</span>
+      </nav>
+
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <h1 style="margin: 0; font-size: 24px; line-height: 30px; font-weight: 700;">스캔 정합</h1>
+        <span style="display: inline-flex; align-items: center; gap: 6px; color: #037f0c;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M8 12.5l2.5 2.5L16 9.5"></path></svg>
+          <span>정합 완료</span>
+        </span>
+      </div>
+
+      <div style="display: flex; flex-direction: column; background: #ffffff; border-radius: 16px; box-shadow: 0 1px 1px 1px #e9ebed, 0 1px 8px 2px rgba(0, 7, 22, 0.12);">
+        <div style="padding: 12px 20px; border-bottom: 1px solid #e9ebed;">
+          <span style="font-size: 18px; line-height: 22px; font-weight: 700;">정합 결과</span>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 16px; padding: 20px;">
+
+          <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px;">
+            <div style="display: flex; flex-direction: column; gap: 4px;">
+              <span style="font-weight: 700;">정합 잔차 RMSE</span>
+              <span style="font-family: Monaco, Menlo, Consolas, 'Courier New', monospace; font-variant-numeric: tabular-nums;">0.93 mm</span>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 4px; padding-left: 20px; border-left: 1px solid #e9ebed;">
+              <span style="font-weight: 700;">ICP 반복</span>
+              <span style="font-family: Monaco, Menlo, Consolas, 'Courier New', monospace; font-variant-numeric: tabular-nums;">23</span>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 4px; padding-left: 20px; border-left: 1px solid #e9ebed;">
+              <span style="font-weight: 700;">겹친 영역(추정)</span>
+              <span style="font-family: Monaco, Menlo, Consolas, 'Courier New', monospace; font-variant-numeric: tabular-nums;">89%</span>
+            </div>
+          </div>
+
+          <div style="display: flex; align-items: flex-start; gap: 12px; padding: 12px 16px; border: 2px solid #8d6605; border-radius: 12px; background: #fffce9;">
+            <span style="display: flex; align-items: center; justify-content: center; width: 16px; height: 20px; flex-shrink: 0; color: #8d6605;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l10 18H2L12 3z"></path><path d="M12 10v4M12 17.5v.5"></path></svg>
+            </span>
+            <p style="margin: 0;">이 수치는 수직 방향 일치만 보증합니다. 평탄한 바닥에서는 두 스캔이 수평으로 수 미터 어긋나 있어도 이 값이 1mm 근처로 나옵니다(설계 검증에서 실측한 사실입니다). RMSE는 수직, 아래 겹쳐보기는 수평 - 두 확인은 서로 다른 축을 보며 어느 한쪽이 다른 쪽을 대신하지 못합니다. 이 숫자만 보고 승인하지 마세요.</p>
+          </div>
+
+          <div style="display: flex; align-items: flex-start; gap: 12px; padding: 12px 16px; border: 2px solid #0972d3; border-radius: 12px; background: #f2f8fd;">
+            <span style="display: flex; align-items: center; justify-content: center; width: 16px; height: 20px; flex-shrink: 0; color: #0972d3;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 11v5M12 8v.5"></path></svg>
+            </span>
+            <div style="display: flex; flex-direction: column; gap: 4px;">
+              <p style="margin: 0; font-weight: 700;">수평 검증 가능성: 낮음 (수평 감도 1.084, 기준 1.1)</p>
+              <p style="margin: 0;">바닥이 평탄할수록 이 값은 낮게 나옵니다. 평탄한 면은 자기 위로 밀어도 모양이 같아서, 두 스캔의 수평 위치를 데이터만으로 판별할 정보가 원래 없기 때문입니다. 이 용역의 대상인 ±5mm 평탄 바닥에서는 낮게 나오는 것이 정상이고 흔합니다.</p>
+              <p style="margin: 0;">같은 이유로 아래 겹쳐보기도 이 바닥에서는 신호가 약합니다. 즉 수치로도 그림으로도 수평 방향을 확실히 보장할 수는 없습니다. 대응점을 서로 멀리 떨어뜨려 넓게 분산해 찍은 것이 이 방향의 유일한 보장이므로, 찍은 자리가 두 스캔에서 정말 같은 지점이었는지 되짚어 보세요. 확신이 없으면 대응점을 다시 찍되 더 넓게 흩어 고르세요.</p>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; background: #ffffff; border-radius: 16px; box-shadow: 0 1px 1px 1px #e9ebed, 0 1px 8px 2px rgba(0, 7, 22, 0.12);">
+        <div style="padding: 12px 20px; border-bottom: 1px solid #e9ebed;">
+          <span style="font-size: 18px; line-height: 22px; font-weight: 700;">겹쳐보기 (정합 결과 육안 확인)</span>
+        </div>
+        <div style="display: flex; align-items: flex-start; gap: 20px; padding: 20px;">
+
+          <div style="display: flex; flex-direction: column; gap: 4px; width: 562px; flex-shrink: 0;">
+            <div style="display: flex; border: 1px solid #e9ebed; border-radius: 8px; overflow: hidden; background: #ffffff;">
+              <svg width="560" height="420" viewBox="0 0 560 420" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <rect x="0" y="0" width="560" height="420" fill="#ffffff"></rect>
+                <rect x="40" y="40" width="360" height="280" fill="#0972d3" fill-opacity="0.12"></rect>
+                <rect x="40" y="200" width="40" height="40" fill="#0972d3" fill-opacity="0.4"></rect>
+                <rect x="80" y="80" width="40" height="40" fill="#0972d3" fill-opacity="0.5"></rect>
+                <rect x="120" y="80" width="40" height="40" fill="#0972d3" fill-opacity="0.35"></rect>
+                <rect x="160" y="120" width="40" height="40" fill="#0972d3" fill-opacity="0.6"></rect>
+                <rect x="240" y="160" width="40" height="40" fill="#0972d3" fill-opacity="0.4"></rect>
+                <rect x="280" y="200" width="40" height="40" fill="#0972d3" fill-opacity="0.55"></rect>
+                <rect x="320" y="240" width="40" height="40" fill="#0972d3" fill-opacity="0.3"></rect>
+                <rect x="80" y="240" width="40" height="40" fill="#0972d3" fill-opacity="0.45"></rect>
+                <rect x="80" y="40" width="360" height="280" fill="#037f0c" fill-opacity="0.12"></rect>
+                <rect x="80" y="80" width="40" height="40" fill="#037f0c" fill-opacity="0.5"></rect>
+                <rect x="120" y="80" width="40" height="40" fill="#037f0c" fill-opacity="0.35"></rect>
+                <rect x="160" y="120" width="40" height="40" fill="#037f0c" fill-opacity="0.6"></rect>
+                <rect x="240" y="160" width="40" height="40" fill="#037f0c" fill-opacity="0.4"></rect>
+                <rect x="280" y="200" width="40" height="40" fill="#037f0c" fill-opacity="0.55"></rect>
+                <rect x="320" y="240" width="40" height="40" fill="#037f0c" fill-opacity="0.3"></rect>
+                <rect x="80" y="240" width="40" height="40" fill="#037f0c" fill-opacity="0.45"></rect>
+                <rect x="400" y="120" width="40" height="40" fill="#037f0c" fill-opacity="0.5"></rect>
+                <rect x="400" y="280" width="40" height="40" fill="#037f0c" fill-opacity="0.35"></rect>
+                <path d="M40 0V420M80 0V420M120 0V420M160 0V420M200 0V420M240 0V420M280 0V420M320 0V420M360 0V420M400 0V420M440 0V420M480 0V420M520 0V420M0 40H560M0 80H560M0 120H560M0 160H560M0 200H560M0 240H560M0 280H560M0 320H560M0 360H560M0 400H560" fill="none" stroke="#e9ebed" stroke-width="1"></path>
+                <rect x="40.5" y="40.5" width="359" height="279" fill="none" stroke="#0972d3" stroke-width="1"></rect>
+                <rect x="80.5" y="40.5" width="359" height="279" fill="none" stroke="#037f0c" stroke-width="1" stroke-dasharray="4 3"></rect>
+              </svg>
+            </div>
+            <span style="font-size: 12px; line-height: 16px; color: #5f6b7a;">산출물 PNG 자리 (높이 뷰 A 위에 B를 겹쳐 그림)</span>
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 12px; flex: 1; min-width: 0;">
+            <div style="display: flex; align-items: center; gap: 8px; font-size: 12px; line-height: 16px; color: #5f6b7a;">
+              <span style="white-space: nowrap;">맞춘 스캔(B) 진하기</span>
+              <div style="display: flex; align-items: center; width: 160px; height: 16px;">
+                <div style="width: 79px; height: 4px; border-radius: 2px 0 0 2px; background: #0972d3;"></div>
+                <div style="width: 16px; height: 16px; flex-shrink: 0; border: 2px solid #0972d3; border-radius: 50%; background: #ffffff; box-sizing: border-box;"></div>
+                <div style="flex: 1; height: 4px; border-radius: 0 2px 2px 0; background: #e9ebed;"></div>
+              </div>
+              <span style="font-variant-numeric: tabular-nums;">55%</span>
+            </div>
+            <p style="margin: 0; font-size: 12px; line-height: 16px; color: #5f6b7a;">슬라이더를 좌우로 움직이며 두 그림의 벽·기둥·모서리 같은 특징이 같은 자리에 오는지 보세요. 겹쳐지지 않고 나란히 밀려 있으면 수평으로 어긋난 정합입니다.</p>
+            <div style="padding: 12px 16px; border: 1px solid #e9ebed; border-radius: 12px; font-size: 12px; line-height: 16px; color: #414d5c;">겹쳐보기의 한계: 미터급 어긋남은 확실히 드러나지만 수십 cm급은 정합된 것과 구별하기 어렵습니다(실측 30cm 오정합의 무늬 상관 0.840 대 정합 0.896). 평탄해서 벽·기둥·요철 같은 특징이 없는 바닥일수록 그렇습니다 - 수평 감도가 낮게 나오는 바닥이 정확히 이 경우입니다. 이 방향의 보장은 결국 대응점을 넓게 분산해 찍었는가에 달려 있습니다.</div>
+          </div>
+
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 12px; padding: 12px 20px; border-top: 1px solid #e9ebed;">
+          <label style="display: flex; align-items: center; gap: 8px;">
+            <span style="width: 16px; height: 16px; flex-shrink: 0; border: 2px solid #8c8c94; border-radius: 2px; background: #ffffff; box-sizing: border-box;"></span>
+            <span>겹쳐보기에서 두 스캔이 실제로 포개지는 것을 확인했습니다.</span>
+          </label>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="display: inline-flex; align-items: center; height: 32px; padding: 0 20px; border: 2px solid #9ba7b6; border-radius: 20px; color: #9ba7b6; font-weight: 700; background: transparent;">병합 스캔 열기</span>
+            <a href="#" style="display: inline-flex; align-items: center; height: 32px; padding: 0 20px; border: 2px solid #0972d3; border-radius: 20px; color: #0972d3; font-weight: 700; background: transparent;">대응점 다시 찍기</a>
+          </div>
+          <p style="margin: 0; font-size: 12px; line-height: 16px; color: #5f6b7a;">병합 스캔은 정합이 성공한 시점에 이미 만들어져 있습니다(데이터 계보 "정합 병합"). 위 확인은 이 화면의 안내 장치일 뿐 시스템 차원의 승인 절차가 아닙니다. 체크하지 않아도 병합 스캔은 측정위치 목록과 스캔 상세에 이미 나타나 있고, 스캔 상세의 "평활도 분석" 버튼을 누르면 이 겹쳐보기를 한 번도 보지 않은 채로 분석이 시작됩니다. 그러니 이 정합을 쓰지 않기로 했다면 아래 "대응점 다시 찍기"로 병합 스캔을 정리하세요.</p>
+        </div>
+      </div>
+
+    </main>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>
