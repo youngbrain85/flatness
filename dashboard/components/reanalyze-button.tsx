@@ -248,7 +248,11 @@ export function SlopeCriteriaField({ ctl }: { ctl: ReanalyzeControl }) {
 
 // 평활도 컨테이너의 헤더 액션(기준 라디오가 없는 쪽)은 이 버튼 하나로 끝난다.
 // 구배는 라디오가 본문으로 가야 해서 SlopeAnalysisContainer가 두 조각을 직접 배치한다.
-export function ReanalyzeButton(props: Props) {
+//
+// 최종 리뷰 Important 4: kind를 AnalysisKind로 열어 두면 kind="slope"로 부를 수 있는데,
+// 그러면 훅이 기준 후보를 불러 is_default로 버튼만 활성화되고 정작 라디오(SlopeCriteriaField)는
+// 그려지지 않는다 - N1 계열 함정이 타입으로 되살아난다. 이 래퍼는 평활도 전용으로 좁힌다.
+export function ReanalyzeButton(props: Omit<Props, 'kind'> & { kind: 'flatness' }) {
   const ctl = useReanalyze(props);
   return <ReanalyzeAction ctl={ctl} />;
 }

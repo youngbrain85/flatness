@@ -18,22 +18,17 @@ import { Container } from '@/components/ui/container';
 import { KeyValuePairs } from '@/components/ui/key-value';
 import { PAGE_MAIN } from '@/components/ui/page';
 import { PageHeader } from '@/components/ui/page-header';
-import { StatusIndicator, type StatusType } from '@/components/ui/status-indicator';
+import { SCAN_STATUS_TYPE, StatusIndicator } from '@/components/ui/status-indicator';
 import {
   ANALYSIS_KIND_LABEL, ANALYSIS_STATUS_LABEL, GRADE_LABEL, LINEAGE_LABEL,
   SCAN_STATUS_LABEL, SURFACE_LABEL,
 } from '@/lib/domain/labels';
 import { GRADE_TONE } from '@/lib/domain/grade-tone';
 import { isExternalImport, isSlopeStats } from '@/lib/domain/stats';
-import type { AnalysisRow, LocationRow, PhotoRow, ScanRow, ScanStatus, SiteRow } from '@/lib/domain/types';
+import type { AnalysisRow, LocationRow, PhotoRow, ScanRow, SiteRow } from '@/lib/domain/types';
 
-// 스캔 상태 → StatusIndicator 타입(표시 매핑, 스캔 정보의 '상태' 칸). 종결(ready)=success,
-// 실패=error, 사전 검사 대기(uploaded)=in-progress(워커가 곧 처리), 사용자 입력 대기·
-// 보관=pending. 아트보드: UnitConfirm '단위 확인 대기' minus-circle, Done '분석 준비됨' check.
-const SCAN_STATUS_TYPE: Record<ScanStatus, StatusType> = {
-  uploaded: 'in-progress', awaiting_unit_confirm: 'pending', ready: 'success',
-  archived: 'pending', failed: 'error',
-};
+// 최종 리뷰 Important 2: 스캔 상태 → StatusIndicator 타입 표는 측정위치 트리와 공유해야
+// 같은 스캔이 두 화면에서 같은 아이콘을 단다 - components/ui/status-indicator.tsx로 옮겼다.
 
 // Realtime 감시가 필요한 진행 중 상태(리뷰 Important 2) — ready/archived/failed는
 // 이미 종결됐거나(ready는 이 화면 자체에서 동기적으로 전이시킨 값) 더 이상 워커가

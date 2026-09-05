@@ -5,8 +5,10 @@ import type { ReactNode } from 'react';
 export const tableClass = {
   table: 'w-full border-collapse text-sm',
   thead: 'border-y border-cs-divider text-left',
-  th: 'h-10 px-5 font-bold',
-  thNum: 'h-10 px-5 text-right font-bold',
+  // 최종 리뷰 Important 5: 헤더 문구는 줄바꿈하지 않는다 - '표면 · 버전'처럼 가운뎃점으로
+  // 이은 헤더가 1440에서도 2줄로 꺾여 헤더 높이 40px 규칙이 깨졌다(설정 화면 실측).
+  th: 'h-10 whitespace-nowrap px-5 font-bold',
+  thNum: 'h-10 whitespace-nowrap px-5 text-right font-bold',
   td: 'h-11 px-5',
   tdNum: 'h-11 px-5 text-right font-mono tabular-nums',
   row: 'border-b border-cs-divider last:border-b-0',

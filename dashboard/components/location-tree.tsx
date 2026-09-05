@@ -1,11 +1,13 @@
 import Link from 'next/link';
 import type { BuildingNode } from '@/lib/domain/tree';
-import type { AnalysisStatus, ScanRow, Verdict } from '@/lib/domain/types';
+import type { AnalysisStatus, ScanRow, ScanStatus, Verdict } from '@/lib/domain/types';
 import { GRADE_LABEL, SCAN_STATUS_LABEL, SURFACE_LABEL } from '@/lib/domain/labels';
 import { GRADE_TONE } from '@/lib/domain/grade-tone';
 import { LinkButton } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icons';
-import { StatusIndicator, TONE_STATUS } from '@/components/ui/status-indicator';
+import {
+  SCAN_STATUS_TYPE, StatusIndicator, TONE_STATUS, type StatusType,
+} from '@/components/ui/status-indicator';
 
 export interface ScanWithCurrent extends ScanRow {
   current?: { id: string; status: AnalysisStatus; overall_verdict: Verdict | null };
@@ -13,6 +15,15 @@ export interface ScanWithCurrent extends ScanRow {
 
 // 카드 안 텍스트 링크(브레드크럼과 같은 cs-link 규칙)
 const TEXT_LINK = 'text-cs-link hover:text-cs-link-hover hover:underline';
+
+// 최종 리뷰 Important 2: 미분석 스캔의 상태 아이콘. 아트보드(SiteDetail.dc.html 137·161행)의
+// 트리 행은 '업로드됨'·'분석 준비됨'만 시계로 그린다 - 트리에서 '분석 준비됨'은 "아직 분석
+// 결과가 없다"는 뜻이라 이 화면에서는 종결이 아니기 때문이다. 그 두 상태만 예외로 두고
+// 나머지(failed·archived·awaiting_unit_confirm)는 스캔 상세와 같은 표를 쓴다 - 예전에는
+// 전부 시계라 '실패'·'보관됨'에도 시계가 붙어 같은 스캔이 두 화면에서 달라 보였다.
+function treeScanStatusType(status: ScanStatus): StatusType {
+  return status === 'ready' || status === 'uploaded' ? 'in-progress' : SCAN_STATUS_TYPE[status];
+}
 
 // 아트보드(SiteDetail): 동 › 층 › 공간 소제목이 1px 세로선 + 20px로 들여쓰기되고,
 // 측정위치는 1px cs-divider · 8px 라운드 카드다. 카드 안 버튼은 전부 normal(뷰의 primary는 '위치 추가').
@@ -77,7 +88,7 @@ export function LocationTree({ tree, scansByLocation, siteId }: {
                                       <StatusIndicator type={TONE_STATUS.fail}>분석 실패</StatusIndicator>
                                     ) : (
                                       // 미분석 스캔의 상태 라벨(옛 neutral 배지): 아트보드대로 clock 아이콘 + 보조색
-                                      <StatusIndicator type="in-progress">{SCAN_STATUS_LABEL[s.status]}</StatusIndicator>
+                                      <StatusIndicator type={treeScanStatusType(s.status)}>{SCAN_STATUS_LABEL[s.status]}</StatusIndicator>
                                     )}
                                   </Link>
                                 </li>

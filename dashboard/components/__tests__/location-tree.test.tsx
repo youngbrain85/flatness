@@ -72,6 +72,23 @@ describe('LocationTree (Cloudscape 재스킨: StatusIndicator + 카드 + 액션)
     expect(screen.getByText(label).getAttribute('data-status')).toBe(status);
   });
 
+  // 최종 리뷰 Important 2: 미분석 스캔의 상태 아이콘을 스캔 상세와 공유한다. 예전에는
+  // SCAN_STATUS_LABEL 전체를 in-progress(시계)에 태워 '실패'·'보관됨'에도 시계가 붙었고,
+  // 같은 스캔이 스캔 상세에서는 error/pending으로 보였다. 아트보드(SiteDetail 137·161행)가
+  // 시계로 그리는 '업로드됨'·'분석 준비됨'만 in-progress로 남는다.
+  const statusCases: [ScanWithCurrent['status'], string, string][] = [
+    ['ready', '분석 준비됨', 'in-progress'],
+    ['uploaded', '업로드됨', 'in-progress'],
+    ['failed', '실패', 'error'],
+    ['archived', '보관됨', 'pending'],
+    ['awaiting_unit_confirm', '단위 확인 대기', 'pending'],
+  ];
+  it.each(statusCases)('미분석 스캔 상태 %s("%s")는 data-status=%s로 그린다', (status, label, expected) => {
+    const scansByLocation = new Map([['l1', [{ ...scan('c1', 'l1', undefined), status }]]]);
+    render(<LocationTree tree={tree(loc)} scansByLocation={scansByLocation} siteId="s1" />);
+    expect(screen.getByText(label).getAttribute('data-status')).toBe(expected);
+  });
+
   it('동(700) › 층(nav-text 700) › 공간(보조색) 소제목 아래 측정위치 카드(1px cs-divider, 8px 라운드)', () => {
     render(<LocationTree tree={tree(loc)} scansByLocation={new Map()} siteId="s1" />);
     expect(screen.getByText('A동').className).toContain('font-bold');

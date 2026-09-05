@@ -51,10 +51,17 @@ export function ReportActions({ report }: {
     router.refresh();
   }
 
-  // 페이지 헤더의 액션 슬롯(우측)에 놓인다 - 버튼 줄 아래로 발행 안내·메시지·오류가 펼쳐지므로
-  // 세로 컬럼을 우측 정렬한다. 아트보드 ReportDetail: PDF 다운로드 · PDF 다시 생성 · 발행(primary).
+  // 페이지 헤더의 액션 슬롯(우측)에 놓인다. 아트보드 ReportDetail(63-79행)의 헤더는
+  // 삭제 · PDF 다운로드 · PDF 다시 생성 · 발행(primary)이 8px 간격 한 줄이다.
+  //
+  // 최종 리뷰 Important 5: 예전에는 이 컴포넌트가 자기 열(flex-col)을 만들어 그 안에 버튼
+  // 줄과 안내문을 쌓았다. 그러면 삭제 버튼(호출부가 그리는 형제)과 이 열이 나란한 두 칸이
+  // 되고, 열의 폭은 긴 안내문이 정하므로 삭제만 왼쪽으로 멀찍이 밀려났다(실측: 삭제 x≈450,
+  // PDF 다운로드 x≈730). 열을 없애고 프래그먼트로 돌려주면 버튼들이 호출부의
+  // flex-wrap 줄(app/reports/[id]/page.tsx)에 직접 놓여 삭제와 8px로 붙고, 안내문 블록은
+  // basis-full로 그 줄 아래 한 줄을 통째로 차지한다 - 버튼 줄의 폭에 전혀 관여하지 않는다.
   return (
-    <div className="flex flex-col items-end gap-2">
+    <>
       <div className="flex flex-wrap items-center justify-end gap-2">
         {report.pdf_path && (
           <a href={dataUrl(report.pdf_path)} download className={buttonClass('normal')}>
@@ -72,14 +79,20 @@ export function ReportActions({ report }: {
           <Button variant="primary" onClick={finalize} disabled={busy}>발행</Button>
         )}
       </div>
-      {report.status === 'finalized' && (
-        <p className="text-xs leading-4 text-cs-text-secondary">
-          발행된 보고서는 수정할 수 없습니다(내용 변경은 DB에서 차단됩니다). 내용을 바꾸려면 새 보고서를 만드세요.
-        </p>
+      {/* 안내문·메시지·오류는 버튼 줄 아래 한 줄(basis-full)에 우측 정렬로 모은다. 폭은
+          버튼 줄과 무관하지만 헤더에서 읽는 글이므로 max-w-sm으로 묶어 오른쪽에 붙인다. */}
+      {(report.status === 'finalized' || message || error) && (
+        <div className="flex basis-full flex-col items-end gap-2">
+          {report.status === 'finalized' && (
+            <p className="max-w-sm text-right text-xs leading-4 text-cs-text-secondary">
+              발행된 보고서는 수정할 수 없습니다(내용 변경은 DB에서 차단됩니다). 내용을 바꾸려면 새 보고서를 만드세요.
+            </p>
+          )}
+          {/* 최종 리뷰 M3: 발행 성공은 판정이 아니라 시스템 메시지이므로 판정색을 쓰지 않는다 - 보조색 텍스트. */}
+          {message && <p className="max-w-sm text-right text-sm text-cs-text-secondary">{message}</p>}
+          {error && <Alert type="error" className="max-w-sm">{error}</Alert>}
+        </div>
       )}
-      {/* 최종 리뷰 M3: 발행 성공은 판정이 아니라 시스템 메시지이므로 판정색을 쓰지 않는다 - 보조색 텍스트. */}
-      {message && <p className="text-sm text-cs-text-secondary">{message}</p>}
-      {error && <Alert type="error" className="max-w-lg">{error}</Alert>}
-    </div>
+    </>
   );
 }

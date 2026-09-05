@@ -128,12 +128,39 @@ describe('ui primitives (Cloudscape 해부)', () => {
     expect(screen.getByRole('button', { name: '저장' })).toBeInTheDocument();
   });
 
-  it('KeyValuePairs: 두 번째 열부터 세로 구분선, 라벨 700', () => {
+  // 최종 리뷰 Important 1: 375px에서 열이 접히는지, 구분선이 "열이 실제로 갈라지는"
+  // 폭에서만 붙는지를 본다. 'md:border-l'도 문자열로는 'border-l'을 포함하므로
+  // toContain으로는 접두사 붙은 클래스와 맨 클래스를 구별하지 못한다 - 토큰으로 쪼갠다.
+  const hasClass = (el: Element, c: string) => el.className.split(' ').includes(c);
+
+  it('KeyValuePairs(2열): 좁은 폭에서 1열로 접히고 구분선은 sm 이상에서만', () => {
     const { container } = render(<KeyValuePairs columns={2} items={[{ label: '현장', value: '6' }, { label: '스캔', value: '130' }]} />);
+    expect(container.querySelector('dl')?.className).toContain('grid-cols-1');
+    expect(container.querySelector('dl')?.className).toContain('sm:grid-cols-2');
     const cells = container.querySelectorAll('dl > div');
     expect(cells[0].className).not.toContain('border-l');
-    expect(cells[1].className).toContain('border-l');
+    // 1열로 접힌 폭에서는 구분선이 없어야 한다(맨 border-l 금지), sm부터 붙는다.
+    expect(hasClass(cells[1], 'border-l')).toBe(false);
+    expect(hasClass(cells[1], 'sm:border-l')).toBe(true);
+    expect(hasClass(cells[1], 'sm:pl-5')).toBe(true);
     expect(screen.getByText('현장').className).toContain('font-bold');
+  });
+
+  it('KeyValuePairs(4열): 375px에서 2열로 접히고 구분선이 그 폭을 따라간다', () => {
+    const items = ['a', 'b', 'c', 'd'].map((label) => ({ label, value: '1' }));
+    const { container } = render(<KeyValuePairs columns={4} items={items} />);
+    expect(container.querySelector('dl')?.className).toContain('grid-cols-2');
+    expect(container.querySelector('dl')?.className).toContain('md:grid-cols-4');
+    const cells = container.querySelectorAll('dl > div');
+    // 2열 모드에서 각 줄의 첫 칸(0·2)에는 구분선이 없고, 두 번째 칸(1·3)에만 붙는다.
+    expect(hasClass(cells[0], 'border-l')).toBe(false);
+    expect(hasClass(cells[2], 'border-l')).toBe(false);
+    expect(hasClass(cells[1], 'border-l')).toBe(true);
+    expect(hasClass(cells[3], 'border-l')).toBe(true);
+    // 4열이 되는 md부터는 0번을 뺀 전부에 붙는다.
+    expect(hasClass(cells[0], 'md:border-l')).toBe(false);
+    expect(hasClass(cells[2], 'md:border-l')).toBe(true);
+    expect(hasClass(cells[2], 'md:pl-5')).toBe(true);
   });
   it('StatValue: 28px 700 tabular 수치 + 보조색 단위', () => {
     render(<StatValue value={130} unit="건" />);
@@ -144,6 +171,9 @@ describe('ui primitives (Cloudscape 해부)', () => {
   it('tableClass: 헤더 40px 700, 행 44px, 셀 padding 20px, 수치 열 mono 우측', () => {
     expect(tableClass.th).toContain('h-10');
     expect(tableClass.th).toContain('font-bold');
+    // 최종 리뷰 Important 5: '표면 · 버전' 같은 헤더가 1440에서 2줄로 꺾이면 h-10이 무의미해진다.
+    expect(tableClass.th).toContain('whitespace-nowrap');
+    expect(tableClass.thNum).toContain('whitespace-nowrap');
     expect(tableClass.td).toContain('h-11');
     expect(tableClass.td).toContain('px-5');
     expect(tableClass.tdNum).toContain('font-mono');

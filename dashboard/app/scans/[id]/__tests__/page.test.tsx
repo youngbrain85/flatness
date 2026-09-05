@@ -106,8 +106,18 @@ function analysisSections(node: unknown): El[] {
 // 렌더되므로(서버 트리에는 안 보인다) 그 게이트 prop을 본다 - page.tsx가 옛
 // `user && showSlopeButton`을 그대로 넘긴다. C1 가드(임포트 스캔에 구배 분석을
 // 걸면 안 된다)를 페이지 레벨에서 잡는 자리가 여기다.
-function slopeButtonShown(node: unknown): boolean {
-  return findAll(node, SlopeAnalysisContainer).some((c) => c.props.showButton === true);
+//
+// 최종 리뷰 Important 3: 예전에는 컨테이너가 아예 없을 때도 false를 돌려줬다. 그래서
+// "구배 섹션이 렌더되지 않는" 픽스처(임포트 케이스 포함)는 게이트를 한 번도 관측하지
+// 않고 toBe(false)를 통과했다 - 같은 초록이 "게이트가 막았다"와 "볼 것이 없었다" 둘 다를
+// 뜻해 어느 쪽인지 말해 주지 않았다. 지금 배선에서는 showSlopeSection이 showSlopeButton에
+// 걸려 있어 가드를 지우면 섹션도 함께 나타나므로 옛 단언들도 (우연히) 빨개지지만, 그
+// 결합이 끊기는 순간 조용히 공허해진다. 컨테이너가 없으면 null을 돌려 두 경우를 테스트가
+// 문장으로 구분하게 하고, 아래 'C1 대조군'이 "섹션은 있고 게이트는 닫혔다"를 직접 못박는다.
+function slopeButtonShown(node: unknown): boolean | null {
+  const containers = findAll(node, SlopeAnalysisContainer);
+  if (containers.length === 0) return null;
+  return containers.some((c) => c.props.showButton === true);
 }
 
 function chain(result: { data: unknown; error: null }) {
@@ -184,7 +194,8 @@ describe('ScanPage 종류별 분석 섹션 배선 (단계 C 회귀 차단)', () 
     expect(buttons[0].props.kind).toBe('flatness');
     // T6 리뷰 수정 1차: 구배 버튼은 SlopeAnalysisContainer가 그리므로 ReanalyzeButton
     // 개수만으로는 더 이상 "구배 버튼이 없다"를 증명하지 못한다 - 게이트를 직접 본다.
-    expect(slopeButtonShown(el)).toBe(false);
+    // 이 픽스처에는 구배 분석이 없어 섹션 자체가 그려지지 않는다(게이트 미관측 = null).
+    expect(slopeButtonShown(el)).toBeNull();
   });
 
   it('임포트 결과 스캔이면 구배 버튼을 렌더하지 않는다', async () => {
@@ -199,11 +210,36 @@ describe('ScanPage 종류별 분석 섹션 배선 (단계 C 회귀 차단)', () 
     expect(buttons[0].props.kind).toBe('flatness');
     // T6 리뷰 수정 1차: 구배 버튼은 SlopeAnalysisContainer가 그리므로 ReanalyzeButton
     // 개수만으로는 더 이상 "구배 버튼이 없다"를 증명하지 못한다 - 게이트를 직접 본다.
-    expect(slopeButtonShown(el)).toBe(false);
+    // 이 픽스처에는 구배 분석이 없어 섹션 자체가 그려지지 않는다(게이트 미관측 = null).
+    expect(slopeButtonShown(el)).toBeNull();
     // 리뷰 Important(I2): 버튼 개수만 세면 isImport 배선 자체는 검증되지 않는다.
     // 이 값이 틀어지면 임포트 스캔 재분석이 'analyze' 잡으로 나가 Colab 편차값이
     // 통째로 무시되고 전 셀이 조용히 "적합"이 된다(C1 사고 계열).
     expect(buttons[0].props.isImport).toBe(true);
+  });
+
+  // 최종 리뷰 Important 3: 위 임포트 테스트는 구배 분석이 없어 섹션 자체가 안 그려지므로
+  // C1 게이트(!isImportUnknownOrTrue)를 한 번도 관측하지 못한다. 완료된 구배 분석을 함께
+  // 두면 섹션은 latestSlope만으로 반드시 그려지고(showSlopeSection = !!latestSlope || …),
+  // 그때 showButton 값이 곧 C1 가드의 값이다 - 섹션 렌더 여부에 기대지 않는 단언이 된다.
+  // "증명된 임포트" 경로(engine_version='external-colab-v1')에서 게이트를 실제로 관측하는
+  // 유일한 픽스처다. H(재리뷰)는 섹션이 그려지지만 doneFlatness가 없는 "판별 불가" 경로다.
+  it('C1 대조군: 증명된 임포트 스캔은 구배 섹션이 그려져도 버튼 게이트가 닫혀 있다', async () => {
+    const importFlatness = mkAnalysis({
+      id: 'f1', kind: 'flatness', status: 'done', engine_version: 'external-colab-v1',
+      created_at: '2026-07-20T00:00:00Z',
+    });
+    const doneSlope = mkAnalysis({
+      id: 's1', kind: 'slope', status: 'done', created_at: '2026-07-21T00:00:00Z',
+    });
+    vi.mocked(createClient).mockResolvedValue(
+      stubSupabase(mkScan(), [importFlatness, doneSlope]) as never);
+
+    const el = await ScanPage(pageProps());
+
+    // 섹션은 실제로 렌더된다 - null(게이트 미관측)이 아니라 false(게이트가 막았다)임을 보장한다.
+    expect(findAll(el, SlopeAnalysisContainer)).toHaveLength(1);
+    expect(slopeButtonShown(el)).toBe(false);
   });
 
   // 리뷰 Important(I1): isExternalImport는 engine_version/stats.meta.source로만
@@ -226,7 +262,8 @@ describe('ScanPage 종류별 분석 섹션 배선 (단계 C 회귀 차단)', () 
     expect(buttons[0].props.kind).toBe('flatness');
     // T6 리뷰 수정 1차: 구배 버튼은 SlopeAnalysisContainer가 그리므로 ReanalyzeButton
     // 개수만으로는 더 이상 "구배 버튼이 없다"를 증명하지 못한다 - 게이트를 직접 본다.
-    expect(slopeButtonShown(el)).toBe(false);
+    // 이 픽스처에는 구배 분석이 없어 섹션 자체가 그려지지 않는다(게이트 미관측 = null).
+    expect(slopeButtonShown(el)).toBeNull();
   });
 
   it('I1 실험군 B: 임포트 분석이 failed면 구배 버튼을 숨긴다', async () => {
@@ -241,7 +278,8 @@ describe('ScanPage 종류별 분석 섹션 배선 (단계 C 회귀 차단)', () 
     expect(buttons[0].props.kind).toBe('flatness');
     // T6 리뷰 수정 1차: 구배 버튼은 SlopeAnalysisContainer가 그리므로 ReanalyzeButton
     // 개수만으로는 더 이상 "구배 버튼이 없다"를 증명하지 못한다 - 게이트를 직접 본다.
-    expect(slopeButtonShown(el)).toBe(false);
+    // 이 픽스처에는 구배 분석이 없어 섹션 자체가 그려지지 않는다(게이트 미관측 = null).
+    expect(slopeButtonShown(el)).toBeNull();
   });
 
   it('I1 실험군 C: 완료된 임포트 분석을 재분석해 새 행이 queued로 latest가 되면 구배 버튼을 숨긴다', async () => {
@@ -267,7 +305,8 @@ describe('ScanPage 종류별 분석 섹션 배선 (단계 C 회귀 차단)', () 
     expect(buttons[0].props.kind).toBe('flatness');
     // T6 리뷰 수정 1차: 구배 버튼은 SlopeAnalysisContainer가 그리므로 ReanalyzeButton
     // 개수만으로는 더 이상 "구배 버튼이 없다"를 증명하지 못한다 - 게이트를 직접 본다.
-    expect(slopeButtonShown(el)).toBe(false);
+    // 이 픽스처에는 구배 분석이 없어 섹션 자체가 그려지지 않는다(게이트 미관측 = null).
+    expect(slopeButtonShown(el)).toBeNull();
   });
 
   // 재리뷰 I-new: 1차 수정(latestFlatness.status==='done' 요구)이 임포트 오판은
@@ -289,7 +328,8 @@ describe('ScanPage 종류별 분석 섹션 배선 (단계 C 회귀 차단)', () 
     expect(buttons[0].props.kind).toBe('flatness');
     // T6 리뷰 수정 1차: 구배 버튼은 SlopeAnalysisContainer가 그리므로 ReanalyzeButton
     // 개수만으로는 더 이상 "구배 버튼이 없다"를 증명하지 못한다 - 게이트를 직접 본다.
-    expect(slopeButtonShown(el)).toBe(false);
+    // 이 픽스처에는 구배 분석이 없어 섹션 자체가 그려지지 않는다(게이트 미관측 = null).
+    expect(slopeButtonShown(el)).toBeNull();
   });
 
   it('F(재리뷰): 정상 스캔의 첫 평활도 분석이 failed면(완료된 분석 없음) 구배 버튼을 숨긴다', async () => {
@@ -304,7 +344,8 @@ describe('ScanPage 종류별 분석 섹션 배선 (단계 C 회귀 차단)', () 
     expect(buttons[0].props.kind).toBe('flatness');
     // T6 리뷰 수정 1차: 구배 버튼은 SlopeAnalysisContainer가 그리므로 ReanalyzeButton
     // 개수만으로는 더 이상 "구배 버튼이 없다"를 증명하지 못한다 - 게이트를 직접 본다.
-    expect(slopeButtonShown(el)).toBe(false);
+    // 이 픽스처에는 구배 분석이 없어 섹션 자체가 그려지지 않는다(게이트 미관측 = null).
+    expect(slopeButtonShown(el)).toBeNull();
   });
 
   it('E2(재리뷰): 평활도 재분석이 queued여도 옛 완료 분석이 LiDAR임을 증명하면 구배 버튼이 살아 있다', async () => {

@@ -2,7 +2,9 @@
 // 화면의 모든 아이콘은 이 컴포넌트를 거친다. data-icon으로 테스트가 식별한다.
 import type { ReactNode, SVGProps } from 'react';
 
-const PATHS: Record<string, ReactNode> = {
+// 최종 리뷰 Important 4(T1): Record<string, …>이면 IconName에 이름을 더해도 PATHS 누락이
+// 컴파일에 안 걸려 아이콘이 조용히 빈 svg로 나간다. IconName으로 키를 좁혀 전수 강제한다.
+const PATHS: Record<IconName, ReactNode> = {
   'check-circle': <><circle cx="12" cy="12" r="9" /><path d="M8 12.5l2.5 2.5L16 9.5" /></>,
   'alert-triangle': <><path d="M12 3l10 18H2L12 3z" /><path d="M12 10v4M12 17.5v.5" /></>,
   'x-circle': <><circle cx="12" cy="12" r="9" /><path d="M15 9l-6 6M9 9l6 6" /></>,

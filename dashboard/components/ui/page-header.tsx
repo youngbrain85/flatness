@@ -12,7 +12,9 @@ export function PageHeader({ crumbs, title, description, actions }: {
           <h1 className="text-2xl font-bold leading-[30px]">{title}</h1>
           {description && <p className="text-sm text-cs-text-secondary">{description}</p>}
         </div>
-        {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
+        {/* 최종 리뷰 Important 5: shrink-0이면 액션 블록의 intrinsic 폭(보고서 상세의
+            발행 안내문 등)이 그대로 자리를 차지해 제목을 밀어낸다 - 줄어들 수 있게 둔다. */}
+        {actions && <div className="flex max-w-full items-center gap-2">{actions}</div>}
       </div>
     </div>
   );
