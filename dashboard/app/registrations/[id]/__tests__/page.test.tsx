@@ -167,29 +167,33 @@ describe('RegistrationPage 브레드크럼 (D8)', () => {
     const header = findByType(el, PageHeader);
 
     expect(header).not.toBeNull();
-    const props = header!.props as { crumbs: { href?: string; label: string }[]; title: string };
+    const props = header!.props as { crumbs: { href?: string; label: string }[]; title: unknown };
     expect(props.crumbs).toEqual([
       { href: '/', label: '현장' },
       { href: '/sites/s1', label: '본관 현장' },
       { label: '본관 / 1층 / 로비 / 로비' },
     ]);
-    expect(props.title).toBe('스캔 정합');
+    expect(textOf(props.title)).toContain('스캔 정합');
   });
 
-  // 아트보드 RegistrationDetail: h1 옆 진행 상태는 배지가 아니라 StatusIndicator. 색·아이콘은
+  // 아트보드 RegistrationDetail(63-69행): h1 '스캔 정합'과 진행 상태 StatusIndicator가
+  // flex + gap 한 줄에 나란히 놓인다 - PageHeader의 description은 h1 아래 별도 줄로
+  // 떨어지므로 StatusIndicator는 description이 아니라 title 안에 들어간다. 색·아이콘은
   // statusTone(F2) → TONE_STATUS 매핑으로 정해진다(done→success, failed→error, 나머지→pending).
   it.each([
     ['awaiting_points', 'pending', '대응점 지정 대기'],
     ['done', 'success', '정합 완료'],
     ['failed', 'error', '정합 실패'],
-  ] as const)('%s 상태를 PageHeader description의 StatusIndicator(%s)로 그린다', async (status, type, label) => {
+  ] as const)('%s 상태를 PageHeader title 안 StatusIndicator(%s)로 그린다', async (status, type, label) => {
     const el = await mount({ registration: { ...REG, status } });
     expect(el.type).toBe('main');
     expect((el.props as { className: string }).className).toBe(PAGE_MAIN);
-    const desc = (findByType(el, PageHeader)!.props as { description: ReactElement }).description;
-    expect(desc.type).toBe(StatusIndicator);
-    expect((desc.props as { type: string }).type).toBe(type);
-    expect((desc.props as { children: string }).children).toBe(label);
+    const header = findByType(el, PageHeader)!.props as { title: ReactElement; description?: unknown };
+    expect(header.description).toBeUndefined();
+    const status_ = findByType(header.title, StatusIndicator);
+    expect(status_).not.toBeNull();
+    expect((status_!.props as { type: string }).type).toBe(type);
+    expect((status_!.props as { children: string }).children).toBe(label);
   });
 
   it('원본 스캔이 둘 다 없으면 현장 홈 크럼만 남긴다', async () => {

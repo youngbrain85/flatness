@@ -71,11 +71,18 @@ export default async function RegistrationPage({ params }: { params: Promise<{ i
 
   return (
     <main className={PAGE_MAIN}>
-      {/* 아트보드 RegistrationDetail: h1 '스캔 정합' + 진행 상태 StatusIndicator(배지 → 상태 표시기) */}
-      <PageHeader crumbs={crumbs} title="스캔 정합" description={
-        <StatusIndicator type={TONE_STATUS[statusTone(registration.status)]}>
-          {REGISTRATION_STATUS_LABEL[registration.status]}
-        </StatusIndicator>
+      {/* 아트보드 RegistrationDetail(63-69행): h1 '스캔 정합'과 진행 상태 StatusIndicator가
+          flex + gap 한 줄에 나란히 놓인다 - PageHeader의 description은 h1 아래 별도 줄로
+          떨어지므로 쓸 수 없다. title 자리에 h1 + StatusIndicator를 함께 넣어 한 줄로
+          만든다. StatusIndicator는 자체 text-sm을 쓰므로, h1에서 물려받는 font-bold/
+          leading-[30px]만 font-normal/leading-5로 되짚어 아트보드의 400 굵기를 맞춘다. */}
+      <PageHeader crumbs={crumbs} title={
+        <span className="flex flex-wrap items-center gap-3">
+          스캔 정합
+          <StatusIndicator type={TONE_STATUS[statusTone(registration.status)]} className="font-normal leading-5">
+            {REGISTRATION_STATUS_LABEL[registration.status]}
+          </StatusIndicator>
+        </span>
       } />
       {scanA && scanB ? (
         <RegistrationWorkbench registration={registration} scanA={scanA} scanB={scanB} />
