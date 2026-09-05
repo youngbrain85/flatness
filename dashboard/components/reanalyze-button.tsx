@@ -39,6 +39,8 @@ import { enqueueJob } from '@/lib/domain/jobs';
 import { ANALYSIS_KIND_LABEL } from '@/lib/domain/labels';
 import { isDirectionAwareCriteria } from '@/lib/domain/slope-direction';
 import type { AnalysisKind, AnalysisStatus, CriteriaRow, SlopeThreshold, Surface } from '@/lib/domain/types';
+import { Button } from '@/components/ui/button';
+import { FormField, checkClass } from '@/components/ui/form';
 
 interface Props {
   scanId: string;
@@ -175,11 +177,11 @@ export function ReanalyzeButton({
     <div className="flex flex-col items-end gap-1">
       {/* N1: 구배 기준 선택 - upload-form.tsx의 "적용 기준" 라디오 목록과 같은 패턴.
           thresholds[0].use(옥상 슬래브(노출방수) / 욕실·화장실 바닥 / 주차장 바닥 /
-          실내 평바닥 등, 007_slope_analysis.sql:118-133)를 보여준다. */}
+          실내 평바닥 등, 007_slope_analysis.sql:118-133)를 보여준다.
+          순서는 fn_resolve_criteria 반환 순서 그대로다 - 재정렬하지 않는다. */}
       {kind === 'slope' && slopeCriteria.length > 0 && (
-        <div className="w-full max-w-xs rounded border bg-white p-2 text-xs">
-          <p className="mb-1 font-medium text-zinc-600">적용 기준</p>
-          <div className="space-y-1">
+        <FormField label="적용 기준">
+          <div className="flex flex-col gap-2">
             {slopeCriteria.map((c) => {
               // CriteriaRow.thresholds는 컴파일 타임에는 평활도 Threshold[]지만
               // kind='slope' 행의 실제 jsonb 내용은 SlopeThreshold다(런타임
@@ -187,34 +189,33 @@ export function ReanalyzeButton({
               const t = c.thresholds?.[0] as unknown as SlopeThreshold | undefined;
               const aware = isDirectionAwareCriteria(t ?? null);
               return (
-                <label key={c.id} className="flex items-start gap-1.5">
+                <label key={c.id} className="flex items-center gap-2 text-sm">
                   <input type="radio" name={`slope-criteria-${scanId}`} checked={slopeCriteriaId === c.id}
                     onChange={() => setSlopeCriteriaId(c.id)} disabled={busy || inProgress}
-                    className="mt-0.5" />
-                  <span>
-                    {t?.use ?? c.name}
-                    {c.is_default && <em className="ml-1 not-italic text-zinc-600">(기본)</em>}
-                    {!aware && <em className="ml-1 not-italic text-zinc-400">- 방향 판정 안 함</em>}
+                    className={checkClass} />
+                  <span className="inline-flex flex-wrap items-baseline gap-1.5">
+                    <span>{t?.use ?? c.name}</span>
+                    {c.is_default && <span className="text-cs-text-secondary">(기본)</span>}
+                    {!aware && <span className="text-cs-disabled">- 방향 판정 안 함</span>}
                   </span>
                 </label>
               );
             })}
           </div>
-        </div>
+        </FormField>
       )}
       {kind === 'slope' && criteriaLoadError && (
-        <p className="max-w-xs text-xs text-red-600">{criteriaLoadError}</p>
+        <p className="max-w-xs text-xs leading-4 text-cs-error">{criteriaLoadError}</p>
       )}
-      <button type="button" onClick={onClick}
+      <Button variant="normal" onClick={onClick}
         disabled={busy || inProgress || (kind === 'slope' && !slopeCriteriaId)}
-        title={inProgress ? '이미 진행 중인 분석이 끝난 뒤 다시 시도하세요.' : undefined}
-        className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm text-zinc-700 hover:bg-zinc-50 disabled:opacity-50">
+        title={inProgress ? '이미 진행 중인 분석이 끝난 뒤 다시 시도하세요.' : undefined}>
         {busy ? '요청 중...' : label}
-      </button>
+      </Button>
       {inProgress && (
-        <p className="text-xs text-zinc-500">진행 중인 분석이 끝난 뒤 다시 시도하세요.</p>
+        <p className="text-xs leading-4 text-cs-text-secondary">진행 중인 분석이 끝난 뒤 다시 시도하세요.</p>
       )}
-      {error && <p className="text-xs text-red-600">{error}</p>}
+      {error && <p className="text-xs leading-4 text-cs-error">{error}</p>}
     </div>
   );
 }

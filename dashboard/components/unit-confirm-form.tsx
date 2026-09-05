@@ -11,6 +11,10 @@ import { enqueueJob } from '@/lib/domain/jobs';
 import { dataUrl } from '@/lib/domain/paths';
 import type { ScanRow } from '@/lib/domain/types';
 import { UNIT_OPTIONS } from '@/lib/upload/validate';
+import { Alert } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { FormField, checkClass } from '@/components/ui/form';
+import { Icon } from '@/components/ui/icons';
 
 export function UnitConfirmForm({ scan, userId }: { scan: ScanRow; userId: string }) {
   const router = useRouter();
@@ -96,27 +100,32 @@ export function UnitConfirmForm({ scan, userId }: { scan: ScanRow; userId: strin
   }
 
   const form = (
-    <form onSubmit={onSubmit} className="max-w-md space-y-4">
-      <p className="rounded-md bg-zinc-100 p-3 text-sm">
-        <span className="font-medium">{scan.original_filename ?? '(파일명 없음)'}</span>
-        <span className="block text-xs text-zinc-500">
+    <form onSubmit={onSubmit} className="flex flex-col gap-4">
+      {/* 아트보드(ScanUnitConfirm) 우열: info Alert(파일명 mono 700 + 12px 설명) → 라디오 → primary. */}
+      <Alert type="info" title={<span className="font-mono">{scan.original_filename ?? '(파일명 없음)'}</span>}>
+        <p className="text-xs leading-4 text-cs-text-secondary">
           파일 좌표의 길이 단위를 확정해야 분석을 시작할 수 있습니다. 단위가 틀리면
           결과 전체가 왜곡되므로 스캔 앱의 내보내기 설정을 확인하세요.
-        </span>
-      </p>
-      <div className="space-y-1">
-        {UNIT_OPTIONS.map((o) => (
-          <label key={o.value} className="flex items-center gap-2 text-sm">
-            <input type="radio" checked={unitScale === o.value} onChange={() => setUnitScale(o.value)} />
-            {o.label}
-          </label>
-        ))}
+        </p>
+      </Alert>
+      <FormField label="파일 좌표 단위">
+        <div className="flex flex-col gap-2">
+          {UNIT_OPTIONS.map((o) => (
+            <label key={o.value} className="flex items-center gap-2 text-sm">
+              <input type="radio" name="unit-scale" className={checkClass}
+                checked={unitScale === o.value} onChange={() => setUnitScale(o.value)} />
+              {o.label}
+            </label>
+          ))}
+        </div>
+      </FormField>
+      {error && <p className="text-sm text-cs-error">{error}</p>}
+      <div className="flex">
+        <Button type="submit" variant="primary" disabled={busy}>
+          <Icon name="check-circle" />
+          단위 확정 후 분석 시작
+        </Button>
       </div>
-      {error && <p className="text-sm text-red-600">{error}</p>}
-      <button type="submit" disabled={busy}
-        className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50">
-        단위 확정 후 분석 시작
-      </button>
     </form>
   );
 
@@ -140,7 +149,7 @@ export function UnitConfirmForm({ scan, userId }: { scan: ScanRow; userId: strin
   // 있어(라디오 3개짜리 폼을 늘릴 이유가 없다) 페이지의 max-w-6xl을 그림이 쓴다.
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] lg:items-start">
-      <section className="space-y-2">
+      <section className="flex flex-col gap-2">
         {/* 리뷰 6: PNG 안에 matplotlib가 같은 제목("높이 뷰 (평면도)")을 이미 구워
             넣는다. 눈에 보이는 h2를 그대로 두면 한 화면에 제목이 두 번 뜬다. 제목
             자체를 지우는 대신 sr-only로 돌린 이유는 접근성이다: 스크린리더는 PNG
@@ -149,10 +158,10 @@ export function UnitConfirmForm({ scan, userId }: { scan: ScanRow; userId: strin
             "원본 크기로 열기" 링크와 설명 문단이 대신한다. */}
         <h2 className="sr-only">높이 뷰 (평면도)</h2>
         {viewFailed ? (
-          <p className="rounded border border-amber-300 bg-amber-50 p-3 text-xs text-zinc-700">
+          <Alert type="warning">
             높이 뷰를 불러오지 못했습니다. 그림 없이도 단위는 확정할 수 있습니다.
             파일명과 스캔 앱의 내보내기 설정을 확인해 단위를 고르세요.
-          </p>
+          </Alert>
         ) : (
           <>
             {/* 리뷰 3: 좁은 화면에서 그림은 원본의 22.6%까지 줄어 축 눈금 숫자가
@@ -161,21 +170,22 @@ export function UnitConfirmForm({ scan, userId }: { scan: ScanRow; userId: strin
                 모든 뷰포트에서 통하는 링크 하나로 푼다. 그림과 라벨을 한 링크로 묶어
                 (그림 클릭 = 라벨 클릭) 링크가 둘로 갈라지지 않게 했다. */}
             <a href={dataUrl(scan.height_view_path)} target="_blank" rel="noopener noreferrer"
-              className="block">
+              className="group block">
               {/* 로컬 route 서빙 이미지 - 데모에서 next/image 최적화 불필요
                   (components/analysis/slope-result.tsx와 같은 판단) */}
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img ref={imgRef} src={dataUrl(scan.height_view_path)}
                 alt="높이 뷰: 위에서 내려다본 점군의 상대 높이"
                 onError={() => setViewFailed(true)}
-                className="w-full rounded border bg-white" />
-              <span className="mt-1 block text-xs text-zinc-700 underline">
+                className="w-full rounded-lg border border-cs-divider bg-white" />
+              <span className="mt-2 flex items-center justify-end gap-1 text-xs font-bold leading-4 text-cs-link group-hover:text-cs-link-hover group-hover:underline">
                 원본 크기로 열기 (새 탭)
+                <Icon name="external" size={14} />
               </span>
             </a>
-            <p className="text-xs text-zinc-500">
+            <p className="text-xs leading-4 text-cs-text-secondary">
               위에서 내려다본 점군의 상대 높이입니다. 축 눈금은 미터가 아니라
-              <span className="font-medium"> 파일 단위</span>이므로, 눈금이 가리키는
+              <span className="font-bold text-cs-text"> 파일 단위</span>이므로, 눈금이 가리키는
               크기와 실제 공간 크기를 견주어 단위를 고르세요. 예를 들어 8m짜리 방인데
               눈금이 8000까지 간다면 mm입니다. 점이 성겨 색이 거의 없거나 &quot;유효
               데이터 없음&quot; 경고가 찍힌 그림이어도 축 눈금은 유효하니 눈금만 보고

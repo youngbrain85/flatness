@@ -29,3 +29,32 @@ describe('AnalysisProgress 결과 보기 링크 (D6 이월: 리다이렉트 홉 
     expect(screen.queryByText('분석 완료 - 결과 보기')).not.toBeInTheDocument();
   });
 });
+
+// T6 Cloudscape 재스킨: 진행·실패 문구는 StatusIndicator(data-status), done은 normal 알약 링크.
+describe('AnalysisProgress Cloudscape 재스킨 (T6)', () => {
+  it('진행 중이면 StatusIndicator in-progress로 상태 라벨 + 자동 갱신 안내를 그린다', () => {
+    useRowStatusMock.mockReturnValue('processing');
+    render(<AnalysisProgress analysisId="a1" initialStatus="processing" scanId="s1" />);
+
+    const el = screen.getByText(/워커가 처리 중입니다/);
+    expect(el).toHaveAttribute('data-status', 'in-progress');
+    expect(el.textContent).toContain('분석 중');
+  });
+
+  it('실패하면 StatusIndicator error + 원인 안내다', () => {
+    useRowStatusMock.mockReturnValue('failed');
+    render(<AnalysisProgress analysisId="a1" initialStatus="failed" scanId="s1" />);
+
+    expect(screen.getByText('분석에 실패했습니다.')).toHaveAttribute('data-status', 'error');
+    expect(screen.getByText(/3회 자동 재시도 후에도 실패한 상태입니다/)).toBeInTheDocument();
+  });
+
+  it('done 링크는 normal 알약 버튼(파랑 보더, 채움 없음)이다', () => {
+    useRowStatusMock.mockReturnValue('done');
+    render(<AnalysisProgress analysisId="a1" initialStatus="done" scanId="s1" />);
+
+    const link = screen.getByText('분석 완료 - 결과 보기');
+    expect(link.className).toContain('border-cs-link');
+    expect(link.className).not.toContain('bg-cs-link');
+  });
+});

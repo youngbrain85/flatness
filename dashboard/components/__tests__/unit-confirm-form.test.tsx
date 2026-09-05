@@ -326,3 +326,31 @@ describe('UnitConfirmForm 높이 뷰 (단계 E)', () => {
     expect(screen.getByText(/축 눈금은 유효하니/)).toBeInTheDocument();
   });
 });
+
+// T6 Cloudscape 재스킨: 파일 안내는 info Alert, 라디오는 네이티브 + accent 토큰(스펙 §7-6),
+// 확정 버튼은 이 뷰의 유일한 primary다. 색은 cs-* 토큰만 본다.
+describe('UnitConfirmForm Cloudscape 재스킨 (T6)', () => {
+  it('파일 안내는 info Alert, 단위 라디오는 checkClass, 라벨 700, 확정 버튼은 primary다', () => {
+    const { container } = render(<UnitConfirmForm scan={scan} userId="u1" />);
+
+    expect(container.querySelector('[data-alert="info"]')).not.toBeNull();
+    expect(screen.getByLabelText(/mm/).className).toContain('accent-cs-link');
+    expect(screen.getByText('파일 좌표 단위').className).toContain('font-bold');
+    expect(screen.getByRole('button', { name: '단위 확정 후 분석 시작' }).className).toContain('bg-cs-link');
+  });
+
+  it('높이 뷰 폴백은 warning Alert다', () => {
+    const { container } = render(<UnitConfirmForm scan={scanWithView} userId="u1" />);
+    fireEvent.error(screen.getByRole('img', { name: /높이 뷰/ }));
+
+    expect(container.querySelector('[data-alert="warning"]')).not.toBeNull();
+    expect(screen.getByText(/높이 뷰를 불러오지 못했습니다/)).toBeInTheDocument();
+  });
+
+  it('원본 열기 링크는 cs-link 700이고 구 팔레트 클래스가 남아 있지 않다', () => {
+    const { container } = render(<UnitConfirmForm scan={scanWithView} userId="u1" />);
+
+    expect(container.querySelector('[data-icon="external"]')).not.toBeNull();
+    expect(container.innerHTML).not.toMatch(/zinc-|amber-|red-/);
+  });
+});

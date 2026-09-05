@@ -30,6 +30,11 @@ import { UnitConfirmForm } from '@/components/unit-confirm-form';
 import { AnalysisResult } from '@/components/analysis/analysis-result';
 import { SlopeResult } from '@/components/analysis/slope-result';
 import { PageHeader } from '@/components/ui/page-header';
+import { Alert } from '@/components/ui/alert';
+import { LinkButton } from '@/components/ui/button';
+import { Container } from '@/components/ui/container';
+import { KeyValuePairs } from '@/components/ui/key-value';
+import { PAGE_MAIN } from '@/components/ui/page';
 import type { AnalysisKind, AnalysisRow, LocationRow, ScanRow, SiteRow, Stats } from '@/lib/domain/types';
 
 // D5: searchParams(?analysis=)가 페이지 시그니처에 들어왔다. 모든 호출이 이 헬퍼를
@@ -38,27 +43,54 @@ function pageProps(search: { analysis?: string } = {}) {
   return { params: Promise.resolve({ id: 'sc1' }), searchParams: Promise.resolve(search) };
 }
 
-// 엘리먼트 트리를 재귀 탐색해 특정 컴포넌트 타입이 쓰인 곳을 모두 모은다.
-// app/analyses/[id]/__tests__/page.test.tsx의 containsType과 같은 이유로 children만
-// 따라간다 - ScanPage 자신이 실행한 JSX만 대상이므로(중첩 헬퍼 컴포넌트를 페이지에
-// 두지 않았다) children 경로만으로 버튼·링크까지 전부 닿는다.
-function findAll(node: unknown, type: unknown, acc: { props: Record<string, unknown> }[] = []) {
-  if (node == null || typeof node !== 'object') return acc;
-  if (Array.isArray(node)) { node.forEach((n) => findAll(n, type, acc)); return acc; }
-  const el = node as { type?: unknown; props?: { children?: unknown } };
-  if (el.type === type) acc.push(el as { props: Record<string, unknown> });
-  findAll(el.props?.children, type, acc);
+// 엘리먼트 트리 전역 순회. Cloudscape 프리미티브(Container·PageHeader·Alert·KeyValuePairs)는
+// 자식을 children뿐 아니라 title·actions·items 같은 슬롯 prop으로도 받으므로, 옛 탐색처럼
+// children만 따라가면 Container의 actions 슬롯에 놓인 ReanalyzeButton·헤더 액션의
+// LinkButton·KeyValuePairs의 items 문구를 통째로 놓친다. 함수 컴포넌트는 실행되지 않고
+// 타입으로만 남으니(async 서버 컴포넌트 테스트 제약) 모든 prop 값을 따라간다. 문자열·
+// 숫자는 onNode에 그대로 넘기고, 순환 참조는 seen으로 막는다.
+type El = { type?: unknown; props: Record<string, unknown> };
+
+function walk(node: unknown, onNode: (n: unknown) => void, seen = new WeakSet<object>()) {
+  if (typeof node === 'string' || typeof node === 'number') { onNode(node); return; }
+  if (node == null || typeof node !== 'object') return;
+  if (seen.has(node)) return;
+  seen.add(node);
+  onNode(node);
+  if (Array.isArray(node)) { node.forEach((n) => walk(n, onNode, seen)); return; }
+  Object.values(node as Record<string, unknown>).forEach((v) => walk(v, onNode, seen));
+}
+
+// 특정 컴포넌트 타입(또는 태그 문자열)이 쓰인 엘리먼트를 모두 모은다.
+function findAll(node: unknown, type: unknown): El[] {
+  const acc: El[] = [];
+  walk(node, (n) => {
+    const el = n as El;
+    if (n && typeof n === 'object' && !Array.isArray(n) && el.type === type && el.props) acc.push(el);
+  });
   return acc;
 }
 
-// 안내 문구 회귀를 잡으려면 엘리먼트 트리에서 문자열 children을 모아야 한다.
-// findAll은 타입(컴포넌트/태그)만 보므로 문구 자체는 잡지 못한다.
-function collectText(node: unknown, acc: string[] = []): string[] {
-  if (typeof node === 'string' || typeof node === 'number') { acc.push(String(node)); return acc; }
-  if (node == null || typeof node !== 'object') return acc;
-  if (Array.isArray(node)) { node.forEach((n) => collectText(n, acc)); return acc; }
-  collectText((node as { props?: { children?: unknown } }).props?.children, acc);
+// 안내 문구 회귀를 잡으려면 트리의 문자열을 모아야 한다. findAll은 타입만 본다.
+// (className·href 같은 prop 문자열도 섞여 들어오지만 한국어 안내 문구와는 겹치지 않는다.)
+function collectText(node: unknown): string[] {
+  const acc: string[] = [];
+  walk(node, (n) => { if (typeof n === 'string' || typeof n === 'number') acc.push(String(n)); });
   return acc;
+}
+
+// 링크 href 수집: 본문 링크(next/link Link)와 버튼 모양 링크(LinkButton - 안에서 Link를
+// 그리지만 트리에는 LinkButton 타입으로만 남는다) 둘 다 센다.
+function linkHrefs(node: unknown): string[] {
+  return [...findAll(node, Link), ...findAll(node, LinkButton)].map((l) => String(l.props.href));
+}
+
+// 분석 섹션(평활도·구배)만 고른다 - 제목이 '<종류> 분석'인 Container. '스캔 정보'·
+// '단위 확인'·'<종류> 결과'(제목이 프래그먼트)는 걸리지 않는다. 코드가 항상 평활도를
+// 먼저, 구배를 나중에 그리므로 [0] 평활도, [1] 구배다.
+function analysisSections(node: unknown): El[] {
+  return findAll(node, Container).filter(
+    (c) => typeof c.props.title === 'string' && c.props.title.endsWith(' 분석'));
 }
 
 function chain(result: { data: unknown; error: null }) {
@@ -270,7 +302,7 @@ describe('ScanPage 종류별 분석 섹션 배선 (단계 C 회귀 차단)', () 
       stubSupabase(mkScan(), [processingFlatness, doneSlope]) as never);
 
     const el = await ScanPage(pageProps());
-    const sections = findAll(el, 'section');
+    const sections = analysisSections(el);
     const progresses = findAll(el, AnalysisProgress);
 
     // 평활도 섹션(진행 중) + 구배 섹션(완료된 결과 표시) 둘 다 그려진다.
@@ -341,10 +373,10 @@ describe('ScanPage 종류별 분석 섹션 배선 (단계 C 회귀 차단)', () 
       stubSupabase(mkScan(), [flatness2, slope2, flatness1, slope1]) as never);
 
     const el = await ScanPage(pageProps());
-    const sections = findAll(el, 'section');
+    const sections = analysisSections(el);
     expect(sections).toHaveLength(2); // [0] 평활도, [1] 구배 (렌더 순서 고정)
-    const flatnessLinks = findAll(sections[0], Link).map((l) => l.props.href);
-    const slopeLinks = findAll(sections[1], Link).map((l) => l.props.href);
+    const flatnessLinks = linkHrefs(sections[0]);
+    const slopeLinks = linkHrefs(sections[1]);
 
     // latest(가장 최근 1건)는 "이전 분석" 목록이 아니라 AnalysisProgress로만 표시된다.
     // D5: 이력 링크는 별도 화면(/analyses/[id])이 아니라 같은 작업대의
@@ -398,7 +430,7 @@ describe('ScanPage 메타·안내 문구 (단계 E)', () => {
       stubSupabase(mkScan({ lineage: 'registered' }), [], location, { id: 'reg-9' }) as never);
 
     const el = await ScanPage(pageProps());
-    const hrefs = findAll(el, Link).map((l) => l.props.href);
+    const hrefs = linkHrefs(el);
     const text = collectText(el).join('');
 
     expect(hrefs).toContain('/registrations/reg-9');
@@ -411,7 +443,7 @@ describe('ScanPage 메타·안내 문구 (단계 E)', () => {
       stubSupabase(mkScan({ lineage: 'registered' }), [], location, null) as never);
 
     const el = await ScanPage(pageProps());
-    const hrefs = findAll(el, Link).map((l) => l.props.href);
+    const hrefs = linkHrefs(el);
     const text = collectText(el).join('');
 
     expect(hrefs.some((h) => String(h).startsWith('/registrations/'))).toBe(false);
@@ -538,7 +570,7 @@ describe('ScanPage 분석 시작 진입점 (단계 F 최종 리뷰 Critical)', (
         location, { id: 'reg-9' }) as never);
 
     const el = await ScanPage(pageProps());
-    const hrefs = findAll(el, Link).map((l) => String(l.props.href));
+    const hrefs = linkHrefs(el);
 
     expect(hrefs.some((h) => h.includes('confirm-unit'))).toBe(false);
     expect(collectText(el).join('')).toContain('이미 미터로 환산돼 있어');
@@ -583,7 +615,7 @@ describe('ScanPage 분석 시작 진입점 (단계 F 최종 리뷰 Critical)', (
       }), []) as never);
 
     const el = await ScanPage(pageProps());
-    const hrefs = findAll(el, Link).map((l) => String(l.props.href));
+    const hrefs = linkHrefs(el);
     const forms = findAll(el, UnitConfirmForm);
 
     expect(hrefs.some((h) => h.includes('confirm-unit'))).toBe(false);
@@ -685,7 +717,10 @@ describe('ScanPage 단위 확인 인라인 (D6 이월: confirm-unit 삭제로 �
   // 쓰는 페이지 폭(max-w-6xl)과 안내 문단이 무방비였다. max-w-md로 되돌리면 그림이
   // 폼 폭으로 쪼그라들어 축 눈금을 못 읽는데(이 화면의 존재 이유가 무너진다) 아무도
   // 못 잡는다."
-  it('단계 E 리뷰 7: 페이지 폭을 max-w-6xl로 유지한다(높이 뷰 2열 배치가 쓰는 폭이다)', async () => {
+  // Cloudscape(스펙 §5): 본문은 최대폭 없이 PAGE_MAIN 하나다(모든 page/loading이 같은 문자열 -
+  // 전환 점프 방지). 높이 뷰 2열 배치가 쓰는 폭이 max-w-md 같은 값으로 쪼그라들면 축 눈금을
+  // 못 읽으므로, 폭 제한이 끼어들지 않는지 여기서 계속 지킨다.
+  it('단계 E 리뷰 7: 본문 클래스는 PAGE_MAIN이고 최대폭 제한이 없다(높이 뷰 2열 배치가 쓰는 폭이다)', async () => {
     vi.mocked(createClient).mockResolvedValue(
       stubSupabase(mkScan({
         status: 'awaiting_unit_confirm', unit_scale: null,
@@ -696,8 +731,8 @@ describe('ScanPage 단위 확인 인라인 (D6 이월: confirm-unit 삭제로 �
     const main = el as { type: string; props: { className: string } };
 
     expect(main.type).toBe('main');
-    expect(main.props.className).toContain('max-w-6xl');
-    expect(main.props.className).not.toContain('max-w-md');
+    expect(main.props.className).toBe(PAGE_MAIN);
+    expect(main.props.className).not.toContain('max-w-');
   });
 
   it.each([
@@ -754,9 +789,14 @@ describe('ScanPage 헤더·단계 스트립 (D5)', () => {
 
     const el = await ScanPage(pageProps());
     const header = findAll(el, PageHeader)[0];
-    const actionHrefs = findAll(header.props.actions, Link).map((l) => String(l.props.href));
+    const actionHrefs = linkHrefs(header.props.actions);
 
     expect(actionHrefs).toContain('/reports/new?location=l1');
+    // 뷰당 primary 1개(Global Constraints·스펙 §4) - 보고서 원클릭이 그 하나다. 결과 패널의
+    // '저장'은 T7이 normal로 그린다(아트보드·스펙 §6은 채움으로 그리지만 §4 규칙을 따른다).
+    const primaries = findAll(header.props.actions, LinkButton).filter((b) => b.props.variant === 'primary');
+    expect(primaries).toHaveLength(1);
+    expect(String(primaries[0].props.href)).toBe('/reports/new?location=l1');
   });
 
   it('완료된 분석이 하나도 없으면 보고서 생성 액션이 없다(빈 보고서 유도 방지)', async () => {
@@ -766,7 +806,7 @@ describe('ScanPage 헤더·단계 스트립 (D5)', () => {
     const el = await ScanPage(pageProps());
     const header = findAll(el, PageHeader)[0];
 
-    expect(findAll(header.props.actions, Link)).toHaveLength(0);
+    expect(linkHrefs(header.props.actions)).toHaveLength(0);
   });
 
   it('단계 스트립에 스캔 상태가 배선된다', async () => {
@@ -806,7 +846,7 @@ describe('ScanPage 헤더·단계 스트립 (D5)', () => {
       stubSupabase(mkScan({ status: 'failed' }), []) as never);
 
     const el = await ScanPage(pageProps());
-    const hrefs = findAll(el, Link).map((l) => String(l.props.href));
+    const hrefs = linkHrefs(el);
 
     expect(hrefs).toContain('/upload?site=site1&location=l1');
     expect(collectText(el).join('')).toContain('다시 업로드');
@@ -971,5 +1011,69 @@ describe('ScanPage 결과 인라인 (D5: analyses/[id] 렌더 이관)', () => {
 
     expect(findAll(el, AnalysisResult)).toHaveLength(0);
     expect(findAll(el, SlopeResult)).toHaveLength(0);
+  });
+});
+
+// ---- T6 Cloudscape 골격 ----
+// 세 아트보드(UnitConfirm·Processing·Done)는 같은 페이지의 세 상태다. 여기서는 새 골격
+// (Container·KeyValuePairs·Alert·LinkButton)에 옛 데이터·분기가 그대로 배선됐는지 본다.
+describe('ScanPage Cloudscape 골격 (T6)', () => {
+  it('스캔 정보는 Container 안 KeyValuePairs 4열 7항목이다(옛 dl과 같은 항목·순서)', async () => {
+    vi.mocked(createClient).mockResolvedValue(
+      stubSupabase(mkScan({ point_count: 1234567 }), []) as never);
+
+    const el = await ScanPage(pageProps());
+    const info = findAll(el, Container).find((c) => c.props.title === '스캔 정보');
+    const kv = findAll(info, KeyValuePairs);
+
+    expect(info).toBeDefined();
+    expect(kv).toHaveLength(1);
+    expect(kv[0].props.columns).toBe(4);
+    expect((kv[0].props.items as { label: unknown }[]).map((i) => i.label))
+      .toEqual(['측정위치', '원본 파일', '장비', '데이터 계보', '점 개수', '상태', '단위 배율']);
+    expect(collectText(kv[0].props.items).join('')).toContain('1,234,567');
+  });
+
+  it.each([
+    ['uploaded', 'info'],
+    ['failed', 'error'],
+  ] as const)('%s 스캔의 안내는 %s Alert다', async (status, type) => {
+    vi.mocked(createClient).mockResolvedValue(stubSupabase(mkScan({ status }), []) as never);
+
+    const el = await ScanPage(pageProps());
+
+    expect(findAll(el, Alert).map((a) => a.props.type)).toContain(type);
+  });
+
+  it('병합 스캔 안내는 warning Alert이고 정합 링크는 normal LinkButton이다', async () => {
+    vi.mocked(createClient).mockResolvedValue(
+      stubSupabase(mkScan({ lineage: 'registered' }), [], location, { id: 'reg-9' }) as never);
+
+    const el = await ScanPage(pageProps());
+    const warning = findAll(el, Alert).find((a) => a.props.type === 'warning');
+    const btn = findAll(warning, LinkButton)[0];
+
+    expect(warning).toBeDefined();
+    expect(String(btn.props.href)).toBe('/registrations/reg-9');
+    expect(btn.props.variant).toBe('normal');
+  });
+
+  it('단위 확인은 Container 안에 안내문 + UnitConfirmForm, 결과는 "<종류> 결과" Container 안이다', async () => {
+    vi.mocked(createClient).mockResolvedValue(
+      stubSupabase(mkScan({ status: 'awaiting_unit_confirm', unit_scale: null }), []) as never);
+    const el = await ScanPage(pageProps());
+    const unit = findAll(el, Container).find((c) => c.props.title === '단위 확인');
+    expect(unit).toBeDefined();
+    expect(findAll(unit, UnitConfirmForm)).toHaveLength(1);
+
+    const done = mkAnalysis({ id: 'f1', kind: 'flatness', stats: FLAT_STATS, engine_version: 'p4-0.5.0' });
+    vi.mocked(createClient).mockResolvedValue(stubSupabase(mkScan(), [done]) as never);
+    const el2 = await ScanPage(pageProps());
+    const result = findAll(el2, Container).find((c) => findAll(c, AnalysisResult).length === 1);
+    expect(result).toBeDefined();
+    const head = collectText(result?.props.title).join('');
+    expect(head).toContain('평활도 결과');
+    expect(head).toContain('2026-07-01 00:00');
+    expect(head).toContain('p4-0.5.0');
   });
 });
