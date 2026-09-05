@@ -1,7 +1,8 @@
 'use client';
 import { createClient } from '@/lib/supabase/client';
 
-export function LogoutButton() {
+// 사이드 내비 항목으로도, 단독 버튼으로도 쓰이므로 스타일은 호출자가 준다.
+export function LogoutButton({ className = 'text-sm text-cs-nav-text hover:text-cs-text' }: { className?: string }) {
   async function onClick() {
     await createClient().auth.signOut();
     // 로그인과 같은 인증 경계이므로 전체 페이지 이동을 쓴다. router.push('/login')
@@ -11,7 +12,5 @@ export function LogoutButton() {
     // 로그아웃에는 전체 이동이 맞다.
     window.location.assign('/login');
   }
-  return (
-    <button onClick={onClick} className="text-sm text-zinc-500 hover:text-zinc-900">로그아웃</button>
-  );
+  return <button type="button" onClick={onClick} className={className}>로그아웃</button>;
 }

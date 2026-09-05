@@ -1,8 +1,12 @@
 import type { Metadata } from 'next';
-import { Noto_Sans_KR, Geist_Mono } from 'next/font/google';
+import { Open_Sans, Noto_Sans_KR, Geist_Mono } from 'next/font/google';
 import './globals.css';
-import { Sidebar } from '@/components/sidebar';
+import { ConsoleShell } from '@/components/shell/console-shell';
+import { TopNav } from '@/components/shell/top-nav';
+import { SideNav } from '@/components/shell/side-nav';
 
+// Cloudscape 어휘의 본문 폰트(Open Sans) + 한글(Noto Sans KR). 모노는 Geist Mono 유지(스펙 §3).
+const openSans = Open_Sans({ subsets: ['latin'], variable: '--font-open-sans' });
 const notoSansKr = Noto_Sans_KR({ subsets: ['latin'], variable: '--font-noto-sans-kr' });
 const geistMono = Geist_Mono({ subsets: ['latin'], variable: '--font-geist-mono' });
 
@@ -14,16 +18,8 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ko">
-      <body className={`${notoSansKr.variable} ${geistMono.variable} min-h-screen bg-zinc-50 font-sans text-zinc-900 antialiased`}>
-        {/* 리뷰 Critical: flex(가로)를 모든 뷰포트에 고정하면 375px에서 모바일
-            <header md:hidden>이 flex-row 아이템이 되어 세로로 늘어나 붙고 본문이
-            찌그러진다(실측 header 321x1030, 본문 321x54). 모바일은 세로 스택
-            (헤더 위 / 본문 아래, 둘 다 cross-axis stretch로 자연스럽게 풀폭),
-            md 이상에서만 가로 스택(사이드바 + 본문)으로 전환한다. */}
-        <div className="flex min-h-screen flex-col md:flex-row">
-          <Sidebar />
-          <div className="min-w-0 flex-1">{children}</div>
-        </div>
+      <body className={`${openSans.variable} ${notoSansKr.variable} ${geistMono.variable} min-h-screen bg-white font-sans text-sm leading-5 text-cs-text antialiased`}>
+        <ConsoleShell topNav={<TopNav />} sideNav={<SideNav />}>{children}</ConsoleShell>
       </body>
     </html>
   );

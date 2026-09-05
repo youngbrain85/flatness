@@ -1,15 +1,31 @@
 @import "tailwindcss";
 
-:root {
-  --background: #fafafa; /* zinc-50 */
-  --foreground: #18181b; /* zinc-900 */
-}
-
+/* Cloudscape 어휘 토큰(스펙 §3). 이 표 밖의 색을 쓰지 않는다. */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-noto-sans-kr);
-  --font-mono: var(--font-geist-mono);
+  --color-cs-text: #000716;
+  --color-cs-text-secondary: #5f6b7a;
+  --color-cs-nav-text: #414d5c;
+  --color-cs-link: #0972d3;
+  --color-cs-link-hover: #033160;
+  --color-cs-divider: #e9ebed;
+  --color-cs-input-border: #8c8c94;
+  --color-cs-disabled: #9ba7b6;
+  --color-cs-topnav: #0f1b2a;
+  --color-cs-topnav-text: #d1d5db;
+  --color-cs-success: #037f0c;
+  --color-cs-success-bg: #f2fcf3;
+  --color-cs-warning: #8d6605;
+  --color-cs-warning-bg: #fffce9;
+  --color-cs-error: #d91515;
+  --color-cs-error-bg: #fff7f7;
+  --color-cs-info-bg: #f2f8fd;
+  --color-cs-na: #7d8998;
+  --color-cs-external: #7d2f9e;
+  --color-cs-external-bg: #f5f0fa;
+  --shadow-cs-container: 0 1px 1px 1px #e9ebed, 0 1px 8px 2px rgba(0, 7, 22, 0.12);
+  --radius-cs-container: 16px;
+  --font-sans: var(--font-open-sans), var(--font-noto-sans-kr), "Helvetica Neue", Arial, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, Menlo, Consolas, monospace;
 }
 
 /* 리뷰 Important 4(이력 보존): unlayered 다크모드 규칙은 Tailwind v4 @layer보다
