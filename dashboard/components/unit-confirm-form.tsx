@@ -145,8 +145,9 @@ export function UnitConfirmForm({ scan, userId }: { scan: ScanRow; userId: strin
   // 좁히면 그 성질이 조용히 사라진다.
   if (!scan.height_view_path) return form;
 
-  // 그림이 단위 판단의 근거이므로 폼보다 넓게 잡는다. 폼 자신은 max-w-md로 묶여
-  // 있어(라디오 3개짜리 폼을 늘릴 이유가 없다) 페이지의 max-w-6xl을 그림이 쓴다.
+  // 그림이 단위 판단의 근거이므로 폼보다 넓게 잡는다 - 아래 3fr:2fr 격자가 그 비율이다
+  // (라디오 3개짜리 폼을 늘릴 이유가 없다). Cloudscape 재스킨으로 폼의 max-w-md와
+  // 페이지의 max-w-6xl이 함께 사라졌으므로, 남는 폭은 전부 그림 열이 가져간다.
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] lg:items-start">
       <section className="flex flex-col gap-2">
