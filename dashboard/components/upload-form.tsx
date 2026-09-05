@@ -7,6 +7,11 @@ import { LINEAGE_LABEL, SURFACE_LABEL } from '@/lib/domain/labels';
 import type { CriteriaRow, Lineage, LocationRow, SiteRow, Surface } from '@/lib/domain/types';
 import { uploadRawScan } from '@/lib/scans/upload';
 import { IMPORT_EXTS, MAX_UPLOAD_BYTES, MAX_UPLOAD_MB, SCAN_EXTS, validateFile } from '@/lib/upload/validate';
+import { Alert } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { Container } from '@/components/ui/container';
+import { FormField, SelectWrap, checkClass, inputClass, selectClass } from '@/components/ui/form';
+import { Icon } from '@/components/ui/icons';
 
 interface Props {
   sites: SiteRow[];
@@ -19,10 +24,15 @@ interface Props {
 // 겹치지 않는다.
 const NEW_SITE_VALUE = '';
 
-// T2 토큰 (D4 브리프 Step 3): 주 버튼 zinc-900, 입력 border-zinc-300 rounded-md.
-const inputClass = 'mt-1 w-full rounded-md border border-zinc-300 px-3 py-2';
-const primaryButtonClass =
-  'rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50';
+// Cloudscape 리스킨(T5): 입력·버튼·알림은 components/ui 프리미티브를 쓴다. 아래 둘은
+// 프리미티브에 없는 이 화면 전용 모양이라 여기서만 정의한다(export 하지 않는다).
+// 링크형 버튼: '+ 새 측정위치'·'취소'. 아트보드의 링크 스타일(cs-link 700, hover 밑줄).
+const linkButtonClass =
+  'inline-flex items-center gap-1.5 self-start text-sm font-bold text-cs-link hover:text-cs-link-hover hover:underline';
+// 파일 입력: 드롭존은 소스에 없으므로 네이티브 input의 ::file-selector-button(Tailwind `file:`)만
+// normal 버튼(2px cs-link 보더 알약) 모양으로 입힌다.
+const fileInputClass =
+  'w-full text-sm text-cs-text file:mr-3 file:h-8 file:cursor-pointer file:rounded-full file:border-2 file:border-cs-link file:bg-transparent file:px-5 file:text-sm file:font-bold file:text-cs-link';
 
 export function UploadForm({ sites, locations, userId, initialLocationId }: Props) {
   const router = useRouter();
@@ -248,179 +258,214 @@ export function UploadForm({ sites, locations, userId, initialLocationId }: Prop
   }
 
   return (
-    <form onSubmit={onSubmit} className="max-w-xl space-y-4">
-      <div className="flex gap-4 text-sm">
-        <label className="flex items-center gap-1">
-          <input type="radio" checked={mode === 'scan'} onChange={() => setMode('scan')} />
-          스캔 분석
-        </label>
-        <label className="flex items-center gap-1">
-          <input type="radio" checked={mode === 'import'} onChange={() => setMode('import')} />
-          기존 결과 가져오기(CSV/JSON)
-        </label>
-      </div>
-      {mode === 'import' && (
-        <p className="rounded-md bg-zinc-100 p-2 text-xs text-zinc-600">
-          기존 Colab 노트북 결과 CSV(X, Y, Signed_Distance_mm 컬럼 필수) 또는 범용
-          연계 JSON(format: &quot;flatness-import-v1&quot;, points[].x/y/deviation_mm)을
-          등록합니다. 바닥 결과만 지원하며, 결과 화면에 &quot;외부 결과&quot; 배지가
-          표시됩니다.
-        </p>
-      )}
-      <div>
-        <label htmlFor="location" className="block text-sm font-medium">측정위치</label>
-        <select id="location" required value={locationId} onChange={(e) => setLocationId(e.target.value)}
-          className={inputClass}>
-          <option value="">선택...</option>
-          {sitesList.map((s) => {
-            const locs = locationsList.filter((l) => l.site_id === s.id);
-            if (locs.length === 0) return null;
-            return (
-              <optgroup key={s.id} label={s.name}>
-                {locs.map((l) => (
-                  <option key={l.id} value={l.id}>
-                    {[l.building, l.floor, l.room, l.name].filter(Boolean).join(' / ')}
-                  </option>
-                ))}
-              </optgroup>
-            );
-          })}
-        </select>
-        <button type="button" onClick={() => setShowNewLocation((v) => !v)}
-          className="mt-1 text-sm font-medium text-zinc-700 hover:text-zinc-900 hover:underline">
-          + 새 측정위치
-        </button>
-        {showNewLocation && (
-          <div className="mt-2 space-y-2 rounded-md border border-zinc-300 bg-white p-3 text-sm"
-            onKeyDown={(e) => {
-              // 리뷰 F2: 이 패널은 상위 스캔 업로드 <form> 안에 중첩돼 있다. 파일·
-              // 위치·기준을 이미 골라둔 상태에서 미니폼 입력 중 Enter를 누르면 기본
-              // 동작이 상위 폼을 암묵 제출해 엉뚱한 기존 측정위치로 스캔이 올라간다.
-              // Enter를 여기서 가로채 "저장" 버튼과 같은 동작(측정위치 생성)으로
-              // 재해석한다(입력이 모두 단일 라인 input/select라 textarea 예외는 불필요).
-              if (e.key === 'Enter') {
-                e.preventDefault();
-                if (!creatingLoc) handleCreateLocation();
-              }
-            }}>
-            <div>
-              <label htmlFor="new-loc-site" className="block text-xs text-zinc-500">현장 선택 또는 새 현장명</label>
-              <select id="new-loc-site" value={newLocSiteId} onChange={(e) => setNewLocSiteId(e.target.value)}
-                className={inputClass}>
-                <option value={NEW_SITE_VALUE}>+ 새 현장 만들기</option>
-                {sitesList.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </select>
-            </div>
-            {newLocSiteId === NEW_SITE_VALUE && (
-              <div>
-                <label htmlFor="new-site-name" className="block text-xs text-zinc-500">새 현장명</label>
-                <input id="new-site-name" value={newSiteName} onChange={(e) => setNewSiteName(e.target.value)}
-                  className={inputClass} />
-              </div>
-            )}
-            <div className="flex flex-wrap gap-2">
-              {([
-                ['building', '동'], ['floor', '층'], ['room', '공간'], ['name', '이름'],
-              ] as const).map(([key, label]) => (
-                <div key={key}>
-                  <label htmlFor={`new-loc-${key}`} className="block text-xs text-zinc-500">{label}</label>
-                  <input id={`new-loc-${key}`} value={newLocFields[key]}
-                    onChange={(e) => setNewLocFields({ ...newLocFields, [key]: e.target.value })}
-                    className="mt-1 w-28 rounded-md border border-zinc-300 px-2 py-1.5" />
-                </div>
-              ))}
-            </div>
-            {newLocError && <p className="text-sm text-red-600">{newLocError}</p>}
-            <div className="flex gap-2">
-              <button type="button" onClick={handleCreateLocation} disabled={creatingLoc}
-                className="rounded-md bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50">
-                {creatingLoc ? '저장 중...' : '저장'}
-              </button>
-              <button type="button" onClick={() => setShowNewLocation(false)}
-                className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-50">
-                취소
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-      {mode === 'scan' && (
-        <div className="flex gap-4 text-sm">
-          <span className="font-medium">표면 유형:</span>
-          {(['floor', 'wall'] as const).map((s) => (
-            <label key={s} className="flex items-center gap-1">
-              <input type="radio" checked={surface === s} onChange={() => setSurface(s)} />
-              {SURFACE_LABEL[s]}
+    // 페이지 섹션 gap(20px)과 같은 간격으로 컨테이너 -> 오류 -> 버튼 줄이 쌓인다.
+    <form onSubmit={onSubmit} className="flex flex-col gap-5">
+      {/* 스펙 §7-8: 컨테이너 제목 '업로드 정보'는 아트보드에만 있던 문구지만 Cloudscape
+          해부(컨테이너 헤더)의 일부라 시스템 크롬으로 채택한다. 데이터·기능 추가는 없다. */}
+      <Container title="업로드 정보">
+        <div className="flex flex-col gap-4">
+          {/* 업로드 방식(아트보드 본문 첫 줄) */}
+          <div className="flex items-center gap-6">
+            <label className="inline-flex items-center gap-2 text-sm">
+              <input type="radio" className={checkClass} checked={mode === 'scan'} onChange={() => setMode('scan')} />
+              스캔 분석
             </label>
-          ))}
-        </div>
-      )}
-      <div>
-        <span className="block text-sm font-medium">적용 기준</span>
-        <div className="mt-1 space-y-1 rounded-md border border-zinc-300 bg-white p-2 text-sm">
-          {criteria.length === 0 && <p className="text-zinc-500">측정위치를 먼저 선택하세요.</p>}
-          {criteria.map((c) => (
-            <label key={c.id} className="flex items-start gap-2">
-              <input type="radio" checked={criteriaId === c.id} onChange={() => setCriteriaId(c.id)} />
-              <span>
-                {c.name}{c.is_default && <em className="ml-1 text-xs text-zinc-600">(기본)</em>}
-                {c.site_id && <em className="ml-1 text-xs text-zinc-600">(현장 기준)</em>}
-                <span className="block text-xs text-zinc-500">{c.source_text}</span>
-              </span>
+            <label className="inline-flex items-center gap-2 text-sm">
+              <input type="radio" className={checkClass} checked={mode === 'import'} onChange={() => setMode('import')} />
+              기존 결과 가져오기(CSV/JSON)
             </label>
-          ))}
-        </div>
-      </div>
-      <div className="flex gap-4">
-        <div>
-          <label htmlFor="scanned-at" className="block text-sm font-medium">측정일자</label>
-          <input id="scanned-at" type="date" required value={scannedAt}
-            onChange={(e) => setScannedAt(e.target.value)}
-            className="mt-1 rounded-md border border-zinc-300 px-3 py-2 font-mono" />
-        </div>
-        <div className="flex-1">
-          <label htmlFor="device" className="block text-sm font-medium">장비</label>
-          <input id="device" value={device} onChange={(e) => setDevice(e.target.value)}
-            placeholder="예: iPhone 15 Pro + 3d Scanner App" className={inputClass} />
-        </div>
-      </div>
-      <div>
-        <label htmlFor="operator" className="block text-sm font-medium">담당자 이름(직접 입력, 비우면 로그인 사용자)</label>
-        <input id="operator" value={operatorManual} onChange={(e) => setOperatorManual(e.target.value)}
-          className={inputClass} />
-      </div>
-      {mode === 'scan' && (
-        <div className="text-sm">
-          <span className="font-medium">데이터 계보:</span>
-          <div className="mt-1 flex gap-4">
-            {(['raw', 'fused_mesh', 'unknown'] as const).map((l) => (
-              <label key={l} className="flex items-center gap-1">
-                <input type="radio" checked={lineage === l} onChange={() => setLineage(l)} />
-                {LINEAGE_LABEL[l]}
-              </label>
-            ))}
           </div>
-          {lineage === 'fused_mesh' && (
-            <p className="mt-1 text-xs text-amber-700">
-              융합 메시는 앱이 스무딩한 데이터라 실제보다 양호하게 나올 수 있습니다. 분석 결과와 보고서에 경고가 표시됩니다.
-            </p>
+          {mode === 'import' && (
+            <Alert type="info">
+              기존 Colab 노트북 결과 CSV(X, Y, Signed_Distance_mm 컬럼 필수) 또는 범용
+              연계 JSON(format: &quot;flatness-import-v1&quot;, points[].x/y/deviation_mm)을
+              등록합니다. 바닥 결과만 지원하며, 결과 화면에 &quot;외부 결과&quot; 배지가
+              표시됩니다.
+            </Alert>
           )}
+
+          {/* 2열(gap 40px). 모바일(<md)은 세로 스택(스펙 §5). */}
+          <div className="grid grid-cols-1 gap-10 md:grid-cols-2">
+
+            {/* 좌열: 측정위치(+인라인 생성) · 표면 유형 · 데이터 계보 */}
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-2">
+                <FormField label="측정위치" htmlFor="location">
+                  <SelectWrap>
+                    <select id="location" required value={locationId} onChange={(e) => setLocationId(e.target.value)}
+                      className={selectClass}>
+                      <option value="">선택...</option>
+                      {sitesList.map((s) => {
+                        const locs = locationsList.filter((l) => l.site_id === s.id);
+                        if (locs.length === 0) return null;
+                        return (
+                          <optgroup key={s.id} label={s.name}>
+                            {locs.map((l) => (
+                              <option key={l.id} value={l.id}>
+                                {[l.building, l.floor, l.room, l.name].filter(Boolean).join(' / ')}
+                              </option>
+                            ))}
+                          </optgroup>
+                        );
+                      })}
+                    </select>
+                  </SelectWrap>
+                </FormField>
+                {/* 문구 '+ 새 측정위치'는 접근 가능한 이름이자 테스트 셀렉터 - 아이콘으로 바꾸지 않는다 */}
+                <button type="button" onClick={() => setShowNewLocation((v) => !v)} className={linkButtonClass}>
+                  + 새 측정위치
+                </button>
+                {showNewLocation && (
+                  <div className="flex flex-col gap-4 rounded-lg border border-cs-divider bg-white p-4"
+                    onKeyDown={(e) => {
+                      // 리뷰 F2: 이 패널은 상위 스캔 업로드 <form> 안에 중첩돼 있다. 파일·
+                      // 위치·기준을 이미 골라둔 상태에서 미니폼 입력 중 Enter를 누르면 기본
+                      // 동작이 상위 폼을 암묵 제출해 엉뚱한 기존 측정위치로 스캔이 올라간다.
+                      // Enter를 여기서 가로채 "저장" 버튼과 같은 동작(측정위치 생성)으로
+                      // 재해석한다(입력이 모두 단일 라인 input/select라 textarea 예외는 불필요).
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        if (!creatingLoc) handleCreateLocation();
+                      }
+                    }}>
+                    <FormField label="현장 선택 또는 새 현장명" htmlFor="new-loc-site">
+                      <SelectWrap>
+                        <select id="new-loc-site" value={newLocSiteId} onChange={(e) => setNewLocSiteId(e.target.value)}
+                          className={selectClass}>
+                          <option value={NEW_SITE_VALUE}>+ 새 현장 만들기</option>
+                          {sitesList.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                        </select>
+                      </SelectWrap>
+                    </FormField>
+                    {newLocSiteId === NEW_SITE_VALUE && (
+                      <FormField label="새 현장명" htmlFor="new-site-name">
+                        <input id="new-site-name" value={newSiteName} onChange={(e) => setNewSiteName(e.target.value)}
+                          className={inputClass} />
+                      </FormField>
+                    )}
+                    <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+                      {([
+                        ['building', '동'], ['floor', '층'], ['room', '공간'], ['name', '이름'],
+                      ] as const).map(([key, label]) => (
+                        <FormField key={key} label={label} htmlFor={`new-loc-${key}`}>
+                          <input id={`new-loc-${key}`} value={newLocFields[key]}
+                            onChange={(e) => setNewLocFields({ ...newLocFields, [key]: e.target.value })}
+                            className={inputClass} />
+                        </FormField>
+                      ))}
+                    </div>
+                    {newLocError && <p className="text-xs leading-4 text-cs-error">{newLocError}</p>}
+                    {/* 뷰당 primary 1개(제출 버튼) - '저장'은 normal, '취소'는 링크형 */}
+                    <div className="flex items-center gap-2">
+                      <Button onClick={handleCreateLocation} disabled={creatingLoc}>
+                        {creatingLoc ? '저장 중...' : '저장'}
+                      </Button>
+                      <button type="button" onClick={() => setShowNewLocation(false)} className={linkButtonClass}>
+                        취소
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+              {mode === 'scan' && (
+                <div className="flex flex-col gap-1">
+                  {/* 라디오 묶음 제목: FormField는 단일 컨트롤용 <label htmlFor>라 묶음에는 span 700을 쓴다 */}
+                  <span className="text-sm font-bold">표면 유형</span>
+                  <div className="flex items-center gap-6">
+                    {(['floor', 'wall'] as const).map((s) => (
+                      <label key={s} className="inline-flex items-center gap-2 text-sm">
+                        <input type="radio" className={checkClass} checked={surface === s} onChange={() => setSurface(s)} />
+                        {SURFACE_LABEL[s]}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {mode === 'scan' && (
+                <div className="flex flex-col gap-1">
+                  <span className="text-sm font-bold">데이터 계보</span>
+                  <div className="flex items-center gap-6">
+                    {(['raw', 'fused_mesh', 'unknown'] as const).map((l) => (
+                      <label key={l} className="inline-flex items-center gap-2 text-sm">
+                        <input type="radio" className={checkClass} checked={lineage === l} onChange={() => setLineage(l)} />
+                        {LINEAGE_LABEL[l]}
+                      </label>
+                    ))}
+                  </div>
+                  {lineage === 'fused_mesh' && (
+                    <Alert type="warning">
+                      융합 메시는 앱이 스무딩한 데이터라 실제보다 양호하게 나올 수 있습니다. 분석 결과와 보고서에 경고가 표시됩니다.
+                    </Alert>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* 우열: 적용 기준 · 측정일자/장비 · 담당자 · 파일 */}
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-1">
+                <span className="text-sm font-bold">적용 기준</span>
+                <div className="flex flex-col gap-2 rounded-lg border border-cs-divider bg-white p-3">
+                  {criteria.length === 0 && <p className="text-sm text-cs-text-secondary">측정위치를 먼저 선택하세요.</p>}
+                  {criteria.map((c) => (
+                    <label key={c.id} className="flex items-start gap-2">
+                      <input type="radio" className={`${checkClass} mt-0.5`} checked={criteriaId === c.id} onChange={() => setCriteriaId(c.id)} />
+                      <span className="flex min-w-0 flex-col">
+                        <span className="inline-flex flex-wrap items-baseline gap-1.5">
+                          {/* 기준 코드는 ID 성격이라 mono(아트보드 13px) */}
+                          <span className="font-mono text-[13px]">{c.name}</span>
+                          {c.is_default && <em className="text-xs not-italic text-cs-text-secondary">(기본)</em>}
+                          {c.site_id && <em className="text-xs not-italic text-cs-text-secondary">(현장 기준)</em>}
+                        </span>
+                        <span className="text-xs leading-4 text-cs-text-secondary">{c.source_text}</span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <div className="flex items-start gap-4">
+                {/* 아트보드: 측정일자 180px 고정, 장비 flex 1 */}
+                <div className="w-[180px] shrink-0">
+                  <FormField label="측정일자" htmlFor="scanned-at">
+                    <input id="scanned-at" type="date" required value={scannedAt}
+                      onChange={(e) => setScannedAt(e.target.value)}
+                      className={`${inputClass} font-mono`} />
+                  </FormField>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <FormField label="장비" htmlFor="device">
+                    <input id="device" value={device} onChange={(e) => setDevice(e.target.value)}
+                      placeholder="예: iPhone 15 Pro + 3d Scanner App" className={inputClass} />
+                  </FormField>
+                </div>
+              </div>
+              <FormField label="담당자 이름(직접 입력, 비우면 로그인 사용자)" htmlFor="operator">
+                <input id="operator" value={operatorManual} onChange={(e) => setOperatorManual(e.target.value)}
+                  className={inputClass} />
+              </FormField>
+              <FormField
+                label={mode === 'import' ? '결과 파일 (csv/json)' : '스캔 파일 (ply/las/laz/xyz/txt/csv/pts)'}
+                htmlFor="file">
+                <input id="file" type="file" required onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                  className={fileInputClass} />
+                {/* 용량 안내는 아트보드처럼 컨트롤 아래(FormField description은 컨트롤 위라 쓰지 않는다) */}
+                <p className="text-xs leading-4 text-cs-text-secondary">
+                  파일은 Supabase Storage에 저장됩니다. 파일당 최대 <span className="font-mono">{MAX_UPLOAD_MB}</span>MB입니다.
+                </p>
+              </FormField>
+            </div>
+
+          </div>
         </div>
-      )}
-      <div>
-        <label htmlFor="file" className="block text-sm font-medium">
-          {mode === 'import' ? '결과 파일 (csv/json)' : '스캔 파일 (ply/las/laz/xyz/txt/csv/pts)'}
-        </label>
-        <input id="file" type="file" required onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-          className="mt-1 w-full text-sm" />
-        <p className="mt-1 text-xs text-zinc-500">
-          파일은 Supabase Storage에 저장됩니다. 파일당 최대 <span className="font-mono">{MAX_UPLOAD_MB}</span>MB입니다.
-        </p>
+      </Container>
+      {error && <Alert type="error">{error}</Alert>}
+      {/* 컨테이너 아래 우측 정렬 - 이 뷰의 유일한 primary */}
+      <div className="flex items-center justify-end gap-2">
+        <Button type="submit" variant="primary" disabled={busy}>
+          <Icon name="upload" />
+          {busy ? '업로드 중...' : mode === 'import' ? '가져오기 시작' : '업로드 후 사전 검사'}
+        </Button>
       </div>
-      {error && <p className="text-sm text-red-600">{error}</p>}
-      <button type="submit" disabled={busy} className={primaryButtonClass}>
-        {busy ? '업로드 중...' : mode === 'import' ? '가져오기 시작' : '업로드 후 사전 검사'}
-      </button>
     </form>
   );
 }
