@@ -14,6 +14,10 @@ vi.mock('@/lib/supabase/client', () => ({ createClient: vi.fn() }));
 
 import { createClient } from '@/lib/supabase/client';
 import { ReanalyzeButton } from '../reanalyze-button';
+// T6 리뷰 수정 1차: 구배 경로의 렌더 대상이 SlopeAnalysisContainer로 바뀌었다 -
+// 아트보드(ScanDone.dc.html 172-205)가 '적용 기준' 라디오를 컨테이너 본문에, 버튼을
+// 헤더에 두기 때문이다. 잡 등록 로직(useReanalyze)은 그대로라 아래 단언은 손대지 않았다.
+import { SlopeAnalysisContainer } from '../slope-analysis-container';
 
 function stubSupabase(opts: {
   criteriaRows?: { id: string; is_default?: boolean }[];
@@ -62,8 +66,7 @@ afterEach(() => {
 
 describe('ReanalyzeButton kind=slope (단계 C: 구배 분석 시작)', () => {
   it('버튼 문구가 "구배 분석"이다(kind별 문구 노출)', () => {
-    render(<ReanalyzeButton scanId="s1" userId="u1" surface="floor" kind="slope" siteId="site1"
-      isImport={false} />);
+    render(<SlopeAnalysisContainer scanId="s1" userId="u1" siteId="site1" showButton />);
     expect(screen.getByRole('button', { name: /구배 분석/ })).toBeInTheDocument();
   });
 
@@ -74,8 +77,7 @@ describe('ReanalyzeButton kind=slope (단계 C: 구배 분석 시작)', () => {
   // createClient 목을 안 주면 마운트 즉시 rpc()가 undefined 위에서 던지므로 반드시 준다.
   it('이 종류의 분석이 한 번도 없었어도(latestStatus 미지정) 후보 로딩 후 버튼이 활성 상태다(첫 시작)', async () => {
     vi.mocked(createClient).mockReturnValue(stubSupabase() as never);
-    render(<ReanalyzeButton scanId="s1" userId="u1" surface="floor" kind="slope" siteId="site1"
-      isImport={false} />);
+    render(<SlopeAnalysisContainer scanId="s1" userId="u1" siteId="site1" showButton />);
     await waitFor(() => expect(screen.getByRole('button', { name: /구배 분석/ })).toBeEnabled());
   });
 
@@ -83,8 +85,7 @@ describe('ReanalyzeButton kind=slope (단계 C: 구배 분석 시작)', () => {
     const rpcSpy = vi.fn();
     const insertSpy = vi.fn();
     vi.mocked(createClient).mockReturnValue(stubSupabase({ rpcSpy, insertSpy }) as never);
-    render(<ReanalyzeButton scanId="s1" userId="u1" surface="floor" kind="slope" siteId="site1"
-      isImport={false} />);
+    render(<SlopeAnalysisContainer scanId="s1" userId="u1" siteId="site1" showButton />);
     // scans.selected_criteria_id(평활도 기준)를 그대로 쓰면 워커가 KeyError로 죽으므로
     // 반드시 p_kind: 'slope'로 새로 해석해야 한다 - 마운트 시 이미 호출됐는지 기다린다.
     await waitFor(() => expect(rpcSpy).toHaveBeenCalledWith('fn_resolve_criteria',
@@ -118,8 +119,7 @@ describe('ReanalyzeButton kind=slope (단계 C: 구배 분석 시작)', () => {
     const insertSpy = vi.fn();
     vi.mocked(createClient).mockReturnValue(
       stubSupabase({ criteriaRows: [], insertSpy }) as never);
-    render(<ReanalyzeButton scanId="s1" userId="u1" surface="floor" kind="slope" siteId="site1"
-      isImport={false} />);
+    render(<SlopeAnalysisContainer scanId="s1" userId="u1" siteId="site1" showButton />);
     fireEvent.click(screen.getByRole('button', { name: /구배 분석/ }));
 
     await screen.findByText(/구배 판정 기준을 찾을 수 없습니다/);
@@ -134,8 +134,7 @@ describe('ReanalyzeButton kind=slope (단계 C: 구배 분석 시작)', () => {
   it('rpc가 오류를 내면(권한 문제 등) err.message를 그대로 보여준다(007 오진 방지)', async () => {
     vi.mocked(createClient).mockReturnValue(
       stubSupabase({ criteriaError: { message: 'permission denied for function fn_resolve_criteria' } }) as never);
-    render(<ReanalyzeButton scanId="s1" userId="u1" surface="floor" kind="slope" siteId="site1"
-      isImport={false} />);
+    render(<SlopeAnalysisContainer scanId="s1" userId="u1" siteId="site1" showButton />);
 
     await screen.findByText(/permission denied for function fn_resolve_criteria/);
     expect(screen.queryByText(/마이그레이션 007이 적용됐는지 확인하세요/)).not.toBeInTheDocument();

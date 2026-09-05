@@ -7,6 +7,11 @@ vi.mock('@/lib/supabase/client', () => ({ createClient: vi.fn() }));
 
 import { createClient } from '@/lib/supabase/client';
 import { ReanalyzeButton } from '../reanalyze-button';
+// T6 리뷰 수정 1차: 구배 기준 라디오는 아트보드대로 컨테이너 '본문'으로 옮겼다
+// (ScanDone.dc.html 172-205 - 헤더에는 버튼만). 라디오와 버튼이 같은 상태를 공유하므로
+// 그 배치는 SlopeAnalysisContainer가 맡는다(로직은 useReanalyze 그대로 - 중복 없음).
+// 아래 구배 describe들은 렌더 대상만 그 컴포넌트로 바꿨고 단언은 한 줄도 바꾸지 않았다.
+import { SlopeAnalysisContainer } from '../slope-analysis-container';
 import { DUPLICATE_JOB_MESSAGE } from '@/lib/domain/jobs';
 import type { CriteriaRow } from '@/lib/domain/types';
 
@@ -201,8 +206,7 @@ function stubSupabaseSlope(
 describe('ReanalyzeButton kind=slope 기준 선택 (코드리뷰(4차) N1)', () => {
   it('마운트 시 후보 기준을 불러와 라디오 목록으로 보여주고, is_default를 기본 선택으로 둔다', async () => {
     vi.mocked(createClient).mockReturnValue(stubSupabaseSlope(slopeCriteriaRows) as never);
-    render(<ReanalyzeButton scanId="s1" userId="u1" surface="floor" kind="slope" siteId="site1"
-      isImport={false} />);
+    render(<SlopeAnalysisContainer scanId="s1" userId="u1" siteId="site1" showButton />);
 
     await waitFor(() => expect(screen.getByText('옥상 슬래브(노출방수)')).toBeInTheDocument());
     expect(screen.getByText('욕실·화장실 바닥')).toBeInTheDocument();
@@ -215,8 +219,7 @@ describe('ReanalyzeButton kind=slope 기준 선택 (코드리뷰(4차) N1)', () 
 
   it('방향 비대상 기준에는 "방향 판정 안 함" 힌트를 보여준다', async () => {
     vi.mocked(createClient).mockReturnValue(stubSupabaseSlope(slopeCriteriaRows) as never);
-    render(<ReanalyzeButton scanId="s1" userId="u1" surface="floor" kind="slope" siteId="site1"
-      isImport={false} />);
+    render(<SlopeAnalysisContainer scanId="s1" userId="u1" siteId="site1" showButton />);
     await waitFor(() => expect(screen.getByText('실내 평바닥')).toBeInTheDocument());
     expect(screen.getByText(/방향 판정 안 함/)).toBeInTheDocument();
   });
@@ -224,8 +227,7 @@ describe('ReanalyzeButton kind=slope 기준 선택 (코드리뷰(4차) N1)', () 
   it('사용자가 다른 기준을 선택하면 그 기준으로 분석을 시작한다(rows[0] 고정 아님)', async () => {
     const insertSpy = vi.fn();
     vi.mocked(createClient).mockReturnValue(stubSupabaseSlope(slopeCriteriaRows, null, () => {}, insertSpy) as never);
-    render(<ReanalyzeButton scanId="s1" userId="u1" surface="floor" kind="slope" siteId="site1"
-      isImport={false} />);
+    render(<SlopeAnalysisContainer scanId="s1" userId="u1" siteId="site1" showButton />);
     await waitFor(() => expect(screen.getByText('옥상 슬래브(노출방수)')).toBeInTheDocument());
 
     // 기본 선택(실내 평바닥, 방향 비대상)이 아니라 방향 판정이 되는 기준으로 바꾼다.
@@ -241,8 +243,7 @@ describe('ReanalyzeButton kind=slope 기준 선택 (코드리뷰(4차) N1)', () 
   it('기본 선택 그대로 시작하면 is_default 기준(c-indoor-level)이 실린다', async () => {
     const insertSpy = vi.fn();
     vi.mocked(createClient).mockReturnValue(stubSupabaseSlope(slopeCriteriaRows, null, () => {}, insertSpy) as never);
-    render(<ReanalyzeButton scanId="s1" userId="u1" surface="floor" kind="slope" siteId="site1"
-      isImport={false} />);
+    render(<SlopeAnalysisContainer scanId="s1" userId="u1" siteId="site1" showButton />);
     await waitFor(() => expect(screen.getByText('실내 평바닥')).toBeInTheDocument());
 
     fireEvent.click(screen.getByRole('button', { name: '구배 분석' }));
@@ -252,8 +253,7 @@ describe('ReanalyzeButton kind=slope 기준 선택 (코드리뷰(4차) N1)', () 
 
   it('후보 기준을 못 찾으면(마이그레이션 007 미적용 등) 오류를 보여주고 버튼을 비활성화한다', async () => {
     vi.mocked(createClient).mockReturnValue(stubSupabaseSlope([]) as never);
-    render(<ReanalyzeButton scanId="s1" userId="u1" surface="floor" kind="slope" siteId="site1"
-      isImport={false} />);
+    render(<SlopeAnalysisContainer scanId="s1" userId="u1" siteId="site1" showButton />);
     await waitFor(() => {
       expect(screen.getByText(/구배 판정 기준을 찾을 수 없습니다/)).toBeInTheDocument();
     });
@@ -262,8 +262,7 @@ describe('ReanalyzeButton kind=slope 기준 선택 (코드리뷰(4차) N1)', () 
 
   it('후보가 로딩되기 전에는 버튼이 비활성 상태다(빈 criteria_id로 분석을 시작하지 않음)', () => {
     vi.mocked(createClient).mockReturnValue(stubSupabaseSlope(slopeCriteriaRows) as never);
-    render(<ReanalyzeButton scanId="s1" userId="u1" surface="floor" kind="slope" siteId="site1"
-      isImport={false} />);
+    render(<SlopeAnalysisContainer scanId="s1" userId="u1" siteId="site1" showButton />);
     // 비동기 useEffect가 아직 안 끝난 첫 렌더 시점.
     expect(screen.getByRole('button', { name: '구배 분석' })).toBeDisabled();
   });
@@ -287,8 +286,7 @@ describe('ReanalyzeButton Cloudscape 재스킨 (T6)', () => {
 
   it('구배 기준 라디오는 checkClass를 쓰고 RPC 반환 순서를 그대로 유지한다', async () => {
     vi.mocked(createClient).mockReturnValue(stubSupabaseSlope(slopeCriteriaRows) as never);
-    render(<ReanalyzeButton scanId="s1" userId="u1" surface="floor" kind="slope" siteId="site1"
-      isImport={false} />);
+    render(<SlopeAnalysisContainer scanId="s1" userId="u1" siteId="site1" showButton />);
     await waitFor(() => expect(screen.getByText('실내 평바닥')).toBeInTheDocument());
 
     const radios = screen.getAllByRole('radio');

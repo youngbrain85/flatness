@@ -60,7 +60,12 @@ interface Props {
   isImport: boolean;
 }
 
-export function ReanalyzeButton({
+// T6 리뷰 수정 1차: 아트보드(ScanDone.dc.html 172-205행)의 구배 컨테이너는 헤더에
+// 버튼만, 본문에 '적용 기준' 라디오를 둔다. 한 컴포넌트가 Container의 actions 슬롯과
+// 본문에 동시에 렌더할 수는 없으므로 상태·잡 등록 로직을 이 훅으로 뽑고, 두 조각
+// (ReanalyzeAction·SlopeCriteriaField)이 같은 ctl을 공유하게 했다 - 로직은 옛
+// ReanalyzeButton 본문 그대로다(잡 타입 분기·기준 해석 순서·엔큐/롤백 전부).
+export function useReanalyze({
   scanId, userId, surface, kind, criteriaId, siteId, latestStatus, isImport,
 }: Props) {
   const router = useRouter();
@@ -172,17 +177,47 @@ export function ReanalyzeButton({
     router.refresh();
   }
 
-  const label = `${ANALYSIS_KIND_LABEL[kind]} 분석`;
+  return {
+    scanId, kind, busy, error, inProgress, slopeCriteria, slopeCriteriaId, setSlopeCriteriaId,
+    criteriaLoadError, onClick,
+    label: `${ANALYSIS_KIND_LABEL[kind]} 분석`,
+    // 구배는 기준을 고르기 전에는 누를 수 없다(빈 criteria_id로 분석을 시작하지 않는다).
+    disabled: busy || inProgress || (kind === 'slope' && !slopeCriteriaId),
+  };
+}
+
+export type ReanalyzeControl = ReturnType<typeof useReanalyze>;
+
+// 버튼 + 진행/오류 안내. 컨테이너 헤더 액션 슬롯(아트보드 ScanProcessing: disabled 버튼 +
+// 12px 힌트)과 단독 사용 양쪽에서 같은 모습이다.
+export function ReanalyzeAction({ ctl }: { ctl: ReanalyzeControl }) {
   return (
     <div className="flex flex-col items-end gap-1">
-      {/* N1: 구배 기준 선택 - upload-form.tsx의 "적용 기준" 라디오 목록과 같은 패턴.
-          thresholds[0].use(옥상 슬래브(노출방수) / 욕실·화장실 바닥 / 주차장 바닥 /
-          실내 평바닥 등, 007_slope_analysis.sql:118-133)를 보여준다.
-          순서는 fn_resolve_criteria 반환 순서 그대로다 - 재정렬하지 않는다. */}
-      {kind === 'slope' && slopeCriteria.length > 0 && (
+      <Button variant="normal" onClick={ctl.onClick} disabled={ctl.disabled}
+        title={ctl.inProgress ? '이미 진행 중인 분석이 끝난 뒤 다시 시도하세요.' : undefined}>
+        {ctl.busy ? '요청 중...' : ctl.label}
+      </Button>
+      {ctl.inProgress && (
+        <p className="text-xs leading-4 text-cs-text-secondary">진행 중인 분석이 끝난 뒤 다시 시도하세요.</p>
+      )}
+      {ctl.error && <p className="text-xs leading-4 text-cs-error">{ctl.error}</p>}
+    </div>
+  );
+}
+
+// N1: 구배 기준 선택 - upload-form.tsx의 "적용 기준" 라디오 목록과 같은 패턴.
+// thresholds[0].use(옥상 슬래브(노출방수) / 욕실·화장실 바닥 / 주차장 바닥 /
+// 실내 평바닥 등, 007_slope_analysis.sql:118-133)를 보여준다.
+// 순서는 fn_resolve_criteria 반환 순서 그대로다 - 재정렬하지 않는다.
+// 아트보드(ScanDone 178-205행)에서 이 블록은 컨테이너 본문의 첫 자식이다.
+export function SlopeCriteriaField({ ctl }: { ctl: ReanalyzeControl }) {
+  if (ctl.kind !== 'slope') return null;
+  return (
+    <>
+      {ctl.slopeCriteria.length > 0 && (
         <FormField label="적용 기준">
           <div className="flex flex-col gap-2">
-            {slopeCriteria.map((c) => {
+            {ctl.slopeCriteria.map((c) => {
               // CriteriaRow.thresholds는 컴파일 타임에는 평활도 Threshold[]지만
               // kind='slope' 행의 실제 jsonb 내용은 SlopeThreshold다(런타임
               // 형태가 다르다 - slope-result.tsx의 stats 캐스팅과 같은 사정).
@@ -190,8 +225,8 @@ export function ReanalyzeButton({
               const aware = isDirectionAwareCriteria(t ?? null);
               return (
                 <label key={c.id} className="flex items-center gap-2 text-sm">
-                  <input type="radio" name={`slope-criteria-${scanId}`} checked={slopeCriteriaId === c.id}
-                    onChange={() => setSlopeCriteriaId(c.id)} disabled={busy || inProgress}
+                  <input type="radio" name={`slope-criteria-${ctl.scanId}`} checked={ctl.slopeCriteriaId === c.id}
+                    onChange={() => ctl.setSlopeCriteriaId(c.id)} disabled={ctl.busy || ctl.inProgress}
                     className={checkClass} />
                   <span className="inline-flex flex-wrap items-baseline gap-1.5">
                     <span>{t?.use ?? c.name}</span>
@@ -204,18 +239,16 @@ export function ReanalyzeButton({
           </div>
         </FormField>
       )}
-      {kind === 'slope' && criteriaLoadError && (
-        <p className="max-w-xs text-xs leading-4 text-cs-error">{criteriaLoadError}</p>
+      {ctl.criteriaLoadError && (
+        <p className="text-xs leading-4 text-cs-error">{ctl.criteriaLoadError}</p>
       )}
-      <Button variant="normal" onClick={onClick}
-        disabled={busy || inProgress || (kind === 'slope' && !slopeCriteriaId)}
-        title={inProgress ? '이미 진행 중인 분석이 끝난 뒤 다시 시도하세요.' : undefined}>
-        {busy ? '요청 중...' : label}
-      </Button>
-      {inProgress && (
-        <p className="text-xs leading-4 text-cs-text-secondary">진행 중인 분석이 끝난 뒤 다시 시도하세요.</p>
-      )}
-      {error && <p className="text-xs leading-4 text-cs-error">{error}</p>}
-    </div>
+    </>
   );
+}
+
+// 평활도 컨테이너의 헤더 액션(기준 라디오가 없는 쪽)은 이 버튼 하나로 끝난다.
+// 구배는 라디오가 본문으로 가야 해서 SlopeAnalysisContainer가 두 조각을 직접 배치한다.
+export function ReanalyzeButton(props: Props) {
+  const ctl = useReanalyze(props);
+  return <ReanalyzeAction ctl={ctl} />;
 }

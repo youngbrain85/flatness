@@ -25,6 +25,7 @@ import { createClient } from '@/lib/supabase/server';
 import ScanPage from '../page';
 import { AnalysisProgress } from '@/components/analysis-progress';
 import { ReanalyzeButton } from '@/components/reanalyze-button';
+import { SlopeAnalysisContainer } from '@/components/slope-analysis-container';
 import { ScanStepStrip } from '@/components/scan-step-strip';
 import { UnitConfirmForm } from '@/components/unit-confirm-form';
 import { AnalysisResult } from '@/components/analysis/analysis-result';
@@ -88,9 +89,25 @@ function linkHrefs(node: unknown): string[] {
 // 분석 섹션(평활도·구배)만 고른다 - 제목이 '<종류> 분석'인 Container. '스캔 정보'·
 // '단위 확인'·'<종류> 결과'(제목이 프래그먼트)는 걸리지 않는다. 코드가 항상 평활도를
 // 먼저, 구배를 나중에 그리므로 [0] 평활도, [1] 구배다.
+//
+// T6 리뷰 수정 1차: 구배 섹션은 자기 Container를 스스로 그리는 클라이언트 컴포넌트
+// (SlopeAnalysisContainer)다 - 아트보드가 '적용 기준' 라디오를 컨테이너 본문에, 버튼을
+// 헤더에 두는데 서버 컴포넌트는 두 슬롯에 한 클라이언트 컴포넌트를 나눠 넣을 수 없기
+// 때문이다. 서버 트리에는 그 컴포넌트 타입만 남으므로 여기서 함께 센다(평활도 먼저).
 function analysisSections(node: unknown): El[] {
-  return findAll(node, Container).filter(
-    (c) => typeof c.props.title === 'string' && c.props.title.endsWith(' 분석'));
+  return [
+    ...findAll(node, Container).filter(
+      (c) => typeof c.props.title === 'string' && c.props.title.endsWith(' 분석')),
+    ...findAll(node, SlopeAnalysisContainer),
+  ];
+}
+
+// 구배 "버튼"이 실제로 그려지는가. 버튼은 이제 SlopeAnalysisContainer 안에서
+// 렌더되므로(서버 트리에는 안 보인다) 그 게이트 prop을 본다 - page.tsx가 옛
+// `user && showSlopeButton`을 그대로 넘긴다. C1 가드(임포트 스캔에 구배 분석을
+// 걸면 안 된다)를 페이지 레벨에서 잡는 자리가 여기다.
+function slopeButtonShown(node: unknown): boolean {
+  return findAll(node, SlopeAnalysisContainer).some((c) => c.props.showButton === true);
 }
 
 function chain(result: { data: unknown; error: null }) {
@@ -165,6 +182,9 @@ describe('ScanPage 종류별 분석 섹션 배선 (단계 C 회귀 차단)', () 
 
     expect(buttons).toHaveLength(1);
     expect(buttons[0].props.kind).toBe('flatness');
+    // T6 리뷰 수정 1차: 구배 버튼은 SlopeAnalysisContainer가 그리므로 ReanalyzeButton
+    // 개수만으로는 더 이상 "구배 버튼이 없다"를 증명하지 못한다 - 게이트를 직접 본다.
+    expect(slopeButtonShown(el)).toBe(false);
   });
 
   it('임포트 결과 스캔이면 구배 버튼을 렌더하지 않는다', async () => {
@@ -177,6 +197,9 @@ describe('ScanPage 종류별 분석 섹션 배선 (단계 C 회귀 차단)', () 
 
     expect(buttons).toHaveLength(1);
     expect(buttons[0].props.kind).toBe('flatness');
+    // T6 리뷰 수정 1차: 구배 버튼은 SlopeAnalysisContainer가 그리므로 ReanalyzeButton
+    // 개수만으로는 더 이상 "구배 버튼이 없다"를 증명하지 못한다 - 게이트를 직접 본다.
+    expect(slopeButtonShown(el)).toBe(false);
     // 리뷰 Important(I2): 버튼 개수만 세면 isImport 배선 자체는 검증되지 않는다.
     // 이 값이 틀어지면 임포트 스캔 재분석이 'analyze' 잡으로 나가 Colab 편차값이
     // 통째로 무시되고 전 셀이 조용히 "적합"이 된다(C1 사고 계열).
@@ -201,6 +224,9 @@ describe('ScanPage 종류별 분석 섹션 배선 (단계 C 회귀 차단)', () 
 
     expect(buttons).toHaveLength(1);
     expect(buttons[0].props.kind).toBe('flatness');
+    // T6 리뷰 수정 1차: 구배 버튼은 SlopeAnalysisContainer가 그리므로 ReanalyzeButton
+    // 개수만으로는 더 이상 "구배 버튼이 없다"를 증명하지 못한다 - 게이트를 직접 본다.
+    expect(slopeButtonShown(el)).toBe(false);
   });
 
   it('I1 실험군 B: 임포트 분석이 failed면 구배 버튼을 숨긴다', async () => {
@@ -213,6 +239,9 @@ describe('ScanPage 종류별 분석 섹션 배선 (단계 C 회귀 차단)', () 
 
     expect(buttons).toHaveLength(1);
     expect(buttons[0].props.kind).toBe('flatness');
+    // T6 리뷰 수정 1차: 구배 버튼은 SlopeAnalysisContainer가 그리므로 ReanalyzeButton
+    // 개수만으로는 더 이상 "구배 버튼이 없다"를 증명하지 못한다 - 게이트를 직접 본다.
+    expect(slopeButtonShown(el)).toBe(false);
   });
 
   it('I1 실험군 C: 완료된 임포트 분석을 재분석해 새 행이 queued로 latest가 되면 구배 버튼을 숨긴다', async () => {
@@ -236,6 +265,9 @@ describe('ScanPage 종류별 분석 섹션 배선 (단계 C 회귀 차단)', () 
 
     expect(buttons).toHaveLength(1);
     expect(buttons[0].props.kind).toBe('flatness');
+    // T6 리뷰 수정 1차: 구배 버튼은 SlopeAnalysisContainer가 그리므로 ReanalyzeButton
+    // 개수만으로는 더 이상 "구배 버튼이 없다"를 증명하지 못한다 - 게이트를 직접 본다.
+    expect(slopeButtonShown(el)).toBe(false);
   });
 
   // 재리뷰 I-new: 1차 수정(latestFlatness.status==='done' 요구)이 임포트 오판은
@@ -255,6 +287,9 @@ describe('ScanPage 종류별 분석 섹션 배선 (단계 C 회귀 차단)', () 
 
     expect(buttons).toHaveLength(1);
     expect(buttons[0].props.kind).toBe('flatness');
+    // T6 리뷰 수정 1차: 구배 버튼은 SlopeAnalysisContainer가 그리므로 ReanalyzeButton
+    // 개수만으로는 더 이상 "구배 버튼이 없다"를 증명하지 못한다 - 게이트를 직접 본다.
+    expect(slopeButtonShown(el)).toBe(false);
   });
 
   it('F(재리뷰): 정상 스캔의 첫 평활도 분석이 failed면(완료된 분석 없음) 구배 버튼을 숨긴다', async () => {
@@ -267,6 +302,9 @@ describe('ScanPage 종류별 분석 섹션 배선 (단계 C 회귀 차단)', () 
 
     expect(buttons).toHaveLength(1);
     expect(buttons[0].props.kind).toBe('flatness');
+    // T6 리뷰 수정 1차: 구배 버튼은 SlopeAnalysisContainer가 그리므로 ReanalyzeButton
+    // 개수만으로는 더 이상 "구배 버튼이 없다"를 증명하지 못한다 - 게이트를 직접 본다.
+    expect(slopeButtonShown(el)).toBe(false);
   });
 
   it('E2(재리뷰): 평활도 재분석이 queued여도 옛 완료 분석이 LiDAR임을 증명하면 구배 버튼이 살아 있다', async () => {
@@ -286,10 +324,8 @@ describe('ScanPage 종류별 분석 섹션 배선 (단계 C 회귀 차단)', () 
       stubSupabase(mkScan(), [requeued, doneLidar]) as never);
 
     const el = await ScanPage(pageProps());
-    const buttons = findAll(el, ReanalyzeButton);
-    const slopeBtn = buttons.find((b) => b.props.kind === 'slope');
 
-    expect(slopeBtn).toBeDefined();
+    expect(slopeButtonShown(el)).toBe(true);
   });
 
   it('H(재리뷰): 평활도가 processing이어도 이미 완료된 구배 결과·이력은 계속 보인다(확정 5)', async () => {
@@ -308,6 +344,10 @@ describe('ScanPage 종류별 분석 섹션 배선 (단계 C 회귀 차단)', () 
     // 평활도 섹션(진행 중) + 구배 섹션(완료된 결과 표시) 둘 다 그려진다.
     expect(sections).toHaveLength(2);
     expect(progresses.map((p) => p.props.analysisId)).toEqual(['f1', 's1']);
+    // 섹션은 보이되 "새 구배 분석 시작" 버튼은 없다 - latestFlatness가 done이 아니라
+    // 임포트 여부를 알 수 없는 상태이기 때문이다(C1). 섹션이 실제로 그려지는 유일한
+    // 케이스라, showButton 게이트가 살아 있는지는 여기서만 확인할 수 있다.
+    expect(slopeButtonShown(el)).toBe(false);
   });
 
   it('평활도 첫 분석이 아직 없으면(analyses 없음) 구배 버튼도 함께 숨긴다', async () => {
@@ -319,6 +359,8 @@ describe('ScanPage 종류별 분석 섹션 배선 (단계 C 회귀 차단)', () 
     const el = await ScanPage(pageProps());
 
     expect(findAll(el, ReanalyzeButton)).toHaveLength(0);
+    // 구배 섹션 자체가 없다(showSlopeSection 거짓) - 버튼만이 아니라 컨테이너도 없다.
+    expect(findAll(el, SlopeAnalysisContainer)).toHaveLength(0);
   });
 
   it('평활도·구배가 공존하면 두 섹션의 진행 상태가 서로 독립이다(analyses[0] 회귀 차단)', async () => {
@@ -335,13 +377,16 @@ describe('ScanPage 종류별 분석 섹션 배선 (단계 C 회귀 차단)', () 
     const el = await ScanPage(pageProps());
     const buttons = findAll(el, ReanalyzeButton);
     const flatnessBtn = buttons.find((b) => b.props.kind === 'flatness');
-    const slopeBtn = buttons.find((b) => b.props.kind === 'slope');
+    // T6 리뷰 수정 1차: 구배 쪽 배선은 이제 SlopeAnalysisContainer의 props다
+    // (버튼은 그 컴포넌트 안에서 같은 값으로 만들어진다 - slope-analysis-container.tsx).
+    const slopeSection = findAll(el, SlopeAnalysisContainer)[0];
 
-    expect(buttons).toHaveLength(2);
+    expect(buttons).toHaveLength(1);
     // 구배가 더 최근이라도(analyses[0]) 평활도 섹션은 여전히 자기 종류의 latest(done)만 본다.
     expect(flatnessBtn?.props.latestStatus).toBe('done');
-    expect(slopeBtn?.props.latestStatus).toBe('processing');
-    expect(slopeBtn?.props.siteId).toBe('site1');
+    expect(slopeSection?.props.latestStatus).toBe('processing');
+    expect(slopeSection?.props.siteId).toBe('site1');
+    expect(slopeSection?.props.showButton).toBe(true);
   });
 
   // 리뷰 Important(I4): 코드리뷰 M3("판정 기준 변경 후 다시 돌리기" 취지)의 핵심이다.

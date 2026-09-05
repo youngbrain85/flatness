@@ -8,6 +8,7 @@ import { AnalysisResult } from '@/components/analysis/analysis-result';
 import { SlopeResult } from '@/components/analysis/slope-result';
 import { ReanalyzeButton } from '@/components/reanalyze-button';
 import { ScanStatusWatcher } from '@/components/scan-status-watcher';
+import { SlopeAnalysisContainer } from '@/components/slope-analysis-container';
 import { ScanStepStrip } from '@/components/scan-step-strip';
 import { UnitConfirmForm } from '@/components/unit-confirm-form';
 import { Alert } from '@/components/ui/alert';
@@ -411,24 +412,24 @@ export default async function ScanPage({ params, searchParams }: {
         </Container>
       )}
       {showSlopeSection && (
-        // 본문은 latestSlope가 있을 때만 있다(옛 코드와 같다). 없으면 빈 20px 본문이 남지 않게
-        // padding도 끈다 - 소스에 없는 안내 문구를 채우지 않는다(스펙 §7-8).
-        <Container
-          title={`${ANALYSIS_KIND_LABEL.slope} 분석`}
-          padded={!!latestSlope}
-          actions={user && showSlopeButton ? (
-            // 구배는 항상 클릭 시점에 fn_resolve_criteria(site, 'floor', 'slope')로
-            // 기준을 새로 해석하므로 criteriaId를 넘기지 않는다(컨트롤러 보강 확정 1).
-            // showSlopeButton이 이미 !isImportUnknownOrTrue로 걸렀으므로 이 버튼은
-            // 항상 'analyze' 잡만 건다. 재리뷰 수정: 섹션 자체는 showSlopeSection이
-            // 따로 관리하므로(latestSlope 존재만으로도 그려진다) 버튼만 이 조건으로
-            // 별도 게이트한다 - 이미 있는 구배 결과를 숨기지 않으면서도 새 구배
-            // 분석은 임포트 여부가 확실할 때만 시작하게 한다.
-            <ReanalyzeButton scanId={id} userId={user.id} surface="floor" kind="slope"
-              siteId={loc?.site_id}
-              latestStatus={latestSlope?.status}
-              isImport={false} />
-          ) : undefined}>
+        // T6 리뷰 수정 1차: 아트보드(ScanDone.dc.html 172-205행)는 헤더에 버튼만 두고
+        // '적용 기준' 라디오를 본문 첫 블록으로 그린다. 라디오와 버튼이 같은 클라이언트
+        // 상태를 공유해 서버 컴포넌트가 Container의 actions 슬롯과 본문에 나눠 렌더할 수
+        // 없으므로, 컨테이너 자체를 SlopeAnalysisContainer(클라이언트)가 그리고 본문에
+        // 들어갈 진행 상태·이력만 children으로 넘긴다. 본문은 옛 코드와 같이 latestSlope가
+        // 있을 때만 있고, 비면 빈 20px이 남지 않게 padding도 꺼진다(스펙 §7-8).
+        //
+        // showButton: 재리뷰 수정으로 섹션 렌더(showSlopeSection)와 버튼 노출을 갈랐다 -
+        // 섹션은 latestSlope 존재만으로도 그려지고, 버튼만 !isImportUnknownOrTrue로
+        // 게이트한다(이미 있는 구배 결과를 숨기지 않으면서 새 구배 분석은 임포트 여부가
+        // 확실할 때만 시작한다). 기준 해석(fn_resolve_criteria)·잡 타입 분기는 컴포넌트
+        // 쪽 주석 참고 - criteriaId를 넘기지 않는 이유도 거기 있다.
+        <SlopeAnalysisContainer
+          scanId={id}
+          userId={user?.id}
+          siteId={loc?.site_id}
+          latestStatus={latestSlope?.status}
+          showButton={!!user && showSlopeButton}>
           {latestSlope && (
             <div className="flex flex-col gap-3">
               <AnalysisProgress analysisId={latestSlope.id} initialStatus={latestSlope.status} scanId={id} />
@@ -450,7 +451,7 @@ export default async function ScanPage({ params, searchParams }: {
               )}
             </div>
           )}
-        </Container>
+        </SlopeAnalysisContainer>
       )}
       {resultAnalysis && (
         // D5: app/analyses/[id]/page.tsx가 하던 결과 렌더를 이 화면으로 옮겼다.
