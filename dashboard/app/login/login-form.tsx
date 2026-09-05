@@ -2,6 +2,9 @@
 import { useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { ensureProfile } from '@/lib/auth/ensure-profile';
+import { FormField, inputClass } from '@/components/ui/form';
+import { Button } from '@/components/ui/button';
+import { Alert } from '@/components/ui/alert';
 
 export function LoginForm() {
   const [email, setEmail] = useState('');
@@ -34,26 +37,26 @@ export function LoginForm() {
     window.location.assign('/');
   }
 
+  // 아트보드 Login 본문: 필드 사이 gap 16px, 라벨 700 + 32px 입력, 오류는 error Alert,
+  // primary 전폭 '로그인'(뷰의 유일한 primary), 안내 12px/16px 보조색.
   return (
-    <form onSubmit={onSubmit} className="space-y-4">
-      <div>
-        <label htmlFor="email" className="block text-sm font-medium">이메일</label>
+    <form onSubmit={onSubmit} className="flex flex-col gap-4">
+      <FormField label="이메일" htmlFor="email">
         <input id="email" type="email" required value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="mt-1 w-full rounded border px-3 py-2" />
-      </div>
-      <div>
-        <label htmlFor="password" className="block text-sm font-medium">비밀번호</label>
+          className={inputClass} />
+      </FormField>
+      <FormField label="비밀번호" htmlFor="password">
         <input id="password" type="password" required value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className="mt-1 w-full rounded border px-3 py-2" />
-      </div>
-      {error && <p className="text-sm text-red-600">{error}</p>}
-      <button type="submit" disabled={busy}
-        className="w-full rounded-md bg-zinc-900 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50">
+          className={inputClass} />
+      </FormField>
+      {error && <Alert type="error">{error}</Alert>}
+      {/* busy면 Button이 cs-disabled 보더로 바꾼다(재시도는 실패 시 setBusy(false)로 다시 열린다) */}
+      <Button type="submit" variant="primary" disabled={busy} className="w-full">
         로그인
-      </button>
-      <p className="text-xs text-zinc-500">
+      </Button>
+      <p className="text-xs leading-4 text-cs-text-secondary">
         계정은 관리자가 Supabase 대시보드(Authentication)에서 생성합니다.
       </p>
     </form>

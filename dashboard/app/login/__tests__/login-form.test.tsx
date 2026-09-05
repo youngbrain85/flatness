@@ -78,3 +78,59 @@ describe('LoginForm', () => {
     expect(screen.getByRole('button', { name: '로그인' })).toBeEnabled();
   });
 });
+
+// Cloudscape 해부(스펙 §4·아트보드 Login): FormField + inputClass, 오류는 error Alert,
+// primary 전폭 버튼, 안내 12px 보조색. 동작 단언은 위 블록이 그대로 지킨다.
+describe('LoginForm 시각(Cloudscape 해부)', () => {
+  it('입력은 inputClass(2px cs-input-border, radius 8px), 라벨은 700이다', () => {
+    render(<LoginForm />);
+    for (const name of ['이메일', '비밀번호']) {
+      const input = screen.getByLabelText(name);
+      expect(input.className).toContain('border-cs-input-border');
+      expect(input.className).toContain('rounded-lg');
+      expect(screen.getByText(name).className).toContain('font-bold');
+    }
+  });
+
+  it('로그인 버튼은 뷰의 유일한 primary이고 전폭이다', () => {
+    render(<LoginForm />);
+    const button = screen.getByRole('button', { name: '로그인' });
+    for (const c of ['bg-cs-link', 'rounded-full', 'w-full']) expect(button.className).toContain(c);
+    expect(button).toHaveAttribute('type', 'submit');
+  });
+
+  it('제출 중에는 버튼이 disabled(cs-disabled 보더)로 바뀐다', async () => {
+    // 끝나지 않는 로그인 요청으로 busy 상태를 고정한다
+    signInWithPassword.mockReturnValue(new Promise(() => {}));
+    render(<LoginForm />);
+    fireEvent.change(screen.getByLabelText('이메일'), { target: { value: 'a@b.com' } });
+    fireEvent.change(screen.getByLabelText('비밀번호'), { target: { value: 'pw' } });
+    fireEvent.click(screen.getByRole('button', { name: '로그인' }));
+
+    const button = screen.getByRole('button', { name: '로그인' });
+    await waitFor(() => expect(button).toBeDisabled());
+    expect(button.className).toContain('border-cs-disabled');
+    expect(button.className).not.toContain('bg-cs-link');
+  });
+
+  it('실패 안내는 error Alert(role="alert", data-alert="error")로 뜬다', async () => {
+    signInWithPassword.mockResolvedValue({ data: { user: null }, error: { message: 'bad' } });
+    render(<LoginForm />);
+    fireEvent.change(screen.getByLabelText('이메일'), { target: { value: 'a@b.com' } });
+    fireEvent.change(screen.getByLabelText('비밀번호'), { target: { value: 'wrong' } });
+    fireEvent.click(screen.getByRole('button', { name: '로그인' }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveAttribute('data-alert', 'error');
+    expect(alert.textContent).toContain('로그인에 실패했습니다. 이메일과 비밀번호를 확인하세요.');
+    expect(alert.querySelector('[data-icon="x-circle"]')).not.toBeNull();
+  });
+
+  it('안내 문구는 12px 보조색이고 문장은 그대로다', () => {
+    render(<LoginForm />);
+    const hint = screen.getByText('계정은 관리자가 Supabase 대시보드(Authentication)에서 생성합니다.');
+    expect(hint.className).toContain('text-xs');
+    expect(hint.className).toContain('text-cs-text-secondary');
+    expect(hint.className).not.toMatch(/zinc-/);
+  });
+});
