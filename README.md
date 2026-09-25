@@ -1,125 +1,133 @@
-# Flatness — 건설 현장 로봇친화 환경 분석 시스템
+# Flatness — Robot-Friendly Environment Analysis System for Construction Sites
 
-국립한밭대학교 연구용역. LiDAR 점군과 건축 도면에서 출발해 **바닥 평활도·구배 실측 분석**,
-**로봇친화형 마감재 DB·BIM 연계**, **로봇 스캔 커버리지 시뮬레이션**까지 — 4개 세부과업을
-하나의 저장소에서 수행합니다.
+A sponsored research project for Hanbat National University. Starting from LiDAR point clouds and
+architectural drawings, one repository carries out four tasks — **field measurement and analysis of
+floor flatness and slope**, a **robot-friendly finish-material database linked to BIM**, and
+**robot scan-coverage simulation**.
 
-| 과업 | 내용 | 상태 |
+| Task | Scope | Status |
 |---|---|---|
-| **1** | 수직·수평면 평활도 분석 + 자동 PDF 보고서 | 완료 · 배포 (Vercel + Railway + Supabase) |
-| **2** | 로봇친화형 마감재 DB + BIM 연계 (도면 → IFC) | 완료 · DB 마이그레이션 편입 |
-| **3** | 로봇 작업 모니터링·시뮬레이션 (스캔 커버리지) | 완료 · Gazebo 대조검증 |
-| **4** | Point Cloud 기반 구배 자동 측정·분석 | 완료 · 배포 |
+| **1** | Flatness analysis of vertical and horizontal surfaces + automatic PDF reports | Complete · deployed (Vercel + Railway + Supabase) |
+| **2** | Robot-friendly finish-material database + BIM linkage (drawings → IFC) | Complete · merged into the database migrations |
+| **3** | Robot work monitoring and simulation (scan coverage) | Complete · cross-validated in Gazebo |
+| **4** | Automatic slope measurement and analysis from point clouds | Complete · deployed |
 
-**테스트 652건** (engine 244 · worker 209 · bim 50 · scansim 149) + 워커 통합 209 ·
-**변이 실험 3계열 전부 차단**(DB 41종 · 도면 복원 10종 · 판정 11종 · 시뮬 10종) ·
-Gazebo 독립 물리 엔진 대조 **운행 거리 오차 +0.07%**.
+**652 tests** (engine 244 · worker 209 · bim 50 · scansim 149) + 209 worker integration tests ·
+**all mutants killed across three mutation-testing families** (database 41 · drawing reconstruction 10 · assessment 11 · simulation 10) ·
+cross-validation against Gazebo, an independent physics engine: **travel-distance error +0.07%**.
 
 ---
 
-## 결과물 미리보기
+## Output Preview
 
-### 과업 2 — 도면에서 BIM으로
+### Task 2 — From Drawings to BIM
 
-확보한 자료가 BIM 모델이 아니라 **샘플 도면(LH 발행, PDF)**이라, 도면에서 기하를 복원해 모델을 만들었습니다.
-선 굵기(1.42pt)로 실 경계만 걸러 폴리곤화 — 복원 면적이 도면에 인쇄된 면적산출표와
-**0.003% 이내**로 일치합니다.
+The available source material was not a BIM model but **sample drawings (PDFs issued by LH, the Korea Land and
+Housing Corporation)**, so the model was built by reconstructing geometry from the drawings. Room boundaries are
+isolated by line weight (1.42pt) and converted to polygons — the reconstructed areas match the area schedule
+printed on the drawings to **within 0.003%**.
 
-| 도면 재구성 + 실별 바닥 레벨 | 로봇 부류별 단차 판정 |
+| Reconstructed plan + floor level by room | Step-height assessment by robot class |
 |---|---|
-| ![도면 재구성](docs/images/task2_plan_levels.png) | ![로봇 판정](docs/images/task2_robot_matrix.png) |
+| ![Reconstructed plan](docs/images/task2_plan_levels.png) | ![Robot assessment](docs/images/task2_robot_matrix.png) |
 
-욕실은 슬래브가 150mm 내려가 있어 **두께(THK)를 레벨로 읽으면 높낮이 방향이 뒤집힙니다** —
-두 도면(부분상세도 FL/SL ↔ 마감표 THK)이 `FL − SL = THK`로 서로를 검증합니다. 판정 결과,
-상업용 서빙·배송·청소·산업 AMR **4개 등급 전부 현관 30mm 단차에 막힙니다**(임계값은 전부
-제조사 공표 사양, [근거 대조표](docs/robot-criteria-sources.md)).
+In the bathrooms the slab is dropped by 150mm, so **reading the thickness (THK) as a level inverts the direction
+of the height difference** — the two drawings (partial detail drawing FL/SL ↔ finish schedule THK) cross-check each
+other through `FL − SL = THK`. The assessment shows that **all four robot classes — commercial serving, delivery,
+cleaning, and industrial AMR — are stopped by the 30mm step at the entrance** (every threshold is a
+manufacturer-published specification; see the [source crosswalk](docs/robot-criteria-sources.md)).
 
-![IFC 왕복 검증](docs/images/task2_ifc.png)
+![IFC round-trip verification](docs/images/task2_ifc.png)
 
-IFC4로 내보낸 뒤 **파일을 다시 읽어 삼각분할**하는 왕복 검증 — 바닥 면적이 도면 면적표와
-0.0025% 이내입니다. 도면에 없는 값(유효 통과폭·미기재 천장고)은 지어내지 않고 `unknown`·명목값
-표식으로 남깁니다.
+A round-trip check exports the model to IFC4, then **reads the file back and triangulates it** — the floor area
+matches the drawing's area schedule to within 0.0025%. Values absent from the drawings (effective clear width,
+unlabeled ceiling heights) are not invented; they are left flagged as `unknown` or as nominal values.
 
-### 과업 3 — 스캔 커버리지 시뮬레이션
+### Task 3 — Scan-Coverage Simulation
 
-로봇의 작업은 LiDAR 스캔입니다 — 계획된 경로가 점군 밀도를 결정하고, 그 점군이 과업 1·4의
-분석 입력이 됩니다. 커버리지 기준은 면적이 아니라 **점 밀도**입니다(모바일 ≤20mm / TLS ≤5mm).
+The robot's job is LiDAR scanning — the planned path determines the point density of the point cloud, and that
+point cloud becomes the analysis input for Tasks 1 and 4. The coverage criterion is **point density**, not area
+(mobile ≤20mm / TLS ≤5mm).
 
-| 모바일 (주행 중 촬영, 시야각 90°) | TLS (거치점 최적화 + 순회) |
+| Mobile (captured while driving, 90° field of view) | TLS (optimized scan stations + tour) |
 |---|---|
-| ![모바일 커버리지](docs/images/task3_mobile_coverage.gif) | ![TLS 커버리지](docs/images/task3_tls_coverage.gif) |
+| ![Mobile coverage](docs/images/task3_mobile_coverage.gif) | ![TLS coverage](docs/images/task3_tls_coverage.gif) |
 
-![거치점 트레이드오프](docs/images/task3_tradeoff.png)
+![Scan-station trade-off](docs/images/task3_tradeoff.png)
 
-TLS 거치점 배치는 greedy set cover, 순회는 nearest neighbor + 2-opt. 같은 기하를 SDF world로
-변환해 **Gazebo(독립 물리 엔진)에서 같은 경유점을 주행**했습니다 — 운행 거리 오차 +0.07%.
+TLS scan stations are placed by greedy set cover, and the tour uses nearest neighbor + 2-opt. The same geometry
+was converted to an SDF world and **the same waypoints were driven in Gazebo (an independent physics engine)** —
+travel-distance error +0.07%.
 
-### 과업 1·4 — 평활도·구배 실측 분석 (배포된 파이프라인)
+### Tasks 1 and 4 — Field Analysis of Flatness and Slope (Deployed Pipeline)
 
-업로드 → 분석 → 판정 히트맵 → PDF 보고서가 웹 대시보드에서 동작합니다. 아래는 합성 demo 점군
-산출물입니다(실물 직선자 실측 대조는 미수행 — [보고서](docs/service-report.md) 6장).
+Upload → analysis → assessment heatmap → PDF report runs in the web dashboard. The outputs below come from a
+synthetic demo point cloud (no comparison against a physical straightedge was performed — see Chapter 6 of the
+[report](docs/service-report.md)).
 
-| 판정 히트맵 (2m 셀) | 3D 프리뷰 | 10cm 정밀 편차맵 |
+| Assessment heatmap (2m cells) | 3D preview | 10cm high-resolution deviation map |
 |---|---|---|
-| ![히트맵](docs/images/task1_heatmap.png) | ![3D](docs/images/task1_preview3d.png) | ![편차맵](docs/images/task1_deviation.png) |
+| ![Heatmap](docs/images/task1_heatmap.png) | ![3D](docs/images/task1_preview3d.png) | ![Deviation map](docs/images/task1_deviation.png) |
 
 ---
 
-## 구성
+## Repository Layout
 
 ```
-engine/     평활도·구배 분석 엔진 (Python) — PLY/LAS/LAZ 리더, RANSAC, 직선자 포락선, 구배
-worker/     잡 처리 워커 — Supabase 잡 큐 폴링, Jinja2 → Chromium PDF 보고서
-dashboard/  웹 대시보드 (Next.js) — 업로드·결과 화면·정합·보고서
-bim/        도면 PDF → 실 기하 복원 → IFC4 내보내기 + 로봇 주행 판정
-scansim/    스캔 커버리지 계획(모바일·TLS)·시뮬레이션·Gazebo 대조검증
-supabase/   마이그레이션 14개 + 검증 게이트 (verification/)
-docs/       용역 결과 보고서(11장)·판정 기준 대조표 3종·데이터 계약·배포 절차
+engine/     Flatness and slope analysis engine (Python) — PLY/LAS/LAZ readers, RANSAC, straightedge envelope, slope
+worker/     Job-processing worker — polls the Supabase job queue; Jinja2 → Chromium PDF reports
+dashboard/  Web dashboard (Next.js) — upload, results, registration, reports
+bim/        Drawing PDF → room-geometry reconstruction → IFC4 export + robot traversal assessment
+scansim/    Scan-coverage planning (mobile and TLS), simulation, and Gazebo cross-validation
+supabase/   14 migrations + verification gates (verification/)
+docs/       Final project report (11 chapters), three assessment-criteria source crosswalks, data contracts, deployment procedure
 ```
 
-배포: Vercel(대시보드) + Railway(워커, Docker) + Supabase(DB·Auth·Storage).
-절차와 주의사항은 [docs/DEPLOY.md](docs/DEPLOY.md).
+Deployment: Vercel (dashboard) + Railway (worker, Docker) + Supabase (database, auth, storage).
+For the procedure and caveats, see [docs/DEPLOY.md](docs/DEPLOY.md).
 
-## 실행
+## Running
 
 ```bash
-# 분석 엔진 (평활도) — pip install -e engine/ 후 `flatness` 로도 실행 가능
+# Analysis engine (flatness) — after pip install -e engine/, it can also be run as `flatness`
 python -m flatness.cli analyze data/demo/demo_floor.ply --out out/
 
-# 도면 → IFC
+# Drawings → IFC
 python bim/to_ifc.py && python bim/verify_ifc.py
 
-# 스캔 커버리지 시뮬레이션 (CSV·JSON·PNG·GIF·PDF 일괄)
+# Scan-coverage simulation (CSV, JSON, PNG, GIF and PDF in one run)
 python -m scansim.cli --dump bim/tests/fixtures/lh26_dump.json --mode both --out out/
 
-# 테스트
+# Tests
 cd engine && python -m pytest -q          # 244
 cd worker && python -m pytest -q          # 209
 python -m pytest bim/tests/ scansim/tests/ -q   # 199
 ```
 
-## 검증 방식
+## Verification Approach
 
-이 프로젝트의 회귀 기준은 단언 개수가 아니라 **심은 변이를 몇 개 죽였는가**입니다 — "프로덕션
-코드는 맞는데 테스트가 정작 막으려던 회귀를 못 잡는" 사고가 반복되어, 변이 실험에 **무변이
-대조군**을 필수로 두었습니다(없으면 "전부 차단"이 도구가 조용히 죽은 상태와 구별되지 않습니다).
+This project's regression standard is not the number of assertions but **how many planted mutants were
+killed** — after repeated incidents in which "the production code was correct, but the tests failed to catch the
+very regression they were meant to prevent," an **unmutated control** was made mandatory for every mutation
+experiment (without one, "all killed" is indistinguishable from a tool that has silently stopped working).
 
-수행하지 않은 검증은 수행했다고 적지 않습니다: 실물 직선자 실측 대조, 실물 드론·지상 스캔
-대조, 실물 로봇 주행은 **미수행**이며 보고서에 그렇게 명시되어 있습니다. 예외적으로 도면 복원
-정확도만은 합성이 아니라 **도면에 인쇄된 면적산출표와의 대조**입니다.
+Verification that was not performed is not reported as performed: comparison against a physical straightedge,
+comparison against physical drone and terrestrial scans, and physical robot traversal were **not performed**, and
+the report states this explicitly. The one exception is drawing-reconstruction accuracy, which is checked not
+against synthetic data but **against the area schedule printed on the drawings**.
 
-## 문서
+## Documents
 
-| 문서 | 내용 |
+| Document | Contents |
 |---|---|
-| [service-report.md](docs/service-report.md) | 용역 결과 보고서 전문 — 1~8장 과업1 / 9장 과업4 / 10장 과업2 / 11장 과업3 |
-| [criteria-sources.md](docs/criteria-sources.md) | 평활도 판정 기준 11종 원문 대조표 + 정직성 선언 |
-| [slope-criteria-sources.md](docs/slope-criteria-sources.md) | 구배 판정 기준 대조표 |
-| [robot-criteria-sources.md](docs/robot-criteria-sources.md) | 로봇 주행 임계값 29행 근거 대조표 |
-| [contracts/finish-material-db.md](docs/contracts/finish-material-db.md) | 마감재 DB 트리 (카탈로그에서 생성) |
-| [contracts/stats-schema.md](docs/contracts/stats-schema.md) | 분석 산출 데이터 계약 |
-| [scan-guideline.md](docs/scan-guideline.md) | 현장 스캔 가이드라인 |
-| [DEPLOY.md](docs/DEPLOY.md) | 배포 절차 (마이그레이션 순서·함정 포함) |
+| [service-report.md](docs/service-report.md) | Full final project report — Chapters 1–8 Task 1 / Chapter 9 Task 4 / Chapter 10 Task 2 / Chapter 11 Task 3 |
+| [criteria-sources.md](docs/criteria-sources.md) | Source crosswalk of the 11 flatness assessment criteria against their original texts + integrity statement |
+| [slope-criteria-sources.md](docs/slope-criteria-sources.md) | Source crosswalk of the slope assessment criteria |
+| [robot-criteria-sources.md](docs/robot-criteria-sources.md) | 29-row source crosswalk of robot traversal thresholds |
+| [contracts/finish-material-db.md](docs/contracts/finish-material-db.md) | Finish-material database tree (generated from the catalog) |
+| [contracts/stats-schema.md](docs/contracts/stats-schema.md) | Data contract for analysis outputs |
+| [scan-guideline.md](docs/scan-guideline.md) | Field scanning guideline |
+| [DEPLOY.md](docs/DEPLOY.md) | Deployment procedure (including migration order and pitfalls) |
 
-> 과업지시서 원문과 샘플 도면 PDF는 저장소에 포함하지 않습니다(`data/` gitignore).
-> 저장소의 도면 관련 데이터는 전부 **파생 기하**(실 폴리곤·레벨·가구 좌표)입니다.
+> The original statement of work and the sample drawing PDFs are not included in the repository (`data/` is gitignored).
+> All drawing-related data in the repository is **derived geometry** (room polygons, levels, furniture coordinates).
