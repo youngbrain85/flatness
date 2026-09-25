@@ -1,106 +1,109 @@
-# P3 대시보드 (평활도 분석 시스템)
+# P3 Dashboard (Flatness Analysis System)
 
-## 1. 개요
+## 1. Overview
 
-현장 바닥·벽면 평활도 스캔(모바일 LiDAR 점군)을 업로드하고, 로컬 파이썬 워커(`worker/`)가
-처리한 분석 결과(히트맵·판정·통계)를 조회·확인하는 Next.js 대시보드다. 로그인한 사용자가
-현장·측정위치를 등록하고, 스캔 파일을 올리고, 진행 상태를 지켜보고, 결과 화면에서 등급
-분포·최악 지점·경고를 확인하고, 판정 기준(criteria)과 측정 불확도(U) 설정을 볼 수 있다.
+This is a Next.js dashboard for uploading flatness scans of site floors and wall surfaces (mobile LiDAR point clouds)
+and for viewing and reviewing the analysis results (heatmaps, assessments, statistics) processed by the local Python
+worker (`worker/`). A logged-in user can register sites and measurement locations, upload scan files, watch the
+progress status, check the grade distribution, worst points, and warnings on the results screen, and view the
+assessment criteria (criteria) and measurement uncertainty (U) settings.
 
-**포지셔닝**: 본 시스템은 합격/불합격을 확정하는 공식 검측 도구가 아니라 "스크리닝
-도구"다. 모바일 LiDAR의 측정 오차가 시방서 허용오차와 같은 자릿수이거나 이를 초과할 수
-있어, 모든 분석 결과에는 측정 불확도(U)와 "본 결과는 스크리닝이며 공식 검측(실물
-직선자·레벨 측량)을 대체하지 않습니다" 문구가 포함된다. 실 시공 판정에는 반드시 공식
-검측을 병행해야 한다.
+**Positioning**: this system is not an official inspection tool that makes final pass/fail determinations but a
+"screening tool." Because the measurement error of mobile LiDAR can be of the same order of magnitude as the
+specification tolerances or can exceed them, every analysis result includes the measurement uncertainty (U) and the
+statement "These results are a screening and do not replace official inspection (physical straightedge and level
+survey)." Any assessment of actual construction work must always be accompanied by official inspection.
 
-## 2. 사전 준비
+## 2. Prerequisites
 
-1. **Supabase 프로젝트 생성 + 마이그레이션 001 → 002 → 003 → 004 → 005 → 006 → 007 순서로 실행** - 절차는
-   [`../docs/SUPABASE_SETUP.md`](../docs/SUPABASE_SETUP.md)를 그대로 따른다(가입부터
-   API 키 발급까지 약 15분, Free 티어 범위 내 0원). **순서와 004·005 실행이 필수다** - 004가
-   빠지면 오류 메시지 없이 보고서 잡의 진행 상태 전환이 조용히 사라지고, 005가 빠지면
-   Storage 버킷이 없어 업로드가 전부 실패한다(이 대시보드는 로컬 파일시스템을 쓰지 않으므로
-   로컬 실행에도 005가 필요하다).
-2. **테스트 계정 생성** - Supabase 대시보드 > **Authentication** > **Add user**에서
-   이메일·비밀번호를 입력하고 **Auto Confirm User**를 체크한다(이메일 인증 절차를 건너뛰고
-   바로 로그인 가능한 계정이 만들어진다). 이 대시보드는 자체 회원가입 화면이 없다 - 로그인
-   화면만 제공하므로 계정은 Supabase 쪽에서 미리 만들어 둔다.
-3. **워커 실행** - 스캔을 실제로 분석하려면 로컬 파이썬 워커가 떠 있어야 한다. 설치·실행
-   방법은 [`../worker/README.md`](../worker/README.md) 참고. 워커 없이도 로그인·현장
-   등록·업로드까지는 가능하지만 분석은 `대기 중`에서 멈춘다.
+1. **Create a Supabase project + run migrations in the order 001 → 002 → 003 → 004 → 005 → 006 → 007** - for the
+   procedure, follow [`../docs/SUPABASE_SETUP.md`](../docs/SUPABASE_SETUP.md) exactly (about 15 minutes from sign-up
+   to issuing the API keys; 0 won within the Free tier). **Keeping this order and running 004 and 005 are mandatory** -
+   if 004 is missing, the progress-status transitions of report jobs silently disappear without any error message, and
+   if 005 is missing, there are no Storage buckets, so every upload fails (this dashboard does not use the local file
+   system, so 005 is required even when running locally).
+2. **Create a test account** - in the Supabase dashboard > **Authentication** > **Add user**, enter an email and
+   password and check **Auto Confirm User** (this skips the email verification procedure and creates an account that
+   can log in right away). This dashboard has no sign-up screen of its own - it provides only a login screen, so
+   create accounts in advance on the Supabase side.
+3. **Run the worker** - to actually analyze scans, the local Python worker must be running. For installation and run
+   instructions, see [`../worker/README.md`](../worker/README.md). Without the worker, you can still get as far as
+   logging in, registering sites, and uploading, but analysis stops at `Queued`.
 
-## 3. 환경변수
+## 3. Environment variables
 
-`.env.example`을 복사해 `.env.local`을 만든다(`.env.local`은 `.gitignore`에 등록되어
-있어 커밋되지 않는다).
+Copy `.env.example` to create `.env.local` (`.env.local` is listed in `.gitignore`, so it is not
+committed).
 
 ```
 cp .env.example .env.local
 ```
 
-| 변수 | 설명 |
+| Variable | Description |
 |---|---|
-| `NEXT_PUBLIC_SUPABASE_URL` | Supabase 프로젝트 URL(`https://<project-ref>.supabase.co`). Settings > API에서 확인 |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | anon(public) key. 같은 화면에서 확인. **service_role 키는 절대 넣지 않는다**(RLS 우회) |
-| `NEXT_PUBLIC_MAX_UPLOAD_BYTES` | 업로드 크기 상한(바이트). 기본 `52428800`(50MB) — Supabase Free 티어 파일당 한도. `005_storage_buckets.sql` 버킷의 `file_size_limit`과 같은 값을 유지해야 한다. Pro 승급 시 둘 다 함께 올린다 |
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL (`https://<project-ref>.supabase.co`). Find it under Settings > API |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | anon (public) key. Find it on the same screen. **Never put the service_role key here** (it bypasses RLS) |
+| `NEXT_PUBLIC_MAX_UPLOAD_BYTES` | Upper limit on upload size (bytes). Default `52428800` (50MB) — the Supabase Free tier's per-file limit. It must be kept at the same value as the `file_size_limit` of the buckets in `005_storage_buckets.sql`. When upgrading to Pro, raise both together |
 
-대시보드는 로컬 파일시스템을 쓰지 않는다 — 원본 스캔·산출물·보고서 PDF는 모두 Supabase
-Storage 서명 URL로 내려받는다(`DATA_DIR` 설정 불필요). 클라우드(Vercel) 배포 절차는
-[`../docs/DEPLOY.md`](../docs/DEPLOY.md) 참고.
+The dashboard does not use the local file system — original scans, outputs, and report PDFs are all downloaded through
+Supabase Storage signed URLs (no `DATA_DIR` setting needed). For the cloud (Vercel) deployment procedure, see
+[`../docs/DEPLOY.md`](../docs/DEPLOY.md).
 
-## 4. 실행
+## 4. Running
 
 ```
 npm install
 npm run dev     # http://localhost:3000
 npm run test    # vitest
-npm run build   # 프로덕션 빌드
+npm run build   # production build
 ```
 
-## 5. 데모 시나리오 (수동 검증 절차)
+## 5. Demo scenario (manual verification procedure)
 
-1. **로그인** - `/login`에서 2번에서 만든 테스트 계정으로 로그인한다. 첫 로그인 시
-   `profiles` 행이 자동 생성된다.
-2. **새 현장** - 홈에서 "새 현장" 생성(이름·주소·메모).
-3. **측정위치 추가** - 현장 상세에서 동/층/실 정보로 측정위치를 추가한다.
-4. **스캔 업로드** - 아래 6번 명령으로 합성 PLY 파일을 만든 뒤 업로드 화면에서 해당
-   측정위치에 업로드한다. 업로드 폼에 기준 후보 목록이 뜨고 `is_default=true` 기준이
-   기본 선택되어 있는지 확인한다.
-5. **단위 확인** - 업로드 직후 상태가 `단위 확인 대기`면 스캔 상세에서 단위(m/cm/mm)를
-   선택해 확정한다. m을 선택해야 6번 합성 파일(미터 단위 좌표)이 올바르게 분석된다.
-6. **분석 진행 표시** - 워커가 실행 중이면 상태가 `분석 대기 중` -> `분석 중` -> `완료`로
-   자동 갱신되는지 지켜본다(Realtime 구독).
-7. **결과 화면** - 분석 완료 후 결과 화면(히트맵 캔버스 · 판정 패널 · 결과표 3분할)을
-   확인하고, 히트맵 셀을 클릭해 상세 정보가 뜨는지 확인한다.
-8. **사진 업로드** - 현장 또는 측정위치에 사진을 올리고 갤러리에 표시되는지 확인한다.
-9. **설정 확인** - `/settings`에서 프로필 이름 저장, 판정 기준 목록·활성 토글, 측정
-   불확도 U 값을 확인한다.
-10. **보고서 생성·발행**: 현장 상세 > 측정위치의 "보고서" > "새 보고서" > 포함 분석 선택
-    (바닥·벽면 함께 가능) > 제목·종합의견 확인 > "보고서 생성" > 진행 상태가 자동으로
-    "PDF 생성 중"에서 "생성 완료"로 바뀌면 미리보기 확인 > "PDF 다운로드" > "발행"
-    - 발행 후에는 제목·의견·PDF를 수정할 수 없다(DB 트리거가 차단). 수정이 필요하면 새 보고서를 만든다
-    - "생성 실패"가 뜨면 사유가 함께 표시된다(예: 완료되지 않은 분석 포함, cells.json 없음).
-      원인을 고친 뒤 "PDF 다시 생성"을 누른다
+1. **Log in** - at `/login`, log in with the test account created in Section 2. On first login, a
+   `profiles` row is created automatically.
+2. **New site** - on the home screen, create a site with "New site" (name, address, notes).
+3. **Add a measurement location** - on the site detail screen, add a measurement location using building/floor/room information.
+4. **Upload a scan** - create a synthetic PLY file with the command in Section 6 below, then upload it to that
+   measurement location on the upload screen. Check that the upload form shows a list of candidate criteria and that
+   the `is_default=true` criterion is selected by default.
+5. **Confirm units** - if the status right after upload is `Awaiting unit confirmation`, select the unit (m/cm/mm) on
+   the scan detail screen and confirm it. You must select m for the synthetic file from Section 6 (coordinates in
+   meters) to be analyzed correctly.
+6. **Analysis progress display** - if the worker is running, watch whether the status updates automatically as
+   `Queued for analysis` -> `Analyzing` -> `Completed` (Realtime subscription).
+7. **Results screen** - after the analysis completes, check the results screen (split into 3 panes: heatmap canvas ·
+   assessment panel · results table), and click a heatmap cell to check that its details appear.
+8. **Upload photos** - upload a photo to a site or a measurement location and check that it appears in the gallery.
+9. **Check settings** - at `/settings`, check saving the profile name, the assessment criteria list and its active
+   toggles, and the measurement uncertainty U value.
+10. **Generate and publish a report**: site detail > the measurement location's "Reports" > "New report" > select the
+    analyses to include (floor and wall surface can be combined) > check the title and overall comments >
+    "Generate report" > when the progress status changes automatically from "Generating PDF" to "Generation complete",
+    check the preview > "Download PDF" > "Publish"
+    - After publishing, the title, comments, and PDF can no longer be modified (a DB trigger blocks this). If changes are needed, create a new report
+    - If "Generation failed" appears, the reason is shown along with it (e.g., an incomplete analysis is included, or there is no cells.json).
+      Fix the cause, then press "Regenerate PDF"
 
-### 6. 합성 테스트 파일 생성
+### 6. Generating a synthetic test file
 
-엔진 테스트 픽스처(`engine/tests/fixtures/synthetic.py`)를 재사용해 6x6m 바닥에 10mm
-함몰이 있는 합성 PLY를 만든다. **저장소 루트**에서 실행한다.
+Reuse the engine test fixture (`engine/tests/fixtures/synthetic.py`) to create a synthetic PLY of a 6x6m floor with a 10mm
+depression. Run it from the **repository root**.
 
 ```bash
-python -c "import importlib.util, pathlib; p = pathlib.Path('engine/tests/fixtures/synthetic.py'); spec = importlib.util.spec_from_file_location('syn', p); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m); pts = m.add_bump(m.flat_floor(size=(6.0, 6.0), spacing=0.02), (2.0, 2.0), 0.3, -0.010); m.write_binary_ply(pts, pathlib.Path('demo_floor.ply')); print('demo_floor.ply 생성(6x6m, 함몰 10mm)')"
+python -c "import importlib.util, pathlib; p = pathlib.Path('engine/tests/fixtures/synthetic.py'); spec = importlib.util.spec_from_file_location('syn', p); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m); pts = m.add_bump(m.flat_floor(size=(6.0, 6.0), spacing=0.02), (2.0, 2.0), 0.3, -0.010); m.write_binary_ply(pts, pathlib.Path('demo_floor.ply')); print('demo_floor.ply created (6x6m, 10mm depression)')"
 ```
 
-생성된 `demo_floor.ply`를 위 5번 업로드 단계에서 사용한다.
+Use the generated `demo_floor.ply` in the upload step of Section 5 above.
 
-## 7. 알려진 데모 제약
+## 7. Known demo limitations
 
-다음은 이 데모 범위에서 의도적으로 제외되었다(P4/P5 또는 정식 단계에서 다룬다).
+The following were intentionally excluded from the scope of this demo (to be handled in P4/P5 or at the production stage).
 
-- 보고서 템플릿 커스터마이징·다국어·이메일 발송·버전 관리는 없다(발행본 불변으로 대체)
-- 보고서 사진은 포함된 분석의 스캔에 등록된 사진만 실린다(측정위치 단위 사진 업로더는 백로그)
-- 인터랙티브 3D 뷰어(엔진이 아직 `viewer.bin`을 산출하지 않음)
-- 수평도(레벨) 섹션 (`stats.json` 계약에 아직 관련 지표가 없음)
-- 히트맵 셀 클릭 시 단면 프로파일 상세(엔진이 프로파일을 산출하지 않음)
-- 판정 기준 신설·버전 개정·현장별 재정의 생성 UI, 사용자 관리, E2E(Playwright) 자동화
-- 분석 실패 시 상세 사유는 화면에 노출되지 않는다 - 워커 로그를 확인한다.
+- There is no report template customization, multilingual support, email delivery, or version management (replaced by making published versions immutable)
+- Reports include only the photos attached to the scans of the included analyses (a photo uploader at the measurement-location level is in the backlog)
+- Interactive 3D viewer (the engine does not yet output `viewer.bin`)
+- Levelness (level) section (the `stats.json` contract does not yet have a related metric)
+- Cross-section profile details when a heatmap cell is clicked (the engine does not output profiles)
+- UI for creating new assessment criteria, revising criteria versions, and creating per-site overrides; user management; E2E (Playwright) automation
+- When an analysis fails, the detailed reason is not shown on screen - check the worker logs.
