@@ -1,3 +1,4 @@
+import dataclasses
 import json
 from pathlib import Path
 import numpy as np
@@ -368,18 +369,29 @@ def test_floor_points3d_block_independent_of_other_renders(tmp_path, monkeypatch
 def test_floor_points3d_bytes_do_not_depend_on_criterion(tmp_path):
     scan = _dent_scan(tmp_path)
     lh = load_criteria()["floor-lh-exposed"]       # pass 6 / rework 18
+    # 소수 허용치. 워커는 DB 기준 행의 pass_mm 을 변환 없이 넘기므로(worker/flatworker/jobs.py 의
+    # _to_criterion) 운영에서는 정수가 아닐 수 있다. 위 두 시드 기준(7, 6)은 정수라 임계값 계산식
+    # (반올림·절삭·변환 누락)을 가르지 못한다
+    frac = dataclasses.replace(CRIT, pass_mm=6.66)
 
     a = pl.analyze_floor(scan, 1.0, CRIT, 5.0, tmp_path / "kcs")
     b = pl.analyze_floor(scan, 1.0, lh, 5.0, tmp_path / "lh")
+    c = pl.analyze_floor(scan, 1.0, frac, 5.0, tmp_path / "frac")
 
-    # 대조군: 두 실행의 기준이 실제로 달랐다
+    # 대조군: 세 실행의 기준이 실제로 달랐다
     assert a["applied_criteria"]["pass_mm"] == 7 and b["applied_criteria"]["pass_mm"] == 6
+    assert c["applied_criteria"]["pass_mm"] == 6.66
     assert a["points3d_threshold_q"] == 70         # 7mm x 10
     assert b["points3d_threshold_q"] == 60         # 6mm x 10
+    # 6.66mm x 10 = 66.6: 반올림 67, 절삭 66, 변환 누락 66.6, 먼저 반올림(7 x 10) 70 이 서로 갈린다
+    assert c["points3d_threshold_q"] == 67
+    # round(66.6, 0) 은 67.0(float)이라 위 값 비교만으로는 안 잡힌다. 정수 허용치에서는 7 x 10 이 이미 int 다
+    assert type(c["points3d_threshold_q"]) is int
     blob_a = (tmp_path / "kcs" / "points3d.bin").read_bytes()
     blob_b = (tmp_path / "lh" / "points3d.bin").read_bytes()
+    blob_c = (tmp_path / "frac" / "points3d.bin").read_bytes()
     assert len(blob_a) > 8 + 8 * 1000              # 빈 파일끼리의 일치가 아니다
-    assert blob_a == blob_b
+    assert blob_a == blob_b == blob_c
 
 
 def test_floor_points3d_chunk_size_invariant(tmp_path, monkeypatch):
