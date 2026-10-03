@@ -280,17 +280,23 @@ describe('createRenderer: 생성', () => {
     }
   });
 
-  // jsdom 은 GLSL 을 실행하지 못하므로 gl 호출과 맞물리는 선언만 소스로 확인한다.
+  // jsdom 은 GLSL 을 실행하지 못하므로 gl 호출과 맞물리는 선언과 식을 소스로 확인한다.
   // 죽이는 변이: aDev 를 float 로 선언(vertexAttribIPointer 와 어긋나 값이 정의되지 않는다),
   // uThresholdQ 를 float 로 선언(uniform1i 와 어긋나 값이 들어가지 않는다), 센티널 경계 변경,
-  // 과장을 z 전체에 적용, 깊이를 표시 위치로 계산, 네모 점
+  // 과장을 z 전체에 적용, 깊이를 표시 위치로 계산, 네모 점,
+  // 융기·침하 색 맞바꿈과 편차 없음 판정 반전(색만 틀려 화면이 그럴듯해 보인다), 편차 단위, 기준면 부호, 과장 축,
+  // 화면 xy 의 출처, 점 크기 식(clamp 순서·클립 w 나눔), extent 곱, 선의 행렬 곱, 선 알파
   it('점 셰이더의 선언과 식이 스펙 §7.5 와 맞는다', () => {
     const { rec } = mount();
     const sources = rec.callsOf('shaderSource').map((c) => c.args[1] as string);
     const pointVs = sources.find((s) => s.includes('aDev'));
     const pointFs = sources.find((s) => s.includes('gl_PointCoord'));
+    const lineVs = sources.find((s) => s.includes('aPos') && !s.includes('aDev'));
+    const lineFs = sources.find((s) => s.includes('uColor'));
     expect(pointVs).toBeDefined();
     expect(pointFs).toBeDefined();
+    expect(lineVs).toBeDefined();
+    expect(lineFs).toBeDefined();
     expect(pointVs).toMatch(/\bin\s+int\s+aDev\s*;/);
     expect(pointVs).toMatch(/\bin\s+vec3\s+aPos\s*;/);
     expect(pointVs).toMatch(/\buniform\s+int\s+uThresholdQ\s*;/);
@@ -300,6 +306,17 @@ describe('createRenderer: 생성', () => {
     expect(pointVs).toMatch(/aDev\s*>\s*uThresholdQ/);
     expect(pointVs).toMatch(/aDev\s*<\s*-\s*uThresholdQ/);
     expect(pointFs).toMatch(/length\(\s*gl_PointCoord\s*-\s*0\.5\s*\)\s*>\s*0\.5\s*\)\s*discard/);   // 둥근 점
+
+    // 위 식들이 못 고정하는 의미. 값이 틀려도 화면은 그럴듯해 보이므로 소스에서 고정한다(실제 그림은 화면 캡처 대조가 본다)
+    expect(pointVs).toMatch(/vec3\s+local\s*=\s*aPos\s*\*\s*uExtent\s*;/);                        // 정규화 좌표 x extent_m = 파일-로컬 m
+    expect(pointVs).toMatch(/float\(\s*aDev\s*\)\s*\*\s*1e-4\b/);                                 // dev 정수 1 = 0.1mm = 1e-4 m
+    expect(pointVs).toMatch(/local\s*\+\s*vec3\(\s*0\.0\s*,\s*0\.0\s*,\s*devM\s*\*\s*\(\s*uExag\s*-\s*1\.0\s*\)\s*\)/);   // 과장은 z 축으로만
+    expect(pointVs).toMatch(/local\s*-\s*vec3\(\s*0\.0\s*,\s*0\.0\s*,\s*devM\s*\)/);              // 기준면 위치 = z - dev
+    expect(pointVs).toMatch(/gl_Position\s*=\s*vec4\(\s*clipS\.xy\s*,/);                          // 화면 xy 는 표시 위치
+    expect(pointVs).toMatch(/clamp\(\s*uPointWorldM\s*\*\s*uPxPerUnit\s*\/\s*clipS\.w\s*,\s*uMinPx\s*,\s*uMaxPx\s*\)/);   // 점 크기
+    expect(pointVs).toMatch(/!\s*hasDev\s*\?\s*uColNone\s*:\s*aDev\s*>\s*uThresholdQ\s*\?\s*uColPro\s*:\s*aDev\s*<\s*-\s*uThresholdQ\s*\?\s*uColDep\s*:\s*uColFlat\s*;/);   // 분류 -> 색
+    expect(lineVs).toMatch(/gl_Position\s*=\s*uViewProj\s*\*\s*vec4\(\s*aPos\s*,\s*1\.0\s*\)\s*;/);   // 선도 같은 행렬로 변환한다
+    expect(lineFs).toMatch(/outColor\s*=\s*uColor\s*;/);                                          // 선 알파는 uColor 가 싣는다
   });
 
   // 죽이는 변이: 링크 뒤 셰이더 객체를 지우지 않음(누수)
@@ -570,7 +587,8 @@ describe('createRenderer: draw', () => {
     expect(depthMaskAt(indexOf(rec, rec.callsOf('clear')[1]))).toBe(true);
   });
 
-  // 죽이는 변이: draw 에서 useProgram·bindVertexArray 누락(다른 프로그램·VAO 로 그린다)
+  // 죽이는 변이: draw 에서 useProgram·bindVertexArray 누락(다른 프로그램·VAO 로 그린다),
+  // uniform 을 useProgram 보다 먼저 부름(이전 프로그램에 값이 들어가거나 GL 오류로 들어가지 않는다)
   it('선과 점을 각자의 프로그램과 VAO 로 그린다', () => {
     const { rec, renderer } = mount();
     renderer.setData(makeData(), makeScaffold());
@@ -586,6 +604,13 @@ describe('createRenderer: draw', () => {
     const point = pointDrawCalls(rec)[0];
     expect(boundAt(rec, indexOf(rec, point), 'useProgram')).toBe(programOf('uThresholdQ'));
     expect(boundAt(rec, indexOf(rec, point), 'bindVertexArray')).toBe(pointVao);
+
+    // uniform 은 그 시점에 쓰고 있는 프로그램에만 들어간다: 모든 uniform 호출의 위치가 직전 useProgram 의 프로그램의 것이어야 한다
+    const uniforms = rec.calls.filter((c) => c.name.startsWith('uniform'));
+    expect(uniforms.length).toBeGreaterThan(0);
+    for (const call of uniforms) {
+      expect((call.args[0] as { program: unknown }).program).toBe(boundAt(rec, indexOf(rec, call), 'useProgram'));
+    }
   });
 
   it('setData 전에는 아무것도 그리지 않는다', () => {
