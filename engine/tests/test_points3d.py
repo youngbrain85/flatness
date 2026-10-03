@@ -633,3 +633,35 @@ def test_golden_file_content_by_hand():
     assert int((has & (dev_q < -70)).sum()) == 3
     assert int((~has).sum()) == 2
     assert int((has & (dev_q >= -70) & (dev_q <= 70)).sum()) == 5
+
+
+# --- TS 상수 대조 (스펙 §10.1) ---------------------------------------------------------------
+# dashboard/lib/domain/points3d.ts 가 엔진과 같은 magic·schema version·센티널·편차 단위를 쓰는지 본다.
+# 같은 파일 형식을 두 언어가 따로 구현하므로, 한쪽 상수만 바꾸면 이 테스트가 죽어야 한다.
+# 저장소 파일을 읽는 선례: test_summary.py 의 _STATS_SCHEMA_MD.
+import re  # noqa: E402
+from pathlib import Path  # noqa: E402
+
+import flatness.core.pointsample as _engine_sample  # noqa: E402
+import flatness.outputs.points3d as _engine_points3d  # noqa: E402
+
+_POINTS3D_TS = Path(__file__).resolve().parents[2] / "dashboard" / "lib" / "domain" / "points3d.ts"
+
+
+def _ts_const(name: str) -> str:
+    """`export const NAME = 값;` 선언에서 값을 문자열 그대로 꺼낸다. 선언은 정확히 1개여야 한다."""
+    src = _POINTS3D_TS.read_text(encoding="utf-8")
+    found = re.findall(rf"^export const {name} = ([^;]+);", src, flags=re.MULTILINE)
+    assert len(found) == 1, (
+        f"{_POINTS3D_TS.name} 에 `export const {name} = 값;` 선언이 정확히 1개여야 한다(찾은 수 {len(found)})"
+    )
+    return found[0].strip()
+
+
+def test_ts_constants_match_engine():
+    assert _ts_const("POINTS3D_MAGIC").strip("'\"") == _engine_points3d.MAGIC.decode("ascii")
+    assert int(_ts_const("POINTS3D_SCHEMA_VERSION")) == _engine_points3d.SCHEMA_VERSION
+    assert int(_ts_const("DEV_NOT_FLOOR")) == _engine_sample.DEV_NOT_FLOOR
+    assert int(_ts_const("DEV_NO_DEVIATION")) == _engine_sample.DEV_NO_DEVIATION
+    # 엔진은 m 단위(1e-4), TS 는 mm 단위(0.1)다. 1e-4 * 1000 의 부동소수 오차를 허용해 비교한다
+    assert abs(float(_ts_const("DEV_UNIT_MM")) - _engine_sample.DEV_UNIT_M * 1000) < 1e-12
