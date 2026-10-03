@@ -362,6 +362,20 @@ describe('Preview3dTab 모드별 화면 (§7.11 분기표의 화면 열)', () =>
     expect(viewerCanvas()).toBeInTheDocument();
     expect(screen.getByTestId('points3d-merged-note')).toBeInTheDocument();
   });
+
+  it('viewer: 상위가 새 props(콜백·analysis·stats 객체)로 다시 렌더해도 렌더러를 다시 만들지 않는다', () => {
+    // Points3dView 의 렌더러 effect 는 data 참조에 의존한다. 점 데이터(load.data)를 그대로 넘기지 않고
+    // 렌더마다 새 객체를 만들면, 상위가 다시 렌더할 때마다 렌더러가 다시 생겨 카메라·LOD 가 초기화된다
+    const { rerender } = render(<Preview3dTab {...tabProps({ load: READY_A })} />);
+    expect(viewerCanvas()).toBeInTheDocument();
+    expect(viewerMounts()).toBe(1);
+
+    // tabProps 를 새로 부르면 콜백·stats·analysis 객체가 모두 새것이다. 점 데이터(READY_A.data)만 그대로다
+    rerender(<Preview3dTab {...tabProps({ load: READY_A })} />);
+
+    expect(viewerCanvas()).toBeInTheDocument();   // 뷰어가 그대로 떠 있다
+    expect(viewerMounts()).toBe(1);               // getContext('webgl2') 가 다시 불리지 않았다
+  });
 });
 
 // ---------------------------------------------------------------------------
