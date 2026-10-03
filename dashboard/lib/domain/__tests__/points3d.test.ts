@@ -14,6 +14,11 @@ import {
   readoutLines,
 } from '../points3d';
 import type { PointClass, Points3dData, Points3dError } from '../points3d';
+import { defaultThresholdQ, loadFor, points3dFile } from '../points3d';
+import type { Points3dLoad } from '../points3d';
+import { resolvePreview3dMode } from '../points3d';
+import type { Preview3dInput, Preview3dMode } from '../points3d';
+import { shouldProbe, shouldRequestLoad } from '../points3d';
 
 // vitest 는 __dirname 을 준다. __tests__ -> domain -> lib -> dashboard -> 저장소 루트
 const GOLDEN_PATH = join(__dirname, '../../../../engine/tests/fixtures/points3d_golden.bin');
@@ -573,5 +578,312 @@ describe('색 표 (§7.6)', () => {
     expect(hexToRgb01('#4cc96f')).toEqual([76 / 255, 201 / 255, 111 / 255]);
     expect(hexToRgb01('#000716')).toEqual([0, 7 / 255, 22 / 255]);
     expect(hexToRgb01('#F06464')).toEqual([240 / 255, 100 / 255, 100 / 255]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Task 7: stats 접근과 적재 상태 (스펙 §7.2, §7.3, §8)
+// ---------------------------------------------------------------------------
+
+// Stats 와 Points3dData 타입은 함수·타입 시그니처에서 꺼낸다.
+// 이 파일의 기존 import 와 이름이 겹쳐 중복 선언이 되는 일을 피하기 위해서다.
+type TabStats = Parameters<typeof points3dFile>[0];
+type TabData = Extract<Points3dLoad, { status: 'ready' }>['data'];
+
+const TAB_DIR = 'artifacts/an1';        // 지금 보는 분석의 artifacts_dir
+const TAB_OTHER_DIR = 'artifacts/an2';  // 직전에 보던 다른 분석의 artifacts_dir
+
+// 상태 결정 함수는 점 데이터의 내용을 보지 않는다. 타입만 맞춘 빈 데이터면 충분하다.
+const TAB_DATA: TabData = {
+  meta: {
+    schema_version: 1, n_points: 0, units: 'm',
+    origin_m: [0, 0, 0], extent_m: [0, 0, 0],
+    deviation: { unit_mm: 0.1, not_floor: -32768, no_deviation: -32767 },
+    sample_cell_m: 0.0125,
+    fit_bounds: { min: [0, 0, 0], max: [0, 0, 0] },
+    sampling: { method: 'cell min-hash stratified', source_points: 0, cap: 500000 },
+    order: 'hash',
+  },
+  xyz: new Uint16Array(0),
+  dev: new Int16Array(0),
+};
+
+/** 평활도 stats 의 최소 픽스처. 적용 기준의 허용치는 7mm 로 고정해 둔다.
+ *  표시 임계값 키가 없을 때 구현이 이 값에서 70 을 만들어 내면 아래 null 단언이 죽는다. */
+function tabStats(extra: Record<string, unknown> = {}): TabStats {
+  return {
+    n_cells: 0, n_valid: 0,
+    grade_counts: { pass: 0, borderline: 0, repair: 0, rework: 0, na: 0 },
+    grade_pct: { pass: 0, borderline: 0, repair: 0, rework: 0, na: 0 },
+    value_max_mm: null, value_min_mm: null, value_mean_mm: null, value_p95_mm: null,
+    worst: null, coverage_pct: 0, reduced_span_cells: 0,
+    applied_criteria: { name: 'x', source: 'y', span_m: 3, pass_mm: 7, rework_mm: 21, u_mm: 5 },
+    warnings: [], zones: [], auto_summary: '',
+    meta: { file: 'f', n_points: 0 },
+    ...extra,
+  } as TabStats;
+}
+
+describe('points3dFile (stats 가 준 점 파일 이름)', () => {
+  it('키가 없으면 null', () => {
+    expect(points3dFile(tabStats())).toBeNull();
+  });
+
+  it('빈 목록이면 null', () => {
+    expect(points3dFile(tabStats({ points3d_paths: [] }))).toBeNull();
+  });
+
+  it('목록의 첫 이름을 그대로 돌려준다(파일명을 코드에 박지 않는다)', () => {
+    expect(points3dFile(tabStats({ points3d_paths: ['points3d.bin'] }))).toBe('points3d.bin');
+    expect(points3dFile(tabStats({ points3d_paths: ['custom3d.bin', 'other.bin'] }))).toBe('custom3d.bin');
+  });
+
+  it('다른 *_paths 키를 대신 읽지 않는다', () => {
+    const stats = tabStats({ preview3d_paths: ['preview3d.png'], deviation_paths: ['deviation.png'] });
+    expect(points3dFile(stats)).toBeNull();
+  });
+});
+
+describe('defaultThresholdQ (엔진이 준 표시 임계값, 0.1mm 정수)', () => {
+  it.each<[number, number]>([
+    [70, 70], [60, 60], [100, 100],          // 탑재 기준 7·6·10mm 는 그대로
+    [63, 63],                                // 5 의 배수로 맞추지 않는다
+    [10, 10], [300, 300],                    // 범위의 양 끝은 그대로
+    [9, 10], [5, 10], [0, 10], [-70, 10],    // 하한 10(1mm)
+    [301, 300], [999, 300],                  // 상한 300(30mm)
+  ])('points3d_threshold_q 가 %d 이면 %d', (q, expected) => {
+    expect(defaultThresholdQ(tabStats({ points3d_threshold_q: q }))).toBe(expected);
+  });
+
+  it.each<[string, unknown]>([
+    ['소수 7.5', 7.5],
+    ['소수 70.5', 70.5],
+    ['문자열 "70"', '70'],
+    ['null', null],
+    ['NaN', Number.NaN],
+    ['Infinity', Number.POSITIVE_INFINITY],
+  ])('정수가 아니면 null: %s', (_label, q) => {
+    expect(defaultThresholdQ(tabStats({ points3d_threshold_q: q }))).toBeNull();
+  });
+
+  it('키가 없으면 null 이다(적용 기준의 허용치 7mm 에서 70 을 만들어 내지 않는다)', () => {
+    expect(defaultThresholdQ(tabStats())).toBeNull();
+  });
+
+  it('적용 기준과 값이 달라도 stats 의 표시 임계값을 그대로 쓴다', () => {
+    // 픽스처의 허용치는 7mm(70)인데 키에는 60 을 줬다. 70 이 나오면 다른 필드를 읽은 것이다
+    expect(defaultThresholdQ(tabStats({ points3d_threshold_q: 60 }))).toBe(60);
+  });
+});
+
+describe('loadFor (지금 보는 분석의 적재 상태)', () => {
+  const NOT_IDLE: [string, Points3dLoad][] = [
+    ['loading', { status: 'loading', dir: TAB_DIR }],
+    ['ready', { status: 'ready', dir: TAB_DIR, data: TAB_DATA }],
+    ['error', { status: 'error', dir: TAB_DIR, reason: 'fetch' }],
+  ];
+
+  it.each(NOT_IDLE)('dir 이 같으면 %s 상태를 그대로(같은 객체) 돌려준다', (_status, load) => {
+    expect(loadFor(load, TAB_DIR)).toBe(load);
+  });
+
+  it.each(NOT_IDLE)('dir 이 다르면 %s 상태를 idle 로 본다', (_status, load) => {
+    expect(loadFor(load, TAB_OTHER_DIR)).toEqual({ status: 'idle' });
+  });
+
+  it.each(NOT_IDLE)('지금 분석의 dir 이 null 이면 %s 상태를 idle 로 본다', (_status, load) => {
+    expect(loadFor(load, null)).toEqual({ status: 'idle' });
+  });
+
+  it('idle 은 dir 과 무관하게 그대로다', () => {
+    const idle: Points3dLoad = { status: 'idle' };
+    expect(loadFor(idle, TAB_DIR)).toBe(idle);
+    expect(loadFor(idle, null)).toBe(idle);
+  });
+
+  it('입력 객체를 바꾸지 않는다', () => {
+    const load: Points3dLoad = { status: 'ready', dir: TAB_DIR, data: TAB_DATA };
+    loadFor(load, TAB_OTHER_DIR);
+    expect(load).toEqual({ status: 'ready', dir: TAB_DIR, data: TAB_DATA });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Task 7: 3D 탭 모드 결정 (스펙 §7.11 분기표)
+// ---------------------------------------------------------------------------
+
+const TAB_IDLE: Points3dLoad = { status: 'idle' };
+const TAB_LOADING: Points3dLoad = { status: 'loading', dir: TAB_DIR };
+const TAB_READY: Points3dLoad = { status: 'ready', dir: TAB_DIR, data: TAB_DATA };
+const TAB_FETCH_ERROR: Points3dLoad = { status: 'error', dir: TAB_DIR, reason: 'fetch' };
+const TAB_FORMAT_ERROR: Points3dLoad = { status: 'error', dir: TAB_DIR, reason: 'format' };
+
+/** 기준 입력: 뷰어 대상인 바닥 분석, 하드웨어 가속, 지금 분석의 점 데이터가 준비됨. 12행(viewer)이다.
+ *  각 테스트는 여기에 그 행의 조건만 덮어쓴다. 기준이 viewer 이므로 모드가 달라지면 덮어쓴 조건 때문이다. */
+function tabInput(over: Partial<Preview3dInput> = {}): Preview3dInput {
+  return {
+    surface: 'floor', isImport: false, dir: TAB_DIR, file: 'points3d.bin', thresholdQ: 70,
+    support: 'hardware', optedIn: false, load: TAB_READY,
+    rendererFailed: false, contextLost: false,
+    ...over,
+  };
+}
+
+type TabRow = [string, Partial<Preview3dInput>, Preview3dMode];
+
+// 각 행의 조건만 만족하는 최소 입력(§7.11 표 12행. 조건이 '또는'인 행은 갈래마다 한 줄)
+const TAB_ROWS: TabRow[] = [
+  ['1행: 벽면 분석', { surface: 'wall' }, 'wall'],
+  ['2행: 임포트 분석', { isImport: true }, 'import'],
+  ['3행: dir 없음', { dir: null }, 'no_data'],
+  ['3행: 점 파일 없음', { file: null }, 'no_data'],
+  ['4행: 표시 임계값 없음', { thresholdQ: null }, 'error_stats'],
+  ['5행: 탐지 전(load 는 ready)', { support: null }, 'loading'],
+  ['6행: WebGL2 불가', { support: 'unsupported' }, 'error_webgl'],
+  ['6행: 렌더러 생성 실패', { rendererFailed: true }, 'error_webgl'],
+  ['7행: 소프트웨어 렌더, 선택 전(load 는 ready)', { support: 'software', optedIn: false }, 'software_prompt'],
+  ['8행: fetch 오류', { load: TAB_FETCH_ERROR }, 'error_fetch'],
+  ['9행: 형식 오류', { load: TAB_FORMAT_ERROR }, 'error_format'],
+  ['10행: 컨텍스트 손실', { contextLost: true }, 'error_context'],
+  ['11행: 적재 전(idle)', { load: TAB_IDLE }, 'loading'],
+  ['11행: 받는 중(loading)', { load: TAB_LOADING }, 'loading'],
+  ['12행: 하드웨어 + ready', {}, 'viewer'],
+  ['12행: 소프트웨어 렌더 + 선택함 + ready', { support: 'software', optedIn: true }, 'viewer'],
+  ['12행: 하드웨어는 optedIn 과 무관', { optedIn: true }, 'viewer'],
+];
+
+// 우선순위: 위 행의 조건과 아래 행의 조건을 함께 만족하면 위 행이 이긴다
+const TAB_PRIORITY: TabRow[] = [
+  ['1 > 2: 벽면이 임포트보다 먼저', { surface: 'wall', isImport: true }, 'wall'],
+  ['1 > 3·4', { surface: 'wall', dir: null, file: null, thresholdQ: null }, 'wall'],
+  ['2 > 3', { isImport: true, dir: null, file: null }, 'import'],
+  ['2 > 4', { isImport: true, thresholdQ: null }, 'import'],
+  ['3 > 4', { file: null, thresholdQ: null }, 'no_data'],
+  ['3 > 5', { dir: null, support: null }, 'no_data'],
+  ['4 > 5', { thresholdQ: null, support: null }, 'error_stats'],
+  ['4 > 6', { thresholdQ: null, support: 'unsupported' }, 'error_stats'],
+  ['4 > 9: 표시 임계값 없음은 형식 오류와 다른 모드', { thresholdQ: null, load: TAB_FORMAT_ERROR }, 'error_stats'],
+  ['5 > 6', { support: null, rendererFailed: true }, 'loading'],
+  ['5 > 8', { support: null, load: TAB_FETCH_ERROR }, 'loading'],
+  ['5 > 10', { support: null, contextLost: true }, 'loading'],
+  ['6 > 7: 렌더러 실패가 선택 안내보다 먼저', { support: 'software', optedIn: false, rendererFailed: true }, 'error_webgl'],
+  ['6 > 8', { support: 'unsupported', load: TAB_FETCH_ERROR }, 'error_webgl'],
+  ['6 > 10', { rendererFailed: true, contextLost: true }, 'error_webgl'],
+  ['7 > 8', { support: 'software', optedIn: false, load: TAB_FETCH_ERROR }, 'software_prompt'],
+  ['7 > 9', { support: 'software', optedIn: false, load: TAB_FORMAT_ERROR }, 'software_prompt'],
+  ['7 > 10', { support: 'software', optedIn: false, contextLost: true }, 'software_prompt'],
+  ['7 > 11', { support: 'software', optedIn: false, load: TAB_IDLE }, 'software_prompt'],
+  ['8 > 10: fetch 오류가 컨텍스트 손실보다 먼저', { load: TAB_FETCH_ERROR, contextLost: true }, 'error_fetch'],
+  ['9 > 10', { load: TAB_FORMAT_ERROR, contextLost: true }, 'error_format'],
+  ['10 > 11(idle)', { contextLost: true, load: TAB_IDLE }, 'error_context'],
+  ['10 > 11(loading)', { contextLost: true, load: TAB_LOADING }, 'error_context'],
+];
+
+describe('resolvePreview3dMode (§7.11 분기표)', () => {
+  it.each(TAB_ROWS)('%s', (_label, over, expected) => {
+    expect(resolvePreview3dMode(tabInput(over))).toBe(expected);
+  });
+
+  it('표의 입력이 11개 모드를 전부 지난다', () => {
+    const seen = new Set(TAB_ROWS.map((row) => resolvePreview3dMode(tabInput(row[1]))));
+    expect([...seen].sort()).toEqual([
+      'error_context', 'error_fetch', 'error_format', 'error_stats', 'error_webgl',
+      'import', 'loading', 'no_data', 'software_prompt', 'viewer', 'wall',
+    ]);
+  });
+
+  it.each(TAB_PRIORITY)('우선순위 %s', (_label, over, expected) => {
+    expect(resolvePreview3dMode(tabInput(over))).toBe(expected);
+  });
+
+  it.each<[string, Points3dLoad]>([
+    ['ready', { status: 'ready', dir: TAB_OTHER_DIR, data: TAB_DATA }],
+    ['fetch 오류', { status: 'error', dir: TAB_OTHER_DIR, reason: 'fetch' }],
+    ['형식 오류', { status: 'error', dir: TAB_OTHER_DIR, reason: 'format' }],
+  ])('다른 분석의 %s 상태는 idle 로 읽는다: loading', (_label, load) => {
+    expect(resolvePreview3dMode(tabInput({ load }))).toBe('loading');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Task 7: 탐지·적재 요청 여부 (스펙 §7.2, §7.3 의 2·3번)
+// ---------------------------------------------------------------------------
+
+describe('shouldProbe · shouldRequestLoad (탐지와 적재 요청 여부)', () => {
+  // 하중 확인용 대조군. 1~4행 조건이 없을 때 아래 두 입력은 각각 true 여야 한다.
+  // 이 전제가 깨지면 '뷰어 대상이 아니면 false' 단언이 가드 없이도 통과해 버린다.
+  const PROBE_WOULD_FIRE: Partial<Preview3dInput> = { support: null, load: TAB_IDLE };
+  const REQUEST_WOULD_FIRE: Partial<Preview3dInput> = { support: 'hardware', load: TAB_IDLE };
+
+  it('대조군: 뷰어 대상이고 탐지 전이면 probe, 하드웨어 + idle 이면 request', () => {
+    expect(shouldProbe(tabInput(PROBE_WOULD_FIRE))).toBe(true);
+    expect(shouldRequestLoad(tabInput(REQUEST_WOULD_FIRE))).toBe(true);
+  });
+
+  it.each<[string, Partial<Preview3dInput>]>([
+    ['1행 벽면', { surface: 'wall' }],
+    ['2행 임포트', { isImport: true }],
+    ['3행 dir 없음', { dir: null }],
+    ['3행 점 파일 없음', { file: null }],
+    ['4행 표시 임계값 없음', { thresholdQ: null }],
+  ])('뷰어 대상이 아니면 탐지도 요청도 하지 않는다: %s', (_label, over) => {
+    expect(shouldProbe(tabInput({ ...PROBE_WOULD_FIRE, ...over }))).toBe(false);
+    expect(shouldRequestLoad(tabInput({ ...PROBE_WOULD_FIRE, ...over }))).toBe(false);
+    expect(shouldProbe(tabInput({ ...REQUEST_WOULD_FIRE, ...over }))).toBe(false);
+    expect(shouldRequestLoad(tabInput({ ...REQUEST_WOULD_FIRE, ...over }))).toBe(false);
+  });
+
+  it.each<[string, Points3dLoad]>([
+    ['idle', TAB_IDLE],
+    ['loading', TAB_LOADING],
+    ['ready', TAB_READY],
+    ['fetch 오류', TAB_FETCH_ERROR],
+    ['형식 오류', TAB_FORMAT_ERROR],
+  ])('탐지 전(support null)에는 probe 만 true 다: load %s', (_label, load) => {
+    expect(shouldProbe(tabInput({ support: null, load }))).toBe(true);
+    expect(shouldRequestLoad(tabInput({ support: null, load }))).toBe(false);
+  });
+
+  it.each<[Preview3dInput['support']]>([['hardware'], ['software'], ['unsupported']])(
+    '탐지가 끝났으면(%s) 다시 탐지하지 않는다',
+    (support) => {
+      expect(shouldProbe(tabInput({ support, load: TAB_IDLE }))).toBe(false);
+      expect(shouldProbe(tabInput({ support, load: TAB_READY }))).toBe(false);
+    },
+  );
+
+  it('소프트웨어 렌더는 "3D로 보기" 전에는 요청하지 않고 누른 뒤에 요청한다', () => {
+    expect(shouldRequestLoad(tabInput({ support: 'software', optedIn: false, load: TAB_IDLE }))).toBe(false);
+    expect(shouldRequestLoad(tabInput({ support: 'software', optedIn: true, load: TAB_IDLE }))).toBe(true);
+  });
+
+  it.each<[string, Points3dLoad]>([
+    ['loading', TAB_LOADING],
+    ['ready', TAB_READY],
+    ['fetch 오류', TAB_FETCH_ERROR],
+    ['형식 오류', TAB_FORMAT_ERROR],
+  ])('지금 분석의 적재 상태가 %s 이면 요청하지 않는다', (_label, load) => {
+    expect(shouldRequestLoad(tabInput({ support: 'hardware', load }))).toBe(false);
+  });
+
+  it.each<[string, Partial<Preview3dInput>]>([
+    ['WebGL2 불가', { support: 'unsupported' }],
+    ['렌더러 생성 실패', { rendererFailed: true }],
+    ['컨텍스트 손실', { contextLost: true }],
+  ])('idle 이어도 모드가 loading 이 아니면 요청하지 않는다: %s', (_label, over) => {
+    expect(shouldRequestLoad(tabInput({ load: TAB_IDLE, ...over }))).toBe(false);
+  });
+
+  it.each<[string, Points3dLoad]>([
+    ['ready', { status: 'ready', dir: TAB_OTHER_DIR, data: TAB_DATA }],
+    ['loading', { status: 'loading', dir: TAB_OTHER_DIR }],
+    ['error', { status: 'error', dir: TAB_OTHER_DIR, reason: 'fetch' }],
+  ])('다른 분석의 %s 상태가 남아 있으면 새로 요청한다(분석 전환)', (_label, load) => {
+    expect(shouldRequestLoad(tabInput({ support: 'hardware', load }))).toBe(true);
+  });
+
+  it('분석을 바꿔도 소프트웨어 렌더의 선택 전에는 요청하지 않는다', () => {
+    const load: Points3dLoad = { status: 'ready', dir: TAB_OTHER_DIR, data: TAB_DATA };
+    expect(shouldRequestLoad(tabInput({ support: 'software', optedIn: false, load }))).toBe(false);
   });
 });

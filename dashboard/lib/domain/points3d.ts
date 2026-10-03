@@ -5,6 +5,8 @@
 // 0.1mm 정수로 넘겨주는 표시용 값이고, 점을 어느 색으로 칠할지만 정한다. 합격·불합격을 가르지 않는다.
 // 이 모듈은 DOM·WebGL 을 건드리지 않고 lib/viz 를 import 하지 않는다.
 
+import type { Stats, Surface } from './types';
+
 // ---- 상수 ----
 // 아래 다섯 개는 엔진과 같은 값이어야 한다. engine/tests/test_points3d.py 가 이 파일을 정규식으로 읽어
 // 대조하므로 `export const 이름 = 값;` 꼴을 바꾸지 않는다.
@@ -282,4 +284,98 @@ export const POINTS3D_THEME: Record<ThemeName, Points3dTheme> = {
 export function hexToRgb01(hex: string): [number, number, number] {
   const v = parseInt(hex.slice(1), 16);
   return [((v >> 16) & 255) / 255, ((v >> 8) & 255) / 255, (v & 255) / 255];
+}
+
+// ---- stats 접근 (스펙 §7.2, §8) ----
+// 브라우저가 stats 에서 읽는 것은 아래 두 키뿐이다. 판정 기준 객체는 읽지 않는다.
+
+/** 받을 점 파일 이름. 키가 없거나 목록이 비면 null 이다.
+ *  파일명 상수를 TS 에 두지 않는다. 엔진이 stats 에 적은 이름이 곧 fetch 할 이름이다. */
+export function points3dFile(stats: Stats): string | null {
+  return (stats.points3d_paths ?? [])[0] ?? null;
+}
+
+/** 뷰어의 기본 표시 임계값(0.1mm 정수). 정수가 아니면 null, 정수면 슬라이더 범위로 clamp 한다.
+ *  슬라이더 눈금(5)의 배수로 맞추지 않는다. 63 은 63 그대로다. */
+export function defaultThresholdQ(stats: Stats): number | null {
+  const q: unknown = stats.points3d_threshold_q;
+  if (typeof q !== 'number' || !Number.isInteger(q)) return null;
+  return Math.min(THRESHOLD_Q_MAX, Math.max(THRESHOLD_Q_MIN, q));
+}
+
+// ---- 적재 상태 (스펙 §7.3) ----
+// Webgl2Support 와 Points3dLoad 를 이 모듈에 두는 이유: lib/domain 이 lib/viz 를 import 하지 않게 한다.
+
+export type Webgl2Support = 'hardware' | 'software' | 'unsupported';
+
+export type Points3dLoad =
+  | { status: 'idle' }
+  | { status: 'loading'; dir: string }
+  | { status: 'ready'; dir: string; data: Points3dData }
+  | { status: 'error'; dir: string; reason: 'fetch' | 'format' };
+
+/** 지금 보는 분석(dir)의 적재 상태. 다른 분석의 상태가 남아 있으면 idle 로 본다.
+ *  분석을 바꿔도 상위 state 가 그대로 남으므로, 이 비교가 없으면 이전 분석의 점이 새 분석 화면에 나온다. */
+export function loadFor(load: Points3dLoad, dir: string | null): Points3dLoad {
+  if (load.status !== 'idle' && load.dir !== dir) return { status: 'idle' };
+  return load;
+}
+
+// ---- 3D 탭 모드 결정 (스펙 §7.11 분기표) ----
+
+export type Preview3dMode = 'wall' | 'import' | 'no_data' | 'software_prompt' | 'loading' | 'viewer'
+  | 'error_stats' | 'error_fetch' | 'error_format' | 'error_webgl' | 'error_context';
+
+export interface Preview3dInput {
+  surface: Surface;                    // analysis.surface
+  isImport: boolean;                   // isExternalImport(...)
+  dir: string | null;                  // analysis.artifacts_dir (지금 보는 분석)
+  file: string | null;                 // points3dFile(stats)
+  thresholdQ: number | null;           // defaultThresholdQ(stats)
+  support: Webgl2Support | null;       // null = 아직 탐지 전(또는 다시 탐지하는 중)
+  optedIn: boolean;                    // 소프트웨어 렌더에서 "3D로 보기"를 눌렀는가
+  load: Points3dLoad;                  // 상위 state 그대로. 함수 안에서 loadFor(load, dir) 로 읽는다
+  rendererFailed: boolean;             // createRenderer 가 null 을 돌려줬는가
+  contextLost: boolean;                // 컨텍스트 손실이 3초 안에 복구되지 않았는가
+}
+
+/** 분기표 1~4행: 뷰어 대상이 아닌 분석이면 그 모드, 뷰어 대상이면 null.
+ *  이 네 경우에는 WebGL2 탐지도 fetch 도 하지 않는다. */
+function nonViewerMode(input: Preview3dInput): 'wall' | 'import' | 'no_data' | 'error_stats' | null {
+  if (input.surface === 'wall') return 'wall';                       // 1행
+  if (input.isImport) return 'import';                               // 2행
+  if (input.dir === null || input.file === null) return 'no_data';   // 3행
+  if (input.thresholdQ === null) return 'error_stats';               // 4행. 9행(error_format)과 달리 다시 시도가 없다
+  return null;
+}
+
+/** 분기표를 위에서부터 차례로 검사해 처음 맞는 행의 모드를 돌려준다. 행의 순서가 곧 우선순위다. */
+export function resolvePreview3dMode(input: Preview3dInput): Preview3dMode {
+  const early = nonViewerMode(input);
+  if (early !== null) return early;                                                     // 1~4행
+  if (input.support === null) return 'loading';                                         // 5행. load 상태와 무관하다
+  if (input.support === 'unsupported' || input.rendererFailed) return 'error_webgl';    // 6행
+  if (input.support === 'software' && !input.optedIn) return 'software_prompt';         // 7행
+  const current = loadFor(input.load, input.dir);                                       // 표의 L
+  if (current.status === 'error') {
+    return current.reason === 'fetch' ? 'error_fetch' : 'error_format';                 // 8·9행
+  }
+  if (input.contextLost) return 'error_context';                                        // 10행
+  if (current.status === 'ready') return 'viewer';                                      // 12행
+  return 'loading';                                                                     // 11행(idle 또는 loading)
+}
+
+// ---- 탐지·적재 요청 여부 (스펙 §7.3 의 2·3번) ----
+
+/** WebGL2 탐지를 해야 하는가. 뷰어 대상(1~4행이 아님)이고 아직 탐지하지 않았을 때만 true. */
+export function shouldProbe(input: Preview3dInput): boolean {
+  return nonViewerMode(input) === null && input.support === null;
+}
+
+/** 점 파일을 받아 달라고 상위에 요청해야 하는가.
+ *  모드가 loading 이어도 탐지 전(5행)이면 요청하지 않는다. 소프트웨어 렌더는 "3D로 보기" 전(7행)에 받지 않는다. */
+export function shouldRequestLoad(input: Preview3dInput): boolean {
+  return resolvePreview3dMode(input) === 'loading'
+    && input.support !== null
+    && loadFor(input.load, input.dir).status === 'idle';
 }
