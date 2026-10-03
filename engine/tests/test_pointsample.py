@@ -733,3 +733,28 @@ def test_sample_dev_matches_recomputed_subcell_index_at_mm_scale():
     assert np.array_equal(s.dev_q, expect)
     # 공허하지 않다: 융기 높이 2mm 이상인 반경 0.352m 원(전체의 6.5%)의 점이 +20 이상이다
     assert int((s.dev_q >= 20).sum()) >= 500
+
+
+# ---- Task 2 보강: 벌점은 두 센티널 모두에 붙는다 (스펙 §4.2) ----
+
+def test_sample_no_deviation_point_loses_to_valid_point_in_same_tile(monkeypatch):
+    # 스펙 §4.2: penalty = 1 은 dev_q 가 DEV_NOT_FLOOR 또는 DEV_NO_DEVIATION 일 때다. 벌점이 DEV_NOT_FLOOR 에만 붙으면
+    # bimodal 서브셀의 점(DEV_NO_DEVIATION)이 같은 표본 칸의 유효 편차 점을 해시로 이길 수 있다.
+    # 손으로 만든 서브셀 둘(1행 2열): 0번은 잔차 +0.3mm, 1번은 잔차 NaN(둘 다 ok 구역·중앙값 0)
+    shape = (1, 2)
+    grid = SubcellGrid(size_m=0.05, origin=np.zeros(2), shape=shape,
+                       median_z=np.zeros(shape, dtype=np.float32), counts=np.full(shape, 5, dtype=np.int32),
+                       bimodal=np.zeros(shape, dtype=bool))
+    zmap = ZoneMap(labels=np.ones(shape, dtype=np.int32),
+                   zones=[ZoneInfo(1, 0.0, 2, 0.005, "ok", (0.0, 0.0, 0.0))])
+    residuals = np.array([[3e-4, np.nan]], dtype=np.float32)
+    pts = np.array([[0.00, 0.0, 0.0],                                # 서브셀 0: 유효 편차 +3
+                    [0.06, 0.0, 0.0]])                               # 서브셀 1(0.06 / 0.05 = 1.2): DEV_NO_DEVIATION
+    # NaN 서브셀의 점이 항상 더 작은 해시를 갖게 한다. 벌점이 없으면 그 점이 이긴다
+    monkeypatch.setattr(ps, "_hash63", lambda chunk: np.where(chunk[:, 0] > 0.05, 0, 5).astype(np.uint64))
+    info = CloudInfo(2, pts.min(axis=0), pts.max(axis=0))
+    # 점유 서브셀 2개 → 면적 0.005 m2. max_points = 1 이면 칸 변 sqrt(0.005) = 0.0707 m 라서 두 점이 한 칸에 든다
+    s = ps.sample_points(_sp_chunks(pts, 10), info, 1.0, grid, zmap, residuals, max_points=1)
+    assert s.sample_cell_m == pytest.approx(math.sqrt(0.005), rel=1e-12)
+    assert s.xyz_local.tolist() == [[0.0, 0.0, 0.0]]
+    assert s.dev_q.tolist() == [3]
