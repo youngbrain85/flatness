@@ -15,8 +15,9 @@ export function DeviationView({ artifactsDir, paths, isImport }: {
   artifactsDir: string | null;
   paths: string[];
   // 외부(Colab) 임포트 결과 여부 — 스펙 §8/계약 §2: 임포트 경로는 편차맵을 아예 생성하지
-  // 않으므로 재분석을 권해선 안 된다(무한 재시도 유도 방지). 판별은 호출부가
-  // lib/domain/stats.ts의 isExternalImport로 넘긴다(3D 프리뷰 탭과 동일한 분기 선례)
+  // 않으므로 재분석을 권해선 안 된다(무한 재시도 유도 방지). 판별은 호출부(analysis-result.tsx)가
+  // lib/domain/stats.ts의 isExternalImport로 넘긴다. 3D 프리뷰 탭도 같은 값을 받아 임포트를
+  // 가른다(preview3d-tab.tsx의 import 모드: 임포트 결과에는 재분석을 권하지 않는다)
   isImport: boolean;
 }) {
   if (!artifactsDir || paths.length === 0) {
