@@ -67,6 +67,8 @@ const WARNING_LABEL: Record<string, string> = {
     '3D 프리뷰 이미지 생성에 실패했습니다. 판정 수치·등급에는 영향이 없습니다.',
   deviation_render_failed:
     '정밀 편차맵 이미지 생성에 실패했습니다. 판정 수치·등급에는 영향이 없습니다.',
+  points3d_render_failed:
+    '3D 점군 데이터 생성에 실패했습니다. 판정 수치·등급에는 영향이 없습니다.',
 };
 
 export function warningLabel(code: string): string {

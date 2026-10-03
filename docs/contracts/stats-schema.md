@@ -16,7 +16,8 @@
 > `engine/flatness/outputs/stats.py`, `engine/flatness/core/pipeline.py`, `engine/flatness/core/cells.py`,
 > `engine/flatness/core/walls.py`, `engine/flatness/core/zones.py`, `engine/flatness/criteria.py`,
 > `engine/flatness/importer/colab_csv.py`, `engine/flatness/outputs/summary.py`, `engine/flatness/outputs/heatmap.py`,
-> `engine/flatness/outputs/preview3d.py`, `engine/flatness/outputs/deviation.py`. §8은 별도로
+> `engine/flatness/outputs/preview3d.py`, `engine/flatness/outputs/deviation.py`,
+> `engine/flatness/core/pointsample.py`, `engine/flatness/outputs/points3d.py`. §8은 별도로
 > `engine/flatness/core/slope.py`, `engine/flatness/outputs/slope_cells.py`, `engine/flatness/outputs/slope_judged.py`,
 > `engine/flatness/outputs/slope_map.py`, `engine/flatness/core/pipeline.py`의 `judge_slope_cells`/`analyze_slope`를
 > 대조했다.
@@ -96,6 +97,8 @@
 |---|---|---|---|---|
 | `preview3d_paths` | O | — | — | `analyze_floor`에서만 추가(`core/pipeline.py:60-62`). `string[]`, 0~2개: 잔차가 전부 NaN이면 `[]`, 아니면 `["preview3d.png"]`, 최댓값 지점 1.5m 반경 내 점이 있으면 `["preview3d.png","preview3d_zoom.png"]`(`outputs/preview3d.py:19-49`). 렌더 자체가 예외로 실패해도 `[]`이며, 이때는 `preview3d_render_failed` 경고가 동반된다(§5) |
 | `deviation_paths` | O | O | — | 정밀 편차맵 파일명 목록(`string[]`). floor는 `[]` 또는 `["deviation.png"]`, wall은 `wall_id` 오름차순 `["deviation_wall1.png", ...]`이며 **스킵된 벽은 목록에 없다(결번)**. 잔차 유효값이 하나도 없으면 파일을 만들지 않아 목록에서 빠진다(`core/pipeline.py`·`outputs/deviation.py`). 렌더가 예외로 실패한 경우도 마찬가지로 해당 파일명이 목록에서 빠지며 `deviation_render_failed` 경고가 동반된다(§5). import 경로는 이 키 자체가 없으므로 소비자는 항상 "없으면 빈 목록"으로 다룬다. **판정과 무관한 보조 시각화**이며 등급·수치 필드에 영향을 주지 않는다 |
+| `points3d_paths` | O | — | — | `analyze_floor`에서만 추가. 3D 점군 뷰어용 점 파일명 목록(`string[]`): `["points3d.bin"]` 또는 `[]`. 다른 `*_paths` 키와 같은 규약이다: 파일 존재는 이 키로 판별하고, 소비자는 키가 없으면 빈 목록으로 다룬다(이 키가 생기기 전에 만든 분석 포함). 생성이 예외로 실패하면 `[]`이고 `points3d_render_failed` 경고가 동반된다(§5). 파일 형식은 §9. 이 파일명은 `preview3d_paths`에 넣지 않는다(보고서가 그 목록의 파일을 3D 프리뷰 그림으로 복사한다). **판정과 무관한 보조 시각화**다 |
+| `points3d_threshold_q` | 조건부 | — | — | int. 3D 점군 뷰어의 기본 표시 임계값, 0.1mm 단위 정수 = `int(round(criterion.pass_mm * 10))`(탑재된 바닥 기준의 `pass_mm` 6·7·10에 대응해 60·70·100). **점 파일이 만들어졌을 때만** 기록한다(`points3d_paths`가 `[]`이면 키 자체가 없다). 스팬 환산과 불확도 U를 적용하지 않는다. 판정에 쓰이지 않는 표시용 값이다 |
 | `walls` | — | O | — | `analyze_wall`에서만 추가(`core/pipeline.py:111`). §2.1 참고 |
 | `zones` (내용) | 구역 목록 채움 | 항상 `[]` | 항상 `[]` | 키 자체는 §1의 공통 키. wall/import는 `build_stats(..., zones=None)` 호출이라 `zones or []` → `[]`(`outputs/stats.py:47`) |
 | `meta.scale_to_m` | O | O | — | 사용자가 `--units`로 지정한 배율(예: mm=0.001). import는 CSV 값을 이미 m로 변환해 읽으므로 키 자체가 없음(`importer/colab_csv.py:35,48-49`) |
@@ -215,6 +218,7 @@ w_fit = a * center_x + b * center_y + c   # a,b,c = walls[i].plane_abc
 | `heatmap_render_failed` | 판정 히트맵(`heatmap.png`/`heatmap_wall{n}.png`) 렌더가 예외(디스크·폰트 등 인프라 사유)로 실패함. 판정 수치는 영향 없음 | floor·wall | `core/pipeline.py`(`render_heatmap` 호출부) |
 | `preview3d_render_failed` | 3D 프리뷰(`preview3d.png`) 렌더가 실패해 `preview3d_paths`가 `[]`로 저장됨. 판정 수치는 영향 없음 | floor | `core/pipeline.py`(`render_preview3d` 호출부) |
 | `deviation_render_failed` | 정밀 편차맵(`deviation.png`/`deviation_wall{n}.png`) 렌더가 실패해 해당 파일명이 `deviation_paths`에서 빠짐. 판정 수치는 영향 없음 | floor·wall | `core/pipeline.py`(`render_deviation_map` 호출부) |
+| `points3d_render_failed` | 3D 점군 뷰어용 점 파일(`points3d.bin`) 생성이 실패해 `points3d_paths`가 `[]`로 저장됨. 판정 수치는 영향 없음 | floor | `core/pipeline.py`(`sample_points`·`write_points3d` 호출부) |
 | `fused_mesh_smoothed` | 업로드 시 데이터 계보를 "융합 메시"로 선택한 스캔임 — 스캐너 앱이 표면을 다듬은 데이터라 실제 요철보다 양호한 결과가 나올 수 있음(스펙 §5.1.1) | floor·wall·import·slope 공통 — **엔진이 아니라 워커가 붙인다**(아래 참고) | `worker/flatworker/lineage.py` |
 
 > **`fused_mesh_smoothed`만 출처가 엔진이 아니다.** 계보는 점군에서 도출되는 값이 아니라 업로드할 때
@@ -228,7 +232,7 @@ w_fit = a * center_x + b * center_y + c   # a,b,c = walls[i].plane_abc
 소비자 구현 참고: `wall_{i}_skipped`는 정규식 `^wall_\d+_skipped$`(또는 `startswith("wall_") and endswith("_skipped")`)로 매칭해야 한다
 — CLI/요약 생성기도 이 방식을 쓴다(`outputs/summary.py:51-52`).
 
-렌더 실패 경고(`heatmap_render_failed`·`preview3d_render_failed`·`deviation_render_failed`)는 벽 여러 개에서 동시에
+렌더 실패 경고(`heatmap_render_failed`·`preview3d_render_failed`·`deviation_render_failed`·`points3d_render_failed`)는 벽 여러 개에서 동시에
 발생해도 코드 하나로만 남는다(어느 벽인지는 구분하지 않음) — `warnings`는 `set`이므로 중복 없이 한 번만 기록된다.
 파일이 없거나 `*_paths`에서 빠진 이유가 렌더링 인프라 문제인지는 **대응하는 `*_render_failed` 경고의 유무로만** 판별한다
 - 경고가 없다면 스킵된 벽·유효 잔차 없음·확대 반경 내 점 없음 같은 정상적인 미생성 사유다.
@@ -246,6 +250,7 @@ w_fit = a * center_x + b * center_y + c   # a,b,c = walls[i].plane_abc
 | `preview3d_zoom.png` | floor(조건부) | 최댓값 지점 반경 1.5m 확대. 반경 내 점이 없으면 생성 안 됨 |
 | `deviation.png` | floor | 정밀 편차맵(10cm 해상도, 0mm 중심 대칭 연속 색상). 판정 히트맵과 별개의 보조 시각화 |
 | `deviation_wall{n}.png` | wall | 벽별 정밀 편차맵. `n`은 `wall_id`와 동일 채번 — **스킵된 벽은 파일 자체가 생성되지 않음(결번)** |
+| `points3d.bin` | floor | 3D 점군 뷰어용 점 표본. 최대 50만 점, 점당 8바이트. 형식은 §9, 생성 여부는 `points3d_paths`로 판별 |
 
 > **정밀 편차맵 읽는 법**: 1m 판정 셀·5등급 이산색인 히트맵과 달리 10cm 격자의 원시 편차(mm)를 연속 색상으로 칠한다.
 > 0mm가 중앙(연노랑), 붉을수록 융기(벽은 돌출), 초록일수록 침하(벽은 함몰)이며 스케일은 ±최대 절대편차로 대칭이다.
@@ -504,6 +509,146 @@ floor/wall/import와 달리 `slope_stats.json`에는 `meta` 키 자체가 없어
 `stats.threshold`는 최신이지만 `applied_criteria`는 최초 분석 시점 그대로다. 기준 자체를 바꾸지 않는 한
 값이 같아 보통은 드러나지 않지만, 기준 개정 이후 재판정하면 두 필드가 서로 다른 시점의 기준을 가리키는
 모순 상태가 된다(백로그 기록됨).
+
+## 9. points3d.bin 형식 계약 (schema_version=1)
+
+바닥 평활도 분석(`analyze_floor`)이 만드는 3D 점군 뷰어용 점 표본 파일의 계약 정본이다. wall·import·구배 경로는
+이 파일을 만들지 않는다. 생성 여부는 §2의 `points3d_paths`로 판별한다(파일 존재를 가정하지 않는다).
+**판정과 무관한 보조 시각화**이며 이 파일이 없어도 stats의 판정 결과는 같다.
+
+- 작성기: `engine/flatness/outputs/points3d.py`의 `encode_points3d`·`write_points3d`. 표본 추출과 점별 편차 계산은
+  `engine/flatness/core/pointsample.py`의 `sample_points`다.
+- 리더: `dashboard/lib/domain/points3d.ts`의 `parsePoints3d`, 엔진의 `read_points3d`(`outputs/points3d.py`).
+- 점별 편차 `dev`는 그 점이 속한 5cm 서브셀의 잔차(정밀 편차맵과 같은 값, + 융기 / − 침하)를 0.1mm 단위 정수로
+  적은 것이다. 점 자체의 편차가 아니다.
+- 뷰어의 기본 표시 임계값은 이 파일이 아니라 stats의 `points3d_threshold_q`(§2)에 있다.
+
+### 9.1 바이트 배치
+
+전부 little-endian. `n` = 점 수, `L` = `json_len`.
+
+| 오프셋 | 길이 | 내용 |
+|---|---|---|
+| `[0, 4)` | 4 | magic. ASCII `FP3D`(`0x46 0x50 0x33 0x44`) |
+| `[4, 8)` | 4 | uint32 `json_len`. 뒤따르는 JSON 영역의 바이트 수이며 **공백 패딩을 포함**한다. `8 + json_len`은 4의 배수다 |
+| `[8, 8+L)` | L | UTF-8 JSON 메타. 끝을 공백(`0x20`)으로 채워 길이를 맞춘다 |
+| `[8+L, 8+L+6n)` | 6n | `uint16 xyz[3n]`. 점마다 x, y, z 순서로 인터리브 |
+| `[8+L+6n, 8+L+8n)` | 2n | `int16 dev[n]` |
+
+- 총 `8 + L + 8n` 바이트. 50만 점이면 약 4.0MB다.
+- 본문 시작(`8 + L`)이 4의 배수이고 `6n`이 짝수이므로 두 블록 모두 TypedArray 뷰로 바로 읽을 수 있다.
+- 압축하지 않는다. 헤더에 버전 필드를 두지 않는다(버전은 JSON의 `schema_version`).
+
+### 9.2 메타 키
+
+키는 아래 순서로 기록한다. 리더는 순서에 기대지 않는다.
+
+| 키 | 타입 | 내용 |
+|---|---|---|
+| `schema_version` | int | `1`. 파일 구조가 바뀔 때만 올린다 |
+| `n_points` | int | 점 수 `n`. 1 이상. 작성기는 `n <= MAX_POINTS`(500,000)를 보장한다. 리더는 상한을 검사하지 않는다 |
+| `units` | string | `"m"` |
+| `origin_m` | float[3] | 절대 좌표(float64). 표본 로컬 범위의 최솟값을 절대 좌표로 바꾼 값 = `origin_abs + min(xyz_local)` |
+| `extent_m` | float[3] | 표본의 축별 범위(m) = `max(xyz_local) − min(xyz_local)`. 0 이상 |
+| `deviation` | object | `{"unit_mm": 0.1, "not_floor": -32768, "no_deviation": -32767}` |
+| `sample_cell_m` | float | 표본 칸 변 `s`(m). 뷰어가 점 크기를 유도한다 |
+| `fit_bounds` | object | `{"min": float[3], "max": float[3]}`. 편차 있는 점(`dev > -32767`)의 파일-로컬 범위. 편차 있는 점이 하나도 없으면 전체 범위(`min = [0,0,0]`, `max = extent_m`). 뷰어의 카메라 초기 맞춤과 격자 범위에 쓴다 |
+| `sampling` | object | `{"method": "cell min-hash stratified", "source_points": int, "cap": int}` |
+| `order` | string | `"hash"`. 점이 해시 값 오름차순으로 놓였다는 뜻. 앞에서 몇 개를 취해도 고른 표본이다 |
+
+**넣지 않는 것**: 엔진 버전, 시드, 판정 기준에 종속된 값(임계값, 기준 이름, 불확도), 분류 수, 파일 경로, 생성 시각.
+같은 스캔이면 기준을 바꿔 재분석해도 파일이 바이트 동일해야 하고, `ENGINE_VERSION`을 올려도 골든 파일
+(`engine/tests/fixtures/points3d_golden.bin`)이 깨지지 않아야 한다.
+
+### 9.3 예시 메타 JSON
+
+```json
+{"schema_version":1,"n_points":118342,"units":"m","origin_m":[254012.3371,4180044.9126,31.4802],"extent_m":[8.0012,6.0009,0.0719],"deviation":{"unit_mm":0.1,"not_floor":-32768,"no_deviation":-32767},"sample_cell_m":0.009797958971132712,"fit_bounds":{"min":[0.0,0.0,0.0],"max":[8.0012,6.0009,0.0719]},"sampling":{"method":"cell min-hash stratified","source_points":120701,"cap":500000},"order":"hash"}
+```
+
+실제 파일에서는 이 문자열 뒤에 `8 + json_len`이 4의 배수가 될 만큼 공백이 붙는다.
+
+### 9.4 인코딩 규칙 (작성기)
+
+```
+mn  = xyz_local.min(axis=0);  mx = xyz_local.max(axis=0);  ext = mx - mn        # float64
+inv = where(ext > 0, 65535.0 / ext, 0.0)
+q   = clip(rint((xyz_local - mn) * inv), 0, 65535).astype('<u2')                # (n, 3), C 순서 = x,y,z 인터리브
+dev = sample.dev_q.astype('<i2')                                                # 이미 센티널·clip 이 끝난 값
+deq = q * ext / 65535.0                                                         # 복원 좌표(파일-로컬)
+has = dev > -32767
+fit_min, fit_max = (deq[has].min(0), deq[has].max(0)) if has.any() else ([0,0,0], ext)
+
+meta = {                                                  # dict 삽입 순서 = 기록 순서(§9.2)
+    "schema_version": 1,
+    "n_points": n,
+    "units": "m",
+    "origin_m": (sample.origin_abs + mn).tolist(),
+    "extent_m": ext.tolist(),
+    "deviation": {"unit_mm": 0.1, "not_floor": -32768, "no_deviation": -32767},
+    "sample_cell_m": float(sample.sample_cell_m),
+    "fit_bounds": {"min": list(fit_min), "max": list(fit_max)},      # Python float 3개씩
+    "sampling": {"method": "cell min-hash stratified",
+                 "source_points": int(sample.source_points), "cap": int(sample.cap)},
+    "order": "hash",
+}
+js   = json.dumps(meta, ensure_ascii=True, allow_nan=False, separators=(",", ":")).encode("ascii")
+js  += b" " * ((-(8 + len(js))) % 4)
+blob = b"FP3D" + struct.pack("<I", len(js)) + js + q.tobytes() + dev.tobytes()
+```
+
+- `xyz_local`은 `info.bbox_min * scale_to_m`(= `origin_abs`)을 뺀 로컬 좌표(m, float64)다.
+- 범위가 0인 축은 `q = 0`, `extent_m = 0`으로 기록한다.
+- `fit_bounds`는 양자화 뒤 복원 좌표로 계산한다(뷰어가 그리는 점을 정확히 감싼다).
+- JSON 숫자는 Python `float`의 `repr`(최단 왕복 표기)로 쓴다. 플랫폼·버전과 무관하게 같은 바이트가 나온다.
+
+### 9.5 복원 식 (리더)
+
+```
+local[i]  = q[i] * extent_m / 65535          # 파일-로컬 좌표(m). q[i] = (xyz[3i], xyz[3i+1], xyz[3i+2])
+abs[i]    = origin_m + local[i]              # 절대 좌표(m). float64 로만 계산한다
+dev_mm[i] = dev[i] * 0.1                     # dev[i] > -32767 일 때만
+```
+
+- `dev[i] == -32768`: 바닥 아님(구역 없음, furniture/ghost 구역, 또는 서브셀 중앙값에서 5cm 넘게 벗어난 점).
+  `dev[i] == -32767`: 바닥 구역 안이지만 잔차 없음(bimodal 서브셀). 둘 다 편차가 없다.
+- 유효 편차 범위는 `[-32766, 32767]`(−3276.6mm ~ +3276.7mm)이고 범위 밖 값은 끝값으로 clip돼 있다.
+- 좌표 분해능은 축 범위 / 65535다(8m에서 0.12mm, 30m에서 0.46mm, 100m에서 1.5mm). 편차 분해능은 0.1mm다.
+
+### 9.6 검증 규칙
+
+**작성기**(`encode_points3d`, `write_points3d`). 하나라도 어기면 예외를 던지고 파일을 남기지 않는다.
+
+1. `1 <= n`. 점이 0개면 `ValueError`.
+2. `n <= MAX_POINTS`(엔진 상수. `sample.cap`이 아니라 상수와 비교한다).
+3. `xyz_local.shape == (n, 3)`, `dev_q.shape == (n,)`, `dev_q.dtype == int16`, 좌표가 전부 유한값.
+4. `len(blob) == 8 + json_len + 8 * n` 그리고 `(8 + json_len) % 4 == 0`.
+5. `write_points3d`는 `encode_points3d`가 돌려준 blob을 한 번에 쓴다. 쓰는 중 예외가 나면
+   `out_path.unlink(missing_ok=True)` 뒤 예외를 다시 던진다.
+
+**리더**(`dashboard/lib/domain/points3d.ts`의 `parsePoints3d`, 엔진의 `read_points3d`). 위에서부터 차례로 검사하고
+처음 어긴 항목의 사유로 실패한다.
+
+| 순서 | 검사 | 실패 사유 |
+|---|---|---|
+| 1 | `byteLength >= 8` | `too_short` |
+| 2 | 앞 4바이트가 `FP3D` | `bad_magic` |
+| 3 | `8 + json_len <= byteLength` 그리고 `(8 + json_len) % 4 == 0` | `bad_header` |
+| 4 | JSON 영역을 UTF-8로 풀어 `JSON.parse` 성공, 결과가 객체 | `bad_json` |
+| 5 | `schema_version === 1` | `unsupported_version` |
+| 6 | 메타 형식: `n_points`가 1 이상 정수, `units === "m"`, `origin_m`·`extent_m`가 유한수 3개(`extent_m >= 0`), `deviation.unit_mm === 0.1`·`not_floor === -32768`·`no_deviation === -32767`, `sample_cell_m`이 0보다 큰 유한수, `fit_bounds.min`·`max`가 유한수 3개이고 축마다 `min <= max`, `order === "hash"` | `bad_meta` |
+| 7 | `byteLength === 8 + json_len + 8 * n_points` | `size_mismatch` |
+| 8 | 호스트가 little-endian(TS 전용: `new Uint8Array(new Uint16Array([1]).buffer)[0] === 1`) | `big_endian_host` |
+
+- 실패를 알리는 방법: `parsePoints3d`는 `{ ok: false, reason }`을 돌려주고, `read_points3d`는 사유 문자열을 메시지로 하는
+  `ValueError`를 던진다. `read_points3d`는 1~7만 검사한다(numpy가 `'<u2'`·`'<i2'`로 엔디안을 명시해 읽으므로 8이 필요 없다).
+- 8번은 버퍼 내용이 아니라 호스트의 성질이다. TS에서는 판정을 `isLittleEndianHost()`로 떼어 두고
+  `parsePoints3d(buf, hostIsLittleEndian = isLittleEndianHost())`의 둘째 인자로 받는다. 테스트는 `false`를 넘겨
+  `big_endian_host`를 확인한다(변조한 버퍼로는 만들 수 없는 사유다).
+- 모르는 메타 키는 무시한다(추가 키는 호환 변경).
+- TS 리더는 `instanceof ArrayBuffer`로 입력을 검사하지 않는다. vitest jsdom에서 `readFileSync(...).buffer`와 그
+  `slice` 결과가 전역 `ArrayBuffer`의 인스턴스가 아니어서, 그렇게 짜면 브라우저에서는 통과하고 골든 테스트에서만
+  거부된다. `byteLength`와 `DataView`·TypedArray 생성만 쓴다.
 
 ## 부록 A. 등급 라벨 매핑 (프론트엔드 참고)
 

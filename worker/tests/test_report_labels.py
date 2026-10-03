@@ -70,7 +70,7 @@ def test_analysis_kind_label_matches_dashboard():
 
 def test_warning_dictionary_matches_dashboard():
     warnings = _extract_object(_ts(), "WARNING_LABEL")
-    assert len(warnings) == 12, "파싱 실패 의심(warnings 사전은 12개 코드)"
+    assert len(warnings) == 13, "파싱 실패 의심(warnings 사전은 13개 코드)"
     assert warnings == WARNING_LABEL
 
 

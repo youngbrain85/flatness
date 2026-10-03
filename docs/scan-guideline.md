@@ -602,8 +602,9 @@ dashboard/lib/domain/height-view.ts pixelToWorld]`.
 
 ### 11.3 스캔과 무관한 경고 (시스템 문제)
 
-`heatmap_render_failed`, `preview3d_render_failed`, `deviation_render_failed`는 그림 생성이
-디스크·폰트 등 인프라 사유로 실패했다는 뜻이다. **판정 수치는 영향받지 않는다**`[스펙 계약 §5]`.
+`heatmap_render_failed`, `preview3d_render_failed`, `deviation_render_failed`,
+`points3d_render_failed`는 그림 또는 3D 점군 데이터 생성이 디스크·폰트 등 인프라 사유로 실패했다는
+뜻이다. **판정 수치는 영향받지 않는다**`[스펙 계약 §5]`.
 재스캔하지 말고 시스템 담당자에게 알린다.
 
 ### 11.4 경고가 없어도 확인할 것

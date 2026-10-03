@@ -28,6 +28,11 @@ describe('warningLabel', () => {
     expect(warningLabel('fused_mesh_smoothed')).toContain('융합 메시');
     expect(warningLabel('fused_mesh_smoothed')).toContain('양호한 결과');
   });
+  it('3D 점군 데이터 생성 실패 코드는 정확히 이 문구다(워커 사본과 글자 단위로 같아야 한다)', () => {
+    expect(warningLabel('points3d_render_failed')).toBe(
+      '3D 점군 데이터 생성에 실패했습니다. 판정 수치·등급에는 영향이 없습니다.',
+    );
+  });
   it('wall_{i}_skipped 개방 패턴을 매칭한다', () => {
     expect(warningLabel('wall_3_skipped')).toContain('3번 벽');
   });

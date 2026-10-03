@@ -69,17 +69,17 @@ def _documented_warning_codes():
     m = re.search(r"## 5\. warnings 코드 사전(.*?)\n## 6\.", text, re.S)
     assert m, "stats-schema.md에서 §5 warnings 코드 사전 절을 찾지 못했습니다"
     codes = re.findall(r"^\|\s*`([a-z0-9_]+)`\s*\|", m.group(1), re.M)
-    # 12개 중 `fused_mesh_smoothed` 하나는 엔진이 아니라 워커가 붙이는 코드다
+    # 13개 중 `fused_mesh_smoothed` 하나는 엔진이 아니라 워커가 붙이는 코드다
     # (계보는 DB 메타데이터이고 엔진은 DB를 모른다 - §5 표 아래 주석 참고).
     # 아래 부분집합 단언은 그래도 성립한다: 엔진 _WARN_TEXT가 문서 사전의
     # 부분집합이면 되고, 워커 전용 코드는 그 여집합에 있으면 그만이다.
-    assert len(codes) == 12, "파싱 실패 의심(§5 리터럴 코드는 12개여야 함 - wall_{i}_skipped 패턴 행 제외)"
+    assert len(codes) == 13, "파싱 실패 의심(§5 리터럴 코드는 13개여야 함 - wall_{i}_skipped 패턴 행 제외)"
     return set(codes)
 
 
 def test_warn_text_is_subset_of_documented_warning_codes():
     """코드리뷰 Minor(M1): summary.py의 _WARN_TEXT는 stats-schema.md §5 사전의
-    부분집합이어야 한다(렌더 실패 3종 heatmap/preview3d/deviation_render_failed을
+    부분집합이어야 한다(렌더 실패 4종 heatmap/preview3d/deviation/points3d_render_failed을
     종합의견 문구에서 의도적으로 뺀 부분집합 — 판정과 무관한 렌더 인프라 실패까지
     종합의견 본문에 싣지 않기 위함, generate_summary의 warnings 순회 로직 참고).
 
@@ -96,3 +96,19 @@ def test_warn_text_is_subset_of_documented_warning_codes():
     """
     documented = _documented_warning_codes()
     assert set(_WARN_TEXT) <= documented
+
+
+def test_render_failed_codes_are_documented_and_kept_out_of_summary_text():
+    """렌더 실패 4종은 계약 문서 §5 에 리터럴 코드로 실려 있고, 종합의견 사전(_WARN_TEXT)에는
+    하나도 없어야 한다(3D 점군 뷰어 스펙 §4.5, §6.2).
+
+    개수 단언(13)만으로는 새 행의 코드 철자가 틀린 경우를 잡지 못한다. 엔진이 붙이는 이름
+    (core/pipeline.py 의 render_warns.add(...) 리터럴과 같은 철자)을 아래 집합에 적어 문서와 대조한다.
+    """
+    documented = _documented_warning_codes()
+    render_failed = {c for c in documented if c.endswith("_render_failed")}
+    assert render_failed == {
+        "heatmap_render_failed", "preview3d_render_failed",
+        "deviation_render_failed", "points3d_render_failed",
+    }
+    assert render_failed.isdisjoint(_WARN_TEXT)
