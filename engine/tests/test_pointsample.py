@@ -708,3 +708,28 @@ def test_sample_raises_when_no_occupied_subcell():
                         median_z=grid.median_z, counts=np.zeros_like(grid.counts), bimodal=grid.bimodal)
     with pytest.raises(ValueError):
         ps.sample_points(_sp_chunks(pts, 1000), info, 1.0, empty, zmap, residuals)
+
+
+# ---- Task 2 보강: scale_to_m != 1.0 에서 서브셀 인덱스 일치 (Task 1 리뷰 주의) ----
+
+def test_sample_dev_matches_recomputed_subcell_index_at_mm_scale():
+    # test_sample_dev_matches_recomputed_subcell_index 는 scale_to_m = 1.0 만 본다. 서브셀 인덱스를 단위가 어긋나게
+    # (rel / scale_to_m) 넣어도 scale 1.0 에서는 비트 단위로 같아 그 테스트가 통과한다. 여기서는 mm 좌표 파일로
+    # 표본 점의 dev_q 가 build_subcell_grid(subcell.py:30-34)가 그 점을 넣은 서브셀의 잔차와 같은지 묶는다.
+    # 원점을 (10, 20, 3) m 로 띄운 것은 인덱스 식의 float 경로를 드러내기 위해서다. 점 간격 2cm 라 x 가 0.1m 의
+    # 배수인 31열(31 * 101 = 3,131 점)이 서브셀 경계 위에 있고, 그 점의 인덱스는 float 반올림이 정한다
+    pts_m = add_bump(flat_floor(size=(3.0, 2.0), spacing=0.02), (2.2, 0.6), 0.5, 0.010)
+    pts_m += np.array([10.0, 20.0, 3.0])
+    pts = pts_m * 1000.0                                             # mm 좌표 파일
+    scene = _sp_scene(pts, scale=0.001)
+    grid, residuals = scene[1], scene[3]
+    assert grid.shape == (40, 60)
+    s = _sp_run(pts, scene, scale=0.001)
+    assert len(s.xyz_local) == len(pts) == 15251                     # 기본 상한(칸 변 약 3.5mm)에서 전 점이 남는다
+    ix, iy = _sp_subcell_index(s.xyz_local, grid)
+    valid = s.dev_q > ps.DEV_NO_DEVIATION
+    assert bool(valid.all())                                         # 이 바닥에는 편차 없는 점이 없다
+    expect = np.rint(residuals[iy, ix].astype(np.float64) * 10000.0).astype(np.int16)
+    assert np.array_equal(s.dev_q, expect)
+    # 공허하지 않다: 융기 높이 2mm 이상인 반경 0.352m 원(전체의 6.5%)의 점이 +20 이상이다
+    assert int((s.dev_q >= 20).sum()) >= 500
