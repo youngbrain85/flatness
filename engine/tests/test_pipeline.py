@@ -1,7 +1,12 @@
+import json
+from pathlib import Path
 import numpy as np
+import pytest
 from tests.fixtures.synthetic import flat_floor, flat_wall, add_bump, add_step, write_binary_ply
+from flatness.core import pipeline as pl
 from flatness.core.pipeline import analyze_floor, analyze_wall
 from flatness.criteria import load_criteria
+from flatness.outputs.points3d import read_points3d
 
 CRIT = load_criteria()["floor-kcs-exposed"]  # pass 7 / rework 21, U=5 → b1=2, b2=12
 
@@ -240,3 +245,178 @@ def test_wall_render_failure_isolated_per_wall(tmp_path, monkeypatch):
     assert "heatmap_render_failed" in stats["warnings"]
     assert not (tmp_path / "out" / "heatmap_wall1.png").exists()  # 벽 1 렌더 실패 → 결번
     assert (tmp_path / "out" / "heatmap_wall2.png").exists()      # 벽 2는 정상 렌더
+
+
+# ---- 3D 점군 뷰어용 점 파일 points3d.bin (스펙 2026-10-02 §4.4, §4.5, §6.1) ----
+
+# 점 파일 생성이 실패해도 그대로여야 하는 판정 수치(스펙 §4.5 목록)
+POINTS3D_JUDGED_KEYS = ("grade_counts", "worst", "value_max_mm", "value_min_mm",
+                        "value_mean_mm", "value_p95_mm", "coverage_pct",
+                        "applied_criteria", "zones")
+
+
+def _dent_scan(dirpath):
+    """6x6m 평탄 바닥(2cm 간격, 301 x 301 = 90,601점) + (2, 2)에 반경 0.3m, 깊이 10mm 함몰."""
+    pts = add_bump(flat_floor(size=(6.0, 6.0), spacing=0.02), (2.0, 2.0), 0.3, -0.010)
+    path = dirpath / "scan.ply"
+    write_binary_ply(pts, path)
+    return path
+
+
+def test_floor_points3d_generated(tmp_path):
+    scan = _dent_scan(tmp_path)
+    out = tmp_path / "out"
+
+    stats = pl.analyze_floor(scan, 1.0, CRIT, 5.0, out)
+
+    assert stats["points3d_paths"] == ["points3d.bin"]
+    assert (out / "points3d.bin").is_file()
+    # 표시 임계값 = pass_mm 7 x 10 = 70 (0.1mm 정수). rework_mm(21)에서 유도하면 210 이 된다
+    assert stats["points3d_threshold_q"] == 70
+    assert type(stats["points3d_threshold_q"]) is int
+    # 보고서가 preview3d_paths 의 파일을 3D 프리뷰 그림으로 복사하므로 점 파일이 섞이면 안 된다
+    assert stats["preview3d_paths"] != []
+    assert "points3d.bin" not in stats["preview3d_paths"]
+    assert "points3d_render_failed" not in stats["warnings"]
+    saved = json.loads((out / "stats.json").read_text("utf-8"))
+    assert saved["points3d_paths"] == ["points3d.bin"]     # write_outputs 이전에 기록돼야 한다
+    assert saved["points3d_threshold_q"] == 70
+    # 파일 내용이 이 스캔의 것인지 본다: 3번째 패스가 읽은 점 수, 함몰의 깊이와 위치
+    meta, xyz_q, dev_q = read_points3d((out / "points3d.bin").read_bytes())
+    assert meta["sampling"]["source_points"] == 301 * 301
+    assert 1 <= meta["n_points"] == len(dev_q) <= 500_000
+    i = int(np.argmin(np.where(dev_q > -32767, dev_q, 32767)))   # 센티널을 뺀 최솟값의 위치
+    assert -110 <= int(dev_q[i]) <= -90      # 10mm 함몰 = -100 (0.1mm 단위). 기존 e2e 와 같은 +-1mm 허용
+    x = meta["origin_m"][0] + float(xyz_q[i, 0]) * meta["extent_m"][0] / 65535
+    y = meta["origin_m"][1] + float(xyz_q[i, 1]) * meta["extent_m"][1] / 65535
+    assert abs(x - 2.0) < 0.1 and abs(y - 2.0) < 0.1
+
+
+def _points3d_sample_boom(*args, **kwargs):
+    raise RuntimeError("주입된 표본 추출 실패")
+
+
+def _points3d_write_partial_then_boom(sample, out_path):
+    # 머리 4바이트만 쓰고 죽는 작성기. out_dir 에 부분 파일이 남는 상황을 만든다
+    Path(out_path).write_bytes(b"FP3D")
+    raise OSError("주입된 쓰기 실패(디스크 가득 참 모사)")
+
+
+@pytest.mark.parametrize("target, fake", [
+    ("sample_points", _points3d_sample_boom),
+    ("write_points3d", _points3d_write_partial_then_boom),
+])
+def test_floor_points3d_failure_isolated(tmp_path, monkeypatch, target, fake):
+    # 점 파일 생성만 실패한 실행을 정상 실행과 비교한다(같은 스캔, 서로 다른 출력 폴더)
+    scan = _dent_scan(tmp_path)
+    ok_out, bad_out = tmp_path / "ok", tmp_path / "bad"
+    ok = pl.analyze_floor(scan, 1.0, CRIT, 5.0, ok_out)
+    monkeypatch.setattr(pl, target, fake)
+
+    bad = pl.analyze_floor(scan, 1.0, CRIT, 5.0, bad_out)
+
+    # 대조군: 정상 실행은 실제로 점 파일을 만들었다
+    assert ok["points3d_paths"] == ["points3d.bin"] and (ok_out / "points3d.bin").is_file()
+    for key in POINTS3D_JUDGED_KEYS:
+        assert bad[key] == ok[key], key
+    # 점 파일과 무관한 나머지 stats(종합의견, meta, 다른 산출물 목록)도 그대로다
+    drop = ("points3d_paths", "points3d_threshold_q", "warnings")
+    assert ({k: v for k, v in bad.items() if k not in drop}
+            == {k: v for k, v in ok.items() if k not in drop})
+    # 늘어난 경고는 정확히 하나다(다른 렌더 블록이 함께 실패하지 않았다)
+    assert set(bad["warnings"]) - set(ok["warnings"]) == {"points3d_render_failed"}
+    assert set(ok["warnings"]) <= set(bad["warnings"])
+    assert bad["points3d_paths"] == []
+    assert "points3d_threshold_q" not in bad
+    assert not (bad_out / "points3d.bin").exists()       # 워커가 out_dir 의 모든 파일을 올린다
+    for name in ("cells.json", "results.csv"):
+        assert (bad_out / name).read_bytes() == (ok_out / name).read_bytes(), name
+    for name in ("heatmap.png", "preview3d.png", "deviation.png"):
+        assert (bad_out / name).stat().st_size > 0, name
+    assert bad["preview3d_paths"] == ok["preview3d_paths"] != []
+    assert bad["deviation_paths"] == ["deviation.png"]
+    saved = json.loads((bad_out / "stats.json").read_text("utf-8"))
+    assert saved["points3d_paths"] == []
+    assert "points3d_threshold_q" not in saved
+    assert "points3d_render_failed" in saved["warnings"]
+
+
+def test_floor_points3d_block_independent_of_other_renders(tmp_path, monkeypatch):
+    # 기존 렌더 3종이 전부 실패해도 점 파일은 만들어진다(새 블록은 독립 try/except)
+    def boom(*args, **kwargs):
+        raise RuntimeError("주입된 렌더 실패")
+
+    monkeypatch.setattr(pl, "render_heatmap", boom)
+    monkeypatch.setattr(pl, "render_preview3d", boom)
+    monkeypatch.setattr(pl, "render_deviation_map", boom)
+    scan = _dent_scan(tmp_path)
+    out = tmp_path / "out"
+
+    stats = pl.analyze_floor(scan, 1.0, CRIT, 5.0, out)
+
+    assert stats["points3d_paths"] == ["points3d.bin"]
+    assert (out / "points3d.bin").is_file()
+    assert stats["points3d_threshold_q"] == 70
+    assert "points3d_render_failed" not in stats["warnings"]
+    # 주입이 실제로 걸렸다(세 렌더는 실패했다)
+    assert stats["preview3d_paths"] == [] and stats["deviation_paths"] == []
+    assert not (out / "heatmap.png").exists()
+    for code in ("heatmap_render_failed", "preview3d_render_failed", "deviation_render_failed"):
+        assert code in stats["warnings"]
+
+
+def test_floor_points3d_bytes_do_not_depend_on_criterion(tmp_path):
+    scan = _dent_scan(tmp_path)
+    lh = load_criteria()["floor-lh-exposed"]       # pass 6 / rework 18
+
+    a = pl.analyze_floor(scan, 1.0, CRIT, 5.0, tmp_path / "kcs")
+    b = pl.analyze_floor(scan, 1.0, lh, 5.0, tmp_path / "lh")
+
+    # 대조군: 두 실행의 기준이 실제로 달랐다
+    assert a["applied_criteria"]["pass_mm"] == 7 and b["applied_criteria"]["pass_mm"] == 6
+    assert a["points3d_threshold_q"] == 70         # 7mm x 10
+    assert b["points3d_threshold_q"] == 60         # 6mm x 10
+    blob_a = (tmp_path / "kcs" / "points3d.bin").read_bytes()
+    blob_b = (tmp_path / "lh" / "points3d.bin").read_bytes()
+    assert len(blob_a) > 8 + 8 * 1000              # 빈 파일끼리의 일치가 아니다
+    assert blob_a == blob_b
+
+
+def test_floor_points3d_chunk_size_invariant(tmp_path, monkeypatch):
+    scan = _dent_scan(tmp_path)
+    pl.analyze_floor(scan, 1.0, CRIT, 5.0, tmp_path / "default")
+    seen = []
+    real = pl.sample_points
+
+    def spy(chunks, *args, **kwargs):
+        # 3번째 패스가 받는 청크 크기를 기록하고 실제 함수로 넘긴다
+        def tap():
+            for c in chunks:
+                seen.append(len(c))
+                yield c
+        return real(tap(), *args, **kwargs)
+
+    monkeypatch.setattr(pl, "sample_points", spy)
+
+    pl.analyze_floor(scan, 1.0, CRIT, 5.0, tmp_path / "small", chunk_size=50_000)
+
+    # 90,601점이 5만 점 청크 둘로 왔다. chunk_size 를 넘기지 않으면 [90601] 이 된다
+    assert seen == [50_000, 40_601]
+    assert ((tmp_path / "small" / "points3d.bin").read_bytes()
+            == (tmp_path / "default" / "points3d.bin").read_bytes())
+
+
+def test_wall_has_no_points3d(tmp_path):
+    # 범위 가드: 점 파일은 바닥 분석만 만든다(벽면은 키도 파일도 없다)
+    pts = np.vstack([flat_floor(size=(4.0, 3.0), spacing=0.02),
+                     flat_wall(length=4.0, height=2.4, spacing=0.02, y0=0.0)])
+    write_binary_ply(pts, tmp_path / "room.ply")
+    crit = load_criteria()["wall-kcs-tilt-other"]
+
+    stats = pl.analyze_wall(tmp_path / "room.ply", 1.0, crit, 8.0, tmp_path / "out")
+
+    saved = json.loads((tmp_path / "out" / "stats.json").read_text("utf-8"))
+    for key in ("points3d_paths", "points3d_threshold_q"):
+        assert key not in stats
+        assert key not in saved
+    assert not (tmp_path / "out" / "points3d.bin").exists()

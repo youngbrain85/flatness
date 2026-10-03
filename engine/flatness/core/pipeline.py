@@ -8,6 +8,7 @@ from flatness.core.subcell import build_subcell_grid
 from flatness.core.levels import detect_levels
 from flatness.core.zones import build_zones
 from flatness.core.cells import evaluate_cells
+from flatness.core.pointsample import sample_points
 from flatness.core.walls import (build_column_grid, detect_wall_lines,
                                  project_wall_points, wall_grid, evaluate_wall)
 from flatness.core.plane import residual_grid
@@ -16,6 +17,7 @@ from flatness.outputs.stats import build_stats, write_outputs
 from flatness.outputs.heatmap import render_heatmap
 from flatness.outputs.deviation import render_deviation_map
 from flatness.outputs.preview3d import render_preview3d
+from flatness.outputs.points3d import FILE_NAME as POINTS3D_FILE, write_points3d
 from flatness.outputs.summary import generate_summary
 # 모듈 최상단에서 임포트한다(judge_slope_cells 함수 내부 지역 임포트가 아니라) -
 # 테스트가 pipeline.render_slope_map을 monkeypatch로 갈아끼우려면 이 이름이
@@ -97,6 +99,21 @@ def analyze_floor(path, scale_to_m, criterion, u_mm, out_dir,
         render_heatmap(cells, grades, out_dir / "heatmap.png", cell_m=cell_m)
     except Exception:
         render_warns.add("heatmap_render_failed")
+    # 3D 점군 뷰어용 점 표본(판정 무관 보조 산출물): 파일을 한 번 더 스트리밍하는 3번째 패스.
+    # 위 세 렌더 블록과 별개의 독립 try/except 다. 어느 한쪽의 실패가 다른 쪽을 막지 않는다.
+    try:
+        sample = sample_points(iter_chunks(path, chunk_size=chunk_size),
+                               info, scale_to_m, grid, zmap, residuals)
+        stats["points3d_paths"] = [write_points3d(sample, out_dir / POINTS3D_FILE)]
+        stats["points3d_threshold_q"] = int(round(criterion.pass_mm * 10))
+    except Exception:
+        stats["points3d_paths"] = []
+        stats.pop("points3d_threshold_q", None)
+        render_warns.add("points3d_render_failed")
+        try:
+            (out_dir / POINTS3D_FILE).unlink(missing_ok=True)   # 부분 파일이 업로드되지 않게 한다
+        except OSError:
+            pass
     if render_warns:
         stats["warnings"] = sorted(set(stats["warnings"]) | render_warns)
     write_outputs(out_dir, stats, cells, grades)
