@@ -8,8 +8,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent, PointerEvent } from 'react';
 import { flushSync } from 'react-dom';
 import {
-  DEV_NO_DEVIATION, DEV_UNIT_MM, EXAGGERATIONS, POINTS3D_THEME, POINT_CLASS_LABEL, THRESHOLD_Q_MAX, THRESHOLD_Q_MIN,
-  THRESHOLD_Q_STEP, fmtThresholdMm, hexToRgb01, readoutLines,
+  EXAGGERATIONS, POINTS3D_THEME, POINT_CLASS_LABEL, THRESHOLD_Q_MAX, THRESHOLD_Q_MIN, THRESHOLD_Q_STEP,
+  fmtThresholdMm, hexToRgb01, readoutLines,
 } from '@/lib/domain/points3d';
 import type { PointClass, Points3dData, ThemeName } from '@/lib/domain/points3d';
 import { FOVY, fitToBounds, viewProj } from '@/lib/viz/points3d/orbit';
@@ -82,16 +82,6 @@ function measure(canvas: HTMLCanvasElement): ViewSize {
 function sameCamera(a: OrbitState, b: OrbitState): boolean {
   return a === b || (a.distance === b.distance && a.azimuth === b.azimuth && a.elevation === b.elevation
     && a.target[0] === b.target[0] && a.target[1] === b.target[1] && a.target[2] === b.target[2]);
-}
-
-// 편차 있는 점의 |dev| 최댓값(m). 두 센티널(편차 없는 점)은 과장하지 않으므로 뺀다. 편차 있는 점이 없으면 0
-function maxAbsDevMeters(dev: Int16Array): number {
-  let q = 0;
-  for (let i = 0; i < dev.length; i++) {
-    const d = dev[i];
-    if (d > DEV_NO_DEVIATION && Math.abs(d) > q) q = Math.abs(d);
-  }
-  return (q * DEV_UNIT_MM) / 1000;   // 0.1mm 정수 -> mm -> m
 }
 
 function rgba(hex: string, alpha: number): string {
@@ -173,8 +163,7 @@ export function Points3dView({ data, defaultThresholdQ, isRegistered, onError }:
 
     const n = data.meta.n_points;
     const fit = data.meta.fit_bounds;
-    const extent = data.meta.extent_m;
-    const maxAbsDevM = maxAbsDevMeters(data.dev);   // 데이터를 받을 때 한 번 잰다
+    const full: Bounds = { min: [0, 0, 0], max: data.meta.extent_m };
     const pointWorldM = pointWorldSizeM(data.meta.sample_cell_m);
     let control = initialControlState(fitToBounds(fit, 'iso'));
     let size = measure(canvas);
@@ -200,10 +189,6 @@ export function Points3dView({ data, defaultThresholdQ, isRegistered, onError }:
     }
     function draw(count: number) {
       const v = viewRef.current;
-      // 표시 높이는 z + dev x (k - 1) 이다. 과장한 점이 near/far 밖으로 잘리지 않도록 near/far 를 정하는 범위의 z 를
-      // max|dev| x (k - 1) 만큼 위아래로 넓힌다. k = 1 이면 [0, 0, 0] ~ extent 그대로다
-      const pad = maxAbsDevM * (v.exaggeration - 1);
-      const full: Bounds = { min: [0, 0, -pad], max: [extent[0], extent[1], extent[2] + pad] };
       const vp = viewProj(control.camera, size.cssW / size.cssH, full);
       // gl_PointSize 는 드로잉 버퍼 px 이다. 환산 계수에 CSS 높이가 아니라 버퍼 높이를 넘긴다
       const [minPx, maxPx] = pointSizeRange(renderer.pointSizeLimit(), size.scale);

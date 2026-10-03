@@ -401,7 +401,7 @@ describe('Points3dView 렌더러 연결', () => {
   });
 
   // 변이: 과장 배율을 넘기지 않음, 상태가 바뀌어도 다시 그리지 않음
-  it('과장 버튼을 누르면 uExag 를 바꿔 n 개 전부로 한 번 다시 그린다', () => {
+  it('과장 버튼을 누르면 uExag 만 바꿔 n 개 전부로 한 번 다시 그린다', () => {
     const { rec } = mount();
     frame(0);
     expect(lastUniform(rec, 'uExag')).toEqual([1]);
@@ -411,40 +411,6 @@ describe('Points3dView 렌더러 연결', () => {
     expect(lastUniform(rec, 'uExag')).toEqual([50]);
     expect(rec.pointDraws()).toEqual([1234, 1234]);
     expect(rafQueue).toHaveLength(0);
-  });
-
-  // 표시 높이는 z + dev x (k - 1) 이라 과장하면 점이 extent 상자 밖으로 나간다. near/far 를 정하는 범위(full)의
-  // z 를 편차 있는 점의 max|dev| x (k - 1) 만큼 위아래로 넓힌다. 센티널(-32767, -32768)은 과장하지 않으므로 뺀다.
-  // near/far 는 target 에서 가장 먼 꼭짓점이 정하므로 위·아래 패딩을 각각 보이려고 fit 높이가 다른 두 데이터를 쓴다.
-  //   READOUT_DATA: dev 32, -32768, -105 -> 편차 있는 점의 |dev| 최대 q = 105 -> 0.0105m.
-  //     x100 이면 0.0105 x 99 = 1.0395m -> full z [-1.0395, 0.5 + 1.0395 = 1.5395]. target z 0.125: 위쪽이 더 멀다
-  //   HIGH: dev 50, -200, -32767, -32768 -> q = 200 -> 0.02m. x100 이면 0.02 x 99 = 1.98m
-  //     -> full z [-1.98, 0.5 + 1.98 = 2.48]. fit 이 z 0.4~0.5 라 target z 0.45: 아래쪽이 더 멀다
-  // 변이: 패딩 없음(x100, |dev| 3cm 이상에서 점이 near/far 에 잘린다), 센티널을 max|dev| 에 넣음, 한쪽만 넓힘,
-  //       (k - 1) 대신 k 를 곱함, 데이터가 바뀌어도 max|dev| 를 다시 재지 않음
-  it('과장하면 near/far 를 정하는 범위의 z 를 max|dev| x (k - 1) 만큼 위아래로 넓힌다', () => {
-    stubSize(640, 480, 1);
-    const { rec, rerender, onError } = mount({ data: READOUT_DATA });
-    frame(0);
-    fireEvent.click(screen.getByRole('button', { name: '×100' }));
-    frame(16);
-    const camA = fitToBounds(READOUT_FIT, 'iso');
-    const a = lastUniform(rec, 'uViewProj');
-    expectMatrix(a, viewProj(camA, 640 / 480, { min: [0, 0, -1.0395], max: [4, 3, 1.5395] }));
-    const unpaddedA = viewProj(camA, 640 / 480, FULL);
-    expect(Math.max(...a.map((v, i) => Math.abs(v - unpaddedA[i])))).toBeGreaterThan(1e-3);
-
-    const HIGH_FIT: Bounds = { min: [1, 1, 0.4], max: [3, 2, 0.5] };
-    const HIGH = dataOf([
-      [16384, 21845, 52428, 50], [49151, 43690, 65535, -200], [32768, 32768, 58982, -32767], [8192, 8192, 58982, -32768],
-    ], HIGH_FIT);
-    rerender(<Points3dView data={HIGH} defaultThresholdQ={70} isRegistered={false} onError={onError} />);
-    frame(32);
-    const camB = fitToBounds(HIGH_FIT, 'iso');
-    const b = lastUniform(rec, 'uViewProj');
-    expectMatrix(b, viewProj(camB, 640 / 480, { min: [0, 0, -1.98], max: [4, 3, 2.48] }));
-    const unpaddedB = viewProj(camB, 640 / 480, FULL);
-    expect(Math.max(...b.map((v, i) => Math.abs(v - unpaddedB[i])))).toBeGreaterThan(1e-3);
   });
 
   // 변이: 임계값을 mm 로 바꿔 넘김(7), 기본값을 5 의 배수로 반올림(65)
