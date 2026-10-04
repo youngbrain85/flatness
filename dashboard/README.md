@@ -75,7 +75,9 @@ npm run build   # production build
 7. **Results screen** - after the analysis completes, check the results screen (split into 3 panes: heatmap canvas ·
    assessment panel · results table), and click a heatmap cell to check that its details appear. For a floor
    analysis, the "3D preview" tab shows an interactive 1:1 point cloud viewer: a sample of the actual scan points
-   at true scale, colored by deviation (drag to rotate, Ctrl+wheel to zoom).
+   at true scale, colored by deviation (drag to rotate, Ctrl+wheel to zoom). Analyses that ran before the viewer
+   was added have no point file: the tab says it is created on reanalysis ("재분석하면 생성됩니다"), and there is no
+   backfill job.
 8. **Upload photos** - upload a photo to a site or a measurement location and check that it appears in the gallery.
 9. **Check settings** - at `/settings`, check saving the profile name, the assessment criteria list and its active
    toggles, and the measurement uncertainty U value.

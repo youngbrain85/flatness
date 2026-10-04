@@ -519,8 +519,8 @@ floor/wall/import와 달리 `slope_stats.json`에는 `meta` 키 자체가 없어
 - 작성기: `engine/flatness/outputs/points3d.py`의 `encode_points3d`·`write_points3d`. 표본 추출과 점별 편차 계산은
   `engine/flatness/core/pointsample.py`의 `sample_points`다.
 - 리더: `dashboard/lib/domain/points3d.ts`의 `parsePoints3d`, 엔진의 `read_points3d`(`outputs/points3d.py`).
-- 점별 편차 `dev`는 그 점이 속한 5cm 서브셀의 잔차(정밀 편차맵과 같은 값, + 융기 / − 침하)를 0.1mm 단위 정수로
-  적은 것이다. 점 자체의 편차가 아니다.
+- 점별 편차 `dev`는 그 점이 속한 5cm 서브셀의 잔차(+ 융기 / − 침하)를 0.1mm 단위 정수로 적은 것이다. 점 자체의
+  편차가 아니다. 정밀 편차맵이 쓰는 것과 같은 5cm 서브셀 잔차 배열에서 나온 값이다(편차맵은 2x2 평균해 10cm로 그린다).
 - 뷰어의 기본 표시 임계값은 이 파일이 아니라 stats의 `points3d_threshold_q`(§2)에 있다.
 
 ### 9.1 바이트 배치
