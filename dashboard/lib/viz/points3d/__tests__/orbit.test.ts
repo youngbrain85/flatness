@@ -330,6 +330,21 @@ describe('viewProj 의 클립 평면', () => {
     }
   });
 
+  // 세 축 범위가 모두 0 이 아닌 상자 [0, 0, 0] ~ [6, 8, 20]. 대각선 = sqrt(36 + 64 + 400) = sqrt(500) = 22.3606797750.
+  // target 이 꼭짓점에 있으면 가장 먼 꼭짓점은 반대편 꼭짓점이라 farRadius = 대각선이다. distance 40 에서
+  // near = 40 - 22.3606797750 = 17.6393202250, far = 40 + 22.3606797750 = 62.3606797750
+  // 죽이는 변이: farRadius 에서 dz 무시, 꼭짓점 열거의 x·y·z 비트를 서로 바꿔 씀(일부 꼭짓점을 보지 않는다)
+  it.each([0, 1, 2, 3, 4, 5, 6, 7])('8꼭짓점을 전부 본다: target 이 꼭짓점 %i 에 있으면 near = 40 - 대각선, far = 40 + 대각선', (i) => {
+    const box: Bounds = { min: [0, 0, 0], max: [6, 8, 20] };
+    const target: Vec3 = [i & 1 ? 6 : 0, i & 2 ? 8 : 0, i & 4 ? 20 : 0];
+    const cam: OrbitState = { target, distance: 40, azimuth: 0, elevation: 0, fovy: FOVY, radius: 5 };
+    const m = viewProj(cam, ASPECT, box);
+    // eye = target + (40, 0, 0) 에서 -x 를 본다. 전방 거리 f 인 점은 (target.x + 40 - f, target.y, target.z)
+    const ahead = (f: number): Vec3 => [target[0] + 40 - f, target[1], target[2]];
+    expect(zOverW(m, ahead(17.6393202250))).toBeCloseTo(-1, 4);
+    expect(zOverW(m, ahead(62.3606797750))).toBeCloseTo(1, 4);
+  });
+
   it('전체 범위가 한 점이어도 행렬이 유한하다(near = far 로 나누지 않는다)', () => {
     const one: Bounds = { min: [3, 4, 0], max: [3, 4, 0] };
     const m = viewProj(s, ASPECT, one);

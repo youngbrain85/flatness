@@ -64,6 +64,13 @@ describe('lookAt', () => {
     expectVec(transformPoint(v, [3, 4, 12]), [0, 0, 0, 1]);
     expectVec(transformPoint(v, [0, 0, 0]), [0, 0, -13, 1]);
   });
+
+  // 퇴화 입력: eye = center 면 전방이 0 벡터, 시선이 up 과 나란하면 오른쪽(f x up)이 0 벡터다.
+  // 죽이는 변이: normalize 의 길이 0 가드 제거(0 / 0 = NaN 이 행렬에 퍼진다)
+  it('eye = center 이거나 시선이 up 과 나란해도 행렬 원소가 전부 유한하다', () => {
+    expect(Array.from(lookAt([0, 0, 5], [0, 0, 5], [0, 0, 1])).every(Number.isFinite)).toBe(true);
+    expect(Array.from(lookAt([0, 0, 5], [0, 0, 0], [0, 0, 1])).every(Number.isFinite)).toBe(true);
+  });
 });
 
 describe('multiply', () => {

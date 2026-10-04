@@ -85,6 +85,11 @@ function withRawMeta(json: string): ArrayBufferLike {
   return buildFile(json, goldenBytes().subarray(8 + JSON_LEN));
 }
 
+/** 골든의 메타 JSON 문자열(끝의 공백 패딩 제외). 리터럴 일부를 바꿔 withRawMeta 에 넘길 때 쓴다. */
+function goldenMetaText(): string {
+  return new TextDecoder().decode(goldenBytes().subarray(8, 8 + JSON_LEN)).trimEnd();
+}
+
 function parseOk(buf: ArrayBufferLike): Points3dData {
   const r = parsePoints3d(buf);
   if (!r.ok) throw new Error(`parse 실패: ${r.reason}`);
@@ -325,12 +330,29 @@ describe('parsePoints3d: 실패 사유 8종 (§5.6 리더 규칙)', () => {
     ['fit_bounds 없음', (m) => { delete m.fit_bounds; }],
     ['fit_bounds.min 2개', (m) => { m.fit_bounds = { min: [0, 0], max: [4, 2.5, 0.1] }; }],
     ['fit_bounds.max 없음', (m) => { m.fit_bounds = { min: [0, 0, 0] }; }],
+    // 세 축이 각자 행을 갖는다. 축 검사 루프를 x 하나로 줄이거나(a < 1) 한 축을 건너뛰면 그 축의 행이 죽는다
     ['fit_bounds x 축 min > max', (m) => { m.fit_bounds = { min: [5, 0, 0], max: [4, 2.5, 0.1] }; }],
+    ['fit_bounds y 축 min > max', (m) => { m.fit_bounds = { min: [0, 3, 0], max: [4, 2.5, 0.1] }; }],
     ['fit_bounds z 축 min > max', (m) => { m.fit_bounds = { min: [0, 0, 0.2], max: [4, 2.5, 0.1] }; }],
     ['order 다름', (m) => { m.order = 'cell'; }],
     ['order 없음', (m) => { delete m.order; }],
   ])('6. bad_meta: %s', (_name, edit) => {
     expect(reasonOf(withMeta(edit))).toBe('bad_meta');
+  });
+
+  // JSON.parse 는 리터럴 1e999 를 Infinity 로 읽는다. withMeta 로는 만들 수 없다(JSON.stringify(Infinity) 는 null).
+  // 죽이는 변이: isFiniteNumber 를 typeof v === 'number' 로 줄이기(Infinity 가 검사를 지나 'ok' 가 된다).
+  // fit_bounds 는 max 쪽에 넣는다. min 에 넣으면 min > max 검사가 대신 잡아 이 변이를 죽이지 못한다
+  it.each<[string, string, string]>([
+    ['origin_m 에 Infinity', '"origin_m":[254012.8371,', '"origin_m":[1e999,'],
+    ['extent_m 에 Infinity', '"extent_m":[4.0,', '"extent_m":[1e999,'],
+    ['sample_cell_m 이 Infinity', '"sample_cell_m":0.0125,', '"sample_cell_m":1e999,'],
+    ['fit_bounds.max 에 Infinity', '"max":[4.0,', '"max":[1e999,'],
+  ])('6. bad_meta: %s (리터럴 1e999)', (_name, from, to) => {
+    expect(JSON.parse('1e999')).toBe(Infinity);   // 이 테스트가 기대는 전제
+    const text = goldenMetaText();
+    expect(text).toContain(from);                  // 바꿔 끼울 자리가 골든에 있다(빈 치환이 아니다)
+    expect(reasonOf(withRawMeta(text.replace(from, to)))).toBe('bad_meta');
   });
 
   it('6. 경계: 범위 0 인 축(extent_m 0, fit min == max)은 유효하다', () => {
