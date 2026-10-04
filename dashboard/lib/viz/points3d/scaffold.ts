@@ -60,19 +60,22 @@ export function buildScaffold(fit: Bounds): {
   const step = niceStep(rangeX, rangeY);
   const nx = stepsIn(rangeX, step);
   const ny = stepsIn(rangeY, step);
+  // niceStep 이 수열 끝(5 x 10^9 m)까지 가도 선 수를 MAX_GRID_LINES 안에 맞추지 못한 거대한 범위면 격자선과 눈금을
+  // 만들지 않는다(축선과 축 이름은 만든다). 그대로 돌면 루프가 사실상 끝나지 않는다. 비유한 범위도 여기서 걸린다
+  const drawGrid = nx + ny + 2 <= MAX_GRID_LINES;
   const decimals = stepDecimals(step);
 
   const v: number[] = [];
   const ticks: AxisTick[] = [];
   // x 가 일정한 선. 범위가 step 의 배수가 아니면 먼 쪽 가장자리(x1)에는 선이 없다
-  for (let i = 0; i <= nx; i++) {
+  for (let i = 0; drawGrid && i <= nx; i++) {
     const x = x0 + i * step;
     v.push(x, y0, z, x, y1, z);
     // 눈금 숫자는 누적 덧셈이 아니라 i x step 에서 바로 만든다
     ticks.push({ axis: 'x', pos: [x, y0, z], text: (i * step).toFixed(decimals), kind: 'tick' });
   }
   // y 가 일정한 선
-  for (let j = 0; j <= ny; j++) {
+  for (let j = 0; drawGrid && j <= ny; j++) {
     const y = y0 + j * step;
     v.push(x0, y, z, x1, y, z);
     ticks.push({ axis: 'y', pos: [x0, y, z], text: (j * step).toFixed(decimals), kind: 'tick' });

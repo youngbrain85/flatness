@@ -48,6 +48,10 @@ export function AnalysisResult({ analysis, scan, photos }: {
   // 진행 중인 점 파일 요청의 dir. 개발 모드의 effect 이중 실행은 같은 렌더의 load(아직 idle)를 두 번 보므로,
   // state 만으로는 fetch 가 두 번 나간다. ref 는 첫 호출이 남긴 값을 둘째 호출이 곧바로 본다.
   const pendingDir = useRef<string | null>(null);
+  // 진행 중인 점 파일 요청의 중단기. 새 요청을 시작하거나(?analysis= 전환) 언마운트하면 끊어 다운로드를 멈춘다
+  const pendingAbort = useRef<AbortController | null>(null);
+
+  useEffect(() => () => pendingAbort.current?.abort(), []);
 
   useEffect(() => {
     let cancelled = false;
@@ -74,6 +78,9 @@ export function AnalysisResult({ analysis, scan, photos }: {
   // 점 파일을 받는다. 마운트 때가 아니라 Preview3dTab 의 요청 effect(또는 다시 시도 버튼)가 부를 때만 시작한다.
   // 서명 URL 을 보관하지 않는다. 다시 받을 때도 /api/data 를 다시 거친다.
   function startPoints3dLoad(dir: string, file: string) {
+    pendingAbort.current?.abort();   // 앞 요청이 아직 받는 중이면 끊는다(끝난 요청이면 null 이다)
+    const controller = new AbortController();
+    pendingAbort.current = controller;
     pendingDir.current = dir;
     setLoad({ status: 'loading', dir });
     void (async () => {
@@ -81,7 +88,7 @@ export function AnalysisResult({ analysis, scan, photos }: {
       // fetch 와 arrayBuffer() 는 둘 다 reject 할 수 있다(slope-result.tsx 와 같은 양식).
       // 잡지 않으면 화면이 로딩 틀에 영구히 멈춘다(조용한 실패 금지).
       try {
-        const res = await fetch(artifactUrl(dir, file));
+        const res = await fetch(artifactUrl(dir, file), { signal: controller.signal });
         if (!res.ok) {
           next = { status: 'error', dir, reason: 'fetch' };
         } else {
@@ -93,6 +100,9 @@ export function AnalysisResult({ analysis, scan, photos }: {
       } catch {
         next = { status: 'error', dir, reason: 'fetch' };
       }
+      // 끊긴 요청은 결과를 버린다. AbortError 를 받기 실패(M5)로 드러내지 않고, 뒤에 시작한 요청의 몫도 건드리지 않는다
+      if (controller.signal.aborted) return;
+      if (pendingAbort.current === controller) pendingAbort.current = null;
       if (pendingDir.current === dir) pendingDir.current = null;
       // 늦게 온 응답을 버린다: 지금도 이 dir 의 응답을 기다리는 중일 때만 반영한다.
       // 그 사이 다른 분석의 요청이 시작됐으면(?analysis= 전환) 상태를 건드리지 않는다.

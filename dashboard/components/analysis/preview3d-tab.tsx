@@ -148,5 +148,10 @@ export function Preview3dTab({
     case 'loading':     // 5·11행. 로딩 틀은 뷰어 영역과 같은 검정이다
     case 'viewer':      // 위의 if 가 이미 그렸다. 여기는 타입을 좁히기 위한 자리이며 도달하지 않는다
       return <Points3dLoadingFrame theme="dark" />;
+    default: {
+      // 모드가 하나 더 생기면 여기서 tsc 가 멈춘다(그 모드가 빈 화면으로 조용히 지나가지 않게 한다)
+      const _exhaustive: never = mode;
+      return _exhaustive;
+    }
   }
 }

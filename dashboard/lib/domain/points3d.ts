@@ -289,10 +289,12 @@ export function hexToRgb01(hex: string): [number, number, number] {
 // ---- stats 접근 (스펙 §7.2, §8) ----
 // 브라우저가 stats 에서 읽는 것은 아래 두 키뿐이다. 판정 기준 객체는 읽지 않는다.
 
-/** 받을 점 파일 이름. 키가 없거나 목록이 비면 null 이다.
+/** 받을 점 파일 이름. 키가 없거나 목록에 빈 문자열이 아닌 이름이 없으면 null 이다.
+ *  스펙 §7.2 의 식 `(stats.points3d_paths ?? [])[0] ?? null` 에 빈 문자열 거르기를 더했다
+ *  (다른 *_paths 소비자의 filter(Boolean) 과 같은 규약. 엔진은 빈 이름을 쓰지 않는다).
  *  파일명 상수를 TS 에 두지 않는다. 엔진이 stats 에 적은 이름이 곧 fetch 할 이름이다. */
 export function points3dFile(stats: Stats): string | null {
-  return (stats.points3d_paths ?? [])[0] ?? null;
+  return (stats.points3d_paths ?? []).filter(Boolean)[0] ?? null;
 }
 
 /** 뷰어의 기본 표시 임계값(0.1mm 정수). 정수가 아니면 null, 정수면 슬라이더 범위로 clamp 한다.

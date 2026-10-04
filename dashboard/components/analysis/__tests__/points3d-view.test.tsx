@@ -193,6 +193,18 @@ describe('Points3dView 화면', () => {
     expect(hud.parentElement!.className.split(/\s+/)).toEqual(expect.arrayContaining(['absolute', 'bottom-3', 'flex-wrap']));
   });
 
+  // 좁은 폭(375px)에서는 축 눈금 라벨이 아래 줄과 겹친다. 글자가 읽히도록 뷰어 배경색을 알파 0.6 으로 깐다.
+  // 바탕색은 색 표의 배경에서 만든다: dark #000000 -> rgba(0, 0, 0, 0.6), light #ffffff -> rgba(255, 255, 255, 0.6)
+  // 변이: 바탕 누락, 밝은 배경 전환이 바탕에 닿지 않음(테마 고정), HUD 나 조작 안내 한쪽에만 깖
+  it('HUD 와 조작 안내는 테마 배경색 알파 0.6 의 바탕을 깔고 밝은 배경 전환을 따른다', () => {
+    mount();
+    expect(screen.getByTestId('points3d-hud')).toHaveStyle({ backgroundColor: 'rgba(0, 0, 0, 0.6)' });
+    expect(screen.getByTestId('points3d-hint')).toHaveStyle({ backgroundColor: 'rgba(0, 0, 0, 0.6)' });
+    fireEvent.click(screen.getByRole('button', { name: '밝은 배경' }));
+    expect(screen.getByTestId('points3d-hud')).toHaveStyle({ backgroundColor: 'rgba(255, 255, 255, 0.6)' });
+    expect(screen.getByTestId('points3d-hint')).toHaveStyle({ backgroundColor: 'rgba(255, 255, 255, 0.6)' });
+  });
+
   // 변이: k > 1 에서도 "축 비율 1:1" 을 남김
   it('과장 버튼을 누르면 HUD 가 "편차 ×{k} 과장" 이 된다', () => {
     mount();

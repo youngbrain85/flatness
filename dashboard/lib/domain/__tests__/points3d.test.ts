@@ -660,6 +660,12 @@ describe('points3dFile (stats 가 준 점 파일 이름)', () => {
     expect(points3dFile(tabStats({ points3d_paths: ['custom3d.bin', 'other.bin'] }))).toBe('custom3d.bin');
   });
 
+  // 죽이는 변이: 첫 원소를 거르지 않고 돌려줌('' 이면 디렉터리 URL 을 받으려다 받기 실패 M5 로 드러난다)
+  it('빈 문자열은 이름으로 치지 않는다(다른 *_paths 소비자의 filter(Boolean) 과 같다)', () => {
+    expect(points3dFile(tabStats({ points3d_paths: [''] }))).toBeNull();
+    expect(points3dFile(tabStats({ points3d_paths: ['', 'points3d.bin'] }))).toBe('points3d.bin');
+  });
+
   it('다른 *_paths 키를 대신 읽지 않는다', () => {
     const stats = tabStats({ preview3d_paths: ['preview3d.png'], deviation_paths: ['deviation.png'] });
     expect(points3dFile(stats)).toBeNull();

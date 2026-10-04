@@ -261,6 +261,32 @@ describe('buildScaffold: 0.1m 미만 축', () => {
   });
 });
 
+describe('buildScaffold: 거대한 범위', () => {
+  // x 범위 1e12 m. niceStep 은 수열 끝 5 x 10^9 까지 가도 선 수를 40 안에 맞추지 못한다
+  // (floor(1e12 / 5e9) = 200 -> 200 + 0 + 2 = 202 > 40). 가드가 없으면 격자선 202개와 눈금 202개를 만든다
+  // 변이: 선 수 가드 제거
+  it('niceStep 이 선 수를 맞추지 못하면 격자선과 눈금 없이 축선 두 변과 축 이름만 낸다', () => {
+    const sc = buildScaffold({ min: [0, 0, 0], max: [1e12, 1, 1] });
+    expect(sc.gridVertCount).toBe(0);
+    expect(sc.axisVertCount).toBe(4);
+    expect(sc.verts.length).toBe(4 * 3);
+    expect(seg(sc.verts, 0)).toEqual(f32([0, 0, 0, 1e12, 0, 0]));
+    expect(seg(sc.verts, 1)).toEqual(f32([0, 0, 0, 0, 1, 0]));
+    expect(sc.ticks.map((t) => `${t.axis}:${t.kind}`)).toEqual(['x:name', 'y:name']);
+  });
+
+  // 1e30 m 면 가드 없이 선이 2 x 10^20 개라 루프가 끝나지 않는다(메모리가 먼저 바닥나 작업자가 죽는다)
+  // 변이: 선 수 가드 제거, 가드를 루프 뒤에 둠
+  it('1e30 m 범위에서도 곧바로 끝나고 정점·라벨 위치가 전부 유한하다', () => {
+    const t0 = performance.now();
+    const sc = buildScaffold({ min: [0, 0, 0], max: [1e30, 1, 1] });
+    expect(performance.now() - t0).toBeLessThan(1000);
+    expect(sc.gridVertCount).toBe(0);
+    expect(Array.from(sc.verts).every(Number.isFinite)).toBe(true);
+    expect(sc.ticks.every((t) => t.pos.every(Number.isFinite))).toBe(true);
+  });
+});
+
 describe('layoutLabels: 손 계산 변환 (1m = 100px, 800 x 800)', () => {
   const m = flatMatrix();
 

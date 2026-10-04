@@ -217,17 +217,27 @@ function deferred<T>() {
 /**
  * URL 로 갈라 응답하는 fetch 스텁. cells.json 은 빈 배열(json), *.bin 은 binReply 가 정한다(arrayBuffer).
  * binUrls() 는 지금까지 나간 *.bin 요청의 URL 목록(호출 순)이다. cells.json 요청은 세지 않는다.
- * binReply 의 둘째 인자는 그 요청이 몇 번째 *.bin 요청인가(1부터)다.
+ * binSignals() 는 같은 순서로 각 *.bin 요청에 넘어온 AbortSignal 이다(넘기지 않았으면 undefined).
+ * binReply 의 둘째 인자는 그 요청이 몇 번째 *.bin 요청인가(1부터), 셋째 인자는 그 요청의 signal 이다.
  */
-function stubFetch(binReply: (url: string, nth: number) => Promise<Response>) {
+function stubFetch(binReply: (url: string, nth: number, signal: AbortSignal | undefined) => Promise<Response>) {
   const urls: string[] = [];
-  vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
+  const signals: (AbortSignal | undefined)[] = [];
+  vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     if (!url.endsWith('.bin')) return Promise.resolve({ ok: true, json: async () => [] } as unknown as Response);
     urls.push(url);
-    return binReply(url, urls.length);
+    signals.push(init?.signal ?? undefined);
+    return binReply(url, urls.length, init?.signal ?? undefined);
   }));
-  return { binUrls: () => [...urls] };
+  return { binUrls: () => [...urls], binSignals: () => [...signals] };
+}
+
+/** 끊길 때까지 끝나지 않는 응답. 실제 fetch 처럼 signal 이 끊기면 AbortError 로 reject 한다. */
+function pendingUntilAbort(signal: AbortSignal | undefined): Promise<Response> {
+  return new Promise((_resolve, reject) => {
+    signal?.addEventListener('abort', () => reject(new DOMException('The operation was aborted.', 'AbortError')));
+  });
 }
 
 const probeMock = vi.mocked(probeWebgl2);
@@ -369,6 +379,42 @@ describe('AnalysisResult 3D 프리뷰 탭 (점 파일 지연 적재)', () => {
     expect(thresholdSlider().value).toBe('60');      // B 의 points3d_threshold_q
     expect(probeMock).toHaveBeenCalledTimes(1);      // 탐지 결과는 분석을 바꿔도 유지한다
     expect(binUrls()).toEqual([URL_A, URL_B]);
+  });
+
+  // 받는 중에 분석을 바꾸면 이전 분석의 다운로드를 끊는다. 끊긴 요청의 AbortError 는 받기 실패(M5)로 드러나지 않는다
+  // 변이: fetch 에 signal 을 넘기지 않음, 새 요청을 시작할 때 앞 요청을 끊지 않음
+  it('받는 중에 다른 분석으로 바꾸면 이전 요청을 끊고(signal.aborted) 새 분석을 그린다', async () => {
+    const b = deferred<Response>();
+    const { binUrls, binSignals } = stubFetch((url, _nth, signal) => (url === URL_A ? pendingUntilAbort(signal) : b.promise));
+    const { rerender } = render(<AnalysisResult analysis={analysisA} scan={scan} photos={[]} />);
+    open3d();
+    await waitFor(() => expect(binUrls()).toEqual([URL_A]));
+    expect(binSignals()[0]?.aborted).toBe(false);
+
+    rerender(<AnalysisResult analysis={analysisB} scan={scan} photos={[]} />);
+    await waitFor(() => expect(binUrls()).toEqual([URL_A, URL_B]));
+    expect(binSignals()[0]?.aborted).toBe(true);    // A 의 요청을 끊었다
+    expect(binSignals()[1]?.aborted).toBe(false);   // B 의 요청은 그대로다
+    await flush();                                    // 끊긴 A 의 AbortError 가 흘러간 뒤에도
+    expect(screen.queryByText(M5)).toBeNull();
+    expect(screen.getByTestId('points3d-loading')).toBeInTheDocument();
+
+    b.resolve(okBin(goldenFirst(11)));
+    await findViewer();
+    expect(hudText()).toContain('11점');             // B 의 점
+    expect(thresholdSlider().value).toBe('60');      // B 의 points3d_threshold_q
+    expect(screen.queryByText(M5)).toBeNull();
+  });
+
+  // 변이: 언마운트 cleanup 에서 끊지 않음
+  it('받는 중에 언마운트되면 요청을 끊는다', async () => {
+    const { binUrls, binSignals } = stubFetch((_url, _nth, signal) => pendingUntilAbort(signal));
+    const { unmount } = render(<AnalysisResult analysis={analysisA} scan={scan} photos={[]} />);
+    open3d();
+    await waitFor(() => expect(binUrls()).toEqual([URL_A]));
+    expect(binSignals()[0]?.aborted).toBe(false);
+    unmount();
+    expect(binSignals()[0]?.aborted).toBe(true);
   });
 
   it('늦은 응답: B 를 받는 중에 A 의 응답이 먼저 도착해도 A 를 그리지 않고, B 가 도착하면 B 를 그린다', async () => {
@@ -588,6 +634,28 @@ describe('AnalysisResult 가 3D 탭에 넘기는 적재 콜백 (탐침으로 직
     expect(loadText()).toBe('loading:artifacts/an1');   // 곧바로 loading 으로 둔다
     await waitFor(() => expect(loadText()).toBe('ready:artifacts/an1'));
     expect(binUrls()).toEqual([URL_A, URL_A]);
+  });
+
+  // 같은 dir 을 받는 중에 다시 받으면 앞 요청을 끊고 새로 받는다. 끊긴 앞 요청의 AbortError 는 버린다.
+  // 변이: 끊긴 요청의 결과를 버리지 않음(AbortError 가 지금 dir 의 error 로 들어가 새 요청을 기다리는 화면을 덮는다)
+  it('받는 중의 onRetryLoad 는 앞 요청을 끊고, 끊긴 요청의 AbortError 는 오류 상태가 되지 않는다', async () => {
+    useProbe();
+    const second = deferred<Response>();
+    const { binUrls, binSignals } = stubFetch((_url, nth, signal) => (nth === 1 ? pendingUntilAbort(signal) : second.promise));
+    render(<AnalysisResult analysis={analysisA} scan={scan} photos={[]} />);
+    open3d();
+    press('요청');
+    expect(loadText()).toBe('loading:artifacts/an1');
+
+    press('다시 받기');
+    expect(binUrls()).toEqual([URL_A, URL_A]);
+    expect(binSignals()[0]?.aborted).toBe(true);
+    expect(binSignals()[1]?.aborted).toBe(false);
+    await flush();
+    expect(loadText()).toBe('loading:artifacts/an1');   // 끊긴 첫 요청이 error 로 덮지 않는다
+
+    second.resolve(okBin(golden()));
+    await waitFor(() => expect(loadText()).toBe('ready:artifacts/an1'));
   });
 
   it.each<[string, AnalysisRow]>([

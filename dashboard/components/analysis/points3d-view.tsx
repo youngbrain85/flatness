@@ -33,6 +33,7 @@ const WHEEL_LINE_PX = 16;        // 휠이 줄 단위(deltaMode 1)로 알릴 때
 const READOUT_OFFSET_PX = 12;    // 읽기 창을 커서에서 띄우는 거리(CSS px)
 const READOUT_BOX_W_PX = 160;    // 읽기 창의 어림 크기. 영역을 넘는지 판정해 반대쪽으로 뒤집는 데만 쓴다
 const READOUT_BOX_H_PX = 100;
+const OVERLAY_BG_ALPHA = 0.6;    // HUD·조작 안내 바탕의 알파. 좁은 폭에서 축 라벨과 겹쳐도 글자가 읽히게 뷰어 배경색을 깐다
 
 const LEGEND: PointClass[] = ['flat', 'depression', 'protrusion', 'none'];
 const VIEW_PRESETS: { id: ViewPreset; label: string }[] = [
@@ -330,6 +331,7 @@ export function Points3dView({ data, defaultThresholdQ, isRegistered, onError }:
   }
 
   const theme = POINTS3D_THEME[themeName];
+  const overlayBg = rgba(theme.background, OVERLAY_BG_ALPHA);
   const thresholdText = fmtThresholdMm(thresholdQ);
   const hud = [
     exaggeration === 1 ? '축 비율 1:1' : `편차 ×${exaggeration} 과장`,
@@ -374,8 +376,10 @@ export function Points3dView({ data, defaultThresholdQ, isRegistered, onError }:
         </ul>
         {/* 아래 줄: 왼쪽 HUD, 오른쪽 조작 안내. 폭이 좁으면 두 줄로 접힌다 */}
         <div className="pointer-events-none absolute inset-x-3 bottom-3 flex flex-wrap items-end justify-between gap-x-3 gap-y-1 text-xs leading-4">
-          <p data-testid="points3d-hud" style={{ color: theme.text }}>{hud}</p>
-          <p data-testid="points3d-hint" style={{ color: theme.textSecondary }}>드래그 회전 · Ctrl+휠 확대</p>
+          <p data-testid="points3d-hud" className="rounded px-1"
+            style={{ color: theme.text, backgroundColor: overlayBg }}>{hud}</p>
+          <p data-testid="points3d-hint" className="rounded px-1"
+            style={{ color: theme.textSecondary, backgroundColor: overlayBg }}>드래그 회전 · Ctrl+휠 확대</p>
         </div>
         {readout && (
           <div data-testid="points3d-readout"
