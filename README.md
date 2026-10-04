@@ -63,7 +63,8 @@ travel-distance error +0.07%.
 
 Upload → analysis → assessment heatmap → PDF report runs in the web dashboard. The outputs below come from a
 synthetic demo point cloud (no comparison against a physical straightedge was performed — see Chapter 6 of the
-[report](docs/service-report.md)).
+[report](docs/service-report.md)). The floor results screen also includes an interactive 1:1 point cloud viewer
+(pure WebGL2, no 3D library): a sample of the actual scan points at true scale, colored by deviation.
 
 | Assessment heatmap (2m cells) | 3D preview | 10cm high-resolution deviation map |
 |---|---|---|

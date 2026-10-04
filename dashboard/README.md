@@ -73,7 +73,9 @@ npm run build   # production build
 6. **Analysis progress display** - if the worker is running, watch whether the status updates automatically as
    `Queued for analysis` -> `Analyzing` -> `Completed` (Realtime subscription).
 7. **Results screen** - after the analysis completes, check the results screen (split into 3 panes: heatmap canvas ·
-   assessment panel · results table), and click a heatmap cell to check that its details appear.
+   assessment panel · results table), and click a heatmap cell to check that its details appear. For a floor
+   analysis, the "3D preview" tab shows an interactive 1:1 point cloud viewer: a sample of the actual scan points
+   at true scale, colored by deviation (drag to rotate, Ctrl+wheel to zoom).
 8. **Upload photos** - upload a photo to a site or a measurement location and check that it appears in the gallery.
 9. **Check settings** - at `/settings`, check saving the profile name, the assessment criteria list and its active
    toggles, and the measurement uncertainty U value.
@@ -102,7 +104,6 @@ The following were intentionally excluded from the scope of this demo (to be han
 
 - There is no report template customization, multilingual support, email delivery, or version management (replaced by making published versions immutable)
 - Reports include only the photos attached to the scans of the included analyses (a photo uploader at the measurement-location level is in the backlog)
-- Interactive 3D viewer (the engine does not yet output `viewer.bin`)
 - Levelness (level) section (the `stats.json` contract does not yet have a related metric)
 - Cross-section profile details when a heatmap cell is clicked (the engine does not output profiles)
 - UI for creating new assessment criteria, revising criteria versions, and creating per-site overrides; user management; E2E (Playwright) automation
