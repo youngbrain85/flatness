@@ -1,75 +1,77 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { enqueueJob } from '@/lib/domain/jobs';
 import { LINEAGE_LABEL, SURFACE_LABEL } from '@/lib/domain/labels';
-import type { CriteriaRow, Lineage, LocationRow, SiteRow, Surface } from '@/lib/domain/types';
+import type { CriteriaRow, Lineage, LocationRow, Surface } from '@/lib/domain/types';
 import { uploadRawScan } from '@/lib/scans/upload';
 import { IMPORT_EXTS, MAX_UPLOAD_BYTES, MAX_UPLOAD_MB, SCAN_EXTS, validateFile } from '@/lib/upload/validate';
 import { Alert } from '@/components/ui/alert';
-import { Button } from '@/components/ui/button';
+import { Button, buttonClass } from '@/components/ui/button';
 import { Container } from '@/components/ui/container';
 import { FormField, SelectWrap, checkClass, inputClass, selectClass } from '@/components/ui/form';
 import { Icon } from '@/components/ui/icons';
 
 interface Props {
-  sites: SiteRow[];
+  /** 경로(/sites/[id]/upload)가 정한 현장. 화면 안에서 바꾸지 않는다(스펙 §5 행 05). */
+  siteId: string;
+  /** 이 현장의 측정위치(페이지가 측정위치 탭 트리와 같은 순서로 정렬해 넘긴다). */
   locations: LocationRow[];
   userId: string;
+  /** ?location= 프리필. 페이지가 이 현장의 측정위치인지 확인한 뒤에만 넘긴다. */
   initialLocationId?: string;
 }
 
-// 인라인 현장 생성 셀렉트의 "새 현장명 직접 입력" 값. 실제 site id(uuid)와 절대
-// 겹치지 않는다.
-const NEW_SITE_VALUE = '';
+// 선택지 칩(아트보드 Upload 업로드 방식·표면 유형·데이터 계보): 고른 칩은 ink 테두리 + surface-2 바탕 + 600,
+// 나머지는 line-3 테두리 + ink-2 글자. 칩은 진짜 라디오를 감싼 label이다.
+function chipClass(on: boolean): string {
+  return `inline-flex min-h-11 cursor-pointer items-center gap-2.5 rounded-control border px-4 text-sm ${
+    on ? 'border-ink bg-surface-2 font-semibold text-ink' : 'border-line-3 font-medium text-ink-2'}`;
+}
 
-// Cloudscape 리스킨(T5): 입력·버튼·알림은 components/ui 프리미티브를 쓴다. 아래 둘은
-// 프리미티브에 없는 이 화면 전용 모양이라 여기서만 정의한다(export 하지 않는다).
-// 링크형 버튼: '+ 새 측정위치'·'취소'. 아트보드의 링크 스타일(cs-link 700, hover 밑줄).
-const linkButtonClass =
-  'inline-flex items-center gap-1.5 self-start text-sm font-bold text-cs-link hover:text-cs-link-hover hover:underline';
-// 파일 입력: 드롭존은 소스에 없으므로 네이티브 input의 ::file-selector-button(Tailwind `file:`)만
-// normal 버튼(2px cs-link 보더 알약) 모양으로 입힌다.
-const fileInputClass =
-  'w-full text-sm text-cs-text file:mr-3 file:h-8 file:cursor-pointer file:rounded-full file:border-2 file:border-cs-link file:bg-transparent file:px-5 file:text-sm file:font-bold file:text-cs-link';
+// 적용 기준 목록 줄: 고른 줄은 surface-2 바탕 + 왼쪽 2px ink 막대, 줄 사이는 line 구분선.
+function criteriaRowClass(on: boolean): string {
+  return `flex cursor-pointer items-start gap-3 border-b border-l-2 border-b-line py-3 pl-3 pr-3.5 last:border-b-0 ${
+    on ? 'border-l-ink bg-surface-2' : 'border-l-transparent'}`;
+}
 
-export function UploadForm({ sites, locations, userId, initialLocationId }: Props) {
+// 라디오 묶음 제목(fieldset/legend): FormField는 단일 컨트롤용 <label htmlFor>라 묶음에는 legend를 쓴다.
+const FIELDSET = 'm-0 min-w-0 border-0 p-0';
+const LEGEND = 'm-0 p-0 pb-2 text-sm font-semibold text-ink';
+
+export function UploadForm({ siteId, locations, userId, initialLocationId }: Props) {
   const router = useRouter();
-  // 현장 목록과 측정위치 목록을 로컬 상태로 들고 있어야 인라인 생성 직후
-  // (페이지 새로고침 없이) 방금 만든 항목을 optgroup/셀렉트에 바로 반영할 수 있다.
-  const [sitesList, setSitesList] = useState<SiteRow[]>(sites);
+  // 측정위치 목록을 로컬 상태로 들고 있어야 인라인 생성 직후(페이지 새로고침 없이) 방금 만든
+  // 위치를 셀렉트에 바로 넣고 고를 수 있다.
   const [locationsList, setLocationsList] = useState<LocationRow[]>(locations);
   const [mode, setMode] = useState<'scan' | 'import'>('scan');
   const [locationId, setLocationId] = useState(initialLocationId ?? '');
   const [surface, setSurface] = useState<Surface>('floor');
   const [criteria, setCriteria] = useState<CriteriaRow[]>([]);
   const [criteriaId, setCriteriaId] = useState('');
+  // 적용 기준 목록이 비었을 때 그 까닭(불러오는 중·조회 실패·후보 없음). 빈 목록을 말없이 두지 않는다.
+  const [criteriaNote, setCriteriaNote] = useState('적용 기준을 불러오는 중...');
   const [scannedAt, setScannedAt] = useState(new Date().toISOString().slice(0, 10));
   const [device, setDevice] = useState('');
   const [operatorManual, setOperatorManual] = useState('');
   const [lineage, setLineage] = useState<Lineage>('unknown');
   const [file, setFile] = useState<File | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  // 단계 D4: 현장 셀렉트를 없애고 측정위치 단일 셀렉트(optgroup)로 합쳤다. 현장은
-  // 더 이상 독립 상태가 아니라 선택된 location에서 항상 역산한다 - 예전 버그
-  // (?location=만 와도 현장 셀렉트가 비어 목록이 필터로 사라지는 문제)가 이
-  // 구조 변경만으로 자연 소멸한다.
-  const siteId = locationsList.find((l) => l.id === locationId)?.site_id ?? '';
-
   const [showNewLocation, setShowNewLocation] = useState(false);
-  const [newLocSiteId, setNewLocSiteId] = useState(NEW_SITE_VALUE);
-  const [newSiteName, setNewSiteName] = useState('');
   const [newLocFields, setNewLocFields] = useState({ building: '', floor: '', room: '', name: '' });
   const [newLocError, setNewLocError] = useState<string | null>(null);
   const [creatingLoc, setCreatingLoc] = useState(false);
+  const newLocPanelId = useId();
 
   const effectiveSurface: Surface = mode === 'import' ? 'floor' : surface;
 
   // 적용 기준 후보: fn_resolve_criteria는 대체(override) 시맨틱 - 현장 기준이 있으면
   // 전역 기준은 목록에 아예 나오지 않는다. 반환 목록을 그대로 후보로 쓴다.
+  // 다크 C안: 현장이 경로로 정해져 있으므로 측정위치를 고르기 전부터 바로 불러온다(기준은 현장·표면에만 달렸다).
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -82,13 +84,25 @@ export function UploadForm({ sites, locations, userId, initialLocationId }: Prop
         p_site_id: siteId, p_surface: effectiveSurface,
       });
       if (cancelled) return;
-      if (err || !data) { setCriteria([]); setCriteriaId(''); return; }
+      if (err || !data) {
+        setCriteria([]);
+        setCriteriaId('');
+        setCriteriaNote(err ? `적용 기준을 불러오지 못했습니다: ${err.message}` : '적용 기준을 불러오지 못했습니다.');
+        return;
+      }
       const rows = data as CriteriaRow[];
       setCriteria(rows);
       setCriteriaId(rows.find((c) => c.is_default)?.id ?? rows[0]?.id ?? '');
+      setCriteriaNote(rows.length === 0 ? '이 현장에 쓸 수 있는 적용 기준이 없습니다.' : '');
     })();
     return () => { cancelled = true; };
   }, [siteId, effectiveSurface]);
+
+  function clearFile() {
+    setFile(null);
+    // 입력값도 비워야 같은 파일을 다시 골랐을 때 change가 나고, required 검증도 다시 걸린다.
+    if (fileRef.current) fileRef.current.value = '';
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -186,45 +200,19 @@ export function UploadForm({ sites, locations, userId, initialLocationId }: Prop
     }
   }
 
-  // 인라인 현장·측정위치 생성. insert 컬럼은 entry/new-site-card.tsx·new-location-form.tsx와
+  // 그 자리에서 새 측정위치 만들기(같은 현장). insert 컬럼은 new-location-form.tsx와
   // 동일하게 맞춘다 - 트림 정규화 책임도 그대로(001 주석). 층 순서(floor_order)는
-  // 이 미니 폼에는 없어 0으로 둔다(정렬용 보조값이라 나중에 현장 상세에서 조정 가능).
+  // 이 미니 폼에는 없어 0으로 둔다(정렬용 보조값이라 나중에 측정위치 탭에서 조정 가능).
+  // 현장은 경로가 정하므로 옛 인라인 새 현장 만들기(와 그 고아 현장 방지 처리)는 없다(스펙 §5 행 05).
   async function handleCreateLocation() {
     setNewLocError(null);
     const name = newLocFields.name.trim();
     if (!name) { setNewLocError('측정위치명을 입력하세요.'); return; }
-    if (newLocSiteId === NEW_SITE_VALUE && !newSiteName.trim()) {
-      setNewLocError('새 현장명을 입력하세요.');
-      return;
-    }
     setCreatingLoc(true);
     const supabase = createClient();
     try {
-      let targetSiteId = newLocSiteId;
-      // 이번 호출에서 sites insert가 성공했는지 - 아래 locations insert가 실패해도
-      // site는 이미 DB에 실존하므로 실패 메시지와 재시도 동작에 쓴다(리뷰 F1).
-      let justCreatedSite = false;
-      if (targetSiteId === NEW_SITE_VALUE) {
-        const siteName = newSiteName.trim();
-        const { data: siteRow, error: siteErr } = await supabase.from('sites')
-          .insert({ name: siteName, address: null, memo: null })
-          .select('id').single();
-        if (siteErr || !siteRow) { setNewLocError(siteErr?.message ?? '현장 저장 실패'); return; }
-        targetSiteId = siteRow.id;
-        justCreatedSite = true;
-        setSitesList((prev) => [
-          ...prev,
-          { id: siteRow.id, name: siteName, address: null, memo: null, created_at: '', updated_at: '' },
-        ]);
-        // ★ 리뷰 F1: 아래 locations insert가 실패해도 이 두 setState는 그대로 둔다.
-        // newLocSiteId를 NEW_SITE_VALUE로 남겨두면 사용자가 "저장"을 다시 눌렀을 때
-        // 이 if 블록이 또 실행돼 같은 이름의 sites 행이 재시도마다 쌓인다(고아 site
-        // 누적) - site는 이미 만들어졌으니 재시도는 그 site를 재사용해야 한다.
-        setNewLocSiteId(targetSiteId);
-        setNewSiteName('');
-      }
       const { data: locRow, error: locErr } = await supabase.from('locations').insert({
-        site_id: targetSiteId,
+        site_id: siteId,
         building: newLocFields.building.trim(),
         floor: newLocFields.floor.trim(),
         floor_order: 0,
@@ -232,17 +220,13 @@ export function UploadForm({ sites, locations, userId, initialLocationId }: Prop
         name,
       }).select('id').single();
       if (locErr || !locRow) {
-        const base = locErr?.code === '23505'
+        setNewLocError(locErr?.code === '23505'
           ? '같은 동/층/공간에 동일한 측정위치가 이미 있습니다.'
-          : (locErr?.message ?? '측정위치 저장 실패');
-        // 이번 호출에서 site를 막 만들었는데 location 저장이 실패했다면, 재시도가
-        // "새 현장 만들기"로 되돌아가지 않고 방금 만든 그 현장을 그대로 쓴다는 것을
-        // 사용자에게 알린다(리뷰 F1).
-        setNewLocError(justCreatedSite ? `현장은 생성됐습니다. 같은 현장으로 다시 시도하세요. (${base})` : base);
+          : (locErr?.message ?? '측정위치 저장 실패'));
         return;
       }
       const newLocation: LocationRow = {
-        id: locRow.id, site_id: targetSiteId,
+        id: locRow.id, site_id: siteId,
         building: newLocFields.building.trim(), floor: newLocFields.floor.trim(), floor_order: 0,
         room: newLocFields.room.trim(), name, memo: null, created_at: '', updated_at: '',
       };
@@ -250,28 +234,25 @@ export function UploadForm({ sites, locations, userId, initialLocationId }: Prop
       setLocationId(newLocation.id);
       setShowNewLocation(false);
       setNewLocFields({ building: '', floor: '', room: '', name: '' });
-      setNewSiteName('');
-      setNewLocSiteId(targetSiteId);
     } finally {
       setCreatingLoc(false);
     }
   }
 
+  // 아트보드(Upload): 카드 '업로드 정보'(업로드 방식 칩 → 두 열) → 오류 → 오른쪽 아래 주 버튼 하나.
   return (
-    // 페이지 섹션 gap(20px)과 같은 간격으로 컨테이너 -> 오류 -> 버튼 줄이 쌓인다.
     <form onSubmit={onSubmit} className="flex flex-col gap-5">
-      {/* 스펙 §7-8: 컨테이너 제목 '업로드 정보'는 아트보드에만 있던 문구지만 Cloudscape
-          해부(컨테이너 헤더)의 일부라 시스템 크롬으로 채택한다. 데이터·기능 추가는 없다. */}
       <Container title="업로드 정보">
         <div className="flex flex-col gap-4">
-          {/* 업로드 방식(아트보드 본문 첫 줄) */}
-          <div className="flex items-center gap-6">
-            <label className="inline-flex items-center gap-2 text-sm">
-              <input type="radio" className={checkClass} checked={mode === 'scan'} onChange={() => setMode('scan')} />
+          <div role="radiogroup" aria-label="업로드 방식" className="flex flex-wrap gap-2">
+            <label className={chipClass(mode === 'scan')}>
+              <input type="radio" name="upload-mode" className={checkClass}
+                checked={mode === 'scan'} onChange={() => setMode('scan')} />
               스캔 분석
             </label>
-            <label className="inline-flex items-center gap-2 text-sm">
-              <input type="radio" className={checkClass} checked={mode === 'import'} onChange={() => setMode('import')} />
+            <label className={chipClass(mode === 'import')}>
+              <input type="radio" name="upload-mode" className={checkClass}
+                checked={mode === 'import'} onChange={() => setMode('import')} />
               기존 결과 가져오기(CSV/JSON)
             </label>
           </div>
@@ -284,39 +265,33 @@ export function UploadForm({ sites, locations, userId, initialLocationId }: Prop
             </Alert>
           )}
 
-          {/* 2열(gap 40px). 모바일(<md)은 세로 스택(스펙 §5). */}
-          <div className="grid grid-cols-1 gap-10 md:grid-cols-2">
+          {/* 두 열(flex 1 1 420px, 간격 28px 40px). 좁으면 세로로 쌓인다(스펙 §7). */}
+          <div className="flex flex-wrap gap-x-10 gap-y-7">
 
-            {/* 좌열: 측정위치(+인라인 생성) · 표면 유형 · 데이터 계보 */}
-            <div className="flex flex-col gap-4">
+            {/* 왼쪽 열: 측정위치(+그 자리에서 새 측정위치) · 표면 유형 · 데이터 계보 */}
+            <div className="flex min-w-0 flex-[1_1_420px] flex-col gap-[22px]">
               <div className="flex flex-col gap-2">
                 <FormField label="측정위치" htmlFor="location">
                   <SelectWrap>
                     <select id="location" required value={locationId} onChange={(e) => setLocationId(e.target.value)}
                       className={selectClass}>
                       <option value="">선택...</option>
-                      {sitesList.map((s) => {
-                        const locs = locationsList.filter((l) => l.site_id === s.id);
-                        if (locs.length === 0) return null;
-                        return (
-                          <optgroup key={s.id} label={s.name}>
-                            {locs.map((l) => (
-                              <option key={l.id} value={l.id}>
-                                {[l.building, l.floor, l.room, l.name].filter(Boolean).join(' / ')}
-                              </option>
-                            ))}
-                          </optgroup>
-                        );
-                      })}
+                      {locationsList.map((l) => (
+                        <option key={l.id} value={l.id}>
+                          {[l.building, l.floor, l.room, l.name].filter(Boolean).join(' / ')}
+                        </option>
+                      ))}
                     </select>
                   </SelectWrap>
                 </FormField>
-                {/* 문구 '+ 새 측정위치'는 접근 가능한 이름이자 테스트 셀렉터 - 아이콘으로 바꾸지 않는다 */}
-                <button type="button" onClick={() => setShowNewLocation((v) => !v)} className={linkButtonClass}>
-                  + 새 측정위치
+                <button type="button" aria-expanded={showNewLocation} aria-controls={newLocPanelId}
+                  onClick={() => setShowNewLocation((v) => !v)}
+                  className="inline-flex min-h-11 items-center gap-1.5 self-start px-1 text-sm font-semibold text-ink">
+                  <Icon name="plus" />
+                  새 측정위치
                 </button>
                 {showNewLocation && (
-                  <div className="flex flex-col gap-4 rounded-lg border border-cs-divider bg-white p-4"
+                  <div id={newLocPanelId} className="flex flex-col gap-4 rounded-control border border-line-2 bg-ground p-4"
                     onKeyDown={(e) => {
                       // 리뷰 F2: 이 패널은 상위 스캔 업로드 <form> 안에 중첩돼 있다. 파일·
                       // 위치·기준을 이미 골라둔 상태에서 미니폼 입력 중 Enter를 누르면 기본
@@ -328,22 +303,7 @@ export function UploadForm({ sites, locations, userId, initialLocationId }: Prop
                         if (!creatingLoc) handleCreateLocation();
                       }
                     }}>
-                    <FormField label="현장 선택 또는 새 현장명" htmlFor="new-loc-site">
-                      <SelectWrap>
-                        <select id="new-loc-site" value={newLocSiteId} onChange={(e) => setNewLocSiteId(e.target.value)}
-                          className={selectClass}>
-                          <option value={NEW_SITE_VALUE}>+ 새 현장 만들기</option>
-                          {sitesList.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-                        </select>
-                      </SelectWrap>
-                    </FormField>
-                    {newLocSiteId === NEW_SITE_VALUE && (
-                      <FormField label="새 현장명" htmlFor="new-site-name">
-                        <input id="new-site-name" value={newSiteName} onChange={(e) => setNewSiteName(e.target.value)}
-                          className={inputClass} />
-                      </FormField>
-                    )}
-                    <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+                    <div className="grid grid-cols-[repeat(auto-fit,minmax(110px,1fr))] gap-3">
                       {([
                         ['building', '동'], ['floor', '층'], ['room', '공간'], ['name', '이름'],
                       ] as const).map(([key, label]) => (
@@ -354,13 +314,14 @@ export function UploadForm({ sites, locations, userId, initialLocationId }: Prop
                         </FormField>
                       ))}
                     </div>
-                    {newLocError && <p className="text-xs leading-4 text-cs-error">{newLocError}</p>}
-                    {/* 뷰당 primary 1개(제출 버튼) - '저장'은 normal, '취소'는 링크형 */}
-                    <div className="flex items-center gap-2">
+                    {newLocError && <p role="alert" className="text-[13px] text-err">{newLocError}</p>}
+                    {/* 이 화면의 주 버튼은 제출 하나 - '저장'은 보조, '취소'는 글자 버튼 */}
+                    <div className="flex flex-wrap items-center gap-2">
                       <Button onClick={handleCreateLocation} disabled={creatingLoc}>
                         {creatingLoc ? '저장 중...' : '저장'}
                       </Button>
-                      <button type="button" onClick={() => setShowNewLocation(false)} className={linkButtonClass}>
+                      <button type="button" onClick={() => setShowNewLocation(false)}
+                        className="min-h-11 rounded-control px-3 text-[15px] font-medium text-ink-2">
                         취소
                       </button>
                     </div>
@@ -368,30 +329,33 @@ export function UploadForm({ sites, locations, userId, initialLocationId }: Prop
                 )}
               </div>
               {mode === 'scan' && (
-                <div className="flex flex-col gap-1">
-                  {/* 라디오 묶음 제목: FormField는 단일 컨트롤용 <label htmlFor>라 묶음에는 span 700을 쓴다 */}
-                  <span className="text-sm font-bold">표면 유형</span>
-                  <div className="flex items-center gap-6">
-                    {(['floor', 'wall'] as const).map((s) => (
-                      <label key={s} className="inline-flex items-center gap-2 text-sm">
-                        <input type="radio" className={checkClass} checked={surface === s} onChange={() => setSurface(s)} />
-                        {SURFACE_LABEL[s]}
+                <fieldset className={FIELDSET}>
+                  <legend className={LEGEND}>표면 유형</legend>
+                  <div className="flex flex-wrap gap-2">
+                    {(['floor', 'wall'] as const).map((sv) => (
+                      <label key={sv} className={chipClass(surface === sv)}>
+                        <input type="radio" name="upload-surface" className={checkClass}
+                          checked={surface === sv} onChange={() => setSurface(sv)} />
+                        {SURFACE_LABEL[sv]}
                       </label>
                     ))}
                   </div>
-                </div>
+                </fieldset>
               )}
               {mode === 'scan' && (
-                <div className="flex flex-col gap-1">
-                  <span className="text-sm font-bold">데이터 계보</span>
-                  <div className="flex items-center gap-6">
-                    {(['raw', 'fused_mesh', 'unknown'] as const).map((l) => (
-                      <label key={l} className="inline-flex items-center gap-2 text-sm">
-                        <input type="radio" className={checkClass} checked={lineage === l} onChange={() => setLineage(l)} />
-                        {LINEAGE_LABEL[l]}
-                      </label>
-                    ))}
-                  </div>
+                <div className="flex flex-col gap-2.5">
+                  <fieldset className={FIELDSET}>
+                    <legend className={LEGEND}>데이터 계보</legend>
+                    <div className="flex flex-wrap gap-2">
+                      {(['raw', 'fused_mesh', 'unknown'] as const).map((lv) => (
+                        <label key={lv} className={chipClass(lineage === lv)}>
+                          <input type="radio" name="upload-lineage" className={checkClass}
+                            checked={lineage === lv} onChange={() => setLineage(lv)} />
+                          {LINEAGE_LABEL[lv]}
+                        </label>
+                      ))}
+                    </div>
+                  </fieldset>
                   {lineage === 'fused_mesh' && (
                     <Alert type="warning">
                       융합 메시는 앱이 스무딩한 데이터라 실제보다 양호하게 나올 수 있습니다. 분석 결과와 보고서에 경고가 표시됩니다.
@@ -401,38 +365,42 @@ export function UploadForm({ sites, locations, userId, initialLocationId }: Prop
               )}
             </div>
 
-            {/* 우열: 적용 기준 · 측정일자/장비 · 담당자 · 파일 */}
-            <div className="flex flex-col gap-4">
-              <div className="flex flex-col gap-1">
-                <span className="text-sm font-bold">적용 기준</span>
-                <div className="flex flex-col gap-2 rounded-lg border border-cs-divider bg-white p-3">
-                  {criteria.length === 0 && <p className="text-sm text-cs-text-secondary">측정위치를 먼저 선택하세요.</p>}
-                  {criteria.map((c) => (
-                    <label key={c.id} className="flex items-start gap-2">
-                      <input type="radio" className={`${checkClass} mt-0.5`} checked={criteriaId === c.id} onChange={() => setCriteriaId(c.id)} />
-                      <span className="flex min-w-0 flex-col">
-                        <span className="inline-flex flex-wrap items-baseline gap-1.5">
-                          {/* 기준 코드는 ID 성격이라 mono(아트보드 13px) */}
-                          <span className="font-mono text-[13px]">{c.name}</span>
-                          {c.is_default && <em className="text-xs not-italic text-cs-text-secondary">(기본)</em>}
-                          {c.site_id && <em className="text-xs not-italic text-cs-text-secondary">(현장 기준)</em>}
+            {/* 오른쪽 열: 적용 기준 · 측정일자/장비 · 담당자 · 파일 */}
+            <div className="flex min-w-0 flex-[1_1_420px] flex-col gap-[22px]">
+              <fieldset className={FIELDSET}>
+                <legend className={LEGEND}>적용 기준</legend>
+                <div className="flex flex-col overflow-hidden rounded-control border border-line-3">
+                  {criteria.length === 0 && <p className="px-3.5 py-3 text-sm text-muted">{criteriaNote}</p>}
+                  {criteria.map((c) => {
+                    const on = criteriaId === c.id;
+                    return (
+                      <label key={c.id} className={criteriaRowClass(on)}>
+                        <input type="radio" name="upload-criteria" className={`${checkClass} mt-0.5`}
+                          checked={on} onChange={() => setCriteriaId(c.id)} />
+                        <span className="flex min-w-0 flex-col gap-0.5">
+                          <span className="flex flex-wrap items-baseline gap-x-2">
+                            {/* 기준 코드는 ID 성격이라 mono(아트보드 13px) */}
+                            <span className="font-mono text-[13px] text-ink">{c.name}</span>
+                            {c.is_default && <span className="text-xs text-muted">(기본)</span>}
+                            {c.site_id && <span className="text-xs text-muted">(현장 기준)</span>}
+                          </span>
+                          <span className="text-xs text-muted">{c.source_text}</span>
                         </span>
-                        <span className="text-xs leading-4 text-cs-text-secondary">{c.source_text}</span>
-                      </span>
-                    </label>
-                  ))}
+                      </label>
+                    );
+                  })}
                 </div>
-              </div>
-              <div className="flex items-start gap-4">
-                {/* 아트보드: 측정일자 180px 고정, 장비 flex 1 */}
-                <div className="w-[180px] shrink-0">
+              </fieldset>
+              <div className="flex flex-wrap gap-4">
+                {/* 아트보드: 측정일자 flex 1 0 180px, 장비가 남은 폭을 가져간다 */}
+                <div className="min-w-0 flex-[1_0_180px]">
                   <FormField label="측정일자" htmlFor="scanned-at">
                     <input id="scanned-at" type="date" required value={scannedAt}
                       onChange={(e) => setScannedAt(e.target.value)}
-                      className={`${inputClass} font-mono`} />
+                      className={`${inputClass} font-mono [color-scheme:dark]`} />
                   </FormField>
                 </div>
-                <div className="min-w-0 flex-1">
+                <div className="min-w-0 flex-[999_1_240px]">
                   <FormField label="장비" htmlFor="device">
                     <input id="device" value={device} onChange={(e) => setDevice(e.target.value)}
                       placeholder="예: iPhone 15 Pro + 3d Scanner App" className={inputClass} />
@@ -446,10 +414,31 @@ export function UploadForm({ sites, locations, userId, initialLocationId }: Prop
               <FormField
                 label={mode === 'import' ? '결과 파일 (csv/json)' : '스캔 파일 (ply/las/laz/xyz/txt/csv/pts)'}
                 htmlFor="file">
-                <input id="file" type="file" required onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-                  className={fileInputClass} />
-                {/* 용량 안내는 아트보드처럼 컨트롤 아래(FormField description은 컨트롤 위라 쓰지 않는다) */}
-                <p className="text-xs leading-4 text-cs-text-secondary">
+                {/* 아트보드: 점선 파일 상자. 진짜 파일 입력이 상자 전체를 투명하게 덮어 누르기와 끌어다 놓기를
+                    브라우저 기본 동작으로 받는다(따로 드래그 코드가 없다). 상자 안 '파일 선택'은 모양뿐이다. */}
+                <div className="relative flex min-h-28 flex-wrap items-center justify-center gap-x-3.5 gap-y-2.5 rounded-control border border-dashed border-line-3 bg-ground p-5 text-center has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-ink">
+                  <span aria-hidden className={buttonClass('normal')}>
+                    <Icon name="upload" size={18} />
+                    파일 선택
+                  </span>
+                  <span aria-hidden className="text-sm text-muted">또는 파일을 여기에 끌어다 놓기</span>
+                  <input ref={fileRef} id="file" type="file" required
+                    onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                    className="absolute inset-0 h-full w-full cursor-pointer opacity-0" />
+                </div>
+                {file && (
+                  <div className="flex min-h-11 items-center justify-between gap-2 rounded-control border border-line-2 bg-ground pl-3">
+                    <span className="inline-flex min-w-0 items-center gap-2">
+                      <Icon name="file" className="text-muted" />
+                      <span className="min-w-0 font-mono text-[13px] text-ink [overflow-wrap:anywhere]">{file.name}</span>
+                    </span>
+                    <button type="button" aria-label="선택한 파일 빼기" onClick={clearFile}
+                      className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-control text-ink-2">
+                      <Icon name="x" />
+                    </button>
+                  </div>
+                )}
+                <p className="text-[13px] text-muted">
                   파일은 Supabase Storage에 저장됩니다. 파일당 최대 <span className="font-mono">{MAX_UPLOAD_MB}</span>MB입니다.
                 </p>
               </FormField>
@@ -459,10 +448,10 @@ export function UploadForm({ sites, locations, userId, initialLocationId }: Prop
         </div>
       </Container>
       {error && <Alert type="error">{error}</Alert>}
-      {/* 컨테이너 아래 우측 정렬 - 이 뷰의 유일한 primary */}
-      <div className="flex items-center justify-end gap-2">
+      {/* 카드 아래 오른쪽 - 이 화면 본문의 유일한 주 버튼 */}
+      <div className="flex flex-wrap justify-end gap-3">
         <Button type="submit" variant="primary" disabled={busy}>
-          <Icon name="upload" />
+          <Icon name="upload" size={18} />
           {busy ? '업로드 중...' : mode === 'import' ? '가져오기 시작' : '업로드 후 사전 검사'}
         </Button>
       </div>

@@ -29,12 +29,16 @@ const PATHS: Record<IconName, ReactNode> = {
   photo: <><rect x="3" y="5" width="18" height="14" rx="2" /><circle cx="9" cy="10" r="1.5" /><path d="M21 16l-5-5-8 8" /></>,
   // ReportDetail 아트보드의 'PDF 다시 생성' 아이콘(T8 추가). 재분석 등 "다시 실행" 액션 공용.
   refresh: <><path d="M20 12a8 8 0 1 1-2.3-5.7" /><path d="M20 4v5h-5" /></>,
+  // 스캔 업로드(아트보드 Upload): 고른 파일 줄의 문서 아이콘과 '선택한 파일 빼기'의 X(T6 추가).
+  file: <><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5z" /><path d="M14 3v5h5" /></>,
+  x: <path d="M6 6l12 12M18 6L6 18" />,
 };
 
 export type IconName =
   | 'check-circle' | 'alert-triangle' | 'alert-circle' | 'x-circle' | 'info-circle' | 'clock' | 'minus-circle'
   | 'chevron-right' | 'chevron-down' | 'chevron-left' | 'search' | 'plus' | 'upload' | 'user'
-  | 'menu' | 'logout' | 'trend' | 'download' | 'external' | 'photo' | 'refresh';
+  | 'menu' | 'logout' | 'trend' | 'download' | 'external' | 'photo' | 'refresh'
+  | 'file' | 'x';
 
 export function Icon({ name, size = 16, className, ...rest }:
   { name: IconName; size?: number } & Omit<SVGProps<SVGSVGElement>, 'name'>) {
