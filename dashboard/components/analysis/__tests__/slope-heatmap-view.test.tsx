@@ -1,8 +1,11 @@
-import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, within } from '@testing-library/react';
 import { SlopeHeatmapView } from '../slope-heatmap-view';
+import { GRADE_CLASS } from '@/components/ui/grade';
+import { DRAIN_COLOR, STAGE_INK } from '@/lib/domain/palette';
 import type { SlopeCellResult } from '@/lib/domain/slope-judged';
 import type { SlopeCellRow } from '@/lib/domain/types';
+import { recording2d } from '@/lib/viz/__tests__/ctx2d-stub';
 
 function cell(over: Partial<SlopeCellRow> = {}): SlopeCellRow {
   return {
@@ -18,6 +21,10 @@ function result(over: Partial<SlopeCellResult> = {}): SlopeCellResult {
     dev_pct: 0.24, dir_err_deg: 5, correction_mm: 4.8, reverse: false, ...over,
   };
 }
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe('SlopeHeatmapView 클릭 -> 월드 좌표 변환 (브리프 D4: 배수구 클릭)', () => {
   it('클릭 지점을 pxToWorld로 환산해 onDrainClick에 넘긴다', () => {
@@ -94,8 +101,7 @@ function fakeCtx() {
 describe('SlopeHeatmapView -> drawSlopeHeatmap 배선 (코드리뷰 R-19: reverse 미전달 회귀 방지)', () => {
   it('results[].reverse=true가 실제 렌더 경로에서 굵은 화살표(lineWidth 2.2)로 이어진다', () => {
     const { ctx, strokeWidths } = fakeCtx();
-    const getContextSpy = vi.spyOn(HTMLCanvasElement.prototype, 'getContext')
-      .mockReturnValue(ctx as unknown as RenderingContext);
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(ctx as unknown as RenderingContext);
 
     render(
       <SlopeHeatmapView results={[result({ reverse: true })]} cellM={2.0} drainPoints={[]} clickable
@@ -106,14 +112,11 @@ describe('SlopeHeatmapView -> drawSlopeHeatmap 배선 (코드리뷰 R-19: revers
     // lineWidth를 기록하므로, 2.2(굵게)가 실제로 찍혔는지 본다.
     expect(strokeWidths).toContain(2.2);
     expect(strokeWidths).not.toContain(0.9); // 이 픽스처는 셀이 하나뿐이라 얇은 화살표는 없어야 함
-
-    getContextSpy.mockRestore();
   });
 
   it('results[].reverse=false는 얇은 화살표(lineWidth 0.9)로 이어진다', () => {
     const { ctx, strokeWidths } = fakeCtx();
-    const getContextSpy = vi.spyOn(HTMLCanvasElement.prototype, 'getContext')
-      .mockReturnValue(ctx as unknown as RenderingContext);
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(ctx as unknown as RenderingContext);
 
     render(
       <SlopeHeatmapView results={[result({ reverse: false })]} cellM={2.0} drainPoints={[]} clickable
@@ -122,32 +125,48 @@ describe('SlopeHeatmapView -> drawSlopeHeatmap 배선 (코드리뷰 R-19: revers
 
     expect(strokeWidths).toContain(0.9);
     expect(strokeWidths).not.toContain(2.2);
-
-    getContextSpy.mockRestore();
   });
 });
 
-// Cloudscape 리스킨(T7): 캔버스·범례 색은 엔진 PNG와 같은 SLOPE_GRADE_COLOR hex 그대로,
-// 크롬(보더·안내 문구)만 토큰.
-describe('SlopeHeatmapView Cloudscape 해부 (T7)', () => {
-  it('캔버스 보더 cs-divider, 범례 스와치 5종은 SLOPE_GRADE_COLOR, 화살표 안내는 보조색', () => {
+// 다크 T8: 캔버스는 검정 스테이지 안 여백, 범례는 스테이지에 붙은 줄(Stage toolbar, 아트보드 ScanSlope 63~77행).
+// 범례 사각은 같은 이름의 평활도 등급 토큰(캔버스 화면 색과 같은 값, Task 1 palette.test.ts 가 잇는다).
+// data-grade 는 등급 키(SlopeGradeBadge 와 같은 규칙), 글자는 엔진 문자열 그대로. 배수구는 DRAIN_COLOR.
+describe('SlopeHeatmapView C안 해부', () => {
+  it('캔버스는 검정 스테이지(Stage) 안, 범례 줄은 스테이지 다음 형제: 등급 사각(GRADE_CLASS)·배수구(bg-drain)·화살표 안내(muted)', () => {
     const { container } = render(
       <SlopeHeatmapView results={[result()]} cellM={2.0} drainPoints={[]} clickable onDrainClick={vi.fn()} />,
     );
-    expect(container.querySelector('canvas')?.className).toContain('border-cs-divider');
-    expect(container.querySelector('canvas')?.className).toContain('cursor-crosshair');
-    const swatches = container.querySelectorAll('[data-grade]');
-    expect(Array.from(swatches).map((s) => s.getAttribute('data-grade'))).toEqual(['적합', '경계', '보수', '재시공', '판정불가']);
-    expect(swatches[0]).toHaveStyle({ backgroundColor: 'rgb(61, 139, 61)' }); // #3d8b3d
-    expect(container.querySelector('[data-legend="drain"]')).toHaveStyle({ backgroundColor: 'rgb(26, 115, 232)' }); // #1a73e8
-    expect(screen.getByText(/얇은 화살표/).className).toContain('text-cs-text-secondary');
-    expect(container.innerHTML).not.toMatch(/zinc-/);
+    const canvas = container.querySelector('canvas')!;
+    expect(canvas.className).toContain('cursor-crosshair');
+    expect(canvas).toHaveAttribute('role', 'img');
+    const stage = canvas.closest('[data-stage]')!;
+    for (const cls of ['rounded-t-card', 'p-4']) expect(stage.className.split(/\s+/)).toContain(cls);
+    const legend = stage.nextElementSibling as HTMLElement;
+    const swatches = legend.querySelectorAll('[data-grade]');
+    expect(Array.from(swatches).map((s) => s.getAttribute('data-grade'))).toEqual(['pass', 'borderline', 'repair', 'rework', 'na']);
+    expect(swatches[0].className).toContain(GRADE_CLASS.pass.bg);
+    expect(swatches[4].className).toContain(GRADE_CLASS.na.bg);
+    expect(within(legend).getByText('판정불가')).toBeInTheDocument();
+    expect(legend.querySelector('[data-legend="drain"]')!.className).toContain('bg-drain');
+    expect(within(legend).getByText(/얇은 화살표/).className).toContain('text-muted');
+    expect(container.innerHTML).not.toMatch(/\bcs-/);
   });
 
-  it('clickable=false면 not-allowed 커서를 쓴다', () => {
+  it('clickable=false 면 not-allowed 커서를 쓴다', () => {
     const { container } = render(
       <SlopeHeatmapView results={[result()]} cellM={2.0} drainPoints={[]} clickable={false} onDrainClick={vi.fn()} />,
     );
     expect(container.querySelector('canvas')?.className).toContain('cursor-not-allowed');
+  });
+
+  it('배수구 표식은 DRAIN_COLOR 로 채우고 STAGE_INK 1.5px 테두리를 두른다', () => {
+    const { ctx, ops } = recording2d();
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(ctx as unknown as RenderingContext);
+    render(
+      <SlopeHeatmapView results={[result()]} cellM={2.0} drainPoints={[{ x: 1, y: 1 }]} clickable onDrainClick={vi.fn()} />,
+    );
+    expect(ops.filter((o) => o.op === 'fill').map((o) => o.style)).toEqual([DRAIN_COLOR]);
+    const strokes = ops.filter((o) => o.op === 'stroke');
+    expect(strokes[strokes.length - 1]).toMatchObject({ style: STAGE_INK, lineWidth: 1.5 });
   });
 });

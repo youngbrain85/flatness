@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { ResultTable } from '../result-table';
+import { tableClass } from '@/components/ui/data-table';
 import type { CellRow, Stats } from '@/lib/domain/types';
 
 const base: Omit<Stats, 'zones' | 'walls' | 'meta'> = {
@@ -44,36 +45,26 @@ describe('ResultTable (하단 구간별 결과표 - 스펙 §5.1.7 필드와 동
     expect(screen.getByText('10.00')).toBeInTheDocument(); // 최대
     expect(screen.getByText(/1 \(50%\)/)).toBeInTheDocument(); // 보수 이상 셀(비율)
   });
-  it('wall: 벽별 행에 수직도·수직도 등급을 렌더한다', () => {
+  it('wall: 벽별 행에 크기·수직도·수직도 판정(엔진 plumb_grade, 등급 색 점 + 이름)', () => {
     render(<ResultTable stats={wallStats} cells={[cell(1, 3, 'pass'), cell(1, 5, 'pass')]} />);
     expect(screen.getByText('벽 1')).toBeInTheDocument();
+    expect(screen.getByText('5.1 x 2.4')).toBeInTheDocument();
     expect(screen.getByText('8.50')).toBeInTheDocument(); // 수직도 mm
-    expect(screen.getAllByText('적합').length).toBeGreaterThan(0); // plumb_grade
+    expect(screen.getByText('적합').querySelector('[data-grade]')).toHaveAttribute('data-grade', 'pass');
   });
 });
 
-// 리스킨: tableClass 프리셋(머리 IBM Plex Mono 11px dim, 행 padding 14px 16px, 수치 열 우측 mono) + StatusIndicator
-describe('ResultTable Cloudscape 해부 (T7)', () => {
-  it('헤더는 mono 11px dim, 수치 열은 text-right mono, 행 구분은 line, 첫 열은 700이다', () => {
+// 다크 T8: TableBox(표 상자 안에서만 가로 스크롤) + tableClass + scope=col
+describe('ResultTable C안 해부 (아트보드 ScanDone 160~192행)', () => {
+  it('TableBox 안의 표: 열 머리 scope=col, 수치 열은 thNum/tdNum, 첫 열은 600', () => {
     const { container } = render(<ResultTable stats={floorStats} cells={[cell(1, 10, 'repair')]} />);
-    expect(container.firstElementChild?.className).toContain('border-cs-divider');
-    const th = screen.getByRole('columnheader', { name: '최대(mm)' });
-    expect(th.className).toContain('font-mono');
-    expect(th.className).toContain('text-dim');
-    expect(th.className).toContain('text-right');
-    expect(screen.getByRole('columnheader', { name: '상태' }).className).not.toContain('text-right');
+    expect(container.querySelector('table')!.parentElement!.className).toContain('overflow-x-auto');
+    for (const th of screen.getAllByRole('columnheader')) expect(th).toHaveAttribute('scope', 'col');
+    expect(screen.getByRole('columnheader', { name: '최대(mm)' }).className).toBe(tableClass.thNum);
+    expect(screen.getByRole('columnheader', { name: '상태' }).className).toBe(tableClass.th);
     // 셀이 하나뿐인 픽스처라 최대·최소·평균이 모두 10.00이다 - 첫 수치 td(최대)로 해부를 본다
-    const td = screen.getAllByText('10.00')[0];
-    expect(td.className).toContain('font-mono');
-    expect(td.className).toContain('text-right');
-    expect(td.className).toContain('py-3.5');
-    expect(td.closest('tr')?.className).toContain('border-line');
-    expect(screen.getByText('구역 1').className).toContain('font-bold');
-    expect(container.innerHTML).not.toMatch(/zinc-/);
-  });
-  it('wall: 수직도 판정은 StatusIndicator(data-status=success)로 그린다', () => {
-    render(<ResultTable stats={wallStats} cells={[cell(1, 3, 'pass')]} />);
-    expect(screen.getByText('적합')).toHaveAttribute('data-status', 'success');
-    expect(screen.getByRole('columnheader', { name: '수직도(mm)' }).className).toContain('text-right');
+    expect(screen.getAllByText('10.00')[0].className).toBe(tableClass.tdNum);
+    expect(screen.getByText('구역 1').className).toBe(`${tableClass.td} font-semibold`);
+    expect(container.innerHTML).not.toMatch(/\bcs-/);
   });
 });

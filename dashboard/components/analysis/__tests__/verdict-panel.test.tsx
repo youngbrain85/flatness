@@ -1,10 +1,20 @@
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }));
-vi.mock('@/lib/supabase/client', () => ({ createClient: () => ({}) }));
+const { eqMock } = vi.hoisted(() => ({
+  // 함수 타입을 제네릭으로 준다(인자 이름만 적은 구현은 쓰지 않는 인자 경고가 난다)
+  eqMock: vi.fn<(col: string, val: string) => Promise<{ error: { message: string } | null }>>(async () => ({ error: null })),
+}));
+vi.mock('@/lib/supabase/client', () => ({
+  createClient: () => ({ from: () => ({ update: () => ({ eq: eqMock }) }) }),
+}));
 
 import { VerdictPanel } from '../verdict-panel';
+import { EYEBROW } from '../result-parts';
+import { buttonClass } from '@/components/ui/button';
+import { textareaClass } from '@/components/ui/form';
+import { GRADE_CLASS } from '@/components/ui/grade';
 import type { AnalysisRow, Stats } from '@/lib/domain/types';
 
 const stats: Stats = {
@@ -30,96 +40,124 @@ const analysis = {
   deleted_at: null, created_at: '2026-07-28T00:00:00Z', created_by: null, kind: 'flatness',
 } as AnalysisRow;
 
-const imported = {
-  ...analysis, engine_version: 'external-colab-v1',
-  stats: { ...stats, meta: { ...stats.meta, source: 'colab-import' } },
-} as AnalysisRow;
+/** KPI 카드의 글자(라벨 + 값 + 단위, 공백 제거). KpiCard 의 라벨 <p> 는 카드 루트의 직계 자식이다(Task 1 계약) */
+const kpi = (label: string) => (screen.getByText(label).parentElement!.textContent ?? '').replace(/\s+/g, '');
+const tokens = (el: Element) => el.className.split(/\s+/);
 
-describe('VerdictPanel (C안 우측 고정 패널)', () => {
-  it('종합 판정 배지·핵심 수치·기준·경고·종합의견을 렌더한다', () => {
+describe('VerdictPanel KPI (아트보드 ScanDone 90~111행)', () => {
+  it('KPI 5장: 판정·최대 편차·95퍼센타일·판정 셀(유효/전체)·바닥 인식률', () => {
     render(<VerdictPanel analysis={analysis} stats={stats} />);
-    expect(screen.getByText('보수')).toBeInTheDocument();          // 종합 판정
-    expect(screen.getByText('12.34')).toBeInTheDocument();          // 최대 편차
-    // coverage 라벨 분기 - low_coverage 경고 문구도 '바닥 인식률'을 포함하므로 정확 일치로 dt만 매칭
-    expect(screen.getByText('바닥 인식률')).toBeInTheDocument();
-    expect(screen.getByText(/88.5/)).toBeInTheDocument();
-    expect(screen.getByText('floor-kcs-exposed')).toBeInTheDocument();
-    expect(screen.getByText(/70% 미만/)).toBeInTheDocument();       // warning 한국어
-    expect(screen.getByText(/축소 스팬 적용 셀 6/)).toBeInTheDocument();
-    expect(screen.getByText(/스크리닝/)).toBeInTheDocument();       // auto_summary
-    expect(screen.getByLabelText('종합의견(사용자 수정)')).toBeInTheDocument();
+    expect(kpi('판정')).toContain('보수');
+    expect(kpi('최대 편차')).toContain('12.34mm');
+    expect(kpi('95퍼센타일')).toContain('9.87mm');
+    expect(kpi('판정 셀(유효/전체)')).toContain('36/40');
+    expect(kpi('바닥 인식률')).toContain('88.5%');
   });
-  it('계보 경고(fused_mesh_smoothed)를 한국어 문구로 보여준다', () => {
-    // 업로드 화면이 "결과에 경고가 표시됩니다"라고 약속한 그 화면이 여기다.
-    // 워커가 stats.warnings에 코드를 넣어도(flatworker/lineage.py) 이 패널이
-    // 라벨을 못 붙이면 사용자는 `fused_mesh_smoothed`라는 슬러그를 보게 된다.
-    const fused = { ...stats, warnings: ['low_coverage', 'fused_mesh_smoothed'] };
-    render(<VerdictPanel analysis={analysis} stats={fused} />);
-    expect(screen.getByText(/융합 메시는 스캐너 앱이/)).toBeInTheDocument();
-    expect(screen.queryByText('fused_mesh_smoothed')).not.toBeInTheDocument();
+
+  it('판정 KPI 는 엔진 overall_verdict 그대로 KpiCard tone 으로 그린다: 등급 점 + 등급 색 이름(data-grade)', () => {
+    render(<VerdictPanel analysis={analysis} stats={stats} />);
+    const v = screen.getByText('보수').closest('[data-grade]') as HTMLElement;
+    expect(v).toHaveAttribute('data-grade', 'repair');
+    expect(tokens(v)).toContain(GRADE_CLASS.repair.text);
+    expect(v.querySelector('[data-grade="repair"]')).not.toBeNull();   // 등급 점(GradeDot)
   });
-  it('임포트 결과면 외부 결과 배지를 보여준다', () => {
-    render(<VerdictPanel analysis={imported} stats={imported.stats!} />);
-    expect(screen.getByText('외부 결과')).toBeInTheDocument();
+
+  // 변이: 판정 KPI 를 grade_counts 에서 가장 나쁜 등급으로 계산함(브라우저 판정 금지)
+  it('판정 KPI 는 셀 등급에서 계산하지 않는다: 보수 셀이 있어도 overall_verdict 가 적합이면 적합', () => {
+    render(<VerdictPanel analysis={{ ...analysis, overall_verdict: 'pass' } as AnalysisRow} stats={stats} />);
+    expect(screen.getByText('적합').closest('[data-grade]')).toHaveAttribute('data-grade', 'pass');
+    expect(screen.queryByText('보수')).toBeNull();
+  });
+
+  it('overall_verdict 가 없으면 "판정 없음"(muted, 등급 점·data-grade 없음)', () => {
+    render(<VerdictPanel analysis={{ ...analysis, overall_verdict: null } as AnalysisRow} stats={stats} />);
+    const none = screen.getByText('판정 없음');
+    expect(tokens(none)).toContain('text-muted');
+    expect(none.closest('[data-grade]')).toBeNull();
+    expect(kpi('판정')).toBe('판정판정없음');
+  });
+
+  it('유효 셀이 없으면 최대 편차·95퍼센타일은 "-" 이고 단위를 붙이지 않는다', () => {
+    render(<VerdictPanel analysis={analysis} stats={{ ...stats, value_max_mm: null, value_p95_mm: null }} />);
+    expect(kpi('최대 편차')).toBe('최대편차-');
+    expect(kpi('95퍼센타일')).toBe('95퍼센타일-');
   });
 });
 
-// Cloudscape 리스킨(T7): 동작은 위 describe가 지키고 여기서는 해부(프리미티브·토큰·의미 속성)만 본다.
-describe('VerdictPanel Cloudscape 해부 (T7)', () => {
-  it('판정 헤드라인은 StatusIndicator(data-status=error, 18px 700)이고 외부 결과 배지는 external 톤이다', () => {
-    render(<VerdictPanel analysis={imported} stats={imported.stats!} />);
-    const head = screen.getByText('보수');
-    expect(head).toHaveAttribute('data-status', 'error');
-    expect(head.className).toContain('font-bold');
-    // text-lg 금지: Tailwind v4는 .text-lg를 .text-sm보다 앞에 내보내 StatusIndicator의 text-sm이 이긴다
-    expect(head.className).toContain('text-[18px]');
-    expect(head.className).not.toContain('text-lg');
-    expect(screen.getByText('외부 결과')).toHaveAttribute('data-tone', 'external');
-  });
-
-  it('overall_verdict가 없으면 pending 헤드라인 "판정 없음"을 그린다', () => {
-    render(<VerdictPanel analysis={{ ...analysis, overall_verdict: null } as AnalysisRow} stats={stats} />);
-    expect(screen.getByText('판정 없음')).toHaveAttribute('data-status', 'pending');
-    expect(screen.queryByText('외부 결과')).not.toBeInTheDocument();
-  });
-
-  it('수치는 KeyValuePairs 2열 폭(라벨은 눈썹, 값 mono tabular, 최대 편차만 700)이다', () => {
-    const { container } = render(<VerdictPanel analysis={analysis} stats={stats} />);
-    expect(container.querySelector('dl')?.className).toContain('minmax(min(100%,240px),1fr)'); // columns={2}
-    expect(screen.getByText('최대 편차(mm)').className).toContain('text-dim');
-    expect(screen.getByText('12.34').className).toContain('font-mono');
-    expect(screen.getByText('12.34').className).toContain('font-bold');
-    expect(screen.getByText('0.50').className).not.toContain('font-bold');
-    expect(screen.getByText('36 / 40').className).toContain('tabular-nums');
-  });
-
-  it('등급 분포 바는 5등급 세그먼트(GRADE_COLOR hex, 비율 폭)이고 경고는 warning Alert 안에 있다', () => {
-    const { container } = render(<VerdictPanel analysis={analysis} stats={stats} />);
-    const segs = container.querySelectorAll('[data-grade]');
+describe('VerdictPanel 카드 (등급 분포·적용 기준 | 경고·고지)', () => {
+  it('등급 분포: role=img 막대 안 5등급 세그먼트(GRADE_CLASS 바탕, 셀 비율 폭)와 개수 문장', () => {
+    render(<VerdictPanel analysis={analysis} stats={stats} />);
+    expect(screen.getByText('등급 분포').className).toBe(EYEBROW);
+    const bar = screen.getByRole('img', { name: '적합 30, 경계 4, 보수 2, 재시공 0, 판정 불가 4' });
+    const segs = bar.querySelectorAll('[data-grade]');
     expect(Array.from(segs).map((s) => s.getAttribute('data-grade'))).toEqual(['pass', 'borderline', 'repair', 'rework', 'na']);
-    expect(segs[0]).toHaveStyle({ backgroundColor: 'rgb(46, 125, 50)' }); // GRADE_COLOR.pass #2e7d32
-    expect((segs[0] as HTMLElement).style.width).toBe('75%');            // 30/40
-    expect(segs[0].parentElement?.className).toContain('bg-cs-divider');
+    expect(tokens(segs[0])).toContain(GRADE_CLASS.pass.bg);
+    expect((segs[0] as HTMLElement).style.width).toBe('75%');   // 30/40
+    expect((segs[2] as HTMLElement).style.width).toBe('5%');    // 2/40
     expect(screen.getByText('적합 30 · 경계 4 · 보수 2 · 재시공 0 · 판정 불가 4')).toBeInTheDocument();
-    const alert = container.querySelector('[data-alert="warning"]') as HTMLElement;
-    expect(alert).not.toBeNull();
-    expect(alert.textContent).toContain('70% 미만');
   });
 
-  it('적용 기준 코드는 mono, 종합의견 textarea는 textareaClass, 저장은 normal 버튼이고 이 패널에 primary는 없다', () => {
+  it('적용 기준: 코드(mono), 출처 · 임계 · 불확도 한 줄, 축소 스팬 셀 수', () => {
     render(<VerdictPanel analysis={analysis} stats={stats} />);
     expect(screen.getByText('floor-kcs-exposed').className).toContain('font-mono');
-    expect(screen.getByLabelText('종합의견(사용자 수정)').className).toContain('border-line-3');
-    // 뷰당 primary 1개(스펙 §4): ScanDone 뷰의 primary는 헤더의 '이 위치의 보고서 생성'(T6)이므로 저장은 normal
-    const save = screen.getByRole('button', { name: '저장' });
-    expect(save.className).toContain('border-line-3');
-    expect(save.className).not.toContain('bg-ink');
-    expect(save.className).toContain('rounded-control');
-    expect(screen.getAllByRole('button').filter((b) => b.className.split(' ').includes('bg-ink'))).toHaveLength(0);
+    expect(screen.getByText('KCS 14 20 10 표 3.7-1 (제물치장·얇은 마감) · 3m당 허용 7mm · 재시공 21mm · 불확도 U=5mm'))
+      .toBeInTheDocument();
+    expect(screen.getByText('축소 스팬 적용 셀 6개 (허용치 선형 환산)')).toBeInTheDocument();
   });
 
-  it('구 팔레트 클래스(zinc/amber/purple/red/green)가 남아 있지 않다', () => {
-    const { container } = render(<VerdictPanel analysis={imported} stats={imported.stats!} />);
+  it('수직도 기준(span_m 없음)은 "수직도 허용" 문장', () => {
+    const plumb = { ...stats, applied_criteria: { ...stats.applied_criteria, span_m: null } };
+    render(<VerdictPanel analysis={analysis} stats={plumb} />);
+    expect(screen.getByText(/· 수직도 허용 7mm · 재시공 21mm · 불확도 U=5mm$/)).toBeInTheDocument();
+  });
+
+  it('경고는 warning Alert 안의 한국어 문구다(계보 경고 슬러그를 그대로 보이지 않는다), 같은 카드에 고지', () => {
+    // 업로드 화면이 "결과에 경고가 표시됩니다"라고 약속한 그 화면이 여기다(flatworker/lineage.py 의 코드)
+    const fused = { ...stats, warnings: ['low_coverage', 'fused_mesh_smoothed'] };
+    const { container } = render(<VerdictPanel analysis={analysis} stats={fused} />);
+    const alert = container.querySelector('[data-alert="warning"]') as HTMLElement;
+    expect(alert.textContent).toContain('70% 미만');
+    expect(alert.textContent).toContain('융합 메시는 스캐너 앱이');
+    expect(screen.queryByText('fused_mesh_smoothed')).not.toBeInTheDocument();
+    expect(screen.getByText(/모바일 LiDAR 기반 스크리닝이며 공식 검측\(실물 직선자·레벨 측량\)을 대체하지 않습니다/))
+      .toBeInTheDocument();
+  });
+
+  it('경고가 없으면 Alert 없이 고지만 있다', () => {
+    const { container } = render(<VerdictPanel analysis={analysis} stats={{ ...stats, warnings: [] }} />);
+    expect(container.querySelector('[data-alert]')).toBeNull();
+    expect(screen.getByText(/모바일 LiDAR 기반 스크리닝이며/)).toBeInTheDocument();
+  });
+});
+
+describe('VerdictPanel 종합의견 카드', () => {
+  it('자동 의견 원문(pre-wrap) + 사용자 수정 textarea(textareaClass, 5줄) + 저장(보조 버튼, 이 패널의 유일한 버튼)', () => {
+    render(<VerdictPanel analysis={analysis} stats={stats} />);
+    expect(screen.getByText('종합의견').className).toBe(EYEBROW);
+    expect(screen.getByText(/자동 종합의견 본문입니다/).className).toContain('whitespace-pre-wrap');
+    const ta = screen.getByLabelText('종합의견(사용자 수정)');
+    for (const t of textareaClass.split(/\s+/).filter(Boolean)) expect(tokens(ta)).toContain(t);
+    expect(ta).toHaveAttribute('rows', '5');
+    const buttons = screen.getAllByRole('button');
+    expect(buttons.map((b) => b.textContent)).toEqual(['저장']);
+    for (const t of buttonClass('normal').split(/\s+/).filter(Boolean)) expect(tokens(buttons[0])).toContain(t);
+  });
+
+  it('저장하면 결과를 role=status 로 알린다(실패면 사유)', async () => {
+    render(<VerdictPanel analysis={analysis} stats={stats} />);
+    fireEvent.change(screen.getByLabelText('종합의견(사용자 수정)'), { target: { value: '보수 계획 수립' } });
+    fireEvent.click(screen.getByRole('button', { name: '저장' }));
+    expect(await screen.findByText('저장되었습니다')).toHaveAttribute('role', 'status');
+    expect(eqMock).toHaveBeenCalledWith('id', 'a1');
+
+    eqMock.mockResolvedValueOnce({ error: { message: 'RLS' } });
+    fireEvent.click(screen.getByRole('button', { name: '저장' }));
+    expect(await screen.findByText('저장 실패: RLS')).toHaveAttribute('role', 'status');
+  });
+
+  it('DOM 에 옛 팔레트·cs- 토큰이 없다', () => {
+    const { container } = render(<VerdictPanel analysis={analysis} stats={stats} />);
     expect(container.innerHTML).not.toMatch(/zinc-|amber-|purple-|red-|green-/);
+    expect(container.innerHTML).not.toMatch(/\bcs-/);
   });
 });

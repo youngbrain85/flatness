@@ -8,11 +8,11 @@
 // analysis.status는 페이지(app/analyses/[id]/page.tsx)에서 이미 'done'을
 // 보장한다(AnalysisResult의 "status done 전제" 주석과 같은 계약).
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { enqueueJob } from '@/lib/domain/jobs';
-import { ANALYSIS_KIND_LABEL, warningLabel } from '@/lib/domain/labels';
+import { ANALYSIS_KIND_LABEL } from '@/lib/domain/labels';
 import { dataUrl } from '@/lib/domain/paths';
 import { isSlopeCellsFile, slopeCellsJsonUrl } from '@/lib/domain/slope-cells';
 import { isSlopeJudgedFile, joinSlopeCells, slopeJudgedJsonUrl } from '@/lib/domain/slope-judged';
@@ -21,35 +21,26 @@ import type { SlopeCellResult } from '@/lib/domain/slope-judged';
 import { useJudgeStatus } from '@/lib/hooks/use-judge-status';
 import { SlopeHeatmapView } from './slope-heatmap-view';
 import { SlopeResultTable } from './slope-result-table';
-import { SlopeVerdictPanel } from './slope-verdict-panel';
+import { SlopeKpiGrid, SlopeSummaryCard, SlopeVerdictPanel, SlopeWarnings } from './slope-verdict-panel';
+import { CARD, CARD_HALF, CARD_ROW, resultMeta } from './result-parts';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { KeyValuePairs } from '@/components/ui/key-value';
+import { Stage } from '@/components/ui/stage';
 import type { AnalysisRow, DrainPoint, SlopeParams, SlopeStats } from '@/lib/domain/types';
 
-const COUNT_ORDER = ['적합', '경계', '보수', '재시공', '판정불가'] as const;
-// Cloudscape 리스킨(T7) 토큰 - 평활도 AnalysisResult/VerdictPanel과 같은 어휘.
-// RESULT_GRID는 analysis-result.tsx와 같은 문자열(평활도 모듈 전체를 import하지 않으려고 복제).
-const RESULT_GRID = 'grid items-start gap-5 md:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]';
-const LABEL = 'text-sm font-bold';
-const NOTE = 'text-xs leading-4 text-cs-text-secondary';
-const MUTED = 'text-sm text-cs-text-secondary';
-const LINK = 'text-cs-link hover:text-cs-link-hover hover:underline';
-
-// 전 셀 판정불가면 편차 통계 3개가 전부 null이다. 키 자체가 없는 레코드(undefined)도
-// 같이 받아내도록 == null로 비교한다(slope-placeholder.tsx 방어를 그대로 옮김).
-function fmtDevPct(v: number | null | undefined): string {
-  return v == null ? '판정 가능한 셀 없음' : `${v.toFixed(2)}%`;
-}
+// C안(아트보드 docs/design/dark/ScanSlope.dc.html) 결과 구획의 글자 토큰. 편차 통계 표기(판정 가능한 셀 없음)는
+// slope-verdict-panel.tsx 의 KPI 가 맡는다
+const MUTED = 'text-sm text-muted';
+const LINK = 'font-semibold text-ink underline underline-offset-[3px]';
 
 export function SlopeResult({ analysis }: { analysis: AnalysisRow }) {
   const router = useRouter();
+  const headingId = useId();
   // analysis.stats는 공용 컬럼이라 컴파일 타임 타입은 Stats(평활도)다 - 이 컴포넌트는
   // 호출부(app/analyses/[id]/page.tsx)의 isSlopeStats 가드가 이미 format으로
   // 런타임 확인을 마친 뒤에만 렌더되므로 unknown을 거쳐 다시 캐스팅한다.
   const stats = analysis.stats as unknown as SlopeStats;
   const summary = stats.summary ?? ({} as SlopeStats['summary']);
-  const counts = summary.counts ?? ({} as SlopeStats['summary']['counts']);
   const warnings = stats.warnings ?? [];
   const artifacts = stats.artifacts;
   const mapPng = artifacts?.map_png;
@@ -180,58 +171,46 @@ export function SlopeResult({ analysis }: { analysis: AnalysisRow }) {
   }
 
   return (
-    <div className="flex flex-col gap-5">
-      <div className="flex items-center gap-2">
+    <section aria-labelledby={headingId} className="flex flex-col gap-3.5">
+      {/* 머리: 제목 + 종류 태그 + 일시 · 엔진(아트보드 ScanSlope 54~58행) */}
+      <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1.5">
+        <h2 id={headingId} className="font-heading text-[19px] font-semibold">{ANALYSIS_KIND_LABEL.slope} 결과</h2>
         <Badge tone="neutral">{ANALYSIS_KIND_LABEL.slope}</Badge>
+        <span className="font-mono text-xs tabular-nums text-muted">
+          {resultMeta(analysis.created_at, analysis.engine_version)}
+        </span>
       </div>
 
       {!canRejudge ? (
-        <div className="flex flex-col gap-4 rounded-cs-container border border-cs-divider bg-white p-5">
-          <div className="flex flex-col gap-1">
-            <h3 className={LABEL}>판정 요약</h3>
-            <p className="text-sm">
-              {COUNT_ORDER.map((k) => `${k} ${counts[k] ?? 0}`).join(' · ')}
-            </p>
-            <p className={NOTE}>판정 가능 비율 {(summary.coverage_pct ?? 0).toFixed(1)}%</p>
-          </div>
-
-          <KeyValuePairs columns={2} items={[
-            { label: '평균 편차', value: fmtDevPct(summary.mean_dev_pct) },
-            { label: '편차 표준편차', value: fmtDevPct(summary.std_dev_pct) },
-            { label: '최대 편차', value: fmtDevPct(summary.max_dev_pct) },
-          ]} />
-
-          {warnings.length > 0 && (
-            <div className="flex flex-col gap-1">
-              <h3 className={LABEL}>경고</h3>
-              <Alert type="warning">
-                <ul className="flex flex-col gap-1 text-xs leading-4">
-                  {warnings.map((w) => <li key={w}>{warningLabel(w)}</li>)}
-                </ul>
-              </Alert>
-            </div>
-          )}
-
-          {mapPng && (
-            <div className="flex flex-col gap-1">
-              <h3 className={LABEL}>구배 판정 지도</h3>
-              {/* 로컬 route 서빙 이미지 - 데모에서 next/image 최적화 불필요 */}
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={dataUrl(mapPng)} alt="구배 판정 지도"
-                className="max-w-full rounded-lg border border-cs-divider bg-white" />
-            </div>
-          )}
-
+        <>
+          {/* 브리프 D7: 재판정할 수 없는 분석. 엔진 PNG(밝은 그림, 자체 범례 포함)를 검정 스테이지 안 여백에 두고
+              KPI·판정 요약·경고만 보인다(배수구 카드는 없다 - 지정할 수 없다) */}
           <Alert type="info">
             이 분석은 재판정할 수 없습니다. 구배 분석을 다시 실행하면 배수구를 지정할 수 있습니다.
           </Alert>
-        </div>
+          {mapPng && (
+            <Stage className="flex items-center justify-center p-4">
+              {/* 로컬 route 서빙 이미지 - 데모에서 next/image 최적화 불필요 */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={dataUrl(mapPng)} alt="구배 판정 지도" className="block h-auto w-full max-w-[760px]" />
+            </Stage>
+          )}
+          <SlopeKpiGrid summary={summary} />
+          <div className={CARD_ROW}>
+            <SlopeSummaryCard stats={stats} />
+            {warnings.length > 0 && (
+              <div className={`${CARD} ${CARD_HALF} flex flex-col gap-4`}>
+                <SlopeWarnings warnings={warnings} />
+              </div>
+            )}
+          </div>
+        </>
       ) : (
         <>
           {/* 코드리뷰(2차) I1: 방향 판정 대상이 아닌 기준에서는 클릭을 권하지 않고
               이유를 알린다. */}
           {directionAware ? (
-            <p className="text-sm">
+            <p className="text-sm text-ink">
               배수구 위치를 클릭하세요. 클릭하면 그 지점을 기준으로 재판정 작업이 시작되고, 완료되면
               화면이 자동으로 갱신됩니다.
               {/* 코드리뷰 M5: 브리프 D3 - 엔진 PNG는 화면에 다시 그리지 않되(Canvas와
@@ -278,28 +257,23 @@ export function SlopeResult({ analysis }: { analysis: AnalysisRow }) {
             </Alert>
           )}
 
-          <div className={RESULT_GRID}>
-            <section className="min-w-0">
-              {cells ? (
-                <SlopeHeatmapView
-                  results={cells}
-                  cellM={stats.cell_m}
-                  drainPoints={drainPoints}
-                  clickable={!busy && !judgeBusy && directionAware}
-                  onDrainClick={handleDrainClick}
-                />
-              ) : (
-                <p className={MUTED}>{loadError ?? '셀 데이터 로딩 중...'}</p>
-              )}
-            </section>
-            <div className="min-w-0 md:sticky md:top-5 md:self-start">
-              <SlopeVerdictPanel stats={stats} judge={judge} drainPoints={drainPoints} directionAware={directionAware} />
-            </div>
-          </div>
+          {cells ? (
+            <SlopeHeatmapView
+              results={cells}
+              cellM={stats.cell_m}
+              drainPoints={drainPoints}
+              clickable={!busy && !judgeBusy && directionAware}
+              onDrainClick={handleDrainClick}
+            />
+          ) : (
+            <p className={MUTED}>{loadError ?? '셀 데이터 로딩 중...'}</p>
+          )}
 
-          <section className="flex flex-col gap-2">
-            {/* 컨테이너 제목이 h2이므로 본문 소제목은 h3 */}
-            <h3 className="text-base font-bold leading-5">셀별 결과표</h3>
+          <SlopeVerdictPanel stats={stats} judge={judge} drainPoints={drainPoints} directionAware={directionAware} />
+
+          <div className="flex flex-col gap-2.5">
+            {/* 결과 구획 제목이 h2이므로 표 제목은 h3 */}
+            <h3 className="font-heading text-base font-semibold">셀별 결과표</h3>
             {cells ? (
               <SlopeResultTable
                 results={cells}
@@ -309,9 +283,9 @@ export function SlopeResult({ analysis }: { analysis: AnalysisRow }) {
             ) : (
               <p className={MUTED}>{loadError ?? '셀 데이터 로딩 중...'}</p>
             )}
-          </section>
+          </div>
         </>
       )}
-    </div>
+    </section>
   );
 }

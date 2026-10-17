@@ -199,7 +199,10 @@ describe('Preview3dTab 모드별 화면 (§7.11 분기표의 화면 열)', () =>
 
     const img = pngImage() as HTMLImageElement;
     expect(img.getAttribute('src')).toBe('/api/data/artifacts/an1/preview3d.png');
-    expect(img.className).toBe('max-w-full rounded-lg border border-cs-divider bg-white');
+    // 엔진이 그린 밝은 PNG 는 검정 스테이지(Stage) 안 여백에 둔다(스펙 2026-10-17 §5 10: 3D 탭은 둘레만 C안)
+    expect(img.className).toBe('block h-auto w-full max-w-[960px]');
+    expect(img.parentElement).toHaveAttribute('data-stage');
+    expect(img.parentElement!.className).toContain('p-4');
     expect(screen.getByText(M10)).toBeInTheDocument();
     const note = screen.getByText(M2);
     expect(note.tagName).toBe('P');

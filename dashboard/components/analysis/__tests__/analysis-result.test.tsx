@@ -1,7 +1,7 @@
 import { StrictMode } from 'react';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -26,7 +26,7 @@ vi.mock('../preview3d-tab', async (importOriginal) => {
 });
 
 import { AnalysisResult } from '../analysis-result';
-import type { AnalysisRow, ScanRow, Stats } from '@/lib/domain/types';
+import type { AnalysisRow, CellRow, ScanRow, Stats } from '@/lib/domain/types';
 import { probeWebgl2 } from '@/lib/viz/points3d/gl-renderer';
 import { recordingGl } from '@/lib/viz/points3d/__tests__/gl-stub';
 
@@ -110,26 +110,52 @@ describe('AnalysisResult 정밀 편차맵 탭', () => {
   });
 });
 
-// Cloudscape 리스킨(T7): 컨테이너는 페이지(T6)가 그리고 이 컴포넌트는 본문만 그린다 -
-// TabBar → 3:2 그리드(좌 히트맵 / 우 판정 패널) → 구간별 결과표.
-describe('AnalysisResult Cloudscape 본문 (T7)', () => {
-  it('TabBar 4탭(히트맵 활성) + 3:2 그리드 + 구간별 결과표 제목, 구 팔레트 클래스 없음', async () => {
+// 다크 T8: 결과 구획을 이 컴포넌트가 통째로 그린다(아트보드 ScanDone 53~196행) - h2 '평활도 결과' + 일시·엔진 +
+// 알약 탭 -> 탭 본문 -> KPI·카드 -> 구간별 결과표. 판정 셀 선택 줄(0.5·1·2m)은 3번 스펙 몫이라 없다.
+describe('AnalysisResult C안 결과 구획', () => {
+  it('h2 와 메타·알약 탭 4개(히트맵 활성), KPI 와 구간별 결과표가 한 section 안에 있다', async () => {
     stubCellsFetch();
     const { container } = render(<AnalysisResult analysis={analysis} scan={scan} photos={[]} />);
 
+    const heading = screen.getByRole('heading', { level: 2, name: '평활도 결과' });
+    const section = heading.closest('section')!;
+    expect(section).toHaveAttribute('aria-labelledby', heading.id);
+    expect(within(section).getByText('2026-07-29 · 엔진 p1d-0.4.0')).toBeInTheDocument();
+    expect(within(section).getByRole('tablist', { name: '결과 보기' })).toBeInTheDocument();
     expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['히트맵', '정밀 편차맵', '3D 프리뷰', '현장 사진']);
     expect(screen.getByRole('tab', { name: '히트맵' })).toHaveAttribute('aria-selected', 'true');
-
-    const root = container.firstElementChild as HTMLElement;
-    expect(root.className).toContain('flex flex-col gap-5');
-    const grid = root.firstElementChild as HTMLElement;
-    expect(grid.className).toContain('md:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]');
-    expect(grid.className).toContain('gap-5');
-    expect(screen.getByRole('heading', { level: 3, name: '구간별 결과표' })).toBeInTheDocument();
+    expect(within(section).getByText('최대 편차')).toBeInTheDocument();
+    expect(within(section).getByRole('heading', { level: 3, name: '구간별 결과표' })).toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: '판정 셀' })).toBeNull();
+    expect(container.innerHTML).not.toContain('md:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]');
 
     // 빈 cells가 도착하면 히트맵 자리에는 "표시할 셀 데이터가 없습니다." (fetch 이펙트를 기다려 act 경고를 막는다)
     await waitFor(() => expect(screen.getByText('표시할 셀 데이터가 없습니다.')).toBeInTheDocument());
     expect(container.innerHTML).not.toMatch(/zinc-|amber-|red-|green-|purple-/);
+    expect(container.innerHTML).not.toMatch(/\bcs-/);
+  });
+
+  it('임포트 결과면 결과 머리에 "외부 결과" 배지를 단다', async () => {
+    stubCellsFetch();
+    const imported: AnalysisRow = {
+      ...analysis, engine_version: 'external-colab-v1',
+      stats: { ...stats, meta: { ...stats.meta, engine_version: 'external-colab-v1', source: 'colab-import' } },
+    };
+    render(<AnalysisResult analysis={imported} scan={scan} photos={[]} />);
+    const heading = screen.getByRole('heading', { level: 2, name: '평활도 결과' });
+    expect(within(heading.parentElement!).getByText('외부 결과')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('표시할 셀 데이터가 없습니다.')).toBeInTheDocument());
+  });
+
+  it('히트맵 HUD 의 셀 크기는 stats.meta.cell_m 에서 온다', async () => {
+    const one: CellRow[] = [{
+      ix: 0, iy: 0, center_x: 0.5, center_y: 0.5, value_mm: 3.2, span_used_m: 3,
+      occupancy: 1, grade: 'pass', worst_x: null, worst_y: null, zone_id: 1,
+    }];
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => one } as unknown as Response)));
+    const withCell: AnalysisRow = { ...analysis, stats: { ...stats, meta: { ...stats.meta, cell_m: 1 } } };
+    render(<AnalysisResult analysis={withCell} scan={scan} photos={[]} />);
+    expect(await screen.findByTestId('heatmap-hud')).toHaveTextContent('1m 셀 · 1칸(유효 1) · 최댓값 3.20 mm');
   });
 });
 

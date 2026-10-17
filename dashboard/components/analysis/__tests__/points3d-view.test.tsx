@@ -8,6 +8,8 @@ import { StrictMode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { Points3dLoadingFrame, Points3dView } from '../points3d-view';
+import { EYEBROW } from '../result-parts';
+import { buttonClass } from '@/components/ui/button';
 import type { Points3dData } from '@/lib/domain/points3d';
 import { fitToBounds, pan, rotate, viewProj } from '@/lib/viz/points3d/orbit';
 import type { Bounds } from '@/lib/viz/points3d/orbit';
@@ -140,15 +142,15 @@ afterEach(() => {
 
 describe('Points3dLoadingFrame', () => {
   // 변이: 배경을 색 유틸리티 클래스로 / 테마 인자 무시 / Spinner 칩 제거(검정 위에서 회전 호가 보이지 않는다)
-  it('뷰어 영역과 같은 틀에 테마 배경색, 흰 칩 안의 Spinner, 로딩 문구를 그린다', () => {
+  it('뷰어 영역과 같은 2:1 틀에 테마 배경색, ground 칩 안의 Spinner, 로딩 문구를 그린다', () => {
     const { rerender } = render(<Points3dLoadingFrame theme="dark" />);
     const box = screen.getByTestId('points3d-loading');
     expect(box).toHaveStyle({ backgroundColor: '#000000', color: '#f2f4f7' });
-    for (const cls of ['aspect-[4/3]', 'w-full', 'rounded-lg', 'border', 'border-cs-divider']) {
+    for (const cls of ['aspect-[2/1]', 'min-h-80', 'w-full', 'rounded-card', 'border', 'border-line-2']) {
       expect(box.className.split(/\s+/)).toContain(cls);
     }
     const spinner = within(box).getByRole('status');
-    expect(spinner.parentElement!.className).toBe('inline-flex rounded-full bg-white p-2');
+    expect(spinner.parentElement!.className).toBe('inline-flex rounded-full bg-ground p-2');
     expect(within(box).getByText('3D 점군 데이터를 불러오는 중입니다.')).toBeInTheDocument();
 
     rerender(<Points3dLoadingFrame theme="light" />);
@@ -214,8 +216,8 @@ describe('Points3dView 화면', () => {
     expect(screen.getByTestId('points3d-hud').textContent).toBe('축 비율 1:1 · 임계값 ±7 mm · 1,234점');
   });
 
-  // 변이: 선택 배경을 bg-cs-info-bg 덧붙이기로(normal 의 bg-transparent 에 가려 보이지 않는다)
-  it('과장 버튼 4개는 aria-pressed 를 갖고 선택 배경은 aria-pressed variant 로 준다', () => {
+  // 변이: 눌림 채움을 aria-pressed variant 가 아닌 클래스로 덧붙임(보조 버튼의 투명 바탕에 가려지거나 늘 채워진다)
+  it('과장 버튼 4개는 aria-pressed 를 갖고 눌린 버튼은 aria-pressed variant 로 ink 채움을 준다', () => {
     mount();
     const names = ['×1', '×10', '×50', '×100'];
     const pressed = () => names.map((n) => screen.getByRole('button', { name: n }).getAttribute('aria-pressed'));
@@ -224,8 +226,8 @@ describe('Points3dView 화면', () => {
     expect(pressed()).toEqual(['false', 'true', 'false', 'false']);
     for (const n of [...names, '밝은 배경']) {
       const tokens = screen.getByRole('button', { name: n }).className.split(/\s+/);
-      expect(tokens).toContain('aria-pressed:bg-cs-info-bg');
-      expect(tokens).not.toContain('bg-cs-info-bg');
+      for (const t of ['aria-pressed:border-ink', 'aria-pressed:bg-ink', 'aria-pressed:text-ground']) expect(tokens).toContain(t);
+      expect(tokens).not.toContain('bg-ink');
     }
   });
 
@@ -238,19 +240,21 @@ describe('Points3dView 화면', () => {
   });
 
   // 변이: primary 버튼을 둠(뷰당 primary 1개 규칙 위반)
-  it('버튼 8개가 전부 normal 변형이고 묶음 이름 3개가 있다', () => {
+  it('버튼 8개가 전부 보조(normal) 변형이고 묶음 이름 3개는 눈썹 라벨, 시점·편차 과장은 role=group', () => {
     mount();
     const buttons = screen.getAllByRole('button');
     expect(buttons.map((b) => b.textContent)).toEqual(['등각', '평면', '정면', '×1', '×10', '×50', '×100', '밝은 배경']);
+    const normal = buttonClass('normal').split(/\s+/).filter(Boolean);
     for (const b of buttons) {
       const tokens = b.className.split(/\s+/);
-      expect(tokens).toContain('bg-transparent');
-      expect(tokens).not.toContain('bg-cs-link');
+      for (const t of normal) expect(tokens).toContain(t);
       expect(b).toHaveAttribute('type', 'button');
     }
     for (const name of ['시점', '편차 과장', '임계값']) {
-      expect(screen.getByText(name).className).toBe('text-sm font-bold');
+      expect(screen.getByText(name).className).toBe(EYEBROW);
     }
+    expect(screen.getByRole('group', { name: '시점' })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: '편차 과장' })).toBeInTheDocument();
   });
 
   // 변이: 슬라이더 범위·단계 오타, aria-valuetext 누락(보조 기술이 7mm 를 "70" 으로 읽는다)
@@ -262,7 +266,7 @@ describe('Points3dView 화면', () => {
     expect(slider).toHaveAttribute('step', '5');
     expect(slider.value).toBe('70');
     expect(slider).toHaveAttribute('aria-valuetext', '±7 mm');
-    expect(slider.className).toContain('accent-cs-link');
+    expect(slider.className).toContain('accent-ink');
   });
 
   // 20 -> "2", 75 -> "7.5". 변이: HUD·고지 문구가 기본값에 고정됨
@@ -296,7 +300,7 @@ describe('Points3dView 화면', () => {
     mount();
     const notice = screen.getByTestId('points3d-notice');
     expect(notice.textContent).toBe(NOTICE_7);
-    expect(notice.className).toBe('text-xs leading-4 text-cs-text-secondary');
+    expect(notice.className).toBe('basis-full text-[13px] leading-relaxed text-muted');
     expect(NOTICE_7).toContain(String.fromCharCode(0x2212) + '7mm');   // 음수 부호는 U+2212
     expect(NOTICE_7).not.toContain(String.fromCharCode(0x2014));      // U+2014 금지
   });
@@ -336,12 +340,18 @@ describe('Points3dView 화면', () => {
   });
 
   // 변이: 뷰어 영역 비율·틀 클래스 누락, 오버레이가 포인터를 가로챔(캔버스 드래그가 끊긴다)
-  it('뷰어 영역은 4:3 틀이고 오버레이는 pointer-events-none 이다', () => {
+  it('뷰어 영역은 2:1 검정 스테이지(Stage)를 채우고 도구 줄·고지는 스테이지에 붙은 줄 안이다. 오버레이는 pointer-events-none', () => {
     mount();
-    const tokens = screen.getByTestId('points3d-viewport').className.split(/\s+/);
-    for (const cls of ['relative', 'aspect-[4/3]', 'w-full', 'overflow-hidden', 'rounded-lg', 'border', 'border-cs-divider']) {
-      expect(tokens).toContain(cls);
-    }
+    const viewport = screen.getByTestId('points3d-viewport');
+    expect(viewport.className.split(/\s+/)).toEqual(expect.arrayContaining(['absolute', 'inset-0']));
+    const stage = viewport.parentElement!;
+    expect(stage).toHaveAttribute('data-stage');
+    for (const cls of ['aspect-[2/1]', 'overflow-hidden']) expect(stage.className.split(/\s+/)).toContain(cls);
+    // 도구 줄(아트보드 Stage 85행): 버튼·슬라이더와 고지 문구가 스테이지 바로 다음 줄 안에 있다
+    const toolbar = stage.nextElementSibling as HTMLElement;
+    expect(within(toolbar).getAllByRole('button')).toHaveLength(8);
+    expect(within(toolbar).getByRole('slider', { name: '표시 임계값(mm)' })).toBeInTheDocument();
+    expect(within(toolbar).getByTestId('points3d-notice')).toBeInTheDocument();
     const overlays = [
       screen.getByTestId('points3d-legend'),
       screen.getByTestId('points3d-labels'),
@@ -350,23 +360,25 @@ describe('Points3dView 화면', () => {
     for (const el of overlays) expect(el.className.split(/\s+/)).toContain('pointer-events-none');
   });
 
-  // 변이: tabIndex 누락(키 조작 불가), touch-action 누락(터치 드래그가 페이지를 스크롤)
-  it('캔버스: role img, 이름, tabIndex 0, touch-action none, cs-link 포커스 외곽선', () => {
+  // 변이: tabIndex 누락(키 조작 불가), touch-action 누락(터치 드래그가 페이지를 스크롤),
+  //       안쪽 외곽선 누락(스테이지의 overflow-hidden 이 전역 :focus-visible 외곽선(바깥 2px)을 잘라 포커스가 안 보인다)
+  it('캔버스: role img, 이름, tabIndex 0, touch-action none, 전역 포커스 외곽선을 안쪽으로', () => {
     const { canvas } = mount();
     expect(canvas.tagName).toBe('CANVAS');
     expect(canvas).toHaveAttribute('tabindex', '0');
     const tokens = canvas.className.split(/\s+/);
     expect(tokens).toContain('touch-none');
-    expect(tokens).toContain('focus-visible:outline-2');
-    expect(tokens).toContain('focus-visible:outline-cs-link');
+    expect(tokens).toContain('focus-visible:-outline-offset-2');
+    expect(canvas.className).not.toMatch(/\bcs-/);
   });
 
   // 변이: 뷰어 옆에 preview3d.png 를 함께 그림, 옛 팔레트 클래스·색 이름이 든 속성 사용
-  it('PNG 를 함께 그리지 않고, DOM 에 옛 팔레트 부분 문자열이 없다', () => {
+  it('PNG 를 함께 그리지 않고, DOM 에 옛 팔레트·cs- 토큰이 없다', () => {
     const { container } = mount({ isRegistered: true });
     fireEvent.click(screen.getByRole('button', { name: '밝은 배경' }));
     expect(container.querySelector('img')).toBeNull();
     expect(container.innerHTML).not.toMatch(/zinc-|amber-|red-|green-|purple-/);
+    expect(container.innerHTML).not.toMatch(/\bcs-/);
   });
 });
 

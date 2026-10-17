@@ -2,13 +2,15 @@
 // 역구배 표시. 판정 로직은 없다 - joinSlopeCells가 이미 조인해 낸 grade·dev_pct·
 // correction_mm을 그대로 표로 옮기고, 보정 방향 문구만 slope-direction.ts로
 // 계산한다(임계값 비교 없음 - 리트머스 통과).
-// Cloudscape 리스킨(T7): tableClass + StatusIndicator/Badge. 색은 SLOPE_GRADE_TONE(시스템 톤)으로만.
+// C안(아트보드 docs/design/dark/ScanSlope.dc.html 127~265행): TableBox 안의 표(휴대폰은 상자 안에서만 가로 스크롤),
+// 등급은 등급 색 점 + 이름(GradeDot. 구배 등급은 SLOPE_GRADE_TO_GRADE 로 같은 이름의 평활도 등급 색).
 import { correctionDirectionLabel } from '@/lib/domain/slope-direction';
-import { SLOPE_GRADE_TONE } from '@/lib/domain/grade-tone';
+import { SLOPE_GRADE_TO_GRADE } from '@/lib/domain/grade-tone';
 import { Badge } from '@/components/ui/badge';
-import { tableClass } from '@/components/ui/data-table';
-import { StatusIndicator, TONE_STATUS } from '@/components/ui/status-indicator';
+import { TableBox, tableClass } from '@/components/ui/data-table';
+import { GradeDot } from '@/components/ui/grade';
 import type { SlopeCellResult } from '@/lib/domain/slope-judged';
+import type { Grade, SlopeGrade } from '@/lib/domain/types';
 
 function fmtPct(v: number | null): string {
   return v === null ? '-' : `${v.toFixed(2)}%`;
@@ -30,6 +32,12 @@ function directionDeviationLabel(dirErrDeg: number | null, dirPassDeg: number, r
   return `${dirErrDeg.toFixed(1)}도(허용 ${dirPassDeg}도 초과)`;
 }
 
+// 코드리뷰 M1: jsonb는 무결성을 보장하지 않는다 - grade가 알 수 없는 문자열이어도
+// 표시가 안 보이는 조용한 오표시 대신 판정 불가 점으로 그리고 원문 글자를 그대로 보인다.
+function dotGrade(grade: string): Grade {
+  return Object.prototype.hasOwnProperty.call(SLOPE_GRADE_TO_GRADE, grade) ? SLOPE_GRADE_TO_GRADE[grade as SlopeGrade] : 'na';
+}
+
 export function SlopeResultTable({ results, designPct, dirPassDeg }: {
   results: SlopeCellResult[];
   // 코드리뷰(2차) Minor: threshold 결측 시 `?? 0`으로 채워 넘기지 않는다 -
@@ -42,51 +50,48 @@ export function SlopeResultTable({ results, designPct, dirPassDeg }: {
   ));
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-cs-divider bg-white">
-      <table className={tableClass.table}>
-        <thead className={tableClass.thead}>
-          <tr>
-            <th className={tableClass.th}>위치(cx,cy)</th>
-            <th className={tableClass.thNum}>구배(%)</th>
-            <th className={tableClass.thNum}>설계 대비 편차(%)</th>
-            <th className={tableClass.th}>보정</th>
-            <th className={tableClass.th}>등급</th>
-            <th className={tableClass.th}>역구배 여부</th>
-            <th className={tableClass.th}>방향 편차</th>
-            <th className={tableClass.th}>사유</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => {
-            const correction = correctionDirectionLabel(r.cell, r.correction_mm, designPct, r.reverse);
-            const dirDeviation = directionDeviationLabel(r.dir_err_deg, dirPassDeg, r.reverse);
-            return (
-              <tr key={`${r.cell.cx},${r.cell.cy}`} className={tableClass.row}>
-                <td className={`${tableClass.td} font-mono font-bold tabular-nums`}>({r.cell.cx}, {r.cell.cy})</td>
-                <td className={tableClass.tdNum}>{fmtPct(r.cell.slope_pct)}</td>
-                <td className={tableClass.tdNum}>{fmtPct(r.dev_pct)}</td>
-                <td className={tableClass.td}>{correction ?? '-'}</td>
-                <td className={tableClass.td}>
-                  {/* 코드리뷰 M1: jsonb는 무결성을 보장하지 않는다 - grade가 알 수 없는
-                      문자열이어도 표시가 안 보이는 조용한 오표시 대신 판정불가(pending)로
-                      강제한다(slopeCellFillColor의 ok=false 강제와 같은 관례). */}
-                  <StatusIndicator type={TONE_STATUS[SLOPE_GRADE_TONE[r.grade] ?? 'unknown']}>
-                    {r.grade}
-                  </StatusIndicator>
-                </td>
-                <td className={tableClass.td}>
-                  {/* 색만으로는 안 드러나므로(스펙 §7.2) 별도 배지로 표시한다 */}
-                  {r.reverse && <Badge tone="fail">역구배</Badge>}
-                </td>
-                <td className={tableClass.td}>
-                  {dirDeviation && <Badge tone="warn">{dirDeviation}</Badge>}
-                </td>
-                <td className={`${tableClass.td} text-xs text-cs-text-secondary`}>{r.reason}</td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
+    // 열이 8개라 최소 폭 960px(아트보드 ScanSlope). 좁은 화면은 상자 안에서만 가로로 스크롤한다
+    <TableBox minWidth={960}>
+      <thead className={tableClass.thead}>
+        <tr>
+          <th scope="col" className={tableClass.th}>위치(cx,cy)</th>
+          <th scope="col" className={tableClass.thNum}>구배(%)</th>
+          <th scope="col" className={tableClass.thNum}>설계 대비 편차(%)</th>
+          <th scope="col" className={tableClass.th}>보정</th>
+          <th scope="col" className={tableClass.th}>등급</th>
+          <th scope="col" className={tableClass.th}>역구배 여부</th>
+          <th scope="col" className={tableClass.th}>방향 편차</th>
+          <th scope="col" className={tableClass.th}>사유</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((r) => {
+          const correction = correctionDirectionLabel(r.cell, r.correction_mm, designPct, r.reverse);
+          const dirDeviation = directionDeviationLabel(r.dir_err_deg, dirPassDeg, r.reverse);
+          return (
+            <tr key={`${r.cell.cx},${r.cell.cy}`} className={tableClass.row}>
+              <td className={`${tableClass.td} font-mono font-medium tabular-nums`}>({r.cell.cx}, {r.cell.cy})</td>
+              <td className={tableClass.tdNum}>{fmtPct(r.cell.slope_pct)}</td>
+              <td className={tableClass.tdNum}>{fmtPct(r.dev_pct)}</td>
+              <td className={`${tableClass.td} whitespace-nowrap`}>{correction ?? '-'}</td>
+              <td className={tableClass.td}>
+                <span className="inline-flex items-center gap-2 whitespace-nowrap">
+                  <GradeDot grade={dotGrade(r.grade)} />
+                  {r.grade}
+                </span>
+              </td>
+              <td className={tableClass.td}>
+                {/* 색만으로는 안 드러나므로(스펙 §7.2) 별도 배지로 표시한다 */}
+                {r.reverse && <Badge tone="fail">역구배</Badge>}
+              </td>
+              <td className={tableClass.td}>
+                {dirDeviation && <Badge tone="warn">{dirDeviation}</Badge>}
+              </td>
+              <td className={`${tableClass.td} whitespace-nowrap text-xs text-muted`}>{r.reason}</td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </TableBox>
   );
 }

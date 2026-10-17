@@ -12,6 +12,9 @@ export const GRADE_LABEL: Record<Grade, string> = {
   pass: '적합', borderline: '경계', repair: '보수', rework: '재시공', na: '판정 불가',
 };
 
+// PDF·엔진 PNG 의 등급 색(정본). worker/tests/test_report_labels.py 가 이 선언을 파싱해 워커 사본
+// (worker/flatworker/report/labels.py)과 대조하므로 지우거나 이름을 바꾸지 않는다. 화면은 이 값을 쓰지 않는다:
+// 캔버스는 lib/domain/palette.ts 의 화면 등급 색, DOM 은 등급 토큰 클래스를 쓴다(스펙 2026-10-17 §3).
 export const GRADE_COLOR: Record<Grade, string> = {
   pass: '#2e7d32', borderline: '#f9ab00', repair: '#e8710a', rework: '#c5221f', na: '#9e9e9e',
 };

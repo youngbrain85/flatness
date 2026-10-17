@@ -10,6 +10,7 @@ import { getRequestUser } from '@/lib/auth/request-user';
 import { createClient } from '@/lib/supabase/server';
 import { AnalysisProgress } from '@/components/analysis-progress';
 import { AnalysisResult } from '@/components/analysis/analysis-result';
+import { AnalysisHistoryList } from '@/components/analysis/analysis-history';
 import { SlopeResult } from '@/components/analysis/slope-result';
 import { ReanalyzeButton } from '@/components/reanalyze-button';
 import { ScanStatusWatcher } from '@/components/scan-status-watcher';
@@ -21,7 +22,6 @@ import {
 } from '@/components/slope-analysis-container';
 import { UnitConfirmForm } from '@/components/unit-confirm-form';
 import { Alert } from '@/components/ui/alert';
-import { Badge } from '@/components/ui/badge';
 import { LinkButton } from '@/components/ui/button';
 import { Container } from '@/components/ui/container';
 import { Icon } from '@/components/ui/icons';
@@ -30,10 +30,9 @@ import { MAIN_BG, PAGE_MAIN } from '@/components/ui/page';
 import { PageHeader } from '@/components/ui/page-header';
 import { SCAN_STATUS_TYPE, StatusIndicator } from '@/components/ui/status-indicator';
 import {
-  ANALYSIS_KIND_LABEL, ANALYSIS_STATUS_LABEL, GRADE_LABEL, LINEAGE_LABEL,
+  ANALYSIS_KIND_LABEL, ANALYSIS_STATUS_LABEL, LINEAGE_LABEL,
   SCAN_STATUS_LABEL, SURFACE_LABEL,
 } from '@/lib/domain/labels';
-import { GRADE_TONE } from '@/lib/domain/grade-tone';
 import { locationCrumb } from '@/lib/domain/location-label';
 import { isExternalImport, isSlopeStats } from '@/lib/domain/stats';
 import type { AnalysisRow, LocationRow, PhotoRow, ScanRow, SiteRow } from '@/lib/domain/types';
@@ -438,28 +437,18 @@ export default async function ScanPage({ params, searchParams }: {
       )}
       {resultAnalysis && (
         // D5: app/analyses/[id]/page.tsx가 하던 결과 렌더를 이 화면으로 옮겼다.
-        // 헤더 제목 옆 보조 텍스트(일시 · 엔진)는 아트보드(ScanDone '평활도 결과')를 따른다.
-        // 본문(탭·히트맵·판정 패널)은 T7이 components/analysis/*에서 재스킨한다.
-        <Container title={
-          <>
-            {ANALYSIS_KIND_LABEL[resultAnalysis.kind ?? 'flatness']} 결과
-            <span className="ml-3 font-mono text-xs font-normal text-cs-text-secondary">
-              {resultAnalysis.created_at.slice(0, 16).replace('T', ' ')}
-              {' · '}엔진 {resultAnalysis.engine_version ?? '-'}
-            </span>
-          </>
-        }>
-          {isSlopeStats(resultAnalysis.stats) ? (
-            // 단계 C 회귀 차단(analyses/[id]에서 이관): ?analysis=는 이 스캔의 analyses
-            // 목록에서 id로만 고르므로 어떤 쿼리 필터로도 종류를 못 거른다. stats.format
-            // 내용 기반으로 갈라 AnalysisResult로 흘려보내면 lib/domain/stats.ts의
-            // coverageLabel이 stats.meta를 옵셔널 체이닝 없이 읽어 TypeError로 페이지가
-            // 죽는다 - 구배 결과(단계 D)는 SlopeResult로.
-            <SlopeResult analysis={resultAnalysis} />
-          ) : (
-            <AnalysisResult analysis={resultAnalysis} scan={s} photos={photos} />
-          )}
-        </Container>
+        // 결과 구획(<section> · h2 '평활도 결과'/'구배 결과' · 일시 · 엔진 · 알약 탭)은 두 컴포넌트가 통째로
+        // 그린다(아트보드 ScanDone 53~196행). 페이지는 감싸지 않는다(감싸면 제목이 두 번 나온다).
+        isSlopeStats(resultAnalysis.stats) ? (
+          // 단계 C 회귀 차단(analyses/[id]에서 이관): ?analysis=는 이 스캔의 analyses
+          // 목록에서 id로만 고르므로 어떤 쿼리 필터로도 종류를 못 거른다. stats.format
+          // 내용 기반으로 갈라 AnalysisResult로 흘려보내면 lib/domain/stats.ts의
+          // coverageLabel이 stats.meta를 옵셔널 체이닝 없이 읽어 TypeError로 페이지가
+          // 죽는다 - 구배 결과(단계 D)는 SlopeResult로.
+          <SlopeResult analysis={resultAnalysis} />
+        ) : (
+          <AnalysisResult analysis={resultAnalysis} scan={s} photos={photos} />
+        )
       )}
       {hasDoneAnalysis && (
         // 보고서 원클릭(D5): 완료 분석이 하나라도 있으면(구배만 완료여도) 그 측정위치로 보고서를
@@ -507,22 +496,8 @@ export default async function ScanPage({ params, searchParams }: {
         <Container title={`${ANALYSIS_KIND_LABEL.flatness} 분석`} className={CARD_IN_ROW}>
           <div className="flex flex-col gap-3">
             <AnalysisProgress analysisId={latestFlatness.id} initialStatus={latestFlatness.status} scanId={id} />
-            {flatnessAnalyses.length > 1 && (
-              <ul className="flex flex-col gap-2 text-cs-text-secondary">
-                {flatnessAnalyses.slice(1).map((a) => (
-                  <li key={a.id}>
-                    {/* D5: 별도 화면 대신 같은 작업대의 ?analysis= 선택 렌더로 간다. */}
-                    <Link href={`/scans/${id}?analysis=${a.id}`}
-                      className="inline-flex items-center gap-2 text-cs-link hover:text-cs-link-hover hover:underline">
-                      이전 분석 <span className="font-mono text-[13px]">{a.created_at.slice(0, 16).replace('T', ' ')}</span>
-                      {a.overall_verdict && (
-                        <Badge tone={GRADE_TONE[a.overall_verdict]}>{GRADE_LABEL[a.overall_verdict]}</Badge>
-                      )}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            )}
+            {/* D5: 별도 화면 대신 같은 작업대의 ?analysis= 선택 렌더로 간다(목록은 AnalysisHistoryList, 비면 그리지 않는다). */}
+            <AnalysisHistoryList scanId={id} analyses={flatnessAnalyses.slice(1)} />
           </div>
         </Container>
       )}
@@ -531,22 +506,8 @@ export default async function ScanPage({ params, searchParams }: {
           {latestSlope && (
             <div className="flex flex-col gap-3">
               <AnalysisProgress analysisId={latestSlope.id} initialStatus={latestSlope.status} scanId={id} />
-              {slopeAnalyses.length > 1 && (
-                <ul className="flex flex-col gap-2 text-cs-text-secondary">
-                  {slopeAnalyses.slice(1).map((a) => (
-                    <li key={a.id}>
-                      {/* D5: 별도 화면 대신 같은 작업대의 ?analysis= 선택 렌더로 간다. */}
-                      <Link href={`/scans/${id}?analysis=${a.id}`}
-                        className="inline-flex items-center gap-2 text-cs-link hover:text-cs-link-hover hover:underline">
-                        이전 분석 <span className="font-mono text-[13px]">{a.created_at.slice(0, 16).replace('T', ' ')}</span>
-                        {a.overall_verdict && (
-                          <Badge tone={GRADE_TONE[a.overall_verdict]}>{GRADE_LABEL[a.overall_verdict]}</Badge>
-                        )}
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              )}
+              {/* D5: 별도 화면 대신 같은 작업대의 ?analysis= 선택 렌더로 간다(목록은 AnalysisHistoryList, 비면 그리지 않는다). */}
+              <AnalysisHistoryList scanId={id} analyses={slopeAnalyses.slice(1)} />
             </div>
           )}
         </SlopeAnalysisCard>

@@ -39,6 +39,7 @@ import { ScanStatusWatcher } from '@/components/scan-status-watcher';
 import { UnitConfirmForm } from '@/components/unit-confirm-form';
 import { AnalysisResult } from '@/components/analysis/analysis-result';
 import { SlopeResult } from '@/components/analysis/slope-result';
+import { AnalysisHistoryList } from '@/components/analysis/analysis-history';
 import { PageHeader } from '@/components/ui/page-header';
 import { Alert } from '@/components/ui/alert';
 import { LinkButton } from '@/components/ui/button';
@@ -468,11 +469,11 @@ describe('ScanPage 종류별 분석 섹션 배선 (단계 C 회귀 차단)', () 
     expect(flatnessBtn?.props.criteriaId).toBe('current-cr');
   });
 
-  // 리뷰 Important(M1): 링크 href의 평평한 집합만 보면 "평활도 섹션에 구배 이전
-  // 이력이, 구배 섹션에 평활도 이전 이력이 뜨는" 상태(확정 3이 막으려던 바로 그
-  // 상태)를 구별하지 못한다. <section> 요소별로 스코프를 나눠 검사한다 - 코드가
-  // 항상 평활도 섹션을 먼저, 구배 섹션을 나중에 그린다(app/scans/[id]/page.tsx).
-  it('이전 분석 목록이 종류별로 나뉜다(섞이지 않는다, 섹션별 귀속까지 확인)', async () => {
+  // 리뷰 Important(M1): 이력 목록이 종류별로 갈려야 한다(평활도 섹션에 구배 이전 이력이,
+  // 구배 섹션에 평활도 이전 이력이 뜨면 안 된다). 다크 T8: 목록은 AnalysisHistoryList 다.
+  // 서버 트리에는 타입과 props 로만 남으므로 props 를 본다(링크 href 는 그 컴포넌트 테스트가 본다).
+  // 페이지는 평활도 섹션을 먼저, 구배 섹션을 나중에 그린다.
+  it('이전 분석 목록이 종류별로 나뉜다(섞이지 않는다, 평활도 목록이 먼저)', async () => {
     const flatness2 = mkAnalysis({ id: 'flatness2', kind: 'flatness', created_at: '2026-07-28T00:00:00Z' });
     const slope2 = mkAnalysis({ id: 'slope2', kind: 'slope', created_at: '2026-07-27T00:00:00Z' });
     const flatness1 = mkAnalysis({ id: 'flatness1', kind: 'flatness', created_at: '2026-07-10T00:00:00Z' });
@@ -482,16 +483,13 @@ describe('ScanPage 종류별 분석 섹션 배선 (단계 C 회귀 차단)', () 
       stubSupabase(mkScan(), [flatness2, slope2, flatness1, slope1]) as never);
 
     const el = await ScanPage(pageProps());
-    const sections = analysisSections(el);
-    expect(sections).toHaveLength(2); // [0] 평활도, [1] 구배 (렌더 순서 고정)
-    const flatnessLinks = linkHrefs(sections[0]);
-    const slopeLinks = linkHrefs(sections[1]);
+    const lists = findAll(el, AnalysisHistoryList);
 
+    expect(lists).toHaveLength(2);
     // latest(가장 최근 1건)는 "이전 분석" 목록이 아니라 AnalysisProgress로만 표시된다.
-    // D5: 이력 링크는 별도 화면(/analyses/[id])이 아니라 같은 작업대의
-    // ?analysis= 선택 렌더로 간다(T6 리다이렉트가 이 규약을 쓴다).
-    expect(flatnessLinks).toEqual(['/scans/sc1?analysis=flatness1']);
-    expect(slopeLinks).toEqual(['/scans/sc1?analysis=slope1']);
+    expect((lists[0].props.analyses as AnalysisRow[]).map((a) => a.id)).toEqual(['flatness1']);
+    expect((lists[1].props.analyses as AnalysisRow[]).map((a) => a.id)).toEqual(['slope1']);
+    expect(lists.every((l) => l.props.scanId === 'sc1')).toBe(true);
   });
 });
 
@@ -1222,15 +1220,14 @@ describe('ScanPage Cloudscape 골격 (T6)', () => {
     expect(unit).toBeDefined();
     expect(findAll(unit, UnitConfirmForm)).toHaveLength(1);
 
+    // 다크 T8: 결과 구획(h2 '평활도 결과' · 일시 · 엔진 · 탭)은 AnalysisResult 가 통째로 그린다
+    // (components/analysis/__tests__/analysis-result.test.tsx 가 본다). 페이지는 감싸지 않는다 - 감싸면 제목이 두 번 나온다
     const done = mkAnalysis({ id: 'f1', kind: 'flatness', stats: FLAT_STATS, engine_version: 'p4-0.5.0' });
     vi.mocked(createClient).mockResolvedValue(stubSupabase(mkScan(), [done]) as never);
     const el2 = await ScanPage(pageProps());
-    const result = findAll(el2, Container).find((c) => findAll(c, AnalysisResult).length === 1);
-    expect(result).toBeDefined();
-    const head = collectText(result?.props.title).join('');
-    expect(head).toContain('평활도 결과');
-    expect(head).toContain('2026-07-01 00:00');
-    expect(head).toContain('p4-0.5.0');
+    expect(findAll(el2, AnalysisResult)).toHaveLength(1);
+    expect(findAll(el2, Container).filter((c) => findAll(c, AnalysisResult).length > 0)).toHaveLength(0);
+    expect(collectText(el2).join('')).not.toContain('평활도 결과');
   });
 });
 

@@ -1,18 +1,23 @@
-// C안 전체 골격 - Cloudscape 리스킨(T7). 컨테이너('평활도 결과' 헤더)는 페이지가 그리고(T6),
-// 이 컴포넌트는 그 본문(TabBar → 3:2 그리드[히트맵 | 판정 패널] → 구간별 결과표)만 그린다.
+// 평활도 결과 구획(아트보드 docs/design/dark/ScanDone.dc.html 53~196행). 페이지는 감싸지 않고 이 컴포넌트가
+// <section> 을 통째로 그린다: h2 '평활도 결과' + 일시 · 엔진(+외부 결과) + 알약 탭 → 탭 본문(검정 스테이지)
+// → 판정 패널(KPI·등급 분포·적용 기준·경고·종합의견) → 구간별 결과표.
+// 판정 셀 크기 선택 줄(0.5·1·2m)은 3번 스펙 몫이라 그리지 않는다(스펙 §2). 엔진의 판정 셀 그대로 그린다.
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
+import { ANALYSIS_KIND_LABEL } from '@/lib/domain/labels';
 import { artifactUrl } from '@/lib/domain/paths';
 import { loadFor, parsePoints3d, points3dFile } from '@/lib/domain/points3d';
 import type { Points3dLoad, Webgl2Support } from '@/lib/domain/points3d';
 import { isExternalImport } from '@/lib/domain/stats';
 import type { AnalysisRow, CellRow, PhotoRow, ScanRow, Stats } from '@/lib/domain/types';
+import { Badge } from '@/components/ui/badge';
 import { TabBar } from '@/components/ui/tab-bar';
 import { HeatmapView } from './heatmap-view';
 import { DeviationView } from './deviation-view';
 import { Preview3dTab } from './preview3d-tab';
 import { VerdictPanel } from './verdict-panel';
 import { ResultTable } from './result-table';
+import { CARD, resultMeta } from './result-parts';
 import { PhotoGallery } from '@/components/photo-gallery';
 import { RefreshOnUpload } from '@/components/refresh-on-upload';
 
@@ -26,16 +31,14 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'photos', label: '현장 사진' },
 ];
 
-// 3:2 그리드(아트보드 minmax(0,3fr) minmax(0,2fr), gap 20px). md 미만은 세로 스택(스펙 §5).
-// slope-result.tsx가 같은 문자열을 갖는다(구배 화면이 평활도 모듈 전체를 끌어오지 않도록 import 대신 복제).
-const RESULT_GRID = 'grid items-start gap-5 md:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]';
-const MUTED = 'text-sm text-cs-text-secondary';
+const MUTED = 'text-sm text-muted';
 
 export function AnalysisResult({ analysis, scan, photos }: {
   analysis: AnalysisRow;
   scan: ScanRow;
   photos: PhotoRow[];
 }) {
+  const headingId = useId();
   const stats = analysis.stats as Stats; // status done 전제(페이지에서 보장)
   const [tab, setTab] = useState<Tab>('heatmap');
   const [cells, setCells] = useState<CellRow[] | null>(null);
@@ -125,45 +128,53 @@ export function AnalysisResult({ analysis, scan, photos }: {
   }
 
   return (
-    <div className="flex flex-col gap-5">
-      <div className={RESULT_GRID}>
-        <section className="flex min-w-0 flex-col gap-4">
-          <TabBar tabs={TABS} active={tab} onChange={setTab} />
-          {tab === 'heatmap' && (
-            cells ? (
-              <HeatmapView surface={analysis.surface} cells={cells} walls={stats.walls} zones={stats.zones} />
-            ) : (
-              <p className={MUTED}>{cellsError ?? '셀 데이터 로딩 중...'}</p>
-            )
-          )}
-          {tab === 'deviation' && (
-            <DeviationView artifactsDir={analysis.artifacts_dir} paths={deviation} isImport={isImport} />
-          )}
-          {tab === 'preview3d' && (
-            // key: 이 컴포넌트는 ?analysis= 로 분석을 바꿔도 같은 인스턴스가 재사용된다(page.tsx 에 key 가 없다).
-            // 분석이 바뀌면 탭 본문을 새로 마운트해 오류 플래그와 뷰어의 시점·과장·임계값·배경을 초기값으로 되돌린다.
-            <Preview3dTab key={analysis.id} analysis={analysis} stats={stats} scan={scan} isImport={isImport}
-              load={load} support={support} optedIn={optedIn}
-              onSupport={setSupport} onOptIn={() => setOptedIn(true)}
-              onRequestLoad={requestPoints3dLoad} onRetryLoad={retryPoints3dLoad} />
-          )}
-          {tab === 'photos' && (
-            <div className="flex flex-col gap-2">
-              <RefreshOnUpload target={{ scan_id: scan.id }} />
-              <PhotoGallery photos={photos} />
-            </div>
-          )}
-        </section>
-        <div className="min-w-0 md:sticky md:top-5 md:self-start">
-          <VerdictPanel analysis={analysis} stats={stats} />
+    <section aria-labelledby={headingId} className="flex flex-col gap-3.5">
+      {/* 머리: 제목·메타(왼쪽) + 알약 탭(오른쪽, 좁으면 아래로). 아트보드 ScanDone 54~73행 */}
+      <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2.5">
+        <div className="flex min-w-0 flex-wrap items-baseline gap-x-3.5 gap-y-1">
+          <h2 id={headingId} className="font-heading text-[19px] font-semibold">{ANALYSIS_KIND_LABEL.flatness} 결과</h2>
+          <span className="font-mono text-xs tabular-nums text-muted">
+            {resultMeta(analysis.created_at, analysis.engine_version)}
+          </span>
+          {isImport && <Badge tone="external">외부 결과</Badge>}
         </div>
+        <TabBar label="결과 보기" tabs={TABS} active={tab} onChange={setTab} />
       </div>
-      <section className="flex flex-col gap-2">
-        {/* 컨테이너 제목이 h2이므로 본문 소제목은 h3 */}
-        <h3 className="text-base font-bold leading-5">구간별 결과표</h3>
+
+      {tab === 'heatmap' && (
+        cells ? (
+          <HeatmapView surface={analysis.surface} cells={cells} walls={stats.walls} zones={stats.zones}
+            cellM={stats.meta.cell_m ?? null} />
+        ) : (
+          <p className={MUTED}>{cellsError ?? '셀 데이터 로딩 중...'}</p>
+        )
+      )}
+      {tab === 'deviation' && (
+        <DeviationView artifactsDir={analysis.artifacts_dir} paths={deviation} isImport={isImport} />
+      )}
+      {tab === 'preview3d' && (
+        // key: 이 컴포넌트는 ?analysis= 로 분석을 바꿔도 같은 인스턴스가 재사용된다(page.tsx 에 key 가 없다).
+        // 분석이 바뀌면 탭 본문을 새로 마운트해 오류 플래그와 뷰어의 시점·과장·임계값·배경을 초기값으로 되돌린다.
+        <Preview3dTab key={analysis.id} analysis={analysis} stats={stats} scan={scan} isImport={isImport}
+          load={load} support={support} optedIn={optedIn}
+          onSupport={setSupport} onOptIn={() => setOptedIn(true)}
+          onRequestLoad={requestPoints3dLoad} onRetryLoad={retryPoints3dLoad} />
+      )}
+      {tab === 'photos' && (
+        <div className={`${CARD} flex flex-col gap-3`}>
+          <RefreshOnUpload target={{ scan_id: scan.id }} />
+          <PhotoGallery photos={photos} />
+        </div>
+      )}
+
+      <VerdictPanel analysis={analysis} stats={stats} />
+
+      <div className="flex flex-col gap-2.5">
+        {/* 결과 구획 제목이 h2이므로 표 제목은 h3 */}
+        <h3 className="font-heading text-base font-semibold">구간별 결과표</h3>
         {cells ? <ResultTable stats={stats} cells={cells} /> :
           <p className={MUTED}>{cellsError ?? '셀 데이터 로딩 중...'}</p>}
-      </section>
-    </div>
+      </div>
+    </section>
   );
 }

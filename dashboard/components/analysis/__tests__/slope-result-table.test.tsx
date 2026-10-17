@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { SlopeResultTable } from '../slope-result-table';
+import { tableClass } from '@/components/ui/data-table';
 import type { SlopeCellResult } from '@/lib/domain/slope-judged';
 import type { SlopeCellRow } from '@/lib/domain/types';
 
@@ -53,15 +54,12 @@ describe('SlopeResultTable (스펙 §7.2·§5.3: 구배 %, 설계 대비 편차,
     expect(screen.getByText(/방향 전면 재시공 필요/)).toBeInTheDocument();
   });
 
-  // ★ 코드리뷰 M1: jsonb 무결성 미보장 - grade가 SLOPE_GRADE_TONE에 없는
-  // 문자열이어도 배지가 안 보이는 조용한 오표시 대신 판정불가(pending)로 강제한다.
-  // (T7: 화면 배지는 SLOPE_GRADE_COLOR hex가 아니라 시스템 톤 - 캔버스만 hex를 쓴다)
-  it('SLOPE_GRADE_TONE에 없는 미지 등급 문자열도 판정불가(pending)로 폴백해 표시한다', () => {
+  // ★ 코드리뷰 M1: jsonb 무결성 미보장 - 모르는 등급 문자열이어도 조용히 사라지지 않게
+  // 원문을 판정 불가 점과 함께 보인다(다크 T8: 등급 칸은 등급 색 점 + 이름).
+  it('알 수 없는 등급 문자열도 원문을 판정 불가 점(data-grade na)과 함께 보여준다', () => {
     const rows = [result({ grade: '알수없음' as unknown as SlopeCellResult['grade'] })];
     render(<SlopeResultTable results={rows} designPct={2.0} dirPassDeg={30} />);
-    const badge = screen.getByText('알수없음');
-    expect(badge).toHaveAttribute('data-status', 'pending');
-    expect(badge.querySelector('[data-dot]')?.className).toContain('bg-muted');
+    expect(screen.getByText('알수없음').querySelector('[data-grade]')).toHaveAttribute('data-grade', 'na');
   });
 
   it('측정 불가(ok=false) 셀은 구배·보정에 "-"를 보여준다', () => {
@@ -128,24 +126,26 @@ describe('SlopeResultTable (스펙 §7.2·§5.3: 구배 %, 설계 대비 편차,
   });
 });
 
-// Cloudscape 리스킨(T7): 등급 StatusIndicator, 역구배 fail Badge, 방향 편차 warn Badge, tableClass 수치 열.
-describe('SlopeResultTable Cloudscape 해부 (T7)', () => {
-  it('등급은 StatusIndicator, 역구배·방향 편차는 Badge 톤, 수치 열은 우측 mono, 사유는 보조색', () => {
+// 다크 T8(아트보드 ScanSlope 127~265행): TableBox 안의 표, 등급은 등급 색 점 + 이름, 수치 열 tdNum, 사유 muted
+describe('SlopeResultTable C안 해부', () => {
+  it('등급은 점 + 이름(data-grade), 역구배·방향 편차는 Badge, 수치 열은 tdNum, 사유는 muted, 머리는 scope=col', () => {
     const rows = [
       result({ dir_err_deg: 45.3 }),
       result({ cell: cell({ cx: 1 }), grade: '재시공', reason: '역구배(물이 배수구 반대로 흐름)', reverse: true }),
     ];
     const { container } = render(<SlopeResultTable results={rows} designPct={2.0} dirPassDeg={30} />);
-    expect(screen.getByText('적합')).toHaveAttribute('data-status', 'success');
-    expect(screen.getByText('재시공')).toHaveAttribute('data-status', 'error');
-    expect(screen.getByText('역구배')).toHaveAttribute('data-tone', 'fail');
-    expect(screen.getByText('45.3도(허용 30도 초과)')).toHaveAttribute('data-tone', 'warn');
-    const th = screen.getByRole('columnheader', { name: '구배(%)' });
-    expect(th.className).toContain('text-right');
-    expect(th.className).toContain('font-mono');
-    expect(screen.getAllByText('1.50%')[0].className).toContain('font-mono');
-    expect(screen.getByText('크기·방향 모두 허용 안').className).toContain('text-cs-text-secondary');
-    expect(screen.getByText('(0, 0)').className).toContain('font-bold');
-    expect(container.innerHTML).not.toMatch(/zinc-|amber-|red-/);
+    // 열이 많은 표라 최소 폭 960px(아트보드 ScanSlope), 휴대폰은 상자 안에서만 가로 스크롤
+    expect(container.querySelector('table')!.className).toContain('min-w-[960px]');
+    expect(container.querySelector('table')!.parentElement!.className).toContain('overflow-x-auto');
+    expect(screen.getByText('적합').querySelector('[data-grade]')).toHaveAttribute('data-grade', 'pass');
+    expect(screen.getByText('재시공').querySelector('[data-grade]')).toHaveAttribute('data-grade', 'rework');
+    expect(screen.getByText('역구배')).toBeInTheDocument();
+    expect(screen.getByText('45.3도(허용 30도 초과)')).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: '구배(%)' }).className).toBe(tableClass.thNum);
+    expect(screen.getAllByText('1.50%')[0].className).toBe(tableClass.tdNum);
+    expect(screen.getByText('크기·방향 모두 허용 안').className).toContain('text-muted');
+    expect(screen.getByText('(0, 0)').className).toContain('font-mono');
+    for (const th of screen.getAllByRole('columnheader')) expect(th).toHaveAttribute('scope', 'col');
+    expect(container.innerHTML).not.toMatch(/\bcs-/);
   });
 });

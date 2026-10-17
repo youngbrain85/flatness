@@ -1,7 +1,8 @@
 // 3D 점군 1:1 뷰어(스펙 2026-10-02-pointcloud-viewer-design §7). 캔버스 + 오버레이(범례·HUD·조작 안내·축 라벨·읽기 창),
 // 컨트롤 줄, 고지 문구를 그리고 DOM 입력을 순수 모듈(lib/viz/points3d)에 연결한다.
 // - WebGL 은 gl-renderer.ts 만 만진다. 이 파일은 createRenderer 를 effect 안에서 부르고 cleanup 에서 dispose 한다.
-// - 뷰어 색은 POINTS3D_THEME 의 hex 를 인라인 style 로만 쓴다(색 유틸리티 클래스 금지). 바깥 크롬은 cs 토큰 클래스.
+// - 뷰어 색은 POINTS3D_THEME 의 hex 를 인라인 style 로만 쓴다(색 유틸리티 클래스 금지). 바깥 크롬(틀·도구 줄·고지)은
+//   C안 토큰 클래스다(아트보드 docs/design/dark/Stage.dc.html: 2:1 검정 스테이지 + 아래에 붙은 surface 도구 줄).
 // - 임계값은 점을 어느 색으로 칠할지만 정하는 표시용 값이다. 판정 등급을 만들지 않는다.
 'use client';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -26,6 +27,8 @@ import { createRenderer } from '@/lib/viz/points3d/gl-renderer';
 import type { Renderer } from '@/lib/viz/points3d/gl-renderer';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
+import { Stage } from '@/components/ui/stage';
+import { EYEBROW } from './result-parts';
 
 const BUFFER_SCALE_MAX = 2;      // 드로잉 버퍼 배율 = min(devicePixelRatio, 2)
 const INPUT_IDLE_MS = 200;       // 휠·키는 마지막 입력 뒤 이 시간이 지나면 조작이 끝난 것으로 본다
@@ -41,12 +44,14 @@ const VIEW_PRESETS: { id: ViewPreset; label: string }[] = [
   { id: 'top', label: '평면' },
   { id: 'front', label: '정면' },
 ];
-// 선택 배경. Button 의 normal 변형이 가진 투명 배경 클래스와 특이도가 같은 클래스를 덧붙이면 가려진다.
-// aria-pressed variant 는 속성 선택자가 붙어 특이도가 높다. 공용 Button 은 고치지 않는다.
-const PRESSED = 'aria-pressed:bg-cs-info-bg';
+// 눌린 버튼(아트보드 Stage 의 도구 버튼): ink 채움 + ground 글자. Button 의 보조(normal) 변형이 가진 투명 바탕·글자색
+// 클래스와 특이도가 같은 클래스를 덧붙이면 순서에 따라 가려진다. aria-pressed variant 는 속성 선택자가 붙어
+// 특이도가 높고 Tailwind 가 뒤에 내보낸다. 공용 Button 은 고치지 않는다.
+const PRESSED = 'aria-pressed:border-ink aria-pressed:bg-ink aria-pressed:font-semibold aria-pressed:text-ground';
 const GROUP = 'flex flex-wrap items-center gap-2';
-const GROUP_NAME = 'text-sm font-bold';
-const NOTE = 'text-xs leading-4 text-cs-text-secondary';
+const GROUP_NAME = EYEBROW;
+// 고지 문구·병합 안내는 도구 줄의 맨 아래 줄을 통째로 쓴다(아트보드 ScanDeviation 의 설명 줄과 같은 자리)
+const NOTE = 'basis-full text-[13px] leading-relaxed text-muted';
 
 // 축 라벨을 눈금 위치에서 축 바깥쪽으로 띄운다. 두 축의 0 눈금이 같은 모서리에 있어 축마다 방향을 달리한다.
 // x 눈금은 아래로, y 눈금은 왼쪽으로. 축 이름은 눈금 숫자 한 줄만큼 더 바깥에 둔다.
@@ -108,15 +113,16 @@ function pointerXY(e: PointerEvent<HTMLCanvasElement>): Cursor | null {
   return Number.isFinite(x) && Number.isFinite(y) ? { x, y } : null;
 }
 
-// 로딩 틀. 뷰어 영역과 같은 크기·같은 배경이라 탭에 들어올 때 틀 색이 바뀌는 번쩍임이 없다.
-// 공용 Spinner 의 회전 호가 검정 위에서 보이지 않아 흰 칩 안에 넣는다(칩의 흰색은 그림의 색이 아니라 Spinner 의 바탕).
+// 로딩 틀. 뷰어 스테이지와 같은 2:1·최소 320px 틀·같은 배경이라 탭에 들어올 때 틀 색이 바뀌는 번쩍임이 없다.
+// 검정·흰 두 배경(밝은 배경 전환) 어느 쪽에서도 공용 Spinner 의 회전 호(ink)가 보이게 ground 칩 안에 넣는다
+// (칩의 색은 그림의 색이 아니라 Spinner 의 바탕).
 export function Points3dLoadingFrame({ theme }: { theme: ThemeName }) {
   const t = POINTS3D_THEME[theme];
   return (
     <div data-testid="points3d-loading"
-      className="flex aspect-[4/3] w-full flex-col items-center justify-center gap-3 rounded-lg border border-cs-divider"
+      className="flex aspect-[2/1] min-h-80 w-full flex-col items-center justify-center gap-3 rounded-card border border-line-2"
       style={{ backgroundColor: t.background, color: t.text }}>
-      <span className="inline-flex rounded-full bg-white p-2"><Spinner /></span>
+      <span className="inline-flex rounded-full bg-ground p-2"><Spinner /></span>
       <p className="text-sm">3D 점군 데이터를 불러오는 중입니다.</p>
     </div>
   );
@@ -339,13 +345,54 @@ export function Points3dView({ data, defaultThresholdQ, isRegistered, onError }:
     `${data.meta.n_points.toLocaleString('ko-KR')}점`,
   ].join(' · ');
 
+  // 도구 줄(아트보드 Stage 85~104행): Stage 의 toolbar 로 스테이지 바로 아래에 붙는다. 맨 아래 줄은 고지 문구다
+  const toolbar = (
+    <>
+      <div role="group" aria-label="시점" className={GROUP}>
+        <span className={GROUP_NAME}>시점</span>
+        {VIEW_PRESETS.map((p) => (
+          <Button key={p.id} onClick={() => engineRef.current?.setPreset(p.id)}>{p.label}</Button>
+        ))}
+      </div>
+      <div role="group" aria-label="편차 과장" className={GROUP}>
+        <span className={GROUP_NAME}>편차 과장</span>
+        {EXAGGERATIONS.map((k) => (
+          <Button key={k} aria-pressed={exaggeration === k} className={`${PRESSED} font-mono tabular-nums`}
+            onClick={() => setExaggeration(k)}>
+            {`×${k}`}
+          </Button>
+        ))}
+      </div>
+      <div className={GROUP}>
+        <span className={GROUP_NAME}>임계값</span>
+        <input type="range" min={THRESHOLD_Q_MIN} max={THRESHOLD_Q_MAX} step={THRESHOLD_Q_STEP}
+          value={thresholdQ} onChange={(e) => setThresholdQ(Number(e.target.value))}
+          aria-label="표시 임계값(mm)" aria-valuetext={`±${thresholdText} mm`}
+          className="w-[180px] accent-ink" />
+        <span className="min-w-16 font-mono text-[13px] tabular-nums text-ink">{`±${thresholdText} mm`}</span>
+      </div>
+      <Button aria-pressed={themeName === 'light'} className={PRESSED}
+        onClick={() => setThemeName((t) => (t === 'dark' ? 'light' : 'dark'))}>
+        밝은 배경
+      </Button>
+      <p data-testid="points3d-notice" className={NOTE}>
+        {`점 색은 참고용 표시입니다. FLAT(평탄)은 점이 속한 5cm 칸이 구역 기준 평면에서 ±${thresholdText}mm 이내, DEPRESSION(침하)은 −${thresholdText}mm 미만, PROTRUSION(융기)은 +${thresholdText}mm 초과임을 뜻합니다. 판정 등급은 히트맵 탭의 직선자 틈새 기준이며 측정 방식이 다릅니다. 초록 점이 대부분인 칸이 경계·보수일 수 있고, 노랑·빨강 점이 많은 칸이 적합일 수 있습니다. 임계값을 바꿔도 판정과 보고서는 달라지지 않습니다.`}
+      </p>
+      {isRegistered && (
+        <p data-testid="points3d-merged-note" className={NOTE}>
+          정합 병합 스캔의 점은 원본 점이 아니라 5cm 격자 대표점입니다.
+        </p>
+      )}
+    </>
+  );
+
   return (
-    <div className="flex flex-col gap-3">
-      <div data-testid="points3d-viewport"
-        className="relative aspect-[4/3] w-full overflow-hidden rounded-lg border border-cs-divider"
+    <Stage aspect="2/1" toolbar={toolbar}>
+      {/* 뷰어 영역은 스테이지 안을 채운다. 배경은 테마 색(밝은 배경 전환)이라 인라인 style 이다 */}
+      <div data-testid="points3d-viewport" className="absolute inset-0"
         style={{ backgroundColor: theme.background }}>
         <canvas ref={canvasRef} role="img" aria-label="3D 점군 뷰어" tabIndex={0}
-          className="absolute inset-0 h-full w-full touch-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-cs-link"
+          className="absolute inset-0 h-full w-full touch-none focus-visible:-outline-offset-2"
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={(e) => onPointerEnd(e, 'up')}
@@ -398,44 +445,6 @@ export function Points3dView({ data, defaultThresholdQ, isRegistered, onError }:
           <div className="absolute inset-0"><Points3dLoadingFrame theme={themeName} /></div>
         )}
       </div>
-
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-        <div className={GROUP}>
-          <span className={GROUP_NAME}>시점</span>
-          {VIEW_PRESETS.map((p) => (
-            <Button key={p.id} onClick={() => engineRef.current?.setPreset(p.id)}>{p.label}</Button>
-          ))}
-        </div>
-        <div className={GROUP}>
-          <span className={GROUP_NAME}>편차 과장</span>
-          {EXAGGERATIONS.map((k) => (
-            <Button key={k} aria-pressed={exaggeration === k} className={PRESSED} onClick={() => setExaggeration(k)}>
-              {`×${k}`}
-            </Button>
-          ))}
-        </div>
-        <div className={GROUP}>
-          <span className={GROUP_NAME}>임계값</span>
-          <input type="range" min={THRESHOLD_Q_MIN} max={THRESHOLD_Q_MAX} step={THRESHOLD_Q_STEP}
-            value={thresholdQ} onChange={(e) => setThresholdQ(Number(e.target.value))}
-            aria-label="표시 임계값(mm)" aria-valuetext={`±${thresholdText} mm`}
-            className="w-40 accent-cs-link" />
-          <span className="font-mono text-sm tabular-nums">{`±${thresholdText} mm`}</span>
-        </div>
-        <Button aria-pressed={themeName === 'light'} className={PRESSED}
-          onClick={() => setThemeName((t) => (t === 'dark' ? 'light' : 'dark'))}>
-          밝은 배경
-        </Button>
-      </div>
-
-      <p data-testid="points3d-notice" className={NOTE}>
-        {`점 색은 참고용 표시입니다. FLAT(평탄)은 점이 속한 5cm 칸이 구역 기준 평면에서 ±${thresholdText}mm 이내, DEPRESSION(침하)은 −${thresholdText}mm 미만, PROTRUSION(융기)은 +${thresholdText}mm 초과임을 뜻합니다. 판정 등급은 히트맵 탭의 직선자 틈새 기준이며 측정 방식이 다릅니다. 초록 점이 대부분인 칸이 경계·보수일 수 있고, 노랑·빨강 점이 많은 칸이 적합일 수 있습니다. 임계값을 바꿔도 판정과 보고서는 달라지지 않습니다.`}
-      </p>
-      {isRegistered && (
-        <p data-testid="points3d-merged-note" className={NOTE}>
-          정합 병합 스캔의 점은 원본 점이 아니라 5cm 격자 대표점입니다.
-        </p>
-      )}
-    </div>
+    </Stage>
   );
 }

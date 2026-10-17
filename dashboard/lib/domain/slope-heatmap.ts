@@ -9,14 +9,18 @@
 // 이유: PNG에는 좌표계 정보가 없고 tight_layout·dpi=120으로 여백이 가변이라 클릭
 // 좌표를 미터로 환산할 수 없다. 화살표 굵기(역구배 강조)도 상호작용적으로 못
 // 바꾼다.
+//
+// 색(스펙 2026-10-17 §3): 화면 캔버스는 검정 스테이지 위 화면 등급 색(lib/domain/palette.ts)으로 칠한다.
+// 칸 경계는 검정 2px 틈, 화살표는 등급 색 칸 위의 글자 색(CELL_INK)이다(평활도 히트맵과 같은 표기).
+import { CELL_GAP_COLOR, CELL_INK, SCREEN_SLOPE_GRADE_COLOR } from './palette';
 import { worldToPx } from './slope-cells';
 import type { SlopeTransform } from './slope-cells';
 import type { SlopeCellRow, SlopeGrade } from './types';
 
-// 엔진 engine/flatness/outputs/slope_map.py의 _COLOR와 반드시 일치시킨다. 같은
-// 데이터를 matplotlib PNG와 Canvas가 서로 다른 색으로 그리면 같은 스캔의 두
-// 그림이 나란히 뜰 때 혼란을 준다(브리프 D3) - GRADE_COLOR(labels.ts)의 평활도
-// 색과는 다른 값이므로 절대 재사용하지 않는다.
+// 엔진 engine/flatness/outputs/slope_map.py의 _COLOR와 같은 값(엔진 PNG 색의 기록).
+// 화면은 이 hex 를 쓰지 않는다 - 캔버스는 SCREEN_SLOPE_GRADE_COLOR(palette.ts), 범례·막대·표의 점은
+// 등급 토큰 클래스다. 이 표는 엔진이 내는 구배 등급 문자열의 전수 목록으로도 쓰인다
+// (lib/domain/__tests__/palette.test.ts 가 화면 색 표와 키 집합을 대조한다). 지우거나 값을 바꾸지 않는다.
 export const SLOPE_GRADE_COLOR: Record<SlopeGrade, string> = {
   적합: '#3d8b3d', 경계: '#d6c11e', 보수: '#e07b1a', 재시공: '#c0392b', 판정불가: '#9e9e9e',
 };
@@ -39,7 +43,7 @@ export interface GradedSlopeCell {
  * 그대로 따르는 것뿐이므로 §7.3의 판정 이중화가 아니다. */
 export function slopeCellFillColor(cell: SlopeCellRow, grade: SlopeGrade): string {
   const effective = cell.ok ? grade : '판정불가';
-  return SLOPE_GRADE_COLOR[effective] ?? SLOPE_GRADE_COLOR.판정불가;
+  return SCREEN_SLOPE_GRADE_COLOR[effective] ?? SCREEN_SLOPE_GRADE_COLOR.판정불가;
 }
 
 /** 셀 사각형의 Canvas 픽셀 좌표(좌상단 x,y + 폭·높이). */
@@ -63,7 +67,7 @@ export function downhillArrowPx(downhillRad: number, lengthPx: number): { dx: nu
   return { dx: lengthPx * Math.cos(downhillRad), dy: -lengthPx * Math.sin(downhillRad) };
 }
 
-/** 셀 배경(등급 색) + 내리막 화살표를 Canvas에 그린다.
+/** 셀 배경(화면 등급 색) + 칸 경계(검정 2px) + 내리막 화살표(CELL_INK)를 Canvas에 그린다.
  *
  * cellM은 화살표 길이 산정에 쓴다(엔진 render_slope_map과 같은 비율: cell_m*0.35).
  * ok=false 셀이나 downhill_rad가 없는 셀(재판정 전 등)은 화살표를 그리지 않는다. */
@@ -75,14 +79,15 @@ export function drawSlopeHeatmap(
     const r = slopeCellRectPx(t, g.cell);
     ctx.fillStyle = slopeCellFillColor(g.cell, g.grade);
     ctx.fillRect(r.x, r.y, r.w, r.h);
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 0.5;
+    // 경계선 2px 가 칸 가장자리에 걸쳐 그려져 이웃 칸 사이에 2px 검정 틈이 남는다
+    ctx.strokeStyle = CELL_GAP_COLOR;
+    ctx.lineWidth = 2;
     ctx.strokeRect(r.x, r.y, r.w, r.h);
 
     if (!g.cell.ok || g.cell.downhill_rad === null) continue;
     const center = worldToPx(t, g.cell.center_x, g.cell.center_y);
     const { dx, dy } = downhillArrowPx(g.cell.downhill_rad, arrowLenPx);
-    ctx.strokeStyle = '#000000';
+    ctx.strokeStyle = CELL_INK;
     ctx.lineWidth = g.reverse ? 2.2 : 0.9;
     ctx.beginPath();
     ctx.moveTo(center.px, center.py);

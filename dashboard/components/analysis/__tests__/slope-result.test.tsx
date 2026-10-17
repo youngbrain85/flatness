@@ -38,6 +38,7 @@ const { supabaseStub, rpcMock, updateMock, eqMock } = vi.hoisted(() => {
 vi.mock('@/lib/supabase/client', () => ({ createClient: () => supabaseStub }));
 
 import { SlopeResult } from '../slope-result';
+import { EYEBROW } from '../result-parts';
 import type { AnalysisRow, SlopeCellRow, SlopeStats } from '@/lib/domain/types';
 
 // slope-placeholder.test.tsx에서 계승한 기본 픽스처 - cells_json이 없어(D7)
@@ -68,24 +69,29 @@ function analysisWith(overStats: unknown, overParams: Record<string, unknown> = 
 describe('SlopeResult - cells_json 없는 분석(D7): slope-placeholder.tsx 방어 계승', () => {
   it('종류 배지·판정 요약·편차 통계·경고·판정 지도·재판정 불가 안내를 렌더한다', () => {
     render(<SlopeResult analysis={analysisWith(stats)} />);
-    expect(screen.getByText('구배')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 2, name: '구배 결과' })).toBeInTheDocument();
+    expect(screen.getByText('구배')).toHaveAttribute('data-tone', 'neutral');   // 종류 태그(neutral Badge, Task 1 단언 유지)
     expect(screen.getByText('적합 10 · 경계 2 · 보수 1 · 재시공 0 · 판정불가 3')).toBeInTheDocument();
-    expect(screen.getByText(/81.2%/)).toBeInTheDocument();
-    expect(screen.getByText('0.12%')).toBeInTheDocument();
-    expect(screen.getByText('0.05%')).toBeInTheDocument();
-    expect(screen.getByText('0.30%')).toBeInTheDocument();
+    // 다크 T8: 편차 통계는 KPI 카드다(값과 단위가 다른 요소). 라벨 요소의 부모가 카드 루트다
+    const kpi = (label: string) => (screen.getByText(label).parentElement!.textContent ?? '').replace(/\s+/g, '');
+    expect(kpi('판정 가능 비율')).toContain('81.2%');
+    expect(kpi('평균 편차')).toContain('0.12%');
+    expect(kpi('편차 표준편차')).toContain('0.05%');
+    expect(kpi('최대 편차')).toContain('0.30%');
     expect(screen.getByText(/방향\(역구배\)을 판정하지 않았습니다/)).toBeInTheDocument();
     const img = screen.getByAltText('구배 판정 지도') as HTMLImageElement;
     expect(img.getAttribute('src')).toBe('/api/data/artifacts/a1/slope_map.png');
     expect(screen.getByText('이 분석은 재판정할 수 없습니다. 구배 분석을 다시 실행하면 배수구를 지정할 수 있습니다.')).toBeInTheDocument();
     // 클릭 안내(배수구 클릭 상단 안내)는 재판정 불가 분기에서는 보이지 않아야 한다.
     expect(screen.queryByText(/배수구 위치를 클릭하세요/)).not.toBeInTheDocument();
-    // Cloudscape 리스킨(T7): 안내는 info Alert, 경고 목록은 warning Alert, 종류 배지는 neutral Badge
+    // 안내는 info Alert, 경고 목록은 눈썹 라벨 + warning Alert, 엔진 PNG(밝은 그림)는 검정 스테이지 안 여백
     expect(screen.getByText(/이 분석은 재판정할 수 없습니다/).closest('[data-alert]')).toHaveAttribute('data-alert', 'info');
     expect(screen.getByText(/방향\(역구배\)을 판정하지 않았습니다/).closest('[data-alert]')).toHaveAttribute('data-alert', 'warning');
-    expect(screen.getByText('구배')).toHaveAttribute('data-tone', 'neutral');
-    expect(screen.getByText('경고').className).toContain('font-bold');
+    expect(screen.getByText('경고').className).toBe(EYEBROW);
+    expect(img.parentElement).toHaveAttribute('data-stage');
+    expect(img.parentElement!.className).toContain('p-4');
     expect(document.body.innerHTML).not.toMatch(/zinc-|amber-|red-/);
+    expect(document.body.innerHTML).not.toMatch(/\bcs-/);
   });
 
   it('전 셀 판정불가(편차 통계 3종 전부 null)면 숫자 대신 안내 문구를 보여준다', () => {

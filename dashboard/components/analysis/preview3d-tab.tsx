@@ -17,6 +17,7 @@ import type { AnalysisRow, ScanRow, Stats } from '@/lib/domain/types';
 import { probeWebgl2 } from '@/lib/viz/points3d/gl-renderer';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { Stage } from '@/components/ui/stage';
 import { Points3dLoadingFrame, Points3dView } from './points3d-view';
 
 // 화면 문구(스펙 §7.12 전문 그대로). M9(로딩)는 Points3dLoadingFrame 이 갖는다.
@@ -31,7 +32,7 @@ const M8 = '그래픽 컨텍스트가 끊겨 3D 점군 뷰를 표시할 수 없�
 const M10 = '엔진이 생성한 정적 3D 프리뷰 이미지입니다. 높이 축은 편차(mm)이며 실제 축 비율이 아닙니다.';
 
 const STACK = 'flex flex-col gap-3';
-const MUTED = 'text-sm text-cs-text-secondary';
+const MUTED = 'text-sm text-muted';
 
 export function Preview3dTab({
   analysis, stats, scan, isImport, load, support, optedIn,
@@ -89,18 +90,21 @@ export function Preview3dTab({
     );
   }
 
-  // 기존 정적 PNG. 대체 화면에서만 그린다. artifacts_dir 가 없거나 목록이 비면 이미지도 캡션도 없다
+  // 기존 정적 PNG. 대체 화면에서만 그린다. artifacts_dir 가 없거나 목록이 비면 이미지도 캡션도 없다.
+  // 엔진이 그린 밝은 그림이라 검정 스테이지 안 여백에 둔다(스펙 2026-10-17 §5 10: 3D 탭은 둘레만 C안)
   const images = (stats.preview3d_paths ?? []).filter(Boolean);
   const png = dir !== null && images.length > 0 && (
-    <div className={STACK}>
-      {images.map((name) => (
-        // 로컬 route 서빙 이미지 - 데모에서 next/image 최적화 불필요
-        // eslint-disable-next-line @next/next/no-img-element
-        <img key={name} src={artifactUrl(dir, name)} alt={`3D 프리뷰 ${name}`}
-          className="max-w-full rounded-lg border border-cs-divider bg-white" />
-      ))}
-      <p className="text-xs leading-4 text-cs-text-secondary">{M10}</p>
-    </div>
+    <figure className="flex flex-col gap-2">
+      <Stage className="flex flex-col items-center justify-center gap-4 p-4">
+        {images.map((name) => (
+          // 로컬 route 서빙 이미지 - 데모에서 next/image 최적화 불필요
+          // eslint-disable-next-line @next/next/no-img-element
+          <img key={name} src={artifactUrl(dir, name)} alt={`3D 프리뷰 ${name}`}
+            className="block h-auto w-full max-w-[960px]" />
+        ))}
+      </Stage>
+      <figcaption className="text-[13px] leading-relaxed text-muted">{M10}</figcaption>
+    </figure>
   );
 
   switch (mode) {

@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { SlopeVerdictPanel } from '../slope-verdict-panel';
+import { EYEBROW } from '../result-parts';
+import { GRADE_CLASS } from '@/components/ui/grade';
 import type { JudgeInfo, SlopeStats } from '@/lib/domain/types';
 
 const stats: SlopeStats = {
@@ -18,6 +20,9 @@ const stats: SlopeStats = {
     cells_csv: 'artifacts/a1/slope_cells.csv', map_png: 'artifacts/a1/slope_map.png',
   },
 };
+
+/** KPI 카드의 글자(라벨 + 값 + 단위, 공백 제거). KpiCard 의 라벨 <p> 는 카드 루트의 직계 자식이다(Task 1 계약) */
+const kpi = (label: string) => (screen.getByText(label).parentElement!.textContent ?? '').replace(/\s+/g, '');
 
 describe('SlopeVerdictPanel 재판정 진행 배너 (브리프 D5 상태표)', () => {
   it('judge=null이면 배너를 렌더하지 않는다', () => {
@@ -131,9 +136,34 @@ describe('SlopeVerdictPanel 재판정 진행 배너 (브리프 D5 상태표)', (
   });
 });
 
-// Cloudscape 리스킨(T7): 진행 배너 StatusIndicator(in-progress), 실패 배너 error Alert,
-// 편차 통계 KeyValuePairs 2열, 배수구 힌트 cs-warning, 경고 warning Alert.
-describe('SlopeVerdictPanel Cloudscape 해부 (T7)', () => {
+// 다크 T8(아트보드 ScanSlope 78~126행): KPI 4장 -> [판정 요약·적용 기준 | 재판정·현재 배수구·경고] 카드 줄
+describe('SlopeVerdictPanel C안 해부', () => {
+  it('KPI 4장: 판정 가능 비율·평균 편차·편차 표준편차·최대 편차(% 단위)', () => {
+    render(<SlopeVerdictPanel stats={stats} judge={null} drainPoints={[]} directionAware />);
+    expect(kpi('판정 가능 비율')).toContain('81.2%');
+    expect(kpi('평균 편차')).toContain('0.12%');
+    expect(kpi('편차 표준편차')).toContain('0.05%');
+    expect(kpi('최대 편차')).toContain('0.30%');
+  });
+
+  it('편차 통계가 없으면(전 셀 판정불가) KPI 값 자리에 "판정 가능한 셀 없음"', () => {
+    const none = { ...stats, summary: { ...stats.summary, mean_dev_pct: null, std_dev_pct: null, max_dev_pct: null } };
+    render(<SlopeVerdictPanel stats={none} judge={null} drainPoints={[]} directionAware />);
+    expect(screen.getAllByText('판정 가능한 셀 없음')).toHaveLength(3);
+  });
+
+  it('판정 요약: role=img 막대 안 5등급(개수 비율 폭, GRADE_CLASS 바탕)과 개수 문장, 적용 기준 한 줄', () => {
+    render(<SlopeVerdictPanel stats={stats} judge={null} drainPoints={[]} directionAware />);
+    expect(screen.getByText('판정 요약').className).toBe(EYEBROW);
+    const bar = screen.getByRole('img', { name: '적합 10, 경계 2, 보수 1, 재시공 0, 판정불가 3' });
+    const segs = bar.querySelectorAll('[data-grade]');
+    expect(Array.from(segs).map((s) => s.getAttribute('data-grade'))).toEqual(['pass', 'borderline', 'repair', 'rework', 'na']);
+    expect(segs[0].className).toContain(GRADE_CLASS.pass.bg);
+    expect((segs[0] as HTMLElement).style.width).toBe('62.5%');   // 10/16
+    expect(screen.getByText('적합 10 · 경계 2 · 보수 1 · 재시공 0 · 판정불가 3')).toBeInTheDocument();
+    expect(screen.getByText('옥상 · 설계 구배 2% · 허용 0.5% · 재시공 1.5% · 방향 허용 30도')).toBeInTheDocument();
+  });
+
   it('진행 배너는 StatusIndicator in-progress, 실패 배너는 error Alert다', () => {
     const { rerender } = render(
       <SlopeVerdictPanel stats={stats} judge={{ state: 'processing', at: 't0' }} drainPoints={[]} directionAware />,
@@ -146,18 +176,18 @@ describe('SlopeVerdictPanel Cloudscape 해부 (T7)', () => {
     expect(screen.getByText(/사유: 사유X/)).toBeInTheDocument();
   });
 
-  it('편차 통계는 KeyValuePairs 2열, 배수구 미지정 안내는 cs-warning, 경고는 warning Alert, 구 팔레트 없음', () => {
+  it('배수구는 mono, 미지정 안내는 warn 글자, 경고는 눈썹 라벨 + warning Alert, 후속 안내는 muted', () => {
     const { container } = render(
       <SlopeVerdictPanel stats={{ ...stats, direction_judged: false, warnings: ['w1'] }} judge={null}
         drainPoints={[{ x: 3.2, y: 5.1 }]} directionAware />,
     );
-    expect(container.firstElementChild?.className).toContain('rounded-cs-container');
-    expect(container.querySelector('dl')?.className).toContain('minmax(min(100%,240px),1fr)'); // columns={2}
-    expect(screen.getByText('평균 편차').className).toContain('text-dim'); // 라벨은 눈썹(mono 11px dim)
+    expect(screen.getByText('현재 배수구').className).toBe(EYEBROW);
     expect(screen.getByText('(3.2, 5.1)').className).toContain('font-mono');
-    expect(screen.getByText(/지도에서 배수구 위치를 클릭하세요/).className).toContain('text-cs-warning');
+    expect(screen.getByText(/지도에서 배수구 위치를 클릭하세요/).className).toContain('text-warn');
+    expect(screen.getByText('경고').className).toBe(EYEBROW);
     expect(screen.getByText('w1').closest('[data-alert]')).toHaveAttribute('data-alert', 'warning'); // 미지 코드는 원문(warningLabel)
-    expect(screen.getByText(/구역별 통계는 후속 단계/).className).toContain('text-cs-text-secondary');
+    expect(screen.getByText(/구역별 통계는 후속 단계/).className).toContain('text-muted');
     expect(container.innerHTML).not.toMatch(/zinc-|amber-|red-/);
+    expect(container.innerHTML).not.toMatch(/\bcs-/);
   });
 });

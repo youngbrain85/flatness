@@ -4,7 +4,9 @@ import {
 } from '../slope-heatmap';
 import type { GradedSlopeCell } from '../slope-heatmap';
 import type { SlopeTransform } from '../slope-cells';
+import { CELL_GAP_COLOR, CELL_INK, SCREEN_SLOPE_GRADE_COLOR } from '../palette';
 import type { SlopeCellRow } from '../types';
+import { recording2d } from '@/lib/viz/__tests__/ctx2d-stub';
 
 // 실제 analyze-slope CLI(합성 2%/1% 대각 경사, 8.2m x 8.0m)로 만든 slope_cells.json의
 // 셀 형태를 그대로 옮긴 픽스처. width_m/height_m이 있고 zone_id는 항상 null이다.
@@ -55,20 +57,25 @@ describe('SLOPE_GRADE_COLOR (엔진 slope_map.py의 _COLOR와 일치해야 함)'
   });
 });
 
-describe('slopeCellFillColor (ok=false는 등급 무관하게 판정불가 색)', () => {
-  it('ok=true 셀은 넘겨준 grade의 색을 그대로 쓴다', () => {
-    expect(slopeCellFillColor(cell({ ok: true }), '적합')).toBe('#3d8b3d');
-    expect(slopeCellFillColor(cell({ ok: true }), '재시공')).toBe('#c0392b');
+// 스펙 2026-10-17 §3: 화면 캔버스는 화면 등급 색을 쓴다. 엔진 PNG·PDF 만 엔진 hex(위 SLOPE_GRADE_COLOR)를 쓴다(같은 계열, 사용자 확인).
+describe('slopeCellFillColor (화면 등급 색, ok=false는 등급 무관하게 판정불가 색)', () => {
+  it('ok=true 셀은 넘겨준 grade 의 화면 색(SCREEN_SLOPE_GRADE_COLOR)을 그대로 쓰고 엔진 hex 는 쓰지 않는다', () => {
+    for (const g of ['적합', '경계', '보수', '재시공', '판정불가'] as const) {
+      expect(slopeCellFillColor(cell({ ok: true }), g)).toBe(SCREEN_SLOPE_GRADE_COLOR[g]);
+      expect(slopeCellFillColor(cell({ ok: true }), g)).not.toBe(SLOPE_GRADE_COLOR[g]);
+    }
+    expect(slopeCellFillColor(cell({ ok: true }), '적합')).toBe('#38d454');
+    expect(slopeCellFillColor(cell({ ok: true }), '재시공')).toBe('#ff332e');
   });
 
-  it('ok=false 셀은 grade로 무엇을 넘겨도 판정불가 회색을 강제한다', () => {
+  it('ok=false 셀은 grade로 무엇을 넘겨도 판정불가 색을 강제한다', () => {
     // ok=false는 slope_pct·downhill_rad가 없는(측정 불가) 셀이다. 엔진
     // grade_slope_cells도 !ok 셀은 무조건 GRADE_NA를 매긴다(slope.py) - 이건
     // 임계값 비교가 아니라 유효성 플래그를 그대로 따르는 것이므로 판정 이중화가
     // 아니다. 호출부가 실수로(또는 판정 전 기본값으로) 다른 등급을 넘기더라도
-        // 여기서 안전하게 덮어써야 "측정 안 된 셀이 초록으로 뜨는" 조용한 실패를 막는다.
+    // 여기서 안전하게 덮어써야 "측정 안 된 셀이 초록으로 뜨는" 조용한 실패를 막는다.
     const invalid = cell({ ok: false, slope_pct: null, downhill_rad: null, rmse_m: null, se_pct: null });
-    expect(slopeCellFillColor(invalid, '적합')).toBe('#9e9e9e');
+    expect(slopeCellFillColor(invalid, '적합')).toBe(SCREEN_SLOPE_GRADE_COLOR.판정불가);
   });
 });
 
@@ -148,5 +155,15 @@ describe('drawSlopeHeatmap (배경색 + 화살표 오버레이)', () => {
     ctx.stroke = () => { if (ctx.lineWidth === 2.2) sawBold = true; origStroke(); };
     drawSlopeHeatmap(ctx, [g], t, 2.0);
     expect(sawBold).toBe(true);
+  });
+
+  // 다크 T8: 검정 스테이지 위 표기. 칸 사이는 검정 틈(평활도 히트맵과 같다), 화살표는 등급 색 칸 위의 글자 색
+  it('칸은 화면 등급 색, 칸 경계는 CELL_GAP_COLOR 2px, 화살표는 CELL_INK', () => {
+    const t: SlopeTransform = { scale: 10, xMin: 0, yMax: 8 };
+    const { ctx, ops } = recording2d();
+    drawSlopeHeatmap(ctx, [{ cell: cell(), grade: '보수' }], t, 2.0);
+    expect(ops.find((o) => o.op === 'fillRect')).toMatchObject({ style: SCREEN_SLOPE_GRADE_COLOR.보수 });
+    expect(ops.find((o) => o.op === 'strokeRect')).toMatchObject({ style: CELL_GAP_COLOR, lineWidth: 2 });
+    expect(ops.find((o) => o.op === 'stroke')).toMatchObject({ style: CELL_INK, lineWidth: 0.9 });
   });
 });
