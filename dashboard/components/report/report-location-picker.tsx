@@ -1,17 +1,13 @@
-// D7 Step 1: /reports/new에 location 쿼리 없이 들어왔을 때 먼저 보여주는 측정위치
-// 선택 UI. 선택 즉시 라우트를 바꿔 서버 컴포넌트가 그 location으로 후보를 다시
-// 조회하게 한다(로컬 상태로 후보를 들고 있지 않는다 - 후보 쿼리 자체가 서버 전용
-// Supabase 클라이언트를 쓴다). optgroup 구성은 upload-form.tsx(T4)와 동일하게
-// "현장별로 묶고, 측정위치가 0개인 현장은 목록에서 뺀다".
+// D7 Step 1(→ Task 10): /reports/new?site= 로 들어왔을 때 먼저 보여 주는 측정위치 고르기. 고르는 즉시
+// 라우트를 바꿔 서버 컴포넌트가 그 location으로 후보를 다시 조회하게 한다(로컬 상태로 후보를 들고 있지 않는다 -
+// 후보 쿼리 자체가 서버 전용 Supabase 클라이언트를 쓴다). 현장은 경로가 이미 정했다 - 이 현장의 측정위치만
+// 받고 현장 묶음(optgroup)을 두지 않는다(스펙 §5 15행: 화면 안 현장 고르기 없음).
 'use client';
 import { useRouter } from 'next/navigation';
 import { FormField, SelectWrap, selectClass } from '@/components/ui/form';
-import type { LocationRow, SiteRow } from '@/lib/domain/types';
+import type { LocationRow } from '@/lib/domain/types';
 
-export function ReportLocationPicker({ sites, locations }: {
-  sites: SiteRow[];
-  locations: LocationRow[];
-}) {
+export function ReportLocationPicker({ locations }: { locations: LocationRow[] }) {
   const router = useRouter();
   return (
     <div className="max-w-md">
@@ -23,19 +19,11 @@ export function ReportLocationPicker({ sites, locations }: {
             }}
             className={selectClass}>
             <option value="">선택...</option>
-            {sites.map((s) => {
-              const locs = locations.filter((l) => l.site_id === s.id);
-              if (locs.length === 0) return null;
-              return (
-                <optgroup key={s.id} label={s.name}>
-                  {locs.map((l) => (
-                    <option key={l.id} value={l.id}>
-                      {[l.building, l.floor, l.room, l.name].filter(Boolean).join(' / ')}
-                    </option>
-                  ))}
-                </optgroup>
-              );
-            })}
+            {locations.map((l) => (
+              <option key={l.id} value={l.id}>
+                {[l.building, l.floor, l.room, l.name].filter(Boolean).join(' / ')}
+              </option>
+            ))}
           </select>
         </SelectWrap>
       </FormField>

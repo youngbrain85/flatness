@@ -1,24 +1,27 @@
-// 보고서 생성 화면 (스펙 §7.6 전반부)
+// 보고서 생성 화면 (스펙 §7.6 전반부, §5 15행). 아트보드: docs/design/dark/ReportNew.dc.html
+// 현장 밖 경로라 현장 헤더를 이 페이지가 직접 그린다. 현장은 경로가 정한다 - ?location=이면 그 측정위치의
+// 현장, ?site=면 그 현장이다. 화면 안에서 현장을 고르지 않는다.
+import type { Metadata } from 'next';
 import Link from 'next/link';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { getRequestUser } from '@/lib/auth/request-user';
 import { createClient } from '@/lib/supabase/server';
-import { EntryHeader } from '@/components/shell/entry-header';
-import { SiteHeader } from '@/components/shell/site-header';
 import { SupabaseErrorNotice } from '@/components/supabase-error';
 import { ReportCreateForm, type ReportCandidate } from '@/components/report/report-create-form';
 import { ReportLocationPicker } from '@/components/report/report-location-picker';
+import { EntryHeader } from '@/components/shell/entry-header';
+import { SiteHeader } from '@/components/shell/site-header';
 import { Alert } from '@/components/ui/alert';
 import { Container } from '@/components/ui/container';
 import { EmptyState } from '@/components/ui/empty-state';
 import { MAIN_BG, PAGE_MAIN } from '@/components/ui/page';
 import { PageHeader } from '@/components/ui/page-header';
-import { GRADE_LABEL } from '@/lib/domain/labels';
 import type {
   AnalysisKind, JudgeState, LocationRow, ScanRow, SiteRow, SlopeParams, Surface, Verdict,
 } from '@/lib/domain/types';
 
 export const dynamic = 'force-dynamic';
+export const metadata: Metadata = { title: '보고서 생성' };
 
 // 재판정(slope_judge)이 진행 중인 구배 분석은 후보 목록에 **남기되 선택은 막는다**.
 //
@@ -44,68 +47,66 @@ function judgeBlockReason(state: JudgeState | null): string | null {
     + '이전 판정이 발행본에 그대로 박제됩니다. 재판정이 끝난 뒤 이 화면을 새로고침하세요.';
 }
 
+/** 조회 오류 화면: 현장을 아직 모르므로 진입 헤더 + 오류 안내(본문 클래스는 다른 화면과 같다). */
+function errorScreen(email: string | null, message: string) {
+  return (
+    <>
+      <EntryHeader email={email} />
+      <main className={MAIN_BG}>
+        <div className={PAGE_MAIN}><SupabaseErrorNotice message={message} /></div>
+      </main>
+    </>
+  );
+}
+
 export default async function NewReportPage({ searchParams }: {
-  searchParams: Promise<{ location?: string }>;
+  searchParams: Promise<{ location?: string; site?: string }>;
 }) {
-  const { location: locationId } = await searchParams;
+  const { location: locationId, site: siteParam } = await searchParams;
   const supabase = await createClient();
-  // 셸 헤더의 계정 메뉴 라벨. proxy 가 실어 준 헤더만 읽는다(Auth 왕복 0회).
+  // 헤더 계정 메뉴의 이메일. 인증 가드는 proxy가 맡는다(이 화면은 원래 가드 없이 쓰던 그대로).
   const email = (await getRequestUser())?.email ?? null;
 
-  // D7 Step 1: notFound() 대신 측정위치 선택 UI를 먼저 보여준다. 선택하면
-  // ReportLocationPicker가 '/reports/new?location=...'로 다시 요청하고, 그 재요청이
-  // 이 함수를 처음부터 다시 실행해 아래 후보 쿼리를 그 location으로 새로 돈다 -
-  // 후보는 location마다 다르므로 여기서 미리 긁어 클라이언트에 들려 보낼 수 없다.
   if (!locationId) {
-    const [sitesRes, locationsRes] = await Promise.all([
-      supabase.from('sites').select('*').order('name'),
-      supabase.from('locations').select('*'),
+    // 현장도 측정위치도 없는 맨 주소(옛 링크·북마크)는 고를 현장이 없다 - 진입 페이지로 보낸다.
+    // 화면 안에서 현장을 고르지 않는다(스펙 §5 15행: 현장은 측정위치에서 정해진다).
+    if (!siteParam) redirect('/');
+    // D7 Step 1: notFound() 대신 측정위치 고르기를 먼저 보여준다. 고르면 ReportLocationPicker가
+    // '/reports/new?location=...'로 다시 요청하고, 그 재요청이 이 함수를 처음부터 다시 실행해 아래
+    // 후보 쿼리를 그 location으로 새로 돈다 - 후보는 location마다 다르므로 여기서 미리 긁어
+    // 클라이언트에 들려 보낼 수 없다. 측정위치는 이 현장 것만 읽는다.
+    const [siteRes, locationsRes] = await Promise.all([
+      supabase.from('sites').select('*').eq('id', siteParam).maybeSingle(),
+      supabase.from('locations').select('*').eq('site_id', siteParam)
+        .order('building').order('floor_order').order('room').order('name'),
     ]);
-    const listError = sitesRes.error ?? locationsRes.error;
-    if (listError) {
-      return (
-        <>
-          <EntryHeader email={email} />
-          <main className={MAIN_BG}><div className={PAGE_MAIN}><SupabaseErrorNotice message={listError.message} /></div></main>
-        </>
-      );
-    }
-    const allLocations = (locationsRes.data ?? []) as LocationRow[];
-    // 리뷰 F1: 측정위치가 하나도 없으면(모든 현장이 빈 현장인 경우도 포함 - 시·현장
-    // 유무와 무관하게 locations 자체가 0건인지로 판단한다) 셀렉트가 "선택..."뿐인 빈
-    // 상태로 남아 막다른 화면이 된다. 같은 파일의 "후보 0건" 분기(/upload?location=
-    // 유도)·목록 EmptyState와 같은 원칙으로, 현장·측정위치를 인라인 생성할 수 있는
-    // 업로드 화면으로 보낸다.
-    if (allLocations.length === 0) {
-      // 브레드크럼 마지막 항목은 현재 페이지(비링크, 스펙 §7-2)
-      // 셸: 측정위치를 고르기 전이라 현장을 모른다 - 진입 헤더로 그린다(Task 2)
-      return (
-        <>
-          <EntryHeader email={email} />
-          <main className={MAIN_BG}>
-            <div className={PAGE_MAIN}>
-              <PageHeader crumbs={[{ href: '/', label: '현장' }, { label: '보고서 생성' }]} title="보고서 생성" />
-              <EmptyState
-                message="아직 측정위치가 없습니다. 업로드 화면에서 현장·측정위치 생성부터 스캔 업로드까지 한 번에 할 수 있습니다."
-                actionHref="/upload"
-                actionLabel="업로드로 시작"
-              />
-            </div>
-          </main>
-        </>
-      );
-    }
-    // 안내 문구는 '측정위치 선택' 컨테이너의 설명(스펙 §7-8: 컨테이너 헤더는 시스템 크롬)
-    // 셸: 측정위치를 고르기 전이라 현장을 모른다 - 진입 헤더로 그린다(Task 2)
+    const listError = siteRes.error ?? locationsRes.error;
+    if (listError) return errorScreen(email, listError.message);
+    if (!siteRes.data) notFound();
+    const site = siteRes.data as SiteRow;
+    const locations = (locationsRes.data ?? []) as LocationRow[];
     return (
       <>
-        <EntryHeader email={email} />
+        <SiteHeader site={{ id: site.id, name: site.name }} email={email} />
         <main className={MAIN_BG}>
           <div className={PAGE_MAIN}>
-            <PageHeader crumbs={[{ href: '/', label: '현장' }, { label: '보고서 생성' }]} title="보고서 생성" />
-            <Container title="측정위치 선택" description="보고서를 만들 측정위치를 먼저 선택하세요.">
-              <ReportLocationPicker sites={(sitesRes.data ?? []) as SiteRow[]} locations={allLocations} />
-            </Container>
+            <div className="flex w-full max-w-[760px] flex-col gap-5">
+              <PageHeader crumbs={[{ href: `/sites/${site.id}/reports`, label: '보고서' }, { label: '보고서 생성' }]}
+                title="보고서 생성" />
+              {locations.length === 0 ? (
+                // 리뷰 F1(→ Task 10): 측정위치가 없으면 셀렉트가 "선택..."뿐인 막다른 화면이 된다 - 그 자리에서
+                // 측정위치를 만들 수 있는 이 현장의 업로드 화면으로 보낸다.
+                <EmptyState
+                  message="이 현장에는 아직 측정위치가 없습니다. 스캔 업로드 화면에서 측정위치를 만들고 바로 업로드할 수 있습니다."
+                  actionHref={`/sites/${site.id}/upload`}
+                  actionLabel="스캔 업로드로 시작" />
+              ) : (
+                // 안내 문구는 '측정위치 선택' 카드의 설명이다
+                <Container title="측정위치 선택" description="보고서를 만들 측정위치를 먼저 선택하세요.">
+                  <ReportLocationPicker locations={locations} />
+                </Container>
+              )}
+            </div>
           </div>
         </main>
       </>
@@ -114,36 +115,15 @@ export default async function NewReportPage({ searchParams }: {
 
   const { data: location, error } = await supabase
     .from('locations').select('*').eq('id', locationId).maybeSingle();
-  if (error) {
-    return (
-      <>
-        <EntryHeader email={email} />
-        <main className={MAIN_BG}><div className={PAGE_MAIN}><SupabaseErrorNotice message={error.message} /></div></main>
-      </>
-    );
-  }
+  if (error) return errorScreen(email, error.message);
   if (!location) notFound();
   const loc = location as LocationRow;
   const locationLabel = [loc.building, loc.floor, loc.room, loc.name].filter(Boolean).join(' / ');
-  // D8 이월(T7 우려사항): scans/[id]·reports/[id]와 같은 3단계 브레드크럼 규약
-  // (현장 홈 › 현장명 › 측정위치 라벨)을 이 경로에도 맞춘다. 사이트 쿼리 하나만
-  // 늘어날 뿐 후보 조회·제출 로직은 그대로다.
   // perf-auth-roundtrips: site와 scans는 서로 독립이라 병렬로 돈다.
   const [{ data: site }, { data: scans }] = await Promise.all([
     supabase.from('sites').select('*').eq('id', loc.site_id).maybeSingle(),
     supabase.from('scans').select('*').eq('location_id', locationId).is('deleted_at', null),
   ]);
-  const crumbs = [
-    { href: '/', label: '현장' },
-    { href: `/sites/${loc.site_id}`, label: site ? (site as SiteRow).name : '현장 상세' },
-    { label: locationLabel },
-  ];
-  // 셸(스펙 §4.2): 보고서 생성은 URL 을 그대로 두고 측정위치의 현장으로 현장 헤더(보고서)를 그린다.
-  // 현장 행을 못 찾으면 진입 헤더로 대신한다.
-  const siteRow = site as SiteRow | null;
-  const header = siteRow
-    ? <SiteHeader site={{ id: siteRow.id, name: siteRow.name }} email={email} />
-    : <EntryHeader email={email} />;
   const scanRows = (scans ?? []) as ScanRow[];
   const scanById = new Map(scanRows.map((s) => [s.id, s]));
   // kind 필터는 **지우지 않고 넓힌다**(단계 H). 단계 C가 이 필터를 넣은 이유는 둘이었다:
@@ -167,18 +147,10 @@ export default async function NewReportPage({ searchParams }: {
         .eq('is_current', true).eq('status', 'done')
         .in('kind', ['flatness', 'slope']).is('deleted_at', null)
     : { data: [], error: null };
-  if (analysesRes.error) {
-    return (
-      <>
-        {header}
-        <main className={MAIN_BG}><div className={PAGE_MAIN}><SupabaseErrorNotice message={analysesRes.error.message} /></div></main>
-      </>
-    );
-  }
+  if (analysesRes.error) return errorScreen(email, analysesRes.error.message);
 
-  const candidates: ReportCandidate[] = (analysesRes.data ?? []).map((a) => {
+  const candidates: ReportCandidate[] = (analysesRes.data ?? []).map((a): ReportCandidate => {
     const scan = scanById.get(a.scan_id as string);
-    const verdict = a.overall_verdict as Verdict | null;
     // judge는 구배 분석에만 있다(SlopeParams). 평활도 행에는 params.judge가 없으므로
     // 아래 차단 조건이 평활도 후보를 잡아채는 일은 없다.
     const judgeState = (a.params as SlopeParams | null)?.judge?.state ?? null;
@@ -187,34 +159,39 @@ export default async function NewReportPage({ searchParams }: {
       kind: a.kind as AnalysisKind,
       surface: a.surface as Surface,
       scanned_at: scan?.scanned_at ?? '-',
-      verdict_label: verdict ? GRADE_LABEL[verdict] : GRADE_LABEL.na,
+      // 엔진이 낸 판정(overall_verdict)을 그대로 싣는다 - 화면은 등급 배지 색을 고를 뿐 판정하지 않는다
+      grade: (a.overall_verdict as Verdict | null) ?? 'na',
       summary: (a.user_summary as string | null) ?? (a.auto_summary as string | null),
       blocked_reason: judgeBlockReason(judgeState),
     };
   }).sort((a, b) => a.kind.localeCompare(b.kind) || a.surface.localeCompare(b.surface));
 
-  // 아트보드 ReportNew: h1 아래 설명이 측정위치 라벨. 후보 0건은 폼 자리에 info Alert
-  // (막다른 화면 금지 - 업로드 링크 유지). 폼 자체(컨테이너 + primary)는 ReportCreateForm이 그린다.
-  const content = (
-    <div className={PAGE_MAIN}>
-      <PageHeader crumbs={crumbs} title="보고서 생성" description={locationLabel} />
-      {candidates.length === 0 ? (
-        <Container title="보고서 생성">
-          <Alert type="info">
-            이 측정위치에는 완료된 분석이 없습니다. 스캔을 업로드하고 분석이 끝난 뒤 다시 시도하세요.{' '}
-            <Link href={`/upload?location=${locationId}`}
-              className="font-bold text-cs-link hover:text-cs-link-hover hover:underline">스캔 업로드</Link>
-          </Alert>
-        </Container>
-      ) : (
-        <ReportCreateForm locationId={locationId} locationLabel={locationLabel} candidates={candidates} />
-      )}
-    </div>
-  );
+  const s = site as SiteRow | null;
+  // 브레드크럼(스펙 §4.3): 보고서 탭부터 - 보고서 / 보고서 생성(아트보드 ReportNew). 측정위치는 h1 아래 설명.
+  const crumbs = [{ href: `/sites/${loc.site_id}/reports`, label: '보고서' }, { label: '보고서 생성' }];
+
   return (
     <>
-      {header}
-      <main className={MAIN_BG}>{content}</main>
+      {/* 현장 행을 못 읽으면(RLS 등) 현장 헤더를 그릴 수 없다 - 진입 헤더로 대신한다(막다른 화면 금지) */}
+      {s ? <SiteHeader site={{ id: s.id, name: s.name }} email={email} /> : <EntryHeader email={email} />}
+      <main className={MAIN_BG}>
+        <div className={PAGE_MAIN}>
+          {/* 아트보드: 브레드크럼·머리·카드·버튼 줄이 760px 한 열 */}
+          <div className="flex w-full max-w-[760px] flex-col gap-5">
+            <PageHeader crumbs={crumbs} title="보고서 생성" description={locationLabel} />
+            {candidates.length === 0 ? (
+              // 막다른 화면 금지 - 이 측정위치를 미리 고른 업로드 화면으로 잇는다
+              <Alert type="info">
+                이 측정위치에는 완료된 분석이 없습니다. 스캔을 업로드하고 분석이 끝난 뒤 다시 시도하세요.{' '}
+                <Link href={`/sites/${loc.site_id}/upload?location=${locationId}`}
+                  className="font-semibold text-ink underline decoration-line-3 underline-offset-4">스캔 업로드</Link>
+              </Alert>
+            ) : (
+              <ReportCreateForm locationId={locationId} locationLabel={locationLabel} candidates={candidates} />
+            )}
+          </div>
+        </div>
+      </main>
     </>
   );
 }

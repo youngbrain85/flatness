@@ -28,6 +28,7 @@ vi.mock('@/lib/supabase/client', () => ({ createClient: () => supabaseStub }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }));
 
 import { ReportActions } from '../report-actions';
+import { buttonClass } from '@/components/ui/button';
 
 const doneDraft = {
   id: 'r1', status: 'draft' as const, gen_status: 'done' as const,
@@ -52,11 +53,13 @@ describe('ReportActions', () => {
     expect(screen.queryByRole('button', { name: '발행' })).toBeNull();
   });
 
-  it('발행본은 발행·재생성 버튼 없이 발행 상태만 보여준다', () => {
+  it('발행본은 발행·재생성 버튼 없이 발행 안내(muted 12px)만 보여준다', () => {
     render(<ReportActions report={{ ...doneDraft, status: 'finalized' }} />);
     expect(screen.queryByRole('button', { name: '발행' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'PDF 다시 생성' })).toBeNull();
-    expect(screen.getByText(/발행된 보고서는 수정할 수 없습니다/)).toBeInTheDocument();
+    const note = screen.getByText(/발행된 보고서는 수정할 수 없습니다/);
+    expect(note.className).toContain('text-muted');
+    expect(note.className).toContain('text-xs');
   });
 
   it('발행 실패(트리거 거부)는 사유를 그대로 보여준다', async () => {
@@ -76,19 +79,20 @@ describe('ReportActions', () => {
     expect(state.updated).toBeNull();
   });
 
-  it('발행만 primary이고 다운로드·재생성은 normal 버튼이다(뷰당 primary 1개)', () => {
+  it('다운로드·재생성은 보조 버튼이고 아이콘을 단다(주 버튼은 발행 하나)', () => {
     // gen_status failed + pdf_path 있음: 다운로드·재생성은 있고 발행은 없다
     render(<ReportActions report={{ ...doneDraft, gen_status: 'failed' }} />);
     const download = screen.getByRole('link', { name: 'PDF 다운로드' });
     expect(download).toHaveAttribute('download');
-    expect(download.className).toContain('rounded-control');
-    expect(download.className).not.toContain('bg-ink');
+    expect(download).toHaveAttribute('href', '/api/data/reports/r1/report.pdf');
+    expect(download.className).toBe(buttonClass('normal'));
+    expect(download.querySelector('[data-icon="download"]')).not.toBeNull();
     const regen = screen.getByRole('button', { name: 'PDF 다시 생성' });
-    expect(regen.className).toContain('border-line-3');
     expect(regen.className).not.toContain('bg-ink');
+    expect(regen.querySelector('[data-icon="refresh"]')).not.toBeNull();
   });
 
-  it('발행 버튼은 primary(ink 채움)다', () => {
+  it('발행 버튼은 주 버튼(ink 채움)이다', () => {
     render(<ReportActions report={doneDraft} />);
     expect(screen.getByRole('button', { name: '발행' }).className).toContain('bg-ink');
   });

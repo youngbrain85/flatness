@@ -1,5 +1,5 @@
-// D7 Step 1: /reports/new에 location 없이 진입했을 때 먼저 보여주는 측정위치 선택
-// UI. T4(upload-form.tsx)와 같은 현장별 optgroup 단일 셀렉트 방식을 그대로 따른다.
+// /reports/new?site= 에서 먼저 보여 주는 측정위치 고르기(D7 Step 1 → Task 10): 이 현장의 측정위치만,
+// 현장 묶음(optgroup) 없이 나열한다. 화면 안에서 현장을 고르지 않는다(스펙 §5 15행).
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 
@@ -7,51 +7,43 @@ const pushMock = vi.fn();
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: pushMock }) }));
 
 import { ReportLocationPicker } from '../report-location-picker';
-import type { LocationRow, SiteRow } from '@/lib/domain/types';
+import { selectClass } from '@/components/ui/form';
+import type { LocationRow } from '@/lib/domain/types';
 
-function site(id: string, name: string): SiteRow {
-  return { id, name, address: null, memo: null, created_at: '', updated_at: '' };
-}
-function location(id: string, siteId: string, name: string): LocationRow {
+function location(id: string, over: Partial<LocationRow> = {}): LocationRow {
   return {
-    id, site_id: siteId, building: '', floor: '', floor_order: 0, room: '', name,
-    memo: null, created_at: '', updated_at: '',
+    id, site_id: 's1', building: '101동', floor: '3층', floor_order: 3, room: '301호', name: '거실',
+    memo: null, created_at: '', updated_at: '', ...over,
   };
 }
 
-const sites = [site('s1', '현장A'), site('s2', '현장B')];
-const locations = [location('l1', 's1', '거실'), location('l2', 's2', 'P1')];
+const locations = [
+  location('l1'),
+  location('l2', { room: '302호' }),
+  location('l3', { building: '', floor: '', room: '', name: '로비' }),
+];
 
 describe('ReportLocationPicker', () => {
   beforeEach(() => { pushMock.mockClear(); });
 
-  it('현장별 optgroup으로 측정위치를 묶어 보여준다', () => {
-    const { container } = render(<ReportLocationPicker sites={sites} locations={locations} />);
+  it('현장 묶음 없이 이 현장의 측정위치를 " / "로 이어 나열한다', () => {
+    render(<ReportLocationPicker locations={locations} />);
     const sel = screen.getByLabelText('측정위치') as HTMLSelectElement;
-    const groups = [...sel.querySelectorAll('optgroup')];
-    expect(groups.map((g) => g.label)).toEqual(['현장A', '현장B']);
-    // T8: selectClass(1px line-3 테두리) + SelectWrap의 chevron
-    expect(sel.className).toContain('border-line-3');
-    expect(container.querySelector('[data-icon="chevron-down"]')).toBeInTheDocument();
-  });
-
-  it('측정위치가 없는 현장은 optgroup에서 빠진다(업로드 폼과 동일 규칙)', () => {
-    render(
-      <ReportLocationPicker sites={[...sites, site('s3', '현장C(빈 현장)')]} locations={locations} />,
-    );
-    const sel = screen.getByLabelText('측정위치') as HTMLSelectElement;
-    const labels = [...sel.querySelectorAll('optgroup')].map((g) => g.label);
-    expect(labels).not.toContain('현장C(빈 현장)');
+    expect(sel.querySelectorAll('optgroup')).toHaveLength(0);
+    expect([...sel.options].map((o) => o.textContent)).toEqual([
+      '선택...', '101동 / 3층 / 301호 / 거실', '101동 / 3층 / 302호 / 거실', '로비',
+    ]);
+    expect(sel.className).toBe(selectClass);
   });
 
   it('선택하면 그 측정위치로 보고서 생성 화면을 다시 요청한다(서버 재조회로 후보 로드)', () => {
-    render(<ReportLocationPicker sites={sites} locations={locations} />);
+    render(<ReportLocationPicker locations={locations} />);
     fireEvent.change(screen.getByLabelText('측정위치'), { target: { value: 'l2' } });
     expect(pushMock).toHaveBeenCalledWith('/reports/new?location=l2');
   });
 
   it('빈 선택("선택...")으로 되돌아가면 이동하지 않는다', () => {
-    render(<ReportLocationPicker sites={sites} locations={locations} />);
+    render(<ReportLocationPicker locations={locations} />);
     fireEvent.change(screen.getByLabelText('측정위치'), { target: { value: '' } });
     expect(pushMock).not.toHaveBeenCalled();
   });

@@ -1,3 +1,5 @@
+// 보고서 삭제(소프트). 다크 리스킨(Task 10, 아트보드 ReportDetail): 삭제는 위험 버튼(aria-expanded로 확인 상자
+// 열림을 알린다), 확인 상자는 호출부 버튼 줄 아래 한 줄을 통째로 차지하는 오른쪽 정렬 error 상자(최대 520px).
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
@@ -32,17 +34,42 @@ function stubSupabase(
 afterEach(() => { vi.clearAllMocks(); });
 
 describe('ReportDeleteButton', () => {
-  it('첫 클릭에는 지우지 않고 확인 단계(error Alert)를 보여준다', () => {
+  it('첫 클릭에는 지우지 않고 확인 상자(error)를 펼친다 - 삭제·삭제 확인은 위험 버튼이다', () => {
     const spy = vi.fn();
     vi.mocked(createClient).mockReturnValue(stubSupabase(null, spy) as never);
     render(<ReportDeleteButton report={{ id: 'r1', status: 'draft' }} />);
 
-    // T8: 삭제 버튼은 normal(primary는 상세 화면의 발행뿐)
-    expect(screen.getByRole('button', { name: '삭제' }).className).toContain('border-line-3');
-    fireEvent.click(screen.getByRole('button', { name: '삭제' }));
+    const del = screen.getByRole('button', { name: '삭제' });
+    expect(del.className).toContain('text-err');
+    expect(del.className).not.toContain('bg-ink');
+    expect(del).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(del);
+    expect(del).toHaveAttribute('aria-expanded', 'true');
     expect(screen.getByText(/삭제할까요/).closest('[data-alert]')).toHaveAttribute('data-alert', 'error');
-    expect(screen.getByRole('button', { name: '삭제 확인' }).className).not.toContain('bg-ink');
+    const confirm = screen.getByRole('button', { name: '삭제 확인' });
+    expect(confirm.className).toContain('text-err');
+    expect(confirm.className).not.toContain('bg-ink');
+    expect(screen.getByRole('button', { name: '취소' }).className).not.toContain('bg-ink');
     expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('확인 상자는 버튼 줄 아래 한 줄을 통째로 차지한다(order-last · basis-full · 오른쪽 정렬, 최대 520px)', () => {
+    vi.mocked(createClient).mockReturnValue(stubSupabase(null) as never);
+    render(<ReportDeleteButton report={{ id: 'r1', status: 'draft' }} />);
+    fireEvent.click(screen.getByRole('button', { name: '삭제' }));
+    const alert = screen.getByText(/삭제할까요/).closest('[data-alert]') as HTMLElement;
+    const row = alert.parentElement as HTMLElement;
+    for (const c of ['order-last', 'basis-full', 'justify-end']) expect(row.className).toContain(c);
+    expect(alert.className).toContain('max-w-[520px]');
+  });
+
+  it('삭제를 한 번 더 누르면 확인 상자를 닫는다(아트보드 토글)', () => {
+    vi.mocked(createClient).mockReturnValue(stubSupabase(null) as never);
+    render(<ReportDeleteButton report={{ id: 'r1', status: 'draft' }} />);
+    fireEvent.click(screen.getByRole('button', { name: '삭제' }));
+    fireEvent.click(screen.getByRole('button', { name: '삭제' }));
+    expect(screen.queryByText(/삭제할까요/)).toBeNull();
+    expect(screen.getByRole('button', { name: '삭제' })).toHaveAttribute('aria-expanded', 'false');
   });
 
   // 상세 화면: 보고 있던 보고서가 사라지므로 목록으로 이동한다
@@ -50,12 +77,12 @@ describe('ReportDeleteButton', () => {
     const spy = vi.fn();
     const eqSpy = vi.fn();
     vi.mocked(createClient).mockReturnValue(stubSupabase(null, spy, eqSpy) as never);
-    render(<ReportDeleteButton report={{ id: 'r1', status: 'draft' }} redirectTo="/reports" />);
+    render(<ReportDeleteButton report={{ id: 'r1', status: 'draft' }} redirectTo="/sites/s1/reports" />);
 
     fireEvent.click(screen.getByRole('button', { name: '삭제' }));
     fireEvent.click(screen.getByRole('button', { name: '삭제 확인' }));
 
-    await waitFor(() => expect(pushMock).toHaveBeenCalledWith('/reports'));
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith('/sites/s1/reports'));
     expect(spy).toHaveBeenCalledWith(expect.objectContaining({ deleted_at: expect.any(String) }));
     // 이 보고서 1건에만 적용되는지 확인한다. .eq('id', report.id)가 없으면 WHERE
     // 없는 UPDATE가 되어 전체 보고서가 지워진다
@@ -76,7 +103,6 @@ describe('ReportDeleteButton', () => {
 
     await waitFor(() => expect(refreshMock).toHaveBeenCalled());
     expect(spy).toHaveBeenCalledWith(expect.objectContaining({ deleted_at: expect.any(String) }));
-    // 이 보고서 1건에만 적용되는지 확인한다
     expect(eqSpy).toHaveBeenCalledWith('id', 'r1');
     expect(pushMock).not.toHaveBeenCalled();
   });
@@ -90,7 +116,8 @@ describe('ReportDeleteButton', () => {
     fireEvent.click(screen.getByRole('button', { name: '취소' }));
 
     expect(spy).not.toHaveBeenCalled();
-    expect(screen.getByRole('button', { name: '삭제' })).toBeInTheDocument();
+    expect(screen.queryByText(/삭제할까요/)).toBeNull();
+    expect(screen.getByRole('button', { name: '삭제' })).toHaveAttribute('aria-expanded', 'false');
   });
 
   it('발행본은 발행된 기록임을 경고한다', () => {

@@ -34,7 +34,7 @@ export function ReportProgress({ reportId, initialStatus, genError, reportStatus
     return (
       <Alert type="error" title="PDF 생성에 실패했습니다.">
         {genError && <p>사유: {genError}</p>}
-        <p className="text-xs leading-4 text-cs-text-secondary">
+        <p className="mt-1 text-xs text-muted">
           포함한 분석이 완료 상태인지, 워커가 실행 중인지 확인한 뒤 다시 생성하세요.
           3회 자동 재시도 후에도 실패한 상태입니다.
         </p>

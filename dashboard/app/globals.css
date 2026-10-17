@@ -29,6 +29,8 @@
   --color-err: #e05a4e;
   /* 데이터 색: 구배 배수구 표시 전용 */
   --color-drain: #6fcdeb;
+  /* 보고서 PDF 미리보기의 흰 A4 종이 전용(스펙 §5 16행: 인쇄물은 밝은 그대로). 화면 다른 곳에는 쓰지 않는다 */
+  --color-paper: #ffffff;
 
   --font-sans: var(--font-montserrat), var(--font-noto-sans-kr), system-ui, sans-serif;
   --font-heading: var(--font-noto-sans-kr), var(--font-montserrat), sans-serif;

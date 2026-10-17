@@ -1,8 +1,7 @@
-// D7 Step 2: 목록의 "새 보고서" 버튼 상시 노출 + 빈 목록 EmptyState + ReportTable(T8)
-// 전환을 검증한다. 서버 컴포넌트 함수를 직접 호출해 렌더된 트리를 확인한다
-// (app/reports/new/__tests__/page.test.tsx와 같은 방식). ReportTable은 클라이언트
-// 컴포넌트지만 render()가 그대로 실행하므로 도구 줄·상태 열까지 이 트리에서 보인다.
-// 상태 열은 within(table)로 찾는다 - 도구 줄 상태 필터의 <option> 문구가 같은 텍스트다.
+// 현장 보고서 목록(Task 10, 스펙 §5 14행·§11 "보고서 목록의 현장 범위 조회"): 이 현장 측정위치의 보고서만,
+// 삭제 제외, 최신순. 페이지 함수를 불러 반환 트리를 render()한다(ReportTable은 클라이언트 컴포넌트지만
+// render()가 그대로 실행한다). 상태 칸은 within(table)로 찾는다 - 상태 필터 <option> 문구가 같은 글자다.
+// 현장 헤더와 <main>은 app/sites/[id]/layout.tsx(Task 2) 몫이라 여기서는 본문만 본다.
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import type { ReactElement } from 'react';
@@ -10,150 +9,153 @@ import type { ReactElement } from 'react';
 vi.mock('@/lib/supabase/server', () => ({ createClient: vi.fn() }));
 
 import { createClient } from '@/lib/supabase/server';
-import ReportsPage from '../page';
+import SiteReportsPage from '../page';
+import { PAGE_MAIN } from '@/components/ui/page';
 
 type Row = Record<string, unknown>;
+type Call = [table: string, op: string, ...args: unknown[]];
 
-function table(rows: Row[]) {
+// eq/in/is를 실제로 적용하는 쿼리 빌더 흉내. 호출은 [테이블, 연산, 인자...]로 기록한다.
+function table(name: string, rows: Row[], calls: Call[]) {
   let current = rows;
   const obj: Record<string, unknown> = {
-    select: () => obj,
-    is: (col: string, val: unknown) => {
-      current = current.filter((r) => (r[col] ?? null) === val);
-      return obj;
-    },
+    select: (...a: unknown[]) => { calls.push([name, 'select', ...a]); return obj; },
     eq: (col: string, val: unknown) => {
+      calls.push([name, 'eq', col, val]);
       current = current.filter((r) => r[col] === val);
       return obj;
     },
     in: (col: string, vals: unknown[]) => {
+      calls.push([name, 'in', col, vals]);
       current = current.filter((r) => vals.includes(r[col]));
       return obj;
     },
-    // 정렬·개수 제한은 이 스텁의 관심사가 아니다 - 체인만 통과시킨다.
-    order: () => obj,
-    limit: () => obj,
+    is: (col: string, val: unknown) => {
+      calls.push([name, 'is', col, val]);
+      current = current.filter((r) => (r[col] ?? null) === val);
+      return obj;
+    },
+    order: (...a: unknown[]) => { calls.push([name, 'order', ...a]); return obj; },
+    limit: (...a: unknown[]) => { calls.push([name, 'limit', ...a]); return obj; },
     then: (resolve: (v: unknown) => void) => resolve({ data: current, error: null }),
   };
   return obj;
 }
 
-function reportRow(over: Partial<Row> = {}): Row {
+function locationRow(id: string, siteId: string, building: string, floor: string, room: string, name: string): Row {
+  return { id, site_id: siteId, building, floor, floor_order: 0, room, name, memo: null, created_at: '', updated_at: '' };
+}
+
+const LOCATIONS: Row[] = [
+  locationRow('l1', 's1', '101동', '3층', '301호', '거실'),
+  locationRow('l2', 's1', '101동', '5층', '501호', '거실'),
+  locationRow('l9', 's2', '201동', '1층', '', '로비'),
+];
+
+function report(over: Row): Row {
   return {
-    id: 'r1', location_id: 'l1', title: '보고서1', status: 'draft',
-    pdf_path: null, gen_status: 'done', gen_error: null, created_at: '2026-08-01T00:00:00Z',
-    ...over,
+    id: 'r?', location_id: 'l1', title: '보고서', status: 'draft', pdf_path: null,
+    gen_status: 'done', gen_error: null, deleted_at: null, created_at: '2026-09-03T10:00:00Z', ...over,
   };
 }
 
-const locationRow: Row = {
-  id: 'l1', site_id: 's1', building: '101동', floor: '3층', floor_order: 0, room: '', name: '거실',
-  memo: null, created_at: '', updated_at: '',
-};
+const REPORTS: Row[] = [
+  report({ id: 'r1', location_id: 'l1', title: '301호 거실 평활도 보고서', created_at: '2026-09-03T10:00:00Z' }),
+  report({ id: 'r2', location_id: 'l2', title: '501호 거실 평활도 보고서', gen_status: 'processing', created_at: '2026-09-02T10:00:00Z' }),
+  report({ id: 'r3', location_id: 'l9', title: '다른 현장 보고서' }),
+  report({ id: 'r4', location_id: 'l1', title: '지운 보고서', deleted_at: '2026-09-05T00:00:00Z' }),
+];
 
-function mockSupabase(reports: Row[], locations: Row[] = []) {
+async function renderPage(o: { reports?: Row[]; locations?: Row[]; search?: { location?: string } } = {}) {
+  const calls: Call[] = [];
   vi.mocked(createClient).mockResolvedValue({
     from: (t: string) => {
-      if (t === 'reports') return table(reports);
-      if (t === 'locations') return table(locations);
+      if (t === 'locations') return table(t, o.locations ?? LOCATIONS, calls);
+      if (t === 'reports') return table(t, o.reports ?? REPORTS, calls);
       throw new Error(`예상치 못한 테이블: ${t}`);
     },
   } as never);
+  const el = (await SiteReportsPage({
+    params: Promise.resolve({ id: 's1' }),
+    searchParams: Promise.resolve(o.search ?? {}),
+  })) as ReactElement;
+  const utils = render(el);
+  return { calls, el, ...utils };
 }
 
-async function renderPage(searchParams: { location?: string } = {}) {
-  const el = await ReportsPage({ searchParams: Promise.resolve(searchParams) });
-  return render(el as ReactElement);
+function titles(): string[] {
+  return within(screen.getByRole('table')).queryAllByRole('link').map((a) => a.textContent ?? '');
 }
 
-describe('ReportsPage 빈 목록 (D7 Step 2)', () => {
-  it('보고서가 없으면 EmptyState로 새 보고서 만들기를 안내한다', async () => {
-    mockSupabase([]);
+describe('SiteReportsPage 현장 범위 조회 (스펙 §11)', () => {
+  it('이 현장의 측정위치를 먼저 읽고 그 id 안에서만, 삭제를 빼고, 최신순으로 보고서를 고른다', async () => {
+    const { calls } = await renderPage();
+    expect(calls).toContainEqual(['locations', 'eq', 'site_id', 's1']);
+    expect(calls).toContainEqual(['reports', 'in', 'location_id', ['l1', 'l2']]);
+    expect(calls).toContainEqual(['reports', 'is', 'deleted_at', null]);
+    expect(calls).toContainEqual(['reports', 'order', 'created_at', { ascending: false }]);
+    // 다른 현장(l9) 보고서와 지운 보고서(r4)는 없다
+    expect(titles()).toEqual(['301호 거실 평활도 보고서', '501호 거실 평활도 보고서']);
+  });
+
+  it('현장 범위로 좁혔으므로 50건 상한을 두지 않는다(대시보드 보고서 수와 같은 수)', async () => {
+    const { calls } = await renderPage();
+    expect(calls.filter((c) => c[1] === 'limit')).toEqual([]);
+  });
+
+  it('측정위치가 없는 현장은 보고서 쿼리를 보내지 않고 빈 안내를 보여 준다', async () => {
+    const { calls } = await renderPage({ locations: [] });
+    expect(calls.some((c) => c[0] === 'reports')).toBe(false);
+    expect(screen.getByText('이 현장에는 아직 보고서가 없습니다. 새 보고서 버튼으로 만드세요.')).toBeInTheDocument();
+    expect(screen.queryByRole('table')).toBeNull();
+  });
+});
+
+describe('SiteReportsPage 화면 (아트보드 Reports)', () => {
+  it('본문은 PAGE_MAIN이고(현장 헤더·main은 레이아웃 몫) 탭 첫 화면이라 브레드크럼이 없다', async () => {
+    const { el } = await renderPage();
+    expect((el.props as { className: string }).className).toBe(PAGE_MAIN);
+    expect(screen.queryByRole('navigation')).toBeNull();
+  });
+
+  it('h1은 "보고서", 옆 카운터는 (n) mono, 오른쪽 주 버튼 "새 보고서"는 이 현장의 측정위치 고르기로 간다', async () => {
     await renderPage();
-    expect(screen.getByText('보고서가 없습니다.')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '새 보고서 만들기' })).toHaveAttribute('href', '/reports/new');
-    // location 필터가 없으면 풀 필터도 없다
+    // PageHeader counter(Task 1): 카운터는 h1 밖 형제 span이다 - h1 이름은 "보고서"뿐
+    expect(screen.getByRole('heading', { level: 1, name: '보고서' })).toBeInTheDocument();
+    expect(screen.getByText('(2)').className).toContain('font-mono');
+    const add = screen.getByRole('link', { name: '새 보고서' });
+    expect(add).toHaveAttribute('href', '/reports/new?site=s1');
+    expect(add.className).toContain('bg-ink');
+  });
+
+  it('측정위치 열은 " / "로 잇고, PDF 생성 중은 속 빈 고리(in-progress), 작성 중은 대기(pending)다', async () => {
+    await renderPage();
+    const tableEl = screen.getByRole('table');
+    expect(within(tableEl).getByText('101동 / 3층 / 301호 / 거실')).toBeInTheDocument();
+    expect(within(tableEl).getByText('PDF 생성 중').closest('[data-status]')).toHaveAttribute('data-status', 'in-progress');
+    expect(within(tableEl).getByText('작성 중').closest('[data-status]')).toHaveAttribute('data-status', 'pending');
+  });
+
+  it('?location=이 이 현장 측정위치면 그 위치만 보이고, 새 보고서는 그 위치를 미리 고르며, 전체 보기로 풀 수 있다', async () => {
+    const { calls } = await renderPage({ search: { location: 'l2' } });
+    expect(calls).toContainEqual(['reports', 'in', 'location_id', ['l2']]);
+    expect(titles()).toEqual(['501호 거실 평활도 보고서']);
+    expect(screen.getByRole('link', { name: '새 보고서' })).toHaveAttribute('href', '/reports/new?location=l2');
+    expect(screen.getByText('측정위치: 101동 / 5층 / 501호 / 거실')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '전체 보기' })).toHaveAttribute('href', '/sites/s1/reports');
+  });
+
+  it('?location=이 다른 현장 측정위치면 무시하고 이 현장 전체를 보여 준다', async () => {
+    const { calls } = await renderPage({ search: { location: 'l9' } });
+    expect(calls).toContainEqual(['reports', 'in', 'location_id', ['l1', 'l2']]);
+    expect(titles()).not.toContain('다른 현장 보고서');
     expect(screen.queryByRole('link', { name: '전체 보기' })).toBeNull();
+    expect(screen.getByRole('link', { name: '새 보고서' })).toHaveAttribute('href', '/reports/new?site=s1');
   });
 
-  it('location 필터가 걸린 채 0건이어도 프리필을 잃지 않고 전체 보기로 필터를 풀 수 있다', async () => {
-    mockSupabase([], [locationRow]);
-    await renderPage({ location: 'l1' });
-    // 헤더 '새 보고서'가 없는 화면이라 EmptyState의 primary가 프리필을 이어야 한다
-    expect(screen.getByRole('link', { name: '새 보고서 만들기' }))
-      .toHaveAttribute('href', '/reports/new?location=l1');
-    expect(screen.getByRole('link', { name: '전체 보기' })).toHaveAttribute('href', '/reports');
-  });
-});
-
-describe('ReportsPage 새 보고서 버튼 (D7 Step 2: 파라미터 유무와 무관하게 상시 노출)', () => {
-  it('location 파라미터가 없어도 새 보고서 버튼이 있다', async () => {
-    mockSupabase([reportRow()], [locationRow]);
-    await renderPage();
-    expect(screen.getByRole('link', { name: '새 보고서' })).toHaveAttribute('href', '/reports/new');
-  });
-
-  it('location 파라미터가 있으면 새 보고서 링크가 그 위치를 프리필한다', async () => {
-    mockSupabase([reportRow()], [locationRow]);
-    await renderPage({ location: 'l1' });
-    expect(screen.getByRole('link', { name: '새 보고서' })).toHaveAttribute('href', '/reports/new?location=l1');
-  });
-});
-
-describe('ReportsPage 목록 테이블 (D7 Step 2 → T8: 제목 | 측정위치 | 상태 StatusIndicator | 생성일)', () => {
-  it('브레드크럼 현장 › 보고서와 컨테이너 카운터를 그린다', async () => {
-    mockSupabase([reportRow()], [locationRow]);
-    await renderPage();
-    expect(screen.getByRole('link', { name: '현장' })).toHaveAttribute('href', '/');
-    expect(screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent)).toContain('보고서(1)');
-  });
-
-  it('제목·측정위치·생성일을 보여주고 제목이 상세로 링크한다', async () => {
-    mockSupabase([reportRow()], [locationRow]);
-    await renderPage();
-    expect(screen.getByRole('link', { name: '보고서1' })).toHaveAttribute('href', '/reports/r1');
-    expect(screen.getByText('101동 / 3층 / 거실')).toBeInTheDocument();
-    expect(screen.getByText('2026-08-01')).toBeInTheDocument();
-  });
-
-  it('발행된 보고서는 발행됨(success) 상태로 보여준다', async () => {
-    mockSupabase([reportRow({ status: 'finalized' })], [locationRow]);
-    await renderPage();
-    expect(within(screen.getByRole('table')).getByText('발행됨')).toHaveAttribute('data-status', 'success');
-  });
-
-  it('PDF 생성에 실패한 초안은 생성 실패(error) 상태로 보여준다', async () => {
-    mockSupabase([reportRow({ gen_status: 'failed' })], [locationRow]);
-    await renderPage();
-    expect(within(screen.getByRole('table')).getByText('생성 실패')).toHaveAttribute('data-status', 'error');
-  });
-
-  it('PDF 생성 중인 초안은 clock(in-progress)으로 보여준다(아트보드 Reports)', async () => {
-    mockSupabase([reportRow({ gen_status: 'processing' })], [locationRow]);
-    await renderPage();
-    expect(within(screen.getByRole('table')).getByText('PDF 생성 중'))
-      .toHaveAttribute('data-status', 'in-progress');
-  });
-
-  it('PDF 생성 대기 중인 초안은 작성 중과 같은 pending(minus-circle)이다', async () => {
-    mockSupabase([reportRow({ gen_status: 'queued' })], [locationRow]);
-    await renderPage();
-    expect(within(screen.getByRole('table')).getByText('PDF 생성 대기 중'))
-      .toHaveAttribute('data-status', 'pending');
-  });
-
-  it('도구 줄에 검색 입력과 상태 필터(5종)가 있다(스펙 §7-3 - 서버 조회에는 관여하지 않는다)', async () => {
-    mockSupabase([reportRow()], [locationRow]);
-    await renderPage();
-    expect(screen.getByRole('textbox', { name: '보고서 검색' })).toBeInTheDocument();
-    expect(screen.getByRole('combobox', { name: '상태 필터' })).toBeInTheDocument();
-    expect(screen.getAllByRole('option')).toHaveLength(5);
-  });
-
-  it('location 필터가 걸린 목록은 도구 줄에 측정위치 라벨과 전체 보기 링크를 보여준다', async () => {
-    mockSupabase([reportRow()], [locationRow]);
-    await renderPage({ location: 'l1' });
-    expect(screen.getByText('측정위치: 101동 / 3층 / 거실')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '전체 보기' })).toHaveAttribute('href', '/reports');
+  it('위치 필터가 걸린 채 0건이어도 표(안내 줄)와 전체 보기를 남긴다(막다른 화면 금지)', async () => {
+    await renderPage({ search: { location: 'l2' }, reports: [] });
+    expect(screen.getByText('조건에 맞는 보고서가 없습니다')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '전체 보기' })).toHaveAttribute('href', '/sites/s1/reports');
   });
 });

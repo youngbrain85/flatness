@@ -1,16 +1,20 @@
 // 보고서 생성 (스펙 §7.6: 같은 측정위치의 분석 복수 선택 -> 종합의견 수정 -> 잡 등록)
+// 다크 리스킨(Task 10, 아트보드 docs/design/dark/ReportNew.dc.html): 카드 하나(제목 · 포함할 분석 · 종합의견)
+// + 카드 밖 오른쪽 주 버튼. 후보 줄은 "종류 · 표면 · 측정 시각(mono) · 판정 등급 배지".
 'use client';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Alert } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Container } from '@/components/ui/container';
 import { FormField, checkClass, inputClass, textareaClass } from '@/components/ui/form';
+import { GradeBadge } from '@/components/ui/grade';
 import { createClient } from '@/lib/supabase/client';
 import { enqueueJob } from '@/lib/domain/jobs';
-import { ANALYSIS_KIND_LABEL, SURFACE_LABEL } from '@/lib/domain/labels';
+import { ANALYSIS_KIND_LABEL, GRADE_LABEL, SURFACE_LABEL } from '@/lib/domain/labels';
 import { buildDraftOpinion } from '@/lib/domain/reports';
-import type { AnalysisKind, Surface } from '@/lib/domain/types';
+import type { AnalysisKind, Grade, Surface } from '@/lib/domain/types';
 
 export interface ReportCandidate {
   analysis_id: string;
@@ -18,7 +22,8 @@ export interface ReportCandidate {
   kind: AnalysisKind;
   surface: Surface;
   scanned_at: string;
-  verdict_label: string;
+  /** 엔진이 낸 overall_verdict(없으면 'na'). 화면은 이 값으로 등급 배지 색을 고를 뿐 판정하지 않는다. */
+  grade: Grade;
   summary: string | null;
   /**
    * 선택 불가 사유(한국어 문장). null이면 선택할 수 있다.
@@ -42,6 +47,12 @@ function kindTitleLabel(candidates: ReportCandidate[]): string {
 /** 종합의견 초안의 항목 머리말. 같은 바닥에 평활도와 구배가 함께 실릴 수 있다. */
 function opinionLabel(c: ReportCandidate): string {
   return `${ANALYSIS_KIND_LABEL[c.kind]} ${SURFACE_LABEL[c.surface]}`;
+}
+
+/** 종합의견 칸 높이: 초안 줄 수 + 2, 최소 8줄 최대 34줄. 아트보드 rows=34는 초안 문단 넷이 스크롤 없이 다
+ *  보이는 높이다 - 짧은 초안에 34줄 빈칸을 두지 않고, 긴 초안은 34줄에서 멈추고 칸 안에서 스크롤한다. */
+function opinionRows(text: string): number {
+  return Math.min(34, Math.max(8, text.split('\n').length + 2));
 }
 
 export function ReportCreateForm({ locationId, locationLabel, candidates }: {
@@ -124,44 +135,52 @@ export function ReportCreateForm({ locationId, locationLabel, candidates }: {
     router.push(`/reports/${reportId}`);
   }
 
-  // 아트보드 ReportNew: 컨테이너(헤더 없음) 안에 필드 3개, primary '보고서 생성'은 컨테이너 밖
-  // 우하단. 제출 버튼이 같은 <form> 안에 있어야 하므로 폼이 Container를 감싼다.
+  // 제출 버튼이 같은 <form> 안에 있어야 하므로 폼이 카드를 감싼다. 주 버튼은 카드 밖 오른쪽(아트보드).
   return (
     <form onSubmit={submit} className="flex flex-col gap-5">
       <Container>
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-[22px]">
           <FormField label="보고서 제목" htmlFor="report-title">
             <input id="report-title" value={title} onChange={(e) => setTitle(e.target.value)}
               className={inputClass} />
           </FormField>
 
-          <fieldset>
-            <legend className="text-sm font-bold">포함할 분석</legend>
-            <p className="text-xs leading-4 text-cs-text-secondary">
+          <div role="group" aria-labelledby="report-candidates-label" aria-describedby="report-candidates-help"
+            className="flex flex-col gap-2">
+            <p id="report-candidates-label" className="text-sm font-semibold">포함할 분석</p>
+            <p id="report-candidates-help" className="text-[13px] text-muted">
               같은 측정위치의 완료된 최신 분석만 후보로 표시됩니다(평활도와 구배, 바닥과 벽면을 함께 묶을 수 있습니다).
             </p>
-            <div className="mt-2 overflow-hidden rounded-lg border border-cs-divider">
-              {candidates.map((c) => (
-                <div key={c.analysis_id} className="border-b border-cs-divider px-4 py-3 last:border-b-0">
-                  {/* 종류는 **문구로** 앞세운다. 색만으로 구별하지 않는다(스펙 §7.2). */}
-                  <label className={`flex items-center gap-3 text-sm${c.blocked_reason ? ' text-cs-disabled' : ''}`}>
-                    <input type="checkbox" className={checkClass} checked={selected.includes(c.analysis_id)}
-                      disabled={!!c.blocked_reason}
-                      onChange={() => toggle(c.analysis_id)} />
-                    <span>
-                      {ANALYSIS_KIND_LABEL[c.kind]} · {SURFACE_LABEL[c.surface]} · {c.scanned_at} ·
-                      {' '}판정 {c.verdict_label}
-                    </span>
-                  </label>
-                  {c.blocked_reason && <Alert type="warning" className="mt-2">{c.blocked_reason}</Alert>}
-                </div>
-              ))}
+            <div className="mt-1 flex flex-col overflow-hidden rounded-control border border-line-2 bg-ground">
+              {candidates.map((c) => {
+                const blocked = !!c.blocked_reason;
+                const whyId = `report-candidate-why-${c.analysis_id}`;
+                return (
+                  <div key={c.analysis_id}
+                    className={`flex flex-col border-b border-line px-4 last:border-b-0${blocked ? ' gap-2 pb-4 pt-1.5' : ''}`}>
+                    <label className={`flex items-center gap-3 text-sm ${blocked ? 'min-h-11 cursor-not-allowed text-dim' : 'min-h-12 cursor-pointer py-1.5'}`}>
+                      <input type="checkbox" className={checkClass} checked={selected.includes(c.analysis_id)}
+                        disabled={blocked} aria-describedby={blocked ? whyId : undefined}
+                        onChange={() => toggle(c.analysis_id)} />
+                      {/* 종류는 **문구로** 앞세운다. 색만으로 구별하지 않는다(스펙 §7.2) - 등급 배지도 글자를 함께 쓴다.
+                          막힌 줄은 등급 색 대신 중립 배지(지금 넣을 수 없는 판정이 눈에 띄지 않게). */}
+                      <span className="min-w-0">
+                        {ANALYSIS_KIND_LABEL[c.kind]} · {SURFACE_LABEL[c.surface]} ·{' '}
+                        <span className={`font-mono text-[13px]${blocked ? '' : ' text-ink-2'}`}>{c.scanned_at}</span>
+                        {' '}· 판정{' '}
+                        {blocked ? <Badge tone="neutral">{GRADE_LABEL[c.grade]}</Badge> : <GradeBadge grade={c.grade} />}
+                      </span>
+                    </label>
+                    {blocked && <div id={whyId}><Alert type="warning">{c.blocked_reason}</Alert></div>}
+                  </div>
+                );
+              })}
             </div>
-          </fieldset>
+          </div>
 
           <FormField label="종합의견" htmlFor="report-opinion"
             description="비워 두면 분석별 자동 의견이 그대로 보고서에 실립니다. 스크리닝 한계 문구는 항상 자동 포함됩니다.">
-            <textarea id="report-opinion" rows={8} value={opinion}
+            <textarea id="report-opinion" rows={opinionRows(opinion)} value={opinion}
               onChange={(e) => setOpinion(e.target.value)} className={textareaClass} />
           </FormField>
 
@@ -169,7 +188,7 @@ export function ReportCreateForm({ locationId, locationLabel, candidates }: {
         </div>
       </Container>
 
-      <div className="flex justify-end gap-2">
+      <div className="flex flex-wrap justify-end gap-3">
         <Button type="submit" variant="primary" disabled={busy}>
           {busy ? '생성 요청 중...' : '보고서 생성'}
         </Button>

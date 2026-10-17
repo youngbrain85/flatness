@@ -1,4 +1,7 @@
 // 보고서 삭제(소프트). 스펙 2026-08-02-slope-analysis-design.md §7.6
+// 다크 리스킨(Task 10, 아트보드 ReportDetail): '삭제'는 위험 버튼이고 누를 때마다 확인 상자를 여닫는다
+// (aria-expanded). 확인 상자는 프래그먼트의 둘째 형제로 돌려준다 - 호출부의 flex-wrap 줄 안에서
+// order-last + basis-full로 버튼 줄 아래 한 줄을 통째로 차지하고 오른쪽에 붙는다(최대 520px).
 'use client';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -40,20 +43,25 @@ export function ReportDeleteButton({ report, redirectTo }: {
     router.refresh();
   }
 
-  if (!confirming) {
-    return <Button onClick={() => setConfirming(true)}>삭제</Button>;
-  }
-
-  // 확인 단계: error Alert 안에 문구 + 삭제 확인/취소. 둘 다 normal - 상세 화면의 primary는
-  // 발행 하나뿐이고(스펙 §4), 삭제 확인을 파랑 채움으로 만들면 발행과 구별되지 않는다.
   return (
-    <Alert type="error" className="max-w-md">
-      <p>{deleteConfirmText(report)}</p>
-      <div className="mt-2 flex gap-2">
-        <Button onClick={remove} disabled={busy}>삭제 확인</Button>
-        <Button onClick={() => { setConfirming(false); setError(null); }} disabled={busy}>취소</Button>
-      </div>
-      {error && <p className="mt-2 text-cs-error">{error}</p>}
-    </Alert>
+    <>
+      <Button variant="danger" aria-expanded={confirming}
+        onClick={() => { setConfirming((open) => !open); setError(null); }}>
+        삭제
+      </Button>
+      {confirming && (
+        // 확인 단계: error 상자 안에 문구 + 삭제 확인(위험)/취소(보조). 화면의 주 버튼은 발행 하나뿐이다.
+        <div className="order-last flex basis-full justify-end">
+          <Alert type="error" className="w-full max-w-[520px]">
+            <p className="text-ink">{deleteConfirmText(report)}</p>
+            <div className="mt-3 flex flex-wrap gap-3">
+              <Button variant="danger" onClick={remove} disabled={busy}>삭제 확인</Button>
+              <Button onClick={() => { setConfirming(false); setError(null); }} disabled={busy}>취소</Button>
+            </div>
+            {error && <p className="mt-2 text-err">{error}</p>}
+          </Alert>
+        </div>
+      )}
+    </>
   );
 }

@@ -1,40 +1,39 @@
-// D7 Step 3: PageHeader 브레드크럼(현장 › 측정위치) + StatusIndicator 상태(T8) + "포함 분석"
-// 링크의 /scans/[scanId]?analysis=[id] 단축(analyses 행의 scan_id로 한 홉 줄인다 -
-// D6 리다이렉트가 /analyses/[id]도 여전히 받아주지만 여기서는 애초에 그 홉을
-// 만들지 않는다)을 검증한다. 기능(다운로드·재생성·발행·삭제·진행 상태)은 이 태스크의
-// 범위가 아니다 - 각각 report-actions.test.tsx·report-delete-button.test.tsx·
-// report-progress.test.tsx가 이미 덮는다.
-import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+// 보고서 상세(스펙 §7.6 후반부, §5 16행) + 현장 작업 공간(Task 10): 현장 헤더, 브레드크럼 보고서 / 제목,
+// 상태 점, 포함 분석(등급 배지), PDF 미리보기(검정 스테이지 위 흰 A4 종이). 포함 분석 링크는
+// /scans/[scanId]?analysis=[id]로 바로 간다(D6 리다이렉트 홉을 만들지 않는다). 기능(다운로드·재생성·발행·
+// 삭제·진행 상태)은 각 컴포넌트 테스트가 덮는다 - 여기서는 무엇을 넘기는지만 본다.
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { render, screen, within } from '@testing-library/react';
 import type { ReactElement } from 'react';
 
 vi.mock('@/lib/supabase/server', () => ({ createClient: vi.fn() }));
-// Task 2: 셸 헤더(계정 메뉴)가 요청 사용자 이메일을 쓴다 - proxy 가 실어 주는 헤더 형태로 공급한다.
 vi.mock('next/headers', () => ({
   headers: async () => new Headers({
-    'x-flatness-user-id': 'u1', 'x-flatness-user-email': encodeURIComponent('u1@example.com'),
+    'x-flatness-user-id': 'u1',
+    'x-flatness-user-email': encodeURIComponent('u1@example.com'),
   }),
 }));
-// 셸 헤더 내부는 components/shell 테스트가 맡는다. 여기서는 그려진 자리에 넘긴 현장·이메일만 본다
-// (진짜 헤더를 그리면 헤더의 "FLATNESS, 현장 목록으로" 같은 링크가 이 파일의 getByRole 단언과 겹친다).
+
+const { captured } = vi.hoisted(() => ({
+  captured: { site: [] as unknown[], entry: [] as unknown[], del: [] as unknown[] },
+}));
 vi.mock('@/components/shell/site-header', () => ({
-  SiteHeader: ({ site, email }: { site: { id: string; name: string }; email: string | null }) => (
-    <div data-testid="site-header" data-site-id={site.id} data-site-name={site.name} data-email={email ?? ''} />
-  ),
+  SiteHeader: (p: unknown) => { captured.site.push(p); return null; },
 }));
 vi.mock('@/components/shell/entry-header', () => ({
-  EntryHeader: ({ email }: { email: string | null }) => <div data-testid="entry-header" data-email={email ?? ''} />,
+  EntryHeader: (p: unknown) => { captured.entry.push(p); return null; },
 }));
-
-// 하위 클라이언트 컴포넌트(ReportProgress·ReportActions·ReportDeleteButton)는 각자
-// useRouter/Realtime 구독을 쓴다 - 이 페이지 테스트의 관심사(브레드크럼·상태 배지·
-// 포함 분석 링크)가 아니므로 스텁으로 대체해 잡음을 없앤다.
+// 하위 클라이언트 컴포넌트(ReportProgress·ReportActions·ReportDeleteButton)는 각자 useRouter/Realtime
+// 구독을 쓴다 - 이 페이지 테스트의 관심사가 아니므로 스텁으로 대체한다(삭제 버튼은 넘기는 값만 본다).
 vi.mock('@/components/report/report-progress', () => ({ ReportProgress: () => null }));
 vi.mock('@/components/report/report-actions', () => ({ ReportActions: () => null }));
-vi.mock('@/components/report/report-delete-button', () => ({ ReportDeleteButton: () => null }));
+vi.mock('@/components/report/report-delete-button', () => ({
+  ReportDeleteButton: (p: unknown) => { captured.del.push(p); return null; },
+}));
 
 import { createClient } from '@/lib/supabase/server';
 import ReportPage from '../page';
+import { MAIN_BG, PAGE_MAIN } from '@/components/ui/page';
 
 type Row = Record<string, unknown>;
 
@@ -76,11 +75,11 @@ const link: Row = { report_id: 'r1', analysis_id: 'a1', sort_order: 0 };
 const analysis: Row = { id: 'a1', scan_id: 'sc1', surface: 'floor', overall_verdict: 'pass' };
 const scan: Row = { id: 'sc1', scanned_at: '2026-07-20' };
 
-function mockSupabase(report: Row) {
+function mockSupabase(report: Row, locations: Row[] = [location]) {
   vi.mocked(createClient).mockResolvedValue({
     from: (t: string) => {
       if (t === 'reports') return table([report]);
-      if (t === 'locations') return table([location]);
+      if (t === 'locations') return table(locations);
       if (t === 'sites') return table([site]);
       if (t === 'report_analyses') return table([link]);
       if (t === 'analyses') return table([analysis]);
@@ -90,102 +89,105 @@ function mockSupabase(report: Row) {
   } as never);
 }
 
-async function renderPage(report: Row = reportRow()) {
-  mockSupabase(report);
+async function renderPage(report: Row = reportRow(), locations: Row[] = [location]) {
+  mockSupabase(report, locations);
   const el = await ReportPage({ params: Promise.resolve({ id: 'r1' }) });
   return render(el as ReactElement);
 }
 
-describe('ReportPage 브레드크럼 (D7 Step 3: 현장 › 측정위치)', () => {
-  it('현장 홈·현장명·측정위치 라벨을 순서대로 보여준다', async () => {
+beforeEach(() => {
+  captured.site.length = 0;
+  captured.entry.length = 0;
+  captured.del.length = 0;
+});
+
+describe('ReportPage 현장 헤더·브레드크럼·본문 (Task 10, 스펙 §4.3)', () => {
+  it('측정위치의 현장으로 현장 헤더를 그리고 계정 이메일을 넘긴다', async () => {
     await renderPage();
-    expect(screen.getByRole('link', { name: '현장' })).toHaveAttribute('href', '/');
-    expect(screen.getByRole('link', { name: '현장A' })).toHaveAttribute('href', '/sites/s1');
-    expect(screen.getByText('101동 / 3층 / 거실')).toBeInTheDocument();
+    expect(captured.site).toEqual([{ site: { id: 's1', name: '현장A' }, email: 'u1@example.com' }]);
+    expect(captured.entry).toEqual([]);
   });
 
-  it('보고서 제목을 헤딩으로 보여준다', async () => {
+  it('브레드크럼은 보고서(현장 보고서 목록) / 제목(현재 화면)', async () => {
     await renderPage();
-    expect(screen.getByRole('heading', { name: '거실 평활도 분석 보고서' })).toBeInTheDocument();
+    const nav = screen.getByRole('navigation', { name: '위치' });
+    expect(within(nav).getByRole('link', { name: '보고서' })).toHaveAttribute('href', '/sites/s1/reports');
+    expect(within(nav).getByText('거실 평활도 분석 보고서').closest('[aria-current]'))
+      .toHaveAttribute('aria-current', 'page');
+  });
+
+  it('보고서 제목을 h1으로, 본문은 MAIN_BG <main> > PAGE_MAIN으로 그린다', async () => {
+    await renderPage();
+    expect(screen.getByRole('heading', { level: 1, name: '거실 평활도 분석 보고서' })).toBeInTheDocument();
+    const main = screen.getByRole('main');
+    expect(main.className).toBe(MAIN_BG);
+    expect((main.firstElementChild as HTMLElement).className).toBe(PAGE_MAIN);
+  });
+
+  it('삭제하면 이 현장의 보고서 목록으로 간다', async () => {
+    await renderPage();
+    expect(captured.del).toEqual([{ report: { id: 'r1', status: 'draft' }, redirectTo: '/sites/s1/reports' }]);
+  });
+
+  // 측정위치가 지워진 레거시 보고서: 현장을 알 수 없다 - 막다른 화면 대신 진입 헤더 + 현장 목록으로 돌아갈 길
+  it('측정위치가 없으면 진입 헤더와 "현장 목록 / 제목" 크럼, 삭제 후에는 진입 페이지로', async () => {
+    await renderPage(reportRow(), []);
+    expect(captured.site).toEqual([]);
+    expect(captured.entry).toEqual([{ email: 'u1@example.com' }]);
+    const nav = screen.getByRole('navigation', { name: '위치' });
+    expect(within(nav).getByRole('link', { name: '현장 목록' })).toHaveAttribute('href', '/');
+    expect(captured.del).toEqual([{ report: { id: 'r1', status: 'draft' }, redirectTo: '/' }]);
   });
 });
 
-describe('ReportPage 상태 표시 (D7 Step 3: reportStatusBadge 재사용 → T8 StatusIndicator)', () => {
+describe('ReportPage 상태 표시 (reportIndicator 재사용 → StatusIndicator)', () => {
   it('초안 + 생성 완료는 작성 중(pending)으로 표시한다', async () => {
     await renderPage(reportRow({ status: 'draft', gen_status: 'done' }));
-    expect(screen.getByText('작성 중')).toHaveAttribute('data-status', 'pending');
+    expect(screen.getByText('작성 중').closest('[data-status]')).toHaveAttribute('data-status', 'pending');
   });
 
   it('발행본은 발행됨(success)으로 표시한다', async () => {
     await renderPage(reportRow({ status: 'finalized' }));
-    expect(screen.getByText('발행됨')).toHaveAttribute('data-status', 'success');
+    expect(screen.getByText('발행됨').closest('[data-status]')).toHaveAttribute('data-status', 'success');
+  });
+
+  it('PDF 생성 중은 목록과 같게 속 빈 고리(in-progress)다', async () => {
+    await renderPage(reportRow({ gen_status: 'processing', pdf_path: null }));
+    expect(screen.getByText('PDF 생성 중').closest('[data-status]')).toHaveAttribute('data-status', 'in-progress');
   });
 });
 
-describe('ReportPage 포함 분석 링크 (D7 참고: /scans/[scanId]?analysis=[id]로 단축)', () => {
-  it('/analyses/[id]가 아니라 스캔 작업대로 바로 링크한다', async () => {
+describe('ReportPage 포함 분석 (D7: /scans/[scanId]?analysis=[id]로 단축)', () => {
+  it('/analyses/[id]가 아니라 스캔 작업대로 바로 링크하고, 판정은 등급 배지(data-grade)다', async () => {
     await renderPage();
     const a = screen.getByRole('link', { name: /바닥.*2026-07-20.*판정/ });
     expect(a).toHaveAttribute('href', '/scans/sc1?analysis=a1');
+    expect(a.querySelector('[data-grade="pass"]')).toHaveTextContent('적합');
+    expect(within(a).getByText('2026-07-20').className).toContain('font-mono');
   });
 
-  it("'포함 분석' 컨테이너가 건수를 카운터로 보여준다(T8)", async () => {
+  it("'포함 분석' 카드가 건수를 보여준다", async () => {
     await renderPage();
-    expect(screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent)).toContain('포함 분석(1)');
+    expect(screen.getByRole('heading', { level: 2, name: /포함 분석\s*\(1\)/ })).toBeInTheDocument();
   });
 });
 
-describe('ReportPage PDF 미리보기 (T8: 컨테이너 안 iframe)', () => {
-  it('PDF가 있고 생성 완료면 iframe을 그린다', async () => {
-    await renderPage();
-    expect(screen.getByTitle('보고서 PDF 미리보기')).toHaveAttribute('src', '/api/data/reports/r1/report.pdf');
-  });
-
-  it('미리보기는 컨테이너 본문 여백 안에 라운드 8로 놓인다(아트보드 ReportDetail: padding 20 + radius 8)', async () => {
+describe('ReportPage PDF 미리보기 (스펙 §5 16행: 검정 스테이지 위 흰 A4 종이)', () => {
+  it('PDF가 있고 생성 완료면 도구 막대 없는 뷰어를 A4 종이(420px, 210:297) 안에 그린다', async () => {
     await renderPage();
     const frame = screen.getByTitle('보고서 PDF 미리보기');
-    expect(frame.className).toContain('rounded-lg');
-    // 컨테이너에 꽉 채우지 않는다 - padded={false} + 아래 모서리만 둥근 옛 배치가 아니다
-    expect(frame.className).not.toContain('rounded-b-cs-container');
-    expect(frame.parentElement?.className).toContain('px-[22px]'); // Container padded 기본값(본문 여백 20px 22px)
+    expect(frame).toHaveAttribute('src', '/api/data/reports/r1/report.pdf#toolbar=0&navpanes=0&view=FitH');
+    const paper = frame.parentElement as HTMLElement;
+    for (const c of ['bg-paper', 'aspect-[210/297]', 'max-w-[420px]']) expect(paper.className).toContain(c);
+    expect(paper.closest('[data-stage]')).not.toBeNull();
+    expect(screen.getByRole('heading', { level: 2, name: 'PDF 미리보기' })).toBeInTheDocument();
+    expect(screen.getByText('reports/r1/report.pdf').className).toContain('font-mono');
   });
 
-  it('PDF가 없으면 안내 문구를 보여준다', async () => {
+  it('PDF가 없으면 스테이지 안에 안내 문구를 보여준다', async () => {
     await renderPage(reportRow({ pdf_path: null, gen_status: 'processing' }));
     const notice = screen.getByText('PDF가 아직 생성되지 않았습니다.');
-    expect(notice).toBeInTheDocument();
-    // 여백은 컨테이너가 준다 - 안내 문구가 자체 p-5를 덧대지 않는다
-    expect(notice.className).not.toContain('p-5');
-    expect(notice.parentElement?.className).toContain('px-[22px]');
+    expect(notice.closest('[data-stage]')).not.toBeNull();
     expect(screen.queryByTitle('보고서 PDF 미리보기')).toBeNull();
-  });
-});
-
-// Task 2 셸(스펙 §4.2): 보고서 상세는 URL 을 그대로 두고 현장 헤더(보고서) 안에서 그린다.
-describe('ReportPage 셸 헤더 (Task 2)', () => {
-  it('보고서의 측정위치 → 현장으로 SiteHeader 를 그리고 요청 사용자 이메일을 넘긴다', async () => {
-    await renderPage();
-    const header = screen.getByTestId('site-header');
-    expect(header).toHaveAttribute('data-site-id', 's1');
-    expect(header).toHaveAttribute('data-site-name', '현장A');
-    expect(header).toHaveAttribute('data-email', 'u1@example.com');
-    expect(screen.queryByTestId('entry-header')).toBeNull();
-  });
-
-  it('측정위치가 지워진 레거시 보고서는 진입 헤더로 대신한다', async () => {
-    vi.mocked(createClient).mockResolvedValue({
-      from: (t: string) => {
-        if (t === 'reports') return table([reportRow()]);
-        if (t === 'locations') return table([]);
-        if (t === 'report_analyses') return table([link]);
-        if (t === 'analyses') return table([analysis]);
-        if (t === 'scans') return table([scan]);
-        throw new Error(`예상치 못한 테이블: ${t}`);
-      },
-    } as never);
-    const el = await ReportPage({ params: Promise.resolve({ id: 'r1' }) });
-    render(el as ReactElement);
-    expect(screen.queryByTestId('site-header')).toBeNull();
-    expect(screen.getByTestId('entry-header')).toHaveAttribute('data-email', 'u1@example.com');
   });
 });
