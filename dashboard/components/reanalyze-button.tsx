@@ -32,7 +32,7 @@
 // 임포터를 통해 다시 읽게 한다. 구배(kind='slope')는 임포트 스캔에서 이 버튼
 // 자체가 렌더되지 않으므로(app/scans/[id]/page.tsx) 사실상 평활도에서만 의미가 있다.
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { enqueueJob } from '@/lib/domain/jobs';
@@ -40,7 +40,7 @@ import { ANALYSIS_KIND_LABEL } from '@/lib/domain/labels';
 import { isDirectionAwareCriteria } from '@/lib/domain/slope-direction';
 import type { AnalysisKind, AnalysisStatus, CriteriaRow, SlopeThreshold, Surface } from '@/lib/domain/types';
 import { Button } from '@/components/ui/button';
-import { FormField, checkClass } from '@/components/ui/form';
+import { checkClass } from '@/components/ui/form';
 
 interface Props {
   scanId: string;
@@ -60,10 +60,10 @@ interface Props {
   isImport: boolean;
 }
 
-// T6 리뷰 수정 1차: 아트보드(ScanDone.dc.html 172-205행)의 구배 컨테이너는 헤더에
-// 버튼만, 본문에 '적용 기준' 라디오를 둔다. 한 컴포넌트가 Container의 actions 슬롯과
-// 본문에 동시에 렌더할 수는 없으므로 상태·잡 등록 로직을 이 훅으로 뽑고, 두 조각
-// (ReanalyzeAction·SlopeCriteriaField)이 같은 ctl을 공유하게 했다 - 로직은 옛
+// 다크 C안(아트보드 ScanDone): '구배 분석' 버튼은 페이지 제목 줄에, '적용 기준' 라디오는 아래
+// '구배 분석' 카드에 있다. 한 컴포넌트가 두 자리에 동시에 렌더할 수는 없으므로 상태·잡 등록
+// 로직을 이 훅으로 뽑고, 두 조각(ReanalyzeAction·SlopeCriteriaField)이 같은 ctl을 공유하게
+// 했다(slope-analysis-container.tsx의 SlopeAnalysisScope가 ctl을 컨텍스트로 나눠 준다) - 로직은 옛
 // ReanalyzeButton 본문 그대로다(잡 타입 분기·기준 해석 순서·엔큐/롤백 전부).
 export function useReanalyze({
   scanId, userId, surface, kind, criteriaId, siteId, latestStatus, isImport,
@@ -188,19 +188,21 @@ export function useReanalyze({
 
 export type ReanalyzeControl = ReturnType<typeof useReanalyze>;
 
-// 버튼 + 진행/오류 안내. 컨테이너 헤더 액션 슬롯(아트보드 ScanProcessing: disabled 버튼 +
-// 12px 힌트)과 단독 사용 양쪽에서 같은 모습이다.
+// 버튼 + 진행/오류 안내. 페이지 제목 줄(아트보드 ScanProcessing: 비활성 버튼 + 그 아래 13px 안내,
+// 왼쪽 정렬)에 놓인다. 보조 버튼이다 - 이 화면 본문의 주 버튼은 '이 위치의 보고서 생성' 하나다.
 export function ReanalyzeAction({ ctl }: { ctl: ReanalyzeControl }) {
+  const noteId = useId();
   return (
-    <div className="flex flex-col items-end gap-1">
+    <div className="flex flex-col items-start gap-1.5">
       <Button variant="normal" onClick={ctl.onClick} disabled={ctl.disabled}
+        aria-describedby={ctl.inProgress ? noteId : undefined}
         title={ctl.inProgress ? '이미 진행 중인 분석이 끝난 뒤 다시 시도하세요.' : undefined}>
         {ctl.busy ? '요청 중...' : ctl.label}
       </Button>
       {ctl.inProgress && (
-        <p className="text-xs leading-4 text-cs-text-secondary">진행 중인 분석이 끝난 뒤 다시 시도하세요.</p>
+        <p id={noteId} className="text-[13px] text-muted">진행 중인 분석이 끝난 뒤 다시 시도하세요.</p>
       )}
-      {ctl.error && <p className="text-xs leading-4 text-cs-error">{ctl.error}</p>}
+      {ctl.error && <p role="alert" className="max-w-xs text-[13px] text-err">{ctl.error}</p>}
     </div>
   );
 }
@@ -209,13 +211,15 @@ export function ReanalyzeAction({ ctl }: { ctl: ReanalyzeControl }) {
 // thresholds[0].use(옥상 슬래브(노출방수) / 욕실·화장실 바닥 / 주차장 바닥 /
 // 실내 평바닥 등, 007_slope_analysis.sql:118-133)를 보여준다.
 // 순서는 fn_resolve_criteria 반환 순서 그대로다 - 재정렬하지 않는다.
-// 아트보드(ScanDone 178-205행)에서 이 블록은 컨테이너 본문의 첫 자식이다.
+// 아트보드(ScanDone '구배 분석' 카드)에서 이 블록은 카드 본문의 첫 자식이다: 'fieldset 적용 기준' +
+// 기준마다 칸 하나(고른 칸만 ink 테두리 + surface-2 + 600).
 export function SlopeCriteriaField({ ctl }: { ctl: ReanalyzeControl }) {
   if (ctl.kind !== 'slope') return null;
   return (
     <>
       {ctl.slopeCriteria.length > 0 && (
-        <FormField label="적용 기준">
+        <fieldset className="m-0 min-w-0 border-0 p-0">
+          <legend className="m-0 p-0 pb-2 text-sm font-semibold text-ink">적용 기준</legend>
           <div className="flex flex-col gap-2">
             {ctl.slopeCriteria.map((c) => {
               // CriteriaRow.thresholds는 컴파일 타임에는 평활도 Threshold[]지만
@@ -223,31 +227,32 @@ export function SlopeCriteriaField({ ctl }: { ctl: ReanalyzeControl }) {
               // 형태가 다르다 - slope-result.tsx의 stats 캐스팅과 같은 사정).
               const t = c.thresholds?.[0] as unknown as SlopeThreshold | undefined;
               const aware = isDirectionAwareCriteria(t ?? null);
+              const on = ctl.slopeCriteriaId === c.id;
               return (
-                <label key={c.id} className="flex items-center gap-2 text-sm">
-                  <input type="radio" name={`slope-criteria-${ctl.scanId}`} checked={ctl.slopeCriteriaId === c.id}
+                <label key={c.id}
+                  className={`flex min-h-11 cursor-pointer flex-wrap items-center gap-x-2.5 gap-y-0.5 rounded-control border px-3.5 py-2 text-sm ${
+                    on ? 'border-ink bg-surface-2 font-semibold text-ink' : 'border-line-3 font-medium text-ink-2'}`}>
+                  <input type="radio" name={`slope-criteria-${ctl.scanId}`} checked={on}
                     onChange={() => ctl.setSlopeCriteriaId(c.id)} disabled={ctl.busy || ctl.inProgress}
                     className={checkClass} />
-                  <span className="inline-flex flex-wrap items-baseline gap-1.5">
-                    <span>{t?.use ?? c.name}</span>
-                    {c.is_default && <span className="text-cs-text-secondary">(기본)</span>}
-                    {!aware && <span className="text-cs-disabled">- 방향 판정 안 함</span>}
-                  </span>
+                  <span>{t?.use ?? c.name}</span>
+                  {c.is_default && <span className="font-normal text-muted">(기본)</span>}
+                  {!aware && <span className="font-normal text-muted">- 방향 판정 안 함</span>}
                 </label>
               );
             })}
           </div>
-        </FormField>
+        </fieldset>
       )}
       {ctl.criteriaLoadError && (
-        <p className="text-xs leading-4 text-cs-error">{ctl.criteriaLoadError}</p>
+        <p role="alert" className="text-[13px] text-err">{ctl.criteriaLoadError}</p>
       )}
     </>
   );
 }
 
-// 평활도 컨테이너의 헤더 액션(기준 라디오가 없는 쪽)은 이 버튼 하나로 끝난다.
-// 구배는 라디오가 본문으로 가야 해서 SlopeAnalysisContainer가 두 조각을 직접 배치한다.
+// 평활도 쪽(기준 라디오가 없는 쪽)은 제목 줄의 이 버튼 하나로 끝난다.
+// 구배는 라디오가 카드로 가야 해서 SlopeAnalysisScope가 두 조각에 ctl을 나눠 준다.
 //
 // 최종 리뷰 Important 4: kind를 AnalysisKind로 열어 두면 kind="slope"로 부를 수 있는데,
 // 그러면 훅이 기준 후보를 불러 is_default로 버튼만 활성화되고 정작 라디오(SlopeCriteriaField)는

@@ -12,6 +12,7 @@ const { useRowStatusMock } = vi.hoisted(() => ({ useRowStatusMock: vi.fn() }));
 vi.mock('@/lib/hooks/use-row-status', () => ({ useRowStatus: useRowStatusMock }));
 
 import { AnalysisProgress } from '../analysis-progress';
+import { buttonClass } from '@/components/ui/button';
 
 describe('AnalysisProgress 결과 보기 링크 (D6 이월: 리다이렉트 홉 축소)', () => {
   it('done이면 /scans/[scanId]?analysis=[analysisId]로 링크한다(구 /analyses/[id] 아님)', () => {
@@ -30,31 +31,33 @@ describe('AnalysisProgress 결과 보기 링크 (D6 이월: 리다이렉트 홉 
   });
 });
 
-// T6 Cloudscape 재스킨: 진행·실패 문구는 StatusIndicator(data-status), done은 normal 알약 링크.
-describe('AnalysisProgress Cloudscape 재스킨 (T6)', () => {
-  it('진행 중이면 StatusIndicator in-progress로 상태 라벨 + 자동 갱신 안내를 그린다', () => {
+// T7 다크 C안: 진행·실패 문구는 StatusIndicator(data-status), done은 보조 버튼 모양 링크 + 초록 체크.
+describe('AnalysisProgress 다크 C안 (T7)', () => {
+  it('진행 중이면 in-progress 상태(속 빈 고리) + 상태 라벨 + 자동 갱신 안내를 role=status로 그린다', () => {
     useRowStatusMock.mockReturnValue('processing');
     render(<AnalysisProgress analysisId="a1" initialStatus="processing" scanId="s1" />);
 
     const el = screen.getByText(/워커가 처리 중입니다/);
-    expect(el).toHaveAttribute('data-status', 'in-progress');
+    expect(el.closest('[data-status]')).toHaveAttribute('data-status', 'in-progress');
     expect(el.textContent).toContain('분석 중');
+    expect(screen.getByRole('status')).toHaveTextContent('워커가 처리 중입니다');
   });
 
-  it('실패하면 StatusIndicator error + 원인 안내다', () => {
+  it('실패하면 error 상태 + 원인 안내다', () => {
     useRowStatusMock.mockReturnValue('failed');
     render(<AnalysisProgress analysisId="a1" initialStatus="failed" scanId="s1" />);
 
-    expect(screen.getByText('분석에 실패했습니다.')).toHaveAttribute('data-status', 'error');
-    expect(screen.getByText(/3회 자동 재시도 후에도 실패한 상태입니다/)).toBeInTheDocument();
+    expect(screen.getByText('분석에 실패했습니다.').closest('[data-status]')).toHaveAttribute('data-status', 'error');
+    expect(screen.getByText(/3회 자동 재시도 후에도 실패한 상태입니다/)).toHaveClass('text-muted');
   });
 
-  it('done 링크는 normal 버튼(line-3 테두리, 채움 없음)이다', () => {
+  it('done 링크는 보조 버튼(채움 없음)이고 초록 check-circle을 단다', () => {
     useRowStatusMock.mockReturnValue('done');
     render(<AnalysisProgress analysisId="a1" initialStatus="done" scanId="s1" />);
 
     const link = screen.getByText('분석 완료 - 결과 보기');
-    expect(link.className).toContain('border-line-3');
-    expect(link.className).not.toContain('bg-ink');
+    expect(link.className).toContain(buttonClass('normal'));
+    expect(link.className).not.toContain(buttonClass('primary'));
+    expect(link.querySelector('[data-icon="check-circle"]')).toHaveClass('text-ok');
   });
 });

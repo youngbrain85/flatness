@@ -1,22 +1,30 @@
 // 스캔 작업대(D5): 메타데이터 + 단계 스트립 + 상태별 다음 행동 + 단위 확정·분석 결과 인라인
+// 다크 C안(아트보드 ScanUnitConfirm·ScanProcessing·ScanDone): 현장 헤더 → 브레드크럼(측정위치 /
+// 위치 / 스캔) → 제목 줄(제목·메타 | 재분석 버튼) → 상태별 본문 → 스캔 정보 카드.
+// 아래 '// Realtime 감시가 필요한 …'부터 staleSelectedAnalysis 선언 끝까지는 C1 사고 가드
+// 영역이라 한 글자도 바꾸지 않는다(이 머리와 파일 꼬리만 다크 C안으로 바뀐다).
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getRequestUser } from '@/lib/auth/request-user';
 import { createClient } from '@/lib/supabase/server';
-import { EntryHeader } from '@/components/shell/entry-header';
-import { SiteHeader } from '@/components/shell/site-header';
 import { AnalysisProgress } from '@/components/analysis-progress';
 import { AnalysisResult } from '@/components/analysis/analysis-result';
 import { SlopeResult } from '@/components/analysis/slope-result';
 import { ReanalyzeButton } from '@/components/reanalyze-button';
 import { ScanStatusWatcher } from '@/components/scan-status-watcher';
-import { SlopeAnalysisContainer } from '@/components/slope-analysis-container';
 import { ScanStepStrip } from '@/components/scan-step-strip';
+import { EntryHeader } from '@/components/shell/entry-header';
+import { SiteHeader } from '@/components/shell/site-header';
+import {
+  SlopeAnalysisAction, SlopeAnalysisCard, SlopeAnalysisScope,
+} from '@/components/slope-analysis-container';
 import { UnitConfirmForm } from '@/components/unit-confirm-form';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { LinkButton } from '@/components/ui/button';
 import { Container } from '@/components/ui/container';
+import { Icon } from '@/components/ui/icons';
 import { KeyValuePairs } from '@/components/ui/key-value';
 import { MAIN_BG, PAGE_MAIN } from '@/components/ui/page';
 import { PageHeader } from '@/components/ui/page-header';
@@ -26,11 +34,18 @@ import {
   SCAN_STATUS_LABEL, SURFACE_LABEL,
 } from '@/lib/domain/labels';
 import { GRADE_TONE } from '@/lib/domain/grade-tone';
+import { locationCrumb } from '@/lib/domain/location-label';
 import { isExternalImport, isSlopeStats } from '@/lib/domain/stats';
 import type { AnalysisRow, LocationRow, PhotoRow, ScanRow, SiteRow } from '@/lib/domain/types';
 
 // 최종 리뷰 Important 2: 스캔 상태 → StatusIndicator 타입 표는 측정위치 트리와 공유해야
 // 같은 스캔이 두 화면에서 같은 아이콘을 단다 - components/ui/status-indicator.tsx로 옮겼다.
+
+// <title>은 'Flatness · 스캔'(스펙 §9). 앞부분은 app/layout.tsx 의 title.template 이 붙인다.
+export const metadata: Metadata = { title: '스캔' };
+
+// 분석 카드(평활도·구배)는 한 줄에 나란히 두고 좁으면 아래로 쌓는다(아트보드 ScanDone: flex 1 1 420px).
+const CARD_IN_ROW = 'min-w-0 flex-[1_1_420px]';
 
 // Realtime 감시가 필요한 진행 중 상태(리뷰 Important 2) — ready/archived/failed는
 // 이미 종결됐거나(ready는 이 화면 자체에서 동기적으로 전이시킨 값) 더 이상 워커가
@@ -216,7 +231,8 @@ export default async function ScanPage({ params, searchParams }: {
       ? selectedAnalysis
       : null;
 
-  // D5: 브레드크럼의 현장명. loc이 없으면(위치가 지워진 레거시 데이터) 조회하지 않는다.
+  // D5: 측정위치의 현장. loc이 없으면(위치가 지워진 레거시 데이터) 조회하지 않는다.
+  // 다크 C안에서 현장 이름은 브레드크럼이 아니라 현장 헤더(SiteHeader)가 쓴다.
   const siteRes = loc
     ? await supabase.from('sites').select('*').eq('id', loc.site_id).maybeSingle()
     : null;
@@ -231,56 +247,131 @@ export default async function ScanPage({ params, searchParams }: {
   const locLabel = loc
     ? [loc.building, loc.floor, loc.room, loc.name].filter(Boolean).join(' / ')
     : '-';
+  // 다크 C안 브레드크럼(스펙 §4.3): 현장은 헤더에 있으므로 탭 이름부터 시작한다 -
+  // 측정위치 / 동 · 층 · 호 · 위치 / 스캔 · 표면 · 날짜. 둘째 칸은 측정위치 탭의 그 줄(#loc-…)로 간다.
+  // 위치가 지워진 레거시 스캔은 현장을 모르므로 '현장 목록'부터 시작한다(설정 화면과 같은 꼴).
+  const scanCrumb = `스캔 · ${SURFACE_LABEL[s.surface]} · ${s.scanned_at}`;
   const crumbs = loc
     ? [
-        { href: '/', label: '현장' },
-        { href: `/sites/${loc.site_id}`, label: site?.name ?? '현장 상세' },
-        { label: locLabel },
+        { href: `/sites/${loc.site_id}/locations`, label: '측정위치' },
+        { href: `/sites/${loc.site_id}/locations#loc-${loc.id}`, label: locationCrumb(loc) },
+        { label: scanCrumb },
       ]
-    : [{ href: '/', label: '현장' }];
+    : [{ href: '/', label: '현장 목록' }, { label: scanCrumb }];
+  // 아트보드 ScanUnitConfirm은 메타 줄 없이 제목 → 진행 단계 → 스캔 정보(7칸) → 단위 확인 순서다.
+  // ScanProcessing·ScanDone은 제목 아래 메타 줄을 두고, 진행 단계는 맨 아래 스캔 정보 카드 안에 넣는다.
+  const confirmingUnit = s.status === 'awaiting_unit_confirm';
+  // 완료된 분석이 있는 ready 스캔은 아트보드 ScanDone처럼 '분석 완료'라고 적는다. 상태 값(ready)과
+  // 점 색(SCAN_STATUS_TYPE.ready)은 그대로다 - 글자만 결과가 이미 있다는 사실을 말한다.
+  const scanStatusLabel = s.status === 'ready' && hasDoneAnalysis ? '분석 완료' : SCAN_STATUS_LABEL[s.status];
+
+  // point_count는 001_schema.sql에 선언만 되고 비어 있다가 단계 E의
+  // precheck 잡부터 채워진다(worker/flatworker/jobs.py). 그 전에 올라온
+  // 스캔은 계속 null이므로 '-'로 둔다. 단위 확정의 근거는 아니다
+  // (점 개수는 파일 단위가 m이든 mm이든 같다) - 스캔 규모를 가늠하는
+  // 메타데이터로만 쓴다.
+  const pointCountValue = (
+    <span className="font-mono tabular-nums">
+      {s.point_count === null ? '-' : s.point_count.toLocaleString('ko-KR')}
+    </span>
+  );
+  const statusValue = (
+    <StatusIndicator type={SCAN_STATUS_TYPE[s.status]}>{scanStatusLabel}</StatusIndicator>
+  );
+  const unitScaleValue = <span className="font-mono tabular-nums">{s.unit_scale ?? '미확정'}</span>;
+  // 분석 중·완료 화면의 스캔 정보(4칸, 아트보드 ScanProcessing·ScanDone 최소 칸 140px = KeyValuePairs
+  // columns={4}): 측정위치·원본 파일·계보는 제목 아래 메타 줄이 이미 말한다.
+  const shortInfo = [
+    { label: '장비', value: s.device ?? '-' },
+    { label: '점 개수', value: pointCountValue },
+    { label: '상태', value: statusValue },
+    { label: '단위 배율', value: unitScaleValue },
+  ];
+  // 단위 확인 화면의 스캔 정보(7칸, 아트보드 ScanUnitConfirm 최소 칸 240px = KeyValuePairs columns={2}):
+  // 메타 줄이 없으므로 옛 dl의 7항목을 그대로 둔다.
+  const fullInfo = [
+    { label: '측정위치', value: locLabel },
+    {
+      label: '원본 파일',
+      value: <span className="font-mono [overflow-wrap:anywhere]">{s.original_filename ?? '-'}</span>,
+    },
+    { label: '장비', value: s.device ?? '-' },
+    { label: '데이터 계보', value: LINEAGE_LABEL[s.lineage] },
+    { label: '점 개수', value: pointCountValue },
+    { label: '상태', value: statusValue },
+    { label: '단위 배율', value: unitScaleValue },
+  ];
+
+  // 제목 줄 액션(아트보드 ScanProcessing·ScanDone): '구배 분석' → '평활도 분석' 순서. 둘 다 보조 버튼이다 -
+  // 이 화면 본문의 주 버튼은 결과 아래 '이 위치의 보고서 생성' 하나다(아트보드는 ScanDone의 '평활도 분석'도
+  // 채움으로 그리지만 한 화면 주 버튼 하나 규칙을 따른다). SlopeAnalysisAction은 아래 SlopeAnalysisScope의
+  // 게이트(showButton)가 닫혀 있으면 아무것도 그리지 않는다.
+  // 결과 블록({resultAnalysis && …})과 이전 분석 목록 두 개({flatnessAnalyses.length > 1 && …},
+  // {slopeAnalyses.length > 1 && …})는 T8이 결과 구획·AnalysisHistoryList로 바꾼다. T8이 지금 글자를
+  // 그대로(들여쓰기 포함) 찾아 바꾸므로 세 블록은 한 글자도 바꾸지 않고, 둘레의 틀만 다크 C안으로 바꾼다.
+  const titleActions = (
+    <>
+      <SlopeAnalysisAction />
+      {showFirstFlatness && user && (
+        // latestStatus를 넘기지 않는다 - 이 종류의 분석이 한 번도 없었다는 뜻이므로
+        // ReanalyzeButton은 이를 "진행 중 아님"으로 보고 버튼을 활성 상태로 둔다
+        // (구배 첫 분석과 같은 취급). criteriaId는 스캔에 현재 적용된 기준이다;
+        // 병합 스캔은 이 값을 원본 A에서 물려받는다(worker의 _merged_scan_fields).
+        //
+        // isImport={false}는 가정이 아니라 provenNotImport가 증명한 값이다 - 이
+        // 섹션은 임포트가 아님이 증명된 스캔에서만 그려진다(위 주석). 이 게이트를
+        // 지우면 Colab CSV에 'analyze' 잡이 걸린다.
+        <ReanalyzeButton scanId={id} userId={user.id} surface={s.surface} kind="flatness"
+          criteriaId={s.selected_criteria_id ?? undefined}
+          isImport={false} />
+      )}
+      {latestFlatness && user && (
+        // 코드리뷰 Critical(C1): latestFlatness.engine_version/meta로 임포트 결과
+        // 여부를 판별해 재분석 잡 타입 분기 근거로 전달한다(isExternalImport, 정의는
+        // lib/domain/stats.ts - 배지 표시와 동일 기준 재사용).
+        //
+        // 코드리뷰 Minor(M3): 판정 기준은 스캔에 현재 적용된
+        // scan.selected_criteria_id를 우선한다. latestFlatness.criteria_id(직전
+        // 분석이 만들어질 때 스냅샷된 기준)로만 쓰면 사용자가 이후에 스캔의
+        // 적용 기준을 바꿔도 재분석이 옛 기준을 그대로 따라가 버려, 버튼이
+        // 내건 "판정 기준 변경 후 다시 돌리기" 취지와 어긋난다.
+        // selected_criteria_id가 비어 있는 드문 레거시 데이터에서만
+        // latestFlatness.criteria_id로 폴백한다.
+        <ReanalyzeButton scanId={id} userId={user.id} surface={s.surface} kind="flatness"
+          criteriaId={s.selected_criteria_id ?? latestFlatness.criteria_id}
+          latestStatus={latestFlatness.status}
+          isImport={isImport} />
+      )}
+    </>
+  );
 
   const content = (
     <div className={PAGE_MAIN}>
       <PageHeader
         crumbs={crumbs}
-        title={<>스캔 · {SURFACE_LABEL[s.surface]} · <span className="font-mono text-[22px]">{s.scanned_at}</span></>}
-        actions={hasDoneAnalysis ? (
-          // 뷰당 primary 1개(Global Constraints·스펙 §4): 이 화면의 primary는 이 보고서 원클릭뿐이다.
-          // 결과 패널(T7 VerdictPanel)의 '저장'은 normal - 아트보드·스펙 §6은 둘 다 채움으로 그리지만
-          // §4 규칙을 따른다.
-          <LinkButton href={`/reports/new?location=${s.location_id}`} variant="primary">
-            이 위치의 보고서 생성
-          </LinkButton>
-        ) : undefined}
+        title={
+          <>
+            스캔 · {SURFACE_LABEL[s.surface]} ·{' '}
+            <span className="whitespace-nowrap font-mono font-medium tabular-nums">{s.scanned_at}</span>
+          </>
+        }
+        description={confirmingUnit ? undefined : (
+          <>
+            측정위치 {locLabel} · 원본 파일{' '}
+            <span className="font-mono text-ink-2 [overflow-wrap:anywhere]">{s.original_filename ?? '-'}</span>
+            {' · '}{LINEAGE_LABEL[s.lineage]}
+          </>
+        )}
+        actions={titleActions}
       />
-      <ScanStepStrip status={s.status} hasDoneAnalysis={hasDoneAnalysis} />
-      {/* 스펙 §7-8: '스캔 정보' 제목은 아트보드의 컨테이너 크롬 - 항목은 옛 dl과 같은 7개다. */}
-      <Container title="스캔 정보">
-        <KeyValuePairs columns={4} items={[
-          { label: '측정위치', value: locLabel },
-          { label: '원본 파일', value: <span className="font-mono text-[13px]">{s.original_filename ?? '-'}</span> },
-          { label: '장비', value: s.device ?? '-' },
-          { label: '데이터 계보', value: LINEAGE_LABEL[s.lineage] },
-          // point_count는 001_schema.sql에 선언만 되고 비어 있다가 단계 E의
-          // precheck 잡부터 채워진다(worker/flatworker/jobs.py). 그 전에 올라온
-          // 스캔은 계속 null이므로 '-'로 둔다. 단위 확정의 근거는 아니다
-          // (점 개수는 파일 단위가 m이든 mm이든 같다) - 스캔 규모를 가늠하는
-          // 메타데이터로만 쓴다.
-          {
-            label: '점 개수',
-            value: (
-              <span className="font-mono text-[13px] tabular-nums">
-                {s.point_count === null ? '-' : s.point_count.toLocaleString('ko-KR')}
-              </span>
-            ),
-          },
-          {
-            label: '상태',
-            value: <StatusIndicator type={SCAN_STATUS_TYPE[s.status]}>{SCAN_STATUS_LABEL[s.status]}</StatusIndicator>,
-          },
-          { label: '단위 배율', value: <span className="font-mono text-[13px] tabular-nums">{s.unit_scale ?? '미확정'}</span> },
-        ]} />
-      </Container>
+      {confirmingUnit && (
+        <>
+          <ScanStepStrip status={s.status} hasDoneAnalysis={hasDoneAnalysis} />
+          <Container title="스캔 정보">
+            <KeyValuePairs columns={2} items={fullInfo} />
+          </Container>
+        </>
+      )}
       {s.lineage === 'registered' && (
         <Alert type="warning" title="두 스캔을 정합해 만든 병합 스캔입니다.">
           <p>
@@ -293,7 +384,7 @@ export default async function ScanPage({ params, searchParams }: {
               정합 결과·겹쳐보기 확인
             </LinkButton>
           ) : (
-            <p className="mt-1 text-cs-text-secondary">
+            <p className="mt-1 text-ink-2">
               이 스캔을 만든 정합 이력을 찾지 못했습니다(이력이 삭제됐거나 아직 반영되지
               않았습니다). 겹쳐보기를 볼 수 없으므로 이 스캔의 분석 결과를 판단 근거로
               쓸 때 주의하세요.
@@ -310,7 +401,7 @@ export default async function ScanPage({ params, searchParams }: {
         // 렌더한다. 안내 문구는 app/scans/[id]/confirm-unit/page.tsx에서 그대로 옮겼다.
         <Container title="단위 확인">
           <div className="flex flex-col gap-4">
-            <p className="text-cs-text-secondary">
+            <p className="text-[15px] text-ink-2">
               파일 좌표가 m·cm·mm 중 무엇인지 확정하는 단계입니다. 높이 뷰가 있으면 그
               축 눈금과 실제 공간 크기를 견주어 고르고, 없으면 파일명과 스캔 앱의 내보내기
               설정으로 판단하세요.
@@ -336,119 +427,14 @@ export default async function ScanPage({ params, searchParams }: {
             파일을 확인한 뒤 업로드 화면에서 새 스캔으로 다시 시도하세요. 상세 원인은
             워커 실행 창의 로그에 남습니다(3회 자동 재시도 후에도 실패한 상태입니다).
           </p>
-          {/* D5: 재시도를 한 클릭으로 - 업로드 화면이 현장·측정위치를 쿼리로 프리필한다(D4). */}
+          {/* D5: 재시도를 한 클릭으로 - 현장 안 업로드 화면(T6)이 측정위치를 ?location=으로
+              미리 고른다. 위치가 지워진 레거시 스캔은 현장을 모르므로 현장 목록으로 보낸다. */}
           <LinkButton
-            href={loc ? `/upload?site=${loc.site_id}&location=${s.location_id}` : '/upload'}
+            href={loc ? `/sites/${loc.site_id}/upload?location=${s.location_id}` : '/'}
             variant="normal" className="mt-3">
             다시 업로드
           </LinkButton>
         </Alert>
-      )}
-      {showFirstFlatness && (
-        <Container
-          title={`${ANALYSIS_KIND_LABEL.flatness} 분석`}
-          actions={user ? (
-            // latestStatus를 넘기지 않는다 - 이 종류의 분석이 한 번도 없었다는 뜻이므로
-            // ReanalyzeButton은 이를 "진행 중 아님"으로 보고 버튼을 활성 상태로 둔다
-            // (구배 첫 분석과 같은 취급). criteriaId는 스캔에 현재 적용된 기준이다;
-            // 병합 스캔은 이 값을 원본 A에서 물려받는다(worker의 _merged_scan_fields).
-            //
-            // isImport={false}는 가정이 아니라 provenNotImport가 증명한 값이다 - 이
-            // 섹션은 임포트가 아님이 증명된 스캔에서만 그려진다(위 주석). 이 게이트를
-            // 지우면 Colab CSV에 'analyze' 잡이 걸린다.
-            <ReanalyzeButton scanId={id} userId={user.id} surface={s.surface} kind="flatness"
-              criteriaId={s.selected_criteria_id ?? undefined}
-              isImport={false} />
-          ) : undefined}>
-          <p className="text-cs-text-secondary">
-            {s.lineage === 'registered'
-              ? '병합 점군은 이미 미터로 환산돼 있어 단위 확인 없이 바로 분석할 수 있습니다. 다만 정합이 실제로 맞았는지는 위 겹쳐보기로 먼저 확인하세요 - 분석은 어긋난 정합도 그대로 받아 수치를 냅니다.'
-              : '단위가 확정된 스캔인데 아직 분석이 없습니다. 위 버튼으로 첫 분석을 시작하세요.'}
-          </p>
-        </Container>
-      )}
-      {latestFlatness && (
-        <Container
-          title={`${ANALYSIS_KIND_LABEL.flatness} 분석`}
-          actions={user ? (
-            // 코드리뷰 Critical(C1): latestFlatness.engine_version/meta로 임포트 결과
-            // 여부를 판별해 재분석 잡 타입 분기 근거로 전달한다(isExternalImport, 정의는
-            // lib/domain/stats.ts - 배지 표시와 동일 기준 재사용).
-            //
-            // 코드리뷰 Minor(M3): 판정 기준은 스캔에 현재 적용된
-            // scan.selected_criteria_id를 우선한다. latestFlatness.criteria_id(직전
-            // 분석이 만들어질 때 스냅샷된 기준)로만 쓰면 사용자가 이후에 스캔의
-            // 적용 기준을 바꿔도 재분석이 옛 기준을 그대로 따라가 버려, 버튼이
-            // 내건 "판정 기준 변경 후 다시 돌리기" 취지와 어긋난다.
-            // selected_criteria_id가 비어 있는 드문 레거시 데이터에서만
-            // latestFlatness.criteria_id로 폴백한다.
-            <ReanalyzeButton scanId={id} userId={user.id} surface={s.surface} kind="flatness"
-              criteriaId={s.selected_criteria_id ?? latestFlatness.criteria_id}
-              latestStatus={latestFlatness.status}
-              isImport={isImport} />
-          ) : undefined}>
-          <div className="flex flex-col gap-3">
-            <AnalysisProgress analysisId={latestFlatness.id} initialStatus={latestFlatness.status} scanId={id} />
-            {flatnessAnalyses.length > 1 && (
-              <ul className="flex flex-col gap-2 text-cs-text-secondary">
-                {flatnessAnalyses.slice(1).map((a) => (
-                  <li key={a.id}>
-                    {/* D5: 별도 화면 대신 같은 작업대의 ?analysis= 선택 렌더로 간다. */}
-                    <Link href={`/scans/${id}?analysis=${a.id}`}
-                      className="inline-flex items-center gap-2 text-cs-link hover:text-cs-link-hover hover:underline">
-                      이전 분석 <span className="font-mono text-[13px]">{a.created_at.slice(0, 16).replace('T', ' ')}</span>
-                      {a.overall_verdict && (
-                        <Badge tone={GRADE_TONE[a.overall_verdict]}>{GRADE_LABEL[a.overall_verdict]}</Badge>
-                      )}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        </Container>
-      )}
-      {showSlopeSection && (
-        // T6 리뷰 수정 1차: 아트보드(ScanDone.dc.html 172-205행)는 헤더에 버튼만 두고
-        // '적용 기준' 라디오를 본문 첫 블록으로 그린다. 라디오와 버튼이 같은 클라이언트
-        // 상태를 공유해 서버 컴포넌트가 Container의 actions 슬롯과 본문에 나눠 렌더할 수
-        // 없으므로, 컨테이너 자체를 SlopeAnalysisContainer(클라이언트)가 그리고 본문에
-        // 들어갈 진행 상태·이력만 children으로 넘긴다. 본문은 옛 코드와 같이 latestSlope가
-        // 있을 때만 있고, 비면 빈 20px이 남지 않게 padding도 꺼진다(스펙 §7-8).
-        //
-        // showButton: 재리뷰 수정으로 섹션 렌더(showSlopeSection)와 버튼 노출을 갈랐다 -
-        // 섹션은 latestSlope 존재만으로도 그려지고, 버튼만 !isImportUnknownOrTrue로
-        // 게이트한다(이미 있는 구배 결과를 숨기지 않으면서 새 구배 분석은 임포트 여부가
-        // 확실할 때만 시작한다). 기준 해석(fn_resolve_criteria)·잡 타입 분기는 컴포넌트
-        // 쪽 주석 참고 - criteriaId를 넘기지 않는 이유도 거기 있다.
-        <SlopeAnalysisContainer
-          scanId={id}
-          userId={user?.id}
-          siteId={loc?.site_id}
-          latestStatus={latestSlope?.status}
-          showButton={!!user && showSlopeButton}>
-          {latestSlope && (
-            <div className="flex flex-col gap-3">
-              <AnalysisProgress analysisId={latestSlope.id} initialStatus={latestSlope.status} scanId={id} />
-              {slopeAnalyses.length > 1 && (
-                <ul className="flex flex-col gap-2 text-cs-text-secondary">
-                  {slopeAnalyses.slice(1).map((a) => (
-                    <li key={a.id}>
-                      {/* D5: 별도 화면 대신 같은 작업대의 ?analysis= 선택 렌더로 간다. */}
-                      <Link href={`/scans/${id}?analysis=${a.id}`}
-                        className="inline-flex items-center gap-2 text-cs-link hover:text-cs-link-hover hover:underline">
-                        이전 분석 <span className="font-mono text-[13px]">{a.created_at.slice(0, 16).replace('T', ' ')}</span>
-                        {a.overall_verdict && (
-                          <Badge tone={GRADE_TONE[a.overall_verdict]}>{GRADE_LABEL[a.overall_verdict]}</Badge>
-                        )}
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          )}
-        </SlopeAnalysisContainer>
       )}
       {resultAnalysis && (
         // D5: app/analyses/[id]/page.tsx가 하던 결과 렌더를 이 화면으로 옮겼다.
@@ -475,6 +461,16 @@ export default async function ScanPage({ params, searchParams }: {
           )}
         </Container>
       )}
+      {hasDoneAnalysis && (
+        // 보고서 원클릭(D5): 완료 분석이 하나라도 있으면(구배만 완료여도) 그 측정위치로 보고서를
+        // 만든다. 아트보드 ScanDone은 결과 구획 끝 오른쪽에 둔다 - 이 화면 본문의 유일한 주 버튼이다.
+        <div className="flex flex-wrap justify-end gap-3">
+          <LinkButton href={`/reports/new?location=${s.location_id}`} variant="primary">
+            <Icon name="report" size={18} />
+            이 위치의 보고서 생성
+          </LinkButton>
+        </div>
+      )}
       {staleSelectedAnalysis && (
         // 리뷰 Important(F1): app/analyses/[id]/page.tsx 원본이 항상 보여주던
         // "아직 완료되지 않았습니다" 안내를 그대로 복원한다. 링크는 ?analysis= 없는
@@ -491,21 +487,112 @@ export default async function ScanPage({ params, searchParams }: {
             ? '분석은 완료됐지만 결과 데이터(stats)가 없습니다. 오래된 형식의 분석일 수 있으니 재분석을 권장합니다.'
             : `이 분석은 아직 완료되지 않았습니다 (상태: ${ANALYSIS_STATUS_LABEL[staleSelectedAnalysis.status]}).`}{' '}
           <Link href={`/scans/${id}`}
-            className="font-bold text-cs-link hover:text-cs-link-hover hover:underline">스캔 상세에서 진행 상태 보기</Link>
+            className="font-semibold text-ink underline decoration-dim underline-offset-4">스캔 상세에서 진행 상태 보기</Link>
         </Alert>
+      )}
+      {/* 분석 카드 줄(아트보드 ScanDone: flex-wrap 12px, 카드마다 flex 1 1 420px). 카드가 하나도 없으면 빈 div 라
+          empty:hidden 으로 숨겨 본문 간격(gap-5)이 하나 더 생기지 않게 한다. 카드 식은 이 div 와 같은 깊이로
+          적는다 - 안의 이전 분석 목록 두 블록을 T8 이 글자 그대로(들여쓰기 포함) 찾아 바꾸기 때문이다. */}
+      <div className="flex flex-wrap gap-3 empty:hidden">
+      {showFirstFlatness && (
+        <Container title={`${ANALYSIS_KIND_LABEL.flatness} 분석`} className={CARD_IN_ROW}>
+          <p className="text-sm text-ink-2">
+            {s.lineage === 'registered'
+              ? '병합 점군은 이미 미터로 환산돼 있어 단위 확인 없이 바로 분석할 수 있습니다. 다만 정합이 실제로 맞았는지는 위 겹쳐보기로 먼저 확인하세요 - 분석은 어긋난 정합도 그대로 받아 수치를 냅니다.'
+              : '단위가 확정된 스캔인데 아직 분석이 없습니다. 위 버튼으로 첫 분석을 시작하세요.'}
+          </p>
+        </Container>
+      )}
+      {latestFlatness && (
+        <Container title={`${ANALYSIS_KIND_LABEL.flatness} 분석`} className={CARD_IN_ROW}>
+          <div className="flex flex-col gap-3">
+            <AnalysisProgress analysisId={latestFlatness.id} initialStatus={latestFlatness.status} scanId={id} />
+            {flatnessAnalyses.length > 1 && (
+              <ul className="flex flex-col gap-2 text-cs-text-secondary">
+                {flatnessAnalyses.slice(1).map((a) => (
+                  <li key={a.id}>
+                    {/* D5: 별도 화면 대신 같은 작업대의 ?analysis= 선택 렌더로 간다. */}
+                    <Link href={`/scans/${id}?analysis=${a.id}`}
+                      className="inline-flex items-center gap-2 text-cs-link hover:text-cs-link-hover hover:underline">
+                      이전 분석 <span className="font-mono text-[13px]">{a.created_at.slice(0, 16).replace('T', ' ')}</span>
+                      {a.overall_verdict && (
+                        <Badge tone={GRADE_TONE[a.overall_verdict]}>{GRADE_LABEL[a.overall_verdict]}</Badge>
+                      )}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </Container>
+      )}
+      {showSlopeSection && (
+        <SlopeAnalysisCard className={CARD_IN_ROW}>
+          {latestSlope && (
+            <div className="flex flex-col gap-3">
+              <AnalysisProgress analysisId={latestSlope.id} initialStatus={latestSlope.status} scanId={id} />
+              {slopeAnalyses.length > 1 && (
+                <ul className="flex flex-col gap-2 text-cs-text-secondary">
+                  {slopeAnalyses.slice(1).map((a) => (
+                    <li key={a.id}>
+                      {/* D5: 별도 화면 대신 같은 작업대의 ?analysis= 선택 렌더로 간다. */}
+                      <Link href={`/scans/${id}?analysis=${a.id}`}
+                        className="inline-flex items-center gap-2 text-cs-link hover:text-cs-link-hover hover:underline">
+                        이전 분석 <span className="font-mono text-[13px]">{a.created_at.slice(0, 16).replace('T', ' ')}</span>
+                        {a.overall_verdict && (
+                          <Badge tone={GRADE_TONE[a.overall_verdict]}>{GRADE_LABEL[a.overall_verdict]}</Badge>
+                        )}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+        </SlopeAnalysisCard>
+      )}
+      </div>
+      {!confirmingUnit && (
+        <Container title="스캔 정보">
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-2.5">
+              <p className="font-mono text-[11px] tracking-[0.08em] text-dim">진행 단계</p>
+              <ScanStepStrip status={s.status} hasDoneAnalysis={hasDoneAnalysis} placement="card" />
+            </div>
+            <KeyValuePairs columns={4} items={shortInfo} />
+          </div>
+        </Container>
       )}
     </div>
   );
   // 셸(스펙 §4.2): URL 은 그대로 두고 현장 헤더(측정위치) + 도면 격자 본문 안에서 그린다. 현장은 스캔 →
   // 측정위치 → 현장으로 찾는다(위 siteRes). 측정위치·현장이 지워진 레거시 스캔은 현장 헤더를 그릴 수 없어
   // 진입 헤더로 대신한다(현장 목록으로 돌아갈 길은 남는다).
+  // 다크 C안: '구배 분석' 버튼은 제목 줄에, '적용 기준' 라디오는 아래 '구배 분석' 카드에 있다. 둘이 같은
+  // 클라이언트 상태(고른 기준)를 쓰므로 SlopeAnalysisScope가 본문 전체를 감싸 상태를 한 번 만들고, 제목 줄
+  // 조각(SlopeAnalysisAction)과 카드(SlopeAnalysisCard)가 나눠 읽는다. 범위는 DOM 을 그리지 않는 문맥
+  // 공급자라 main > div(PAGE_MAIN) 구조는 그대로다. 게이트 값은 옛 SlopeAnalysisContainer에 넘기던 것과 같다.
   const email = user?.email ?? null;
   return (
     <>
       {site
         ? <SiteHeader site={{ id: site.id, name: site.name }} email={email} />
         : <EntryHeader email={email} />}
-      <main className={MAIN_BG}>{content}</main>
+      <main className={MAIN_BG}>
+        <SlopeAnalysisScope
+          scanId={id}
+          userId={user?.id}
+          // showButton: 재리뷰 수정으로 섹션 렌더(showSlopeSection)와 버튼 노출을 갈랐다 -
+          // 섹션은 latestSlope 존재만으로도 그려지고, 버튼만 !isImportUnknownOrTrue로
+          // 게이트한다(이미 있는 구배 결과를 숨기지 않으면서 새 구배 분석은 임포트 여부가
+          // 확실할 때만 시작한다). 기준 해석(fn_resolve_criteria)·잡 타입 분기는 컴포넌트
+          // 쪽 주석 참고 - criteriaId를 넘기지 않는 이유도 거기 있다.
+          siteId={loc?.site_id}
+          latestStatus={latestSlope?.status}
+          showButton={!!user && showSlopeButton}>
+          {content}
+        </SlopeAnalysisScope>
+      </main>
     </>
   );
 }

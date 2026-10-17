@@ -32,13 +32,15 @@ const PATHS: Record<IconName, ReactNode> = {
   // 스캔 업로드(아트보드 Upload): 고른 파일 줄의 문서 아이콘과 '선택한 파일 빼기'의 X(T6 추가).
   file: <><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5z" /><path d="M14 3v5h5" /></>,
   x: <path d="M6 6l12 12M18 6L6 18" />,
+  // 스캔 작업대(아트보드 ScanDone) '이 위치의 보고서 생성'의 문서 아이콘(T7 추가).
+  report: <><path d="M14 3H6v18h12V7l-4-4z" /><path d="M14 3v4h4M9 13h6M9 17h6" /></>,
 };
 
 export type IconName =
   | 'check-circle' | 'alert-triangle' | 'alert-circle' | 'x-circle' | 'info-circle' | 'clock' | 'minus-circle'
   | 'chevron-right' | 'chevron-down' | 'chevron-left' | 'search' | 'plus' | 'upload' | 'user'
   | 'menu' | 'logout' | 'trend' | 'download' | 'external' | 'photo' | 'refresh'
-  | 'file' | 'x';
+  | 'file' | 'x' | 'report';
 
 export function Icon({ name, size = 16, className, ...rest }:
   { name: IconName; size?: number } & Omit<SVGProps<SVGSVGElement>, 'name'>) {

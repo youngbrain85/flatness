@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 const { pushMock, refreshMock } = vi.hoisted(() => ({ pushMock: vi.fn(), refreshMock: vi.fn() }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: pushMock, refresh: refreshMock }) }));
@@ -7,11 +7,12 @@ vi.mock('@/lib/supabase/client', () => ({ createClient: vi.fn() }));
 
 import { createClient } from '@/lib/supabase/client';
 import { ReanalyzeButton } from '../reanalyze-button';
-// T6 리뷰 수정 1차: 구배 기준 라디오는 아트보드대로 컨테이너 '본문'으로 옮겼다
-// (ScanDone.dc.html 172-205 - 헤더에는 버튼만). 라디오와 버튼이 같은 상태를 공유하므로
-// 그 배치는 SlopeAnalysisContainer가 맡는다(로직은 useReanalyze 그대로 - 중복 없음).
-// 아래 구배 describe들은 렌더 대상만 그 컴포넌트로 바꿨고 단언은 한 줄도 바꾸지 않았다.
-import { SlopeAnalysisContainer } from '../slope-analysis-container';
+import { buttonClass } from '@/components/ui/button';
+import { checkClass } from '@/components/ui/form';
+// 다크 C안(아트보드 ScanDone): 구배 '버튼'은 페이지 제목 줄, 기준 라디오는 '구배 분석' 카드다.
+// 라디오와 버튼이 같은 상태를 공유하므로 SlopeAnalysisScope가 그 상태를 나눠 준다(로직은
+// useReanalyze 그대로 - 중복 없음). 아래 구배 describe들은 렌더 대상만 그 조합(renderSlope)으로 바꿨다.
+import { SlopeAnalysisAction, SlopeAnalysisCard, SlopeAnalysisScope } from '../slope-analysis-container';
 import { DUPLICATE_JOB_MESSAGE } from '@/lib/domain/jobs';
 import type { CriteriaRow } from '@/lib/domain/types';
 
@@ -47,6 +48,16 @@ function stubSupabase(
 afterEach(() => {
   vi.clearAllMocks();
 });
+
+// 페이지 배치 그대로 렌더한다: 범위(SlopeAnalysisScope) 안에 제목 줄 버튼(SlopeAnalysisAction)과
+// 적용 기준 라디오가 있는 카드(SlopeAnalysisCard). 버튼·라디오가 같은 상태를 쓴다.
+function renderSlope() {
+  return render(
+    <SlopeAnalysisScope scanId="s1" userId="u1" siteId="site1" showButton>
+      <SlopeAnalysisAction />
+      <SlopeAnalysisCard />
+    </SlopeAnalysisScope>);
+}
 
 // 단계 C: kind='flatness'를 명시해야 하는 구간이라 버튼 문구가 '다시 분석'에서
 // '평활도 분석'으로 바뀌었다(ANALYSIS_KIND_LABEL[kind] + ' 분석' - reanalyze-button.tsx).
@@ -206,7 +217,7 @@ function stubSupabaseSlope(
 describe('ReanalyzeButton kind=slope 기준 선택 (코드리뷰(4차) N1)', () => {
   it('마운트 시 후보 기준을 불러와 라디오 목록으로 보여주고, is_default를 기본 선택으로 둔다', async () => {
     vi.mocked(createClient).mockReturnValue(stubSupabaseSlope(slopeCriteriaRows) as never);
-    render(<SlopeAnalysisContainer scanId="s1" userId="u1" siteId="site1" showButton />);
+    renderSlope();
 
     await waitFor(() => expect(screen.getByText('옥상 슬래브(노출방수)')).toBeInTheDocument());
     expect(screen.getByText('욕실·화장실 바닥')).toBeInTheDocument();
@@ -219,7 +230,7 @@ describe('ReanalyzeButton kind=slope 기준 선택 (코드리뷰(4차) N1)', () 
 
   it('방향 비대상 기준에는 "방향 판정 안 함" 힌트를 보여준다', async () => {
     vi.mocked(createClient).mockReturnValue(stubSupabaseSlope(slopeCriteriaRows) as never);
-    render(<SlopeAnalysisContainer scanId="s1" userId="u1" siteId="site1" showButton />);
+    renderSlope();
     await waitFor(() => expect(screen.getByText('실내 평바닥')).toBeInTheDocument());
     expect(screen.getByText(/방향 판정 안 함/)).toBeInTheDocument();
   });
@@ -227,7 +238,7 @@ describe('ReanalyzeButton kind=slope 기준 선택 (코드리뷰(4차) N1)', () 
   it('사용자가 다른 기준을 선택하면 그 기준으로 분석을 시작한다(rows[0] 고정 아님)', async () => {
     const insertSpy = vi.fn();
     vi.mocked(createClient).mockReturnValue(stubSupabaseSlope(slopeCriteriaRows, null, () => {}, insertSpy) as never);
-    render(<SlopeAnalysisContainer scanId="s1" userId="u1" siteId="site1" showButton />);
+    renderSlope();
     await waitFor(() => expect(screen.getByText('옥상 슬래브(노출방수)')).toBeInTheDocument());
 
     // 기본 선택(실내 평바닥, 방향 비대상)이 아니라 방향 판정이 되는 기준으로 바꾼다.
@@ -243,7 +254,7 @@ describe('ReanalyzeButton kind=slope 기준 선택 (코드리뷰(4차) N1)', () 
   it('기본 선택 그대로 시작하면 is_default 기준(c-indoor-level)이 실린다', async () => {
     const insertSpy = vi.fn();
     vi.mocked(createClient).mockReturnValue(stubSupabaseSlope(slopeCriteriaRows, null, () => {}, insertSpy) as never);
-    render(<SlopeAnalysisContainer scanId="s1" userId="u1" siteId="site1" showButton />);
+    renderSlope();
     await waitFor(() => expect(screen.getByText('실내 평바닥')).toBeInTheDocument());
 
     fireEvent.click(screen.getByRole('button', { name: '구배 분석' }));
@@ -253,7 +264,7 @@ describe('ReanalyzeButton kind=slope 기준 선택 (코드리뷰(4차) N1)', () 
 
   it('후보 기준을 못 찾으면(마이그레이션 007 미적용 등) 오류를 보여주고 버튼을 비활성화한다', async () => {
     vi.mocked(createClient).mockReturnValue(stubSupabaseSlope([]) as never);
-    render(<SlopeAnalysisContainer scanId="s1" userId="u1" siteId="site1" showButton />);
+    renderSlope();
     await waitFor(() => {
       expect(screen.getByText(/구배 판정 기준을 찾을 수 없습니다/)).toBeInTheDocument();
     });
@@ -262,39 +273,46 @@ describe('ReanalyzeButton kind=slope 기준 선택 (코드리뷰(4차) N1)', () 
 
   it('후보가 로딩되기 전에는 버튼이 비활성 상태다(빈 criteria_id로 분석을 시작하지 않음)', () => {
     vi.mocked(createClient).mockReturnValue(stubSupabaseSlope(slopeCriteriaRows) as never);
-    render(<SlopeAnalysisContainer scanId="s1" userId="u1" siteId="site1" showButton />);
+    renderSlope();
     // 비동기 useEffect가 아직 안 끝난 첫 렌더 시점.
     expect(screen.getByRole('button', { name: '구배 분석' })).toBeDisabled();
   });
 });
 
-// T6 Cloudscape 재스킨: 버튼은 normal(진행 중이면 disabled - dim 글자), 구배 기준 라디오는
-// FormField 안 네이티브 라디오(checkClass)이고 순서는 RPC 반환 순서 그대로다(재정렬 금지).
-describe('ReanalyzeButton Cloudscape 재스킨 (T6)', () => {
-  it('활성 버튼은 normal(line-3 테두리), 진행 중이면 disabled(dim 글자)다', () => {
+// T7 다크 C안: 버튼은 보조 버튼(진행 중이면 비활성 + 안내를 aria-describedby로 잇는다), 구배 기준은
+// fieldset '적용 기준' 안 칸들(고른 칸만 ink 테두리 + surface-2)이고 순서는 RPC 반환 순서 그대로다(재정렬 금지).
+describe('ReanalyzeButton 다크 C안 (T7)', () => {
+  it('활성 버튼은 보조 버튼이고, 진행 중이면 비활성 + 안내 문구를 버튼 설명으로 잇는다', () => {
     const { rerender } = render(<ReanalyzeButton scanId="s1" userId="u1" surface="floor" kind="flatness"
       criteriaId="cr1" latestStatus="done" isImport={false} />);
-    expect(screen.getByRole('button', { name: '평활도 분석' }).className).toContain('border-line-3');
+    const active = screen.getByRole('button', { name: '평활도 분석' });
+    expect(active.className).toContain(buttonClass('normal'));
+    expect(active).not.toHaveAttribute('aria-describedby');
 
     rerender(<ReanalyzeButton scanId="s1" userId="u1" surface="floor" kind="flatness"
       criteriaId="cr1" latestStatus="processing" isImport={false} />);
     const btn = screen.getByRole('button', { name: '평활도 분석' });
     expect(btn).toBeDisabled();
-    expect(btn.className).toContain('text-dim');
-    expect(screen.getByText(/진행 중인 분석이 끝난 뒤/).className).toContain('text-cs-text-secondary');
+    expect(btn.className).toContain(buttonClass('normal', { disabled: true }));
+    const note = screen.getByText(/진행 중인 분석이 끝난 뒤/);
+    expect(note).toHaveClass('text-muted');
+    expect(btn).toHaveAttribute('aria-describedby', note.id);
   });
 
-  it('구배 기준 라디오는 checkClass를 쓰고 RPC 반환 순서를 그대로 유지한다', async () => {
+  it('구배 기준은 fieldset "적용 기준"의 칸들이고 RPC 반환 순서를 그대로 유지한다', async () => {
     vi.mocked(createClient).mockReturnValue(stubSupabaseSlope(slopeCriteriaRows) as never);
-    render(<SlopeAnalysisContainer scanId="s1" userId="u1" siteId="site1" showButton />);
+    renderSlope();
     await waitFor(() => expect(screen.getByText('실내 평바닥')).toBeInTheDocument());
 
-    const radios = screen.getAllByRole('radio');
+    const group = screen.getByRole('group', { name: '적용 기준' });
+    const radios = within(group).getAllByRole('radio');
     expect(radios).toHaveLength(3);
-    expect(radios[0].className).toContain('accent-ink');
+    expect(radios[0].className).toContain(checkClass);
     // 픽스처 순서(옥상 → 욕실 → 실내) 그대로 - is_default(실내)를 앞으로 끌어올리지 않는다.
-    const names = radios.map((r) => r.closest('label')?.querySelector('span > span')?.textContent);
+    const names = radios.map((r) => r.closest('label')?.querySelector('span')?.textContent);
     expect(names).toEqual(['옥상 슬래브(노출방수)', '욕실·화장실 바닥', '실내 평바닥']);
-    expect(screen.getByText('적용 기준').className).toContain('font-semibold');
+    // 고른 칸(기본 = 실내 평바닥)만 강조된다
+    expect(radios[2].closest('label')).toHaveClass('border-ink', 'bg-surface-2');
+    expect(radios[0].closest('label')).toHaveClass('border-line-3');
   });
 });

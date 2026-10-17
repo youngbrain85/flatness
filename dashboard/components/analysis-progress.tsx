@@ -26,12 +26,12 @@ export function AnalysisProgress({ analysisId, initialStatus, scanId }: {
   }, [status, router]);
 
   if (status === 'done') {
-    // 아트보드(ScanDone): normal 알약 링크 + check-circle. 텍스트는 <a>의 직접 자식으로 둔다 -
-    // analysis-progress.test.tsx가 getByText로 잡은 요소의 href를 본다.
+    // 아트보드(ScanDone '평활도 분석' 카드): 보조 버튼 모양 링크 + 초록 check-circle. 글자는 <a>의 직접
+    // 자식으로 둔다 - analysis-progress.test.tsx가 getByText로 잡은 요소의 href를 본다.
     return (
       <div className="flex">
         <LinkButton href={`/scans/${scanId}?analysis=${analysisId}`} variant="normal">
-          <Icon name="check-circle" />
+          <Icon name="check-circle" className="text-ok" />
           분석 완료 - 결과 보기
         </LinkButton>
       </div>
@@ -39,18 +39,21 @@ export function AnalysisProgress({ analysisId, initialStatus, scanId }: {
   }
   if (status === 'failed') {
     return (
-      <div className="flex flex-col gap-1">
+      <div className="flex flex-col gap-1.5">
         <StatusIndicator type="error">분석에 실패했습니다.</StatusIndicator>
-        <p className="text-xs leading-4 text-cs-text-secondary">
+        <p className="text-[13px] leading-[1.55] text-muted">
           지원 포맷(ply/las/laz/xyz/txt/csv/pts)·인코딩·단위 설정을 확인하세요. 상세 원인은
           워커 실행 창의 로그에 남습니다. 3회 자동 재시도 후에도 실패한 상태입니다.
         </p>
       </div>
     );
   }
+  // 아트보드(ScanProcessing '평활도 분석' 카드): 속 빈 고리 + 상태 글자. 바뀌면 읽어 주도록 role=status.
   return (
-    <StatusIndicator type="in-progress">
-      {ANALYSIS_STATUS_LABEL[status]}... (워커가 처리 중입니다. 이 화면은 자동 갱신됩니다)
-    </StatusIndicator>
+    <div role="status" className="text-sm">
+      <StatusIndicator type="in-progress">
+        {ANALYSIS_STATUS_LABEL[status]}... (워커가 처리 중입니다. 이 화면은 자동 갱신됩니다)
+      </StatusIndicator>
+    </div>
   );
 }

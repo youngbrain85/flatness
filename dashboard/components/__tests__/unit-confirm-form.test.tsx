@@ -8,6 +8,7 @@ vi.mock('@/lib/supabase/client', () => ({ createClient: vi.fn(() => ({})) }));
 
 import { createClient } from '@/lib/supabase/client';
 import { UnitConfirmForm } from '../unit-confirm-form';
+import { buttonClass } from '@/components/ui/button';
 import type { ScanRow } from '@/lib/domain/types';
 
 const scan = {
@@ -228,22 +229,24 @@ describe('UnitConfirmForm 높이 뷰 (단계 E)', () => {
   // 리뷰 2: 그림을 썸네일로 줄이거나 세로로 밀어도 전부 초록이던 구멍을 막는다.
   // 실측(1280 뷰포트): 그림 648px / 폼 432px, 같은 행. jsdom에는 CSS가 없어 픽셀을
   // 잴 수 없으므로 폭·배치를 결정하는 클래스와 DOM 순서를 고정한다.
+  // 다크 C안(T7, 아트보드 ScanUnitConfirm): 비율은 flex 3 1 520px : 2 1 340px 이고 좁으면 쌓인다.
   it('그림이 폼보다 시각적으로 우선한다(폭·2열 배치·DOM 순서 고정)', () => {
     const { container } = render(<UnitConfirmForm scan={scanWithView} userId="u1" />);
 
     // (1) 그림은 자기 열을 꽉 채운다 - w-24 같은 썸네일로 줄이면 눈금을 못 읽는다
     expect(screen.getByRole('img', { name: /높이 뷰/ })).toHaveClass('w-full');
 
-    // (2) 넓은 화면에서 그림 3fr : 폼 2fr 2열. 격자 클래스가 사라지면 그림이 폼
-    //     아래로 밀려 "폼이 먼저, 그림은 스크롤해야 보이는" 화면이 된다.
-    const grid = container.firstElementChild!;
-    expect(grid).toHaveClass('grid');
-    expect(grid).toHaveClass('lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]');
+    // (2) 넓은 화면에서 그림 3 : 폼 2 한 줄. 줄바꿈 flex 가 사라지면 그림이 폼 아래로
+    //     밀리거나 폼과 같은 폭으로 쪼그라든다.
+    const row = container.firstElementChild!;
+    expect(row).toHaveClass('flex', 'flex-wrap');
+    const [picture, form] = Array.from(row.children);
+    expect(picture).toHaveClass('flex-[3_1_520px]');
+    expect(form).toHaveClass('flex-[2_1_340px]');
 
     // (3) DOM 순서: 그림이 폼보다 먼저다. 좁은 화면에서 세로로 쌓일 때 이 순서가
     //     그대로 화면 순서가 되고, 스크린리더 낭독 순서이기도 하다.
-    const kids = Array.from(grid.children).map((el) => el.tagName);
-    expect(kids).toEqual(['SECTION', 'FORM']);
+    expect(Array.from(row.children).map((el) => el.tagName)).toEqual(['SECTION', 'FORM']);
   });
 
   // 리뷰 6: PNG 안에 matplotlib가 같은 제목을 이미 구워 넣는다. 보이는 h2를 두면
@@ -327,16 +330,42 @@ describe('UnitConfirmForm 높이 뷰 (단계 E)', () => {
   });
 });
 
-// T6 Cloudscape 재스킨: 파일 안내는 info Alert, 라디오는 네이티브 + accent 토큰(스펙 §7-6),
-// 확정 버튼은 이 뷰의 유일한 primary다. 색은 토큰 클래스만 본다.
-describe('UnitConfirmForm Cloudscape 재스킨 (T6)', () => {
-  it('파일 안내는 info Alert, 단위 라디오는 checkClass, 라벨 600, 확정 버튼은 primary다', () => {
+// T7 다크 C안(아트보드 ScanUnitConfirm): 높이 그림은 검정 스테이지 안, 파일 안내는 info Alert,
+// 단위는 '파일 좌표 단위' 라디오 묶음의 칸 3개(고른 칸만 ink 테두리 + surface-2), 확정 버튼은 주 버튼.
+describe('UnitConfirmForm 다크 C안 (T7)', () => {
+  it('높이 그림은 검정 스테이지(Stage, data-stage) 안에 있고 그 스테이지째 원본 링크다', () => {
+    render(<UnitConfirmForm scan={scanWithView} userId="u1" />);
+
+    const img = screen.getByRole('img', { name: /높이 뷰/ });
+    const stage = img.closest('[data-stage]');
+    expect(stage).not.toBeNull();
+    expect(stage?.closest('a')).toHaveAttribute('href', VIEW_URL);
+    expect(screen.getByRole('link', { name: /원본 크기로 열기/ }).querySelector('[data-icon="external"]')).not.toBeNull();
+  });
+
+  it('파일 안내는 info Alert(파일명 mono), 단위는 이름 붙은 라디오 묶음, 확정 버튼은 주 버튼이다', () => {
     const { container } = render(<UnitConfirmForm scan={scan} userId="u1" />);
 
-    expect(container.querySelector('[data-alert="info"]')).not.toBeNull();
-    expect(screen.getByLabelText(/mm/).className).toContain('accent-ink');
-    expect(screen.getByText('파일 좌표 단위').className).toContain('font-semibold');
-    expect(screen.getByRole('button', { name: '단위 확정 후 분석 시작' }).className).toContain('bg-ink');
+    const info = container.querySelector('[data-alert="info"]');
+    expect(info).not.toBeNull();
+    expect(screen.getByText('room.ply')).toHaveClass('font-mono');
+    const group = screen.getByRole('radiogroup', { name: '파일 좌표 단위' });
+    expect(group.querySelectorAll('input[type="radio"]')).toHaveLength(3);
+    expect(screen.getByRole('button', { name: '단위 확정 후 분석 시작' }).className).toContain(buttonClass('primary'));
+  });
+
+  it('고른 단위 칸만 ink 테두리 + surface-2 바탕이고, 다른 칸을 누르면 강조가 옮겨 간다', () => {
+    render(<UnitConfirmForm scan={scan} userId="u1" />);
+
+    const m = screen.getByLabelText(/m\(미터\)/);
+    const mm = screen.getByLabelText(/mm/);
+    expect(m).toBeChecked();
+    expect(m.closest('label')).toHaveClass('border-ink', 'bg-surface-2');
+    expect(mm.closest('label')).toHaveClass('border-line-3');
+    fireEvent.click(mm);
+    expect(mm).toBeChecked();
+    expect(mm.closest('label')).toHaveClass('border-ink', 'bg-surface-2');
+    expect(m.closest('label')).toHaveClass('border-line-3');
   });
 
   it('높이 뷰 폴백은 warning Alert다', () => {
@@ -347,10 +376,12 @@ describe('UnitConfirmForm Cloudscape 재스킨 (T6)', () => {
     expect(screen.getByText(/높이 뷰를 불러오지 못했습니다/)).toBeInTheDocument();
   });
 
-  it('원본 열기 링크는 cs-link 700이고 구 팔레트 클래스가 남아 있지 않다', () => {
-    const { container } = render(<UnitConfirmForm scan={scanWithView} userId="u1" />);
+  it('실패 문구는 경고(role=alert)로 남는다', async () => {
+    vi.mocked(createClient).mockReturnValue(
+      stubSupabase({ enqueueError: { message: '전송 오류로 등록 실패' } }) as never);
+    render(<UnitConfirmForm scan={scan} userId="u1" />);
+    fireEvent.click(screen.getByRole('button', { name: '단위 확정 후 분석 시작' }));
 
-    expect(container.querySelector('[data-icon="external"]')).not.toBeNull();
-    expect(container.innerHTML).not.toMatch(/zinc-|amber-|red-/);
+    expect(await screen.findByRole('alert')).toHaveTextContent('전송 오류로 등록 실패');
   });
 });

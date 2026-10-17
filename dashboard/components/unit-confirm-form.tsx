@@ -4,7 +4,7 @@
 // 대신 precheck가 높이 뷰 PNG를 남기므로(scans.height_view_path, 010) 사용자가
 // 그 그림의 축 눈금과 실제 공간 크기를 견주어 단위를 직접 확정한다.
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { enqueueJob } from '@/lib/domain/jobs';
@@ -13,8 +13,9 @@ import type { ScanRow } from '@/lib/domain/types';
 import { UNIT_OPTIONS } from '@/lib/upload/validate';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { FormField, checkClass } from '@/components/ui/form';
+import { checkClass } from '@/components/ui/form';
 import { Icon } from '@/components/ui/icons';
+import { Stage } from '@/components/ui/stage';
 
 export function UnitConfirmForm({ scan, userId }: { scan: ScanRow; userId: string }) {
   const router = useRouter();
@@ -26,6 +27,7 @@ export function UnitConfirmForm({ scan, userId }: { scan: ScanRow; userId: strin
   // 아이콘만 남고, 사용자는 "원래 없는 것"인지 "지금 못 불러온 것"인지 구별하지 못한다.
   const [viewFailed, setViewFailed] = useState(false);
   const imgRef = useRef<HTMLImageElement>(null);
+  const unitGroupLabelId = useId();
 
   // ★ onError 하나만으로는 부족하다(실측으로 확인: 401을 주고 실제 브라우저에서
   // 띄웠더니 하이드레이션까지 끝났는데도 폴백이 안 뜨고 깨진 이미지 아이콘만 남았다).
@@ -99,27 +101,34 @@ export function UnitConfirmForm({ scan, userId }: { scan: ScanRow; userId: strin
     router.refresh();
   }
 
-  const form = (
-    <form onSubmit={onSubmit} className="flex flex-col gap-4">
-      {/* 아트보드(ScanUnitConfirm) 우열: info Alert(파일명 mono 700 + 12px 설명) → 라디오 → primary. */}
-      <Alert type="info" title={<span className="font-mono">{scan.original_filename ?? '(파일명 없음)'}</span>}>
-        <p className="text-xs leading-4 text-cs-text-secondary">
+  // 아트보드(ScanUnitConfirm) 오른쪽 열: 파일 안내(info Alert, 파일명 mono) → '파일 좌표 단위' 라디오 칸 3개
+  // (고른 칸만 ink 테두리 + surface-2) → 주 버튼. 2열 배치일 때만 열 크기 클래스(sizing)를 받는다.
+  const renderForm = (sizing: string) => (
+    <form onSubmit={onSubmit} className={`flex flex-col gap-[18px] ${sizing}`.trim()}>
+      <Alert type="info" title={
+        <span className="font-mono text-[13px] font-medium [overflow-wrap:anywhere]">{scan.original_filename ?? '(파일명 없음)'}</span>
+      }>
+        <p className="text-[13px] leading-[1.55] text-ink-2">
           파일 좌표의 길이 단위를 확정해야 분석을 시작할 수 있습니다. 단위가 틀리면
           결과 전체가 왜곡되므로 스캔 앱의 내보내기 설정을 확인하세요.
         </p>
       </Alert>
-      <FormField label="파일 좌표 단위">
-        <div className="flex flex-col gap-2">
-          {UNIT_OPTIONS.map((o) => (
-            <label key={o.value} className="flex items-center gap-2 text-sm">
+      <div role="radiogroup" aria-labelledby={unitGroupLabelId} className="flex flex-col gap-2">
+        <p id={unitGroupLabelId} className="mb-0.5 text-sm font-semibold text-ink">파일 좌표 단위</p>
+        {UNIT_OPTIONS.map((o) => {
+          const on = unitScale === o.value;
+          return (
+            <label key={o.value}
+              className={`flex min-h-11 cursor-pointer items-center gap-3 rounded-control border px-3.5 text-[15px] text-ink ${
+                on ? 'border-ink bg-surface-2 font-semibold' : 'border-line-3 bg-ground font-medium'}`}>
               <input type="radio" name="unit-scale" className={checkClass}
-                checked={unitScale === o.value} onChange={() => setUnitScale(o.value)} />
+                checked={on} onChange={() => setUnitScale(o.value)} />
               {o.label}
             </label>
-          ))}
-        </div>
-      </FormField>
-      {error && <p className="text-sm text-cs-error">{error}</p>}
+          );
+        })}
+      </div>
+      {error && <p role="alert" className="text-sm text-err">{error}</p>}
       <div className="flex">
         <Button type="submit" variant="primary" disabled={busy}>
           <Icon name="check-circle" />
@@ -143,21 +152,21 @@ export function UnitConfirmForm({ scan, userId }: { scan: ScanRow; userId: strin
   // 이 컬럼 자체가 없어 undefined로 온다 - 즉 대시보드를 010보다 먼저 배포해도 이
   // 화면은 살아 있다(워커와 정반대라 배포 순서 위험이 한쪽으로 준다). === null로
   // 좁히면 그 성질이 조용히 사라진다.
-  if (!scan.height_view_path) return form;
+  if (!scan.height_view_path) return renderForm('');
 
-  // 그림이 단위 판단의 근거이므로 폼보다 넓게 잡는다 - 아래 3fr:2fr 격자가 그 비율이다
-  // (라디오 3개짜리 폼을 늘릴 이유가 없다). Cloudscape 재스킨으로 폼의 max-w-md와
-  // 페이지의 max-w-6xl이 함께 사라졌으므로, 남는 폭은 전부 그림 열이 가져간다.
+  // 그림이 단위 판단의 근거이므로 폼보다 넓게 잡는다 - 아트보드(ScanUnitConfirm)의 flex 3 1 520px :
+  // 2 1 340px가 그 비율이다(라디오 3개짜리 폼을 늘릴 이유가 없다). 둘이 한 줄에 못 들어가면 그림이
+  // 위, 폼이 아래로 쌓인다.
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] lg:items-start">
-      <section className="flex flex-col gap-2">
+    <div className="flex flex-wrap items-start gap-6">
+      <section className="flex min-w-0 flex-[3_1_520px] flex-col gap-2.5">
         {/* 리뷰 6: PNG 안에 matplotlib가 같은 제목("높이 뷰 (평면도)")을 이미 구워
-            넣는다. 눈에 보이는 h2를 그대로 두면 한 화면에 제목이 두 번 뜬다. 제목
+            넣는다. 눈에 보이는 제목(h3)을 그대로 두면 한 화면에 제목이 두 번 뜬다. 제목
             자체를 지우는 대신 sr-only로 돌린 이유는 접근성이다: 스크린리더는 PNG
             안의 글자를 읽지 못하므로, 제목을 지우면 이 영역이 heading 없는 익명
             블록이 되어 건너뛰기 탐색에서 사라진다. 보이는 라벨 역할은 아래
             "원본 크기로 열기" 링크와 설명 문단이 대신한다. */}
-        <h2 className="sr-only">높이 뷰 (평면도)</h2>
+        <h3 className="sr-only">높이 뷰 (평면도)</h3>
         {viewFailed ? (
           <Alert type="warning">
             높이 뷰를 불러오지 못했습니다. 그림 없이도 단위는 확정할 수 있습니다.
@@ -171,22 +180,26 @@ export function UnitConfirmForm({ scan, userId }: { scan: ScanRow; userId: strin
                 모든 뷰포트에서 통하는 링크 하나로 푼다. 그림과 라벨을 한 링크로 묶어
                 (그림 클릭 = 라벨 클릭) 링크가 둘로 갈라지지 않게 했다. */}
             <a href={dataUrl(scan.height_view_path)} target="_blank" rel="noopener noreferrer"
-              className="group block">
-              {/* 로컬 route 서빙 이미지 - 데모에서 next/image 최적화 불필요
-                  (components/analysis/slope-result.tsx와 같은 판단) */}
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img ref={imgRef} src={dataUrl(scan.height_view_path)}
-                alt="높이 뷰: 위에서 내려다본 점군의 상대 높이"
-                onError={() => setViewFailed(true)}
-                className="w-full rounded-lg border border-cs-divider bg-white" />
-              <span className="mt-2 flex items-center justify-end gap-1 text-xs font-bold leading-4 text-cs-link group-hover:text-cs-link-hover group-hover:underline">
+              className="flex flex-col gap-2 text-ink no-underline">
+              {/* 다크 C안: 엔진 그림(지금은 밝은 PNG - 어두운 판은 2번 스펙)을 검정 스테이지 안
+                  16px 여백에 둔다(아트보드 ScanUnitConfirm). */}
+              <Stage className="flex items-center justify-center p-4">
+                {/* 로컬 route 서빙 이미지 - 데모에서 next/image 최적화 불필요
+                    (components/analysis/slope-result.tsx와 같은 판단) */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img ref={imgRef} src={dataUrl(scan.height_view_path)}
+                  alt="높이 뷰: 위에서 내려다본 점군의 상대 높이"
+                  onError={() => setViewFailed(true)}
+                  className="block h-auto w-full" />
+              </Stage>
+              <span className="flex min-h-11 items-center justify-end gap-1.5 text-sm font-semibold underline underline-offset-[3px]">
                 원본 크기로 열기 (새 탭)
                 <Icon name="external" size={14} />
               </span>
             </a>
-            <p className="text-xs leading-4 text-cs-text-secondary">
+            <p className="text-[13px] leading-[1.65] text-muted">
               위에서 내려다본 점군의 상대 높이입니다. 축 눈금은 미터가 아니라
-              <span className="font-bold text-cs-text"> 파일 단위</span>이므로, 눈금이 가리키는
+              <span className="font-semibold text-ink"> 파일 단위</span>이므로, 눈금이 가리키는
               크기와 실제 공간 크기를 견주어 단위를 고르세요. 예를 들어 8m짜리 방인데
               눈금이 8000까지 간다면 mm입니다. 점이 성겨 색이 거의 없거나 &quot;유효
               데이터 없음&quot; 경고가 찍힌 그림이어도 축 눈금은 유효하니 눈금만 보고
@@ -195,7 +208,7 @@ export function UnitConfirmForm({ scan, userId }: { scan: ScanRow; userId: strin
           </>
         )}
       </section>
-      {form}
+      {renderForm('min-w-0 flex-[2_1_340px]')}
     </div>
   );
 }
