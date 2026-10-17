@@ -72,6 +72,8 @@ describe('LocationTree 다크 C안 (T5)', () => {
     render(<LocationTree tree={tree(loc)} scansByLocation={new Map([['l1', [scan('c1', 'l1', current)]]])} siteId="s1" />);
     const mark = screen.getByText(label).closest('[data-grade]');
     expect(mark?.getAttribute('data-grade')).toBe(grade);
+    // 8px 등급 색 점도 같은 등급을 단다(글자만 남고 점이 빠지면 색으로 읽던 표시가 사라진다)
+    expect(mark?.querySelector(`[data-grade="${grade}"]`)).not.toBeNull();
   });
 
   // 최종 리뷰 Important 2: 미분석 스캔의 상태 표시를 스캔 상세와 공유한다. 아트보드가 진행 중(속 빈
@@ -96,11 +98,33 @@ describe('LocationTree 다크 C안 (T5)', () => {
     expect(screen.getByText('분석 실패').closest('[data-status]')?.getAttribute('data-status')).toBe('error');
   });
 
+  // 분기 순서는 verdict → done → failed → 스캔 상태로 고정이다. 판정이 있으면 분석 status가 failed여도
+  // 등급이 이긴다(failed를 앞세우면 이미 나온 판정이 '분석 실패'로 덮인다).
+  it('판정이 있으면 현재 분석 status가 failed여도 등급을 그린다(판정이 먼저)', () => {
+    render(<LocationTree tree={tree(loc)}
+      scansByLocation={new Map([['l1', [scan('c1', 'l1', { id: 'a1', status: 'failed', overall_verdict: 'rework' })]]])}
+      siteId="s1" />);
+    expect(screen.getByText('재시공').closest('[data-grade]')?.getAttribute('data-grade')).toBe('rework');
+    expect(screen.queryByText('분석 실패')).toBeNull();
+  });
+
+  // 아직 도는 분석(queued·processing)에는 판정이 없다. done인데 판정이 없는 '판정 불가'로 오인시키지 않고
+  // 미분석 스캔처럼 스캔 상태를 그린다.
+  it.each(['queued', 'processing'] as const)('현재 분석이 %s이면 판정 불가가 아니라 스캔 상태를 그린다', (status) => {
+    render(<LocationTree tree={tree(loc)}
+      scansByLocation={new Map([['l1', [scan('c1', 'l1', { id: 'a1', status, overall_verdict: null })]]])}
+      siteId="s1" />);
+    expect(screen.queryByText('판정 불가')).toBeNull();
+    expect(screen.getByText('분석 준비됨').closest('[data-status]')?.getAttribute('data-status')).toBe('in-progress');
+  });
+
   it('소제목 위계: 동 h2 › 층 h3 › 공간 h4(측정위치 탭의 h1 아래)', () => {
     render(<LocationTree tree={tree(loc)} scansByLocation={new Map()} siteId="s1" />);
     expect(screen.getByRole('heading', { level: 2, name: 'A동' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { level: 3, name: '1층' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { level: 4, name: '거실' })).toBeInTheDocument();
+    // 동 구역은 자기 제목(h2)으로 이름 붙은 region 이다(아트보드 aria-labelledby)
+    expect(screen.getByRole('region', { name: 'A동' })).toBeInTheDocument();
   });
 
   it('빈 동·층·공간 이름은 "(… 미지정)"으로 보인다', () => {

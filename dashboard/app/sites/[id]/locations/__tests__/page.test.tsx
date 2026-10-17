@@ -46,7 +46,8 @@ function chain(
   spy?: (method: string, col: string, val: unknown) => void,
 ) {
   const obj: Record<string, unknown> = {
-    select: () => obj, order: () => obj,
+    select: (cols?: string) => { spy?.('select', cols ?? '', undefined); return obj; },
+    order: (col: string, opts?: unknown) => { spy?.('order', col, opts); return obj; },
     eq: (col: string, val: unknown) => { spy?.('eq', col, val); return obj; },
     in: (col: string, val: unknown) => { spy?.('in', col, val); return obj; },
     is: (col: string, val: unknown) => { spy?.('is', col, val); return obj; },
@@ -71,16 +72,20 @@ const PHOTO = {
 
 function stub(opts: {
   locations?: unknown[]; photos?: unknown[]; scans?: unknown[]; analyses?: unknown[];
-  locationsError?: { message: string };
+  locationsError?: { message: string }; photosError?: { message: string };
+  scansError?: { message: string }; analysesError?: { message: string };
   spies?: Partial<Record<string, (method: string, col: string, val: unknown) => void>>;
 } = {}) {
-  const { locations = [LOCATION], photos = [], scans = [SCAN], analyses = [], locationsError, spies = {} } = opts;
+  const {
+    locations = [LOCATION], photos = [], scans = [SCAN], analyses = [],
+    locationsError, photosError, scansError, analysesError, spies = {},
+  } = opts;
   return {
     from: (table: string) => {
       if (table === 'locations') return chain({ data: locationsError ? null : locations, error: locationsError ?? null }, spies.locations);
-      if (table === 'photos') return chain({ data: photos, error: null }, spies.photos);
-      if (table === 'scans') return chain({ data: scans, error: null }, spies.scans);
-      if (table === 'analyses') return chain({ data: analyses, error: null }, spies.analyses);
+      if (table === 'photos') return chain({ data: photosError ? null : photos, error: photosError ?? null }, spies.photos);
+      if (table === 'scans') return chain({ data: scansError ? null : scans, error: scansError ?? null }, spies.scans);
+      if (table === 'analyses') return chain({ data: analysesError ? null : analyses, error: analysesError ?? null }, spies.analyses);
       // 현장 존재 확인은 레이아웃 몫이다 - 이 페이지가 sites 를 다시 읽으면 여기서 잡힌다.
       throw new Error(`예상치 못한 테이블: ${table}`);
     },
@@ -142,6 +147,57 @@ describe('LocationsPage 쿼리 배선 (단계 C 회귀 차단: I1)', () => {
     expect(findAll(el, SupabaseErrorNotice)[0].props.message).toBe('연결 실패');
     expect(findAll(el, LocationTree)).toHaveLength(0);
   });
+
+  // 에러 가드는 조회마다 따로 있다(사진은 측정위치와 같은 가드, 스캔·현재분석은 각자). 하나라도 빠지면
+  // `?? []`가 실패를 "측정위치가 없습니다"나 빈 판정으로 조용히 바꿔 버린다.
+  const failures: [string, Parameters<typeof stub>[0], string][] = [
+    ['사진', { photosError: { message: '사진 조회 실패' } }, '사진 조회 실패'],
+    ['스캔', { scansError: { message: '스캔 조회 실패' } }, '스캔 조회 실패'],
+    ['현재분석', { analysesError: { message: '분석 조회 실패' } }, '분석 조회 실패'],
+  ];
+  it.each(failures)('%s 조회가 실패하면 빈 트리 대신 Supabase 오류 안내를 PAGE_MAIN 안에 그린다', async (_name, failure, message) => {
+    vi.mocked(createClient).mockResolvedValue(stub(failure) as never);
+
+    const el = (await LocationsPage(props())) as unknown as El;
+
+    expect(el.props.className).toBe(PAGE_MAIN);
+    expect(findAll(el, SupabaseErrorNotice)[0].props.message).toBe(message);
+    expect(findAll(el, LocationTree)).toHaveLength(0);
+  });
+
+  it('사진은 올린 시각 최신순, 스캔은 촬영일 최신순으로 읽는다', async () => {
+    const photosSpy = vi.fn();
+    const scansSpy = vi.fn();
+    vi.mocked(createClient).mockResolvedValue(stub({ spies: { photos: photosSpy, scans: scansSpy } }) as never);
+
+    await LocationsPage(props());
+
+    expect(photosSpy).toHaveBeenCalledWith('order', 'created_at', { ascending: false });
+    expect(scansSpy).toHaveBeenCalledWith('order', 'scanned_at', { ascending: false });
+  });
+
+  it('현재분석 조회는 트리 판정에 필요한 열(scan_id·status·overall_verdict)을 고른다', async () => {
+    const analysesSpy = vi.fn();
+    vi.mocked(createClient).mockResolvedValue(stub({ spies: { analyses: analysesSpy } }) as never);
+
+    await LocationsPage(props());
+
+    const selects = analysesSpy.mock.calls.filter(([method]) => method === 'select');
+    expect(selects).toHaveLength(1);
+    const columns = (selects[0][1] as string).split(',').map((c) => c.trim());
+    expect(columns).toEqual(expect.arrayContaining(['scan_id', 'status', 'overall_verdict']));
+  });
+
+  it('같은 측정위치의 스캔은 조회 순서대로 모두 모은다', async () => {
+    vi.mocked(createClient).mockResolvedValue(
+      stub({ scans: [SCAN, { ...SCAN, id: 'sc2', scanned_at: '2026-09-02' }] }) as never);
+
+    const el = await LocationsPage(props());
+
+    const [tree] = findAll(el, LocationTree);
+    const scansByLocation = tree.props.scansByLocation as Map<string, { id: string }[]>;
+    expect(scansByLocation.get('l1')?.map((s) => s.id)).toEqual(['sc1', 'sc2']);
+  });
 });
 
 // 다크 C안(아트보드 SiteDetail): 레이아웃이 <main>을 그리므로 페이지 뿌리는 PAGE_MAIN div 다.
@@ -181,6 +237,11 @@ describe('LocationsPage 화면 구조 (다크 C안)', () => {
 
     const [tree] = findAll(el, LocationTree);
     expect(tree.props.siteId).toBe('s1');
+    // 트리는 이 현장의 측정위치를 동 › 층 › 공간으로 묶은 것이다
+    expect(tree.props.tree).toEqual([{
+      building: '101동',
+      floors: [{ floor: '3층', floor_order: 3, rooms: [{ room: '301호', locations: [LOCATION] }] }],
+    }]);
     const scansByLocation = tree.props.scansByLocation as Map<string, { id: string; current?: unknown }[]>;
     expect(scansByLocation.get('l1')?.[0].current).toEqual({ id: 'a1', status: 'done', overall_verdict: 'pass' });
     expect(findAll(el, NewLocationForm)[0].props.siteId).toBe('s1');

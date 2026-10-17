@@ -71,6 +71,61 @@ describe('NewLocationForm', () => {
     });
   });
 
+  it('동·층·공간·측정위치 네 칸을 모두 trim해서 insert한다', async () => {
+    const insertSpy = vi.fn();
+    vi.mocked(createClient).mockReturnValue(stubSupabase({ error: null }, insertSpy) as never);
+    render(<NewLocationForm siteId="s1" />);
+
+    fireEvent.change(screen.getByLabelText('동'), { target: { value: ' 101동 ' } });
+    fireEvent.change(screen.getByLabelText('층'), { target: { value: ' 3층 ' } });
+    fireEvent.change(screen.getByLabelText('공간'), { target: { value: ' 301호 ' } });
+    fireEvent.change(screen.getByLabelText('측정위치'), { target: { value: ' 거실 ' } });
+    fireEvent.click(screen.getByRole('button', { name: '위치 추가' }));
+
+    await vi.waitFor(() => expect(refreshMock).toHaveBeenCalled());
+    expect(insertSpy).toHaveBeenCalledWith({
+      site_id: 's1', building: '101동', floor: '3층', floor_order: 0, room: '301호', name: '거실',
+    });
+  });
+
+  it('층 순서를 비워 두면 0으로 넣는다', async () => {
+    const insertSpy = vi.fn();
+    vi.mocked(createClient).mockReturnValue(stubSupabase({ error: null }, insertSpy) as never);
+    render(<NewLocationForm siteId="s1" />);
+
+    fireEvent.change(screen.getByLabelText('층 순서(정수)'), { target: { value: '' } });
+    fireEvent.change(screen.getByLabelText('측정위치'), { target: { value: '거실' } });
+    fireEvent.click(screen.getByRole('button', { name: '위치 추가' }));
+
+    await vi.waitFor(() => expect(refreshMock).toHaveBeenCalled());
+    expect(insertSpy).toHaveBeenCalledWith(expect.objectContaining({ floor_order: 0 }));
+  });
+
+  it('등록에 성공하면 입력칸을 처음 값으로 비운다', async () => {
+    vi.mocked(createClient).mockReturnValue(stubSupabase({ error: null }) as never);
+    render(<NewLocationForm siteId="s1" />);
+
+    fireEvent.change(screen.getByLabelText('동'), { target: { value: '101동' } });
+    fireEvent.change(screen.getByLabelText('층 순서(정수)'), { target: { value: '3' } });
+    fireEvent.change(screen.getByLabelText('측정위치'), { target: { value: '거실' } });
+    fireEvent.click(screen.getByRole('button', { name: '위치 추가' }));
+
+    await vi.waitFor(() => expect(refreshMock).toHaveBeenCalled());
+    expect(screen.getByLabelText('동')).toHaveValue('');
+    expect(screen.getByLabelText('측정위치')).toHaveValue('');
+    expect(screen.getByLabelText('층 순서(정수)')).toHaveValue(0);
+  });
+
+  it('제출은 브라우저 기본 동작(페이지 새로고침)을 막는다', async () => {
+    vi.mocked(createClient).mockReturnValue(stubSupabase({ error: null }) as never);
+    render(<NewLocationForm siteId="s1" />);
+    const form = screen.getByRole('button', { name: '위치 추가' }).closest('form') as HTMLFormElement;
+
+    // fireEvent 는 이벤트가 preventDefault 되지 않았을 때만 true 를 돌려준다
+    expect(fireEvent.submit(form)).toBe(false);
+    await vi.waitFor(() => expect(refreshMock).toHaveBeenCalled());
+  });
+
   it('중복(23505)이면 안내 문구를 경고(role=alert)로 띄우고 refresh하지 않는다', async () => {
     vi.mocked(createClient).mockReturnValue(stubSupabase({ error: { code: '23505', message: 'dup' } }) as never);
     render(<NewLocationForm siteId="s1" />);
