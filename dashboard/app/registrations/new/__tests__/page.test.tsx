@@ -1,7 +1,7 @@
 // 정합 시작 화면 서버 배선 (단계 F Task 5, 스펙 §6.2 2단계) + 현장 작업 공간(Task 9):
 // 현장 밖 경로라 페이지가 현장 헤더를 직접 그리고, 브레드크럼은 탭 이름(측정위치)부터 시작한다(스펙 §4.3).
 // Next.js 16 + Vitest는 async 서버 컴포넌트 render()를 지원하지 않는다 - 페이지 함수를 await 해 반환 트리를 본다.
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ReactElement } from 'react';
 
 vi.mock('@/lib/supabase/server', () => ({ createClient: vi.fn() }));
@@ -9,10 +9,12 @@ vi.mock('next/navigation', () => ({
   notFound: () => { throw new Error('NOT_FOUND'); },
   redirect: (to: string) => { throw new Error(`REDIRECT:${to}`); },
 }));
+// (Task 9 변이 실험 보강) 미로그인 케이스를 위해 헤더 스텁을 테스트마다 바꿀 수 있게 hoisted 저장소로 둔다.
+const { headerStore } = vi.hoisted(() => ({ headerStore: { loggedIn: true } }));
 // perf-auth-roundtrips: 페이지는 proxy가 검증해 실은 x-flatness-user-* 헤더를 읽는다(getRequestUser).
 // 이메일은 proxy가 encodeURIComponent로 싣는다 - getRequestUser의 실제 코드가 그대로 돈다.
 vi.mock('next/headers', () => ({
-  headers: async () => new Headers({
+  headers: async () => new Headers(!headerStore.loggedIn ? {} : {
     'x-flatness-user-id': 'u1',
     'x-flatness-user-email': encodeURIComponent('u1@example.com'),
   }),
@@ -22,7 +24,7 @@ vi.mock('@/components/shell/site-header', () => ({ SiteHeader: () => null }));
 vi.mock('@/components/shell/entry-header', () => ({ EntryHeader: () => null }));
 
 import { createClient } from '@/lib/supabase/server';
-import NewRegistrationPage from '../page';
+import NewRegistrationPage, { metadata } from '../page';
 import { RegistrationCreateForm } from '@/components/registration/registration-create-form';
 import { EntryHeader } from '@/components/shell/entry-header';
 import { SiteHeader } from '@/components/shell/site-header';
@@ -184,5 +186,78 @@ describe('NewRegistrationPage 현장 헤더·브레드크럼·본문 (Task 9, �
     const props = findByType(el, PageHeader)!.props as { description: string };
     expect(props.description).toContain('본관 / 1층 / 로비 / 로비 측정위치의 바닥 스캔 두 개를 하나로 합칩니다');
     expect(props.description).toContain('서브셀 중앙값 점군 하나로 병합합니다.');
+  });
+});
+
+// ---- Task 9 변이 실험 보강 --------------------------------------------------------------------
+// 변이 실험(보고서 참고)으로 드러난 빈틈: 위 모의는 조회 인자를 무시해 .eq('location_id')·.order·현장 id 가
+// 틀려도 통과했고, 미로그인 가드와 location 파라미터 가드, 폼에 넘기는 userId, 화면 이름(<title>)은 보지 않았다.
+describe('NewRegistrationPage 변이 실험 보강 (Task 9)', () => {
+  afterEach(() => { headerStore.loggedIn = true; });
+
+  it('스캔은 이 측정위치 것만, 최근 스캔부터 불러온다', async () => {
+    const spy = vi.fn();
+    await mount([scan('a'), scan('b')], { spy });
+
+    expect(spy).toHaveBeenCalledWith('eq', 'location_id', 'l1');
+    expect(spy).toHaveBeenCalledWith('order', 'scanned_at', { ascending: false });
+  });
+
+  it('측정위치와 현장은 각자의 id 로 조회한다(현장 id 는 측정위치 id 와 다르다)', async () => {
+    const eqCalls: [string, unknown, unknown][] = [];
+    vi.mocked(createClient).mockResolvedValue({
+      from: (table: string) => {
+        const record = (m: string, ...a: unknown[]) => { if (m === 'eq') eqCalls.push([table, a[0], a[1]]); };
+        if (table === 'locations') return chain({ data: LOCATION, error: null }, record);
+        if (table === 'sites') return chain({ data: SITE, error: null }, record);
+        if (table === 'scans') return chain({ data: [scan('a'), scan('b')], error: null }, record);
+        throw new Error(`예상치 못한 테이블: ${table}`);
+      },
+    } as never);
+    await NewRegistrationPage({ searchParams: Promise.resolve({ location: 'l1' }) });
+
+    expect(eqCalls).toContainEqual(['locations', 'id', 'l1']);
+    expect(eqCalls).toContainEqual(['sites', 'id', 's1']);
+  });
+
+  it('폼에는 로그인한 사용자의 id 를 넘긴다', async () => {
+    const el = await mount([scan('a'), scan('b')]);
+    expect((findByType(el, RegistrationCreateForm)!.props as { userId: string }).userId).toBe('u1');
+  });
+
+  it('로그인하지 않았으면 조회 전에 /login 으로 보낸다(방어 심층 가드 유지)', async () => {
+    headerStore.loggedIn = false;
+    vi.mocked(createClient).mockResolvedValue({
+      from: () => { throw new Error('리다이렉트 전에 조회하면 안 된다'); },
+    } as never);
+    await expect(NewRegistrationPage({ searchParams: Promise.resolve({ location: 'l1' }) }))
+      .rejects.toThrow('REDIRECT:/login');
+  });
+
+  it('location 파라미터가 없으면 아무것도 조회하지 않고 notFound 로 보낸다', async () => {
+    vi.mocked(createClient).mockResolvedValue({
+      from: () => { throw new Error('조회하면 안 된다'); },
+    } as never);
+    await expect(NewRegistrationPage({ searchParams: Promise.resolve({}) })).rejects.toThrow('NOT_FOUND');
+  });
+
+  it('화면 이름(<title>)은 "스캔 정합 시작"이다 - 앞의 "Flatness · "는 루트 layout 의 template 가 붙인다', () => {
+    expect(metadata.title).toBe('스캔 정합 시작');
+  });
+});
+
+// 사용자에게 보이는 안내문은 한 글자도 바꾸지 않는다(브리프 규칙). 위 테스트는 조각만 확인했으므로 전문을 잠근다.
+describe('NewRegistrationPage 안내문 전문 (Task 9)', () => {
+  it('머리 안내문 전문 - 측정위치는 " / "로 잇는다', async () => {
+    const el = await mount([scan('a'), scan('b')]);
+    expect((findByType(el, PageHeader)!.props as { description: string }).description).toBe(
+      '본관 / 1층 / 로비 / 로비 측정위치의 바닥 스캔 두 개를 하나로 합칩니다. 같은 공간을 나눠 찍은 스캔에서 같은 지점을 번갈아 찍어 대응점을 만들고, 그 대응점으로 정합한 뒤 서브셀 중앙값 점군 하나로 병합합니다.');
+  });
+
+  it('후보가 모자랄 때의 안내 문단 전문', async () => {
+    const el = await mount([scan('ok1')]);
+    expect(textOf(el)).toContain(
+      '후보가 되려면 바닥 스캔이면서 사전 검사가 끝나 높이 뷰가 있고 단위가 확정된 (분석 준비됨) 상태여야 합니다. 현재 이 측정위치의 후보는 1개입니다.');
+    expect(textOf(findByType(el, LinkButton))).toBe('스캔 업로드');
   });
 });

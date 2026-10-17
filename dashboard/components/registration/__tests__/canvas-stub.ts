@@ -9,11 +9,12 @@
 // 다크 테마(Task 9): 겹쳐보기는 그림 밑에 스테이지 바탕(fillRect)과 격자(stroke 한 번)를 먼저
 // 깐다. 그 호출과 순서(ops)도 기록해 "바탕 → 격자 → A → B" 순서를 테스트가 본다.
 
-export interface DrawCall { src: string; transform: number[]; alpha: number }
+export interface DrawCall { src: string; transform: number[]; alpha: number; smoothing: boolean }
 export interface FillCall { style: string; rect: [number, number, number, number] }
-export interface StrokeCall { style: string; width: number; segments: number }
+// moves: beginPath 이후 moveTo 로 옮긴 좌표들(격자선 시작점) - 간격·시작·방향·반 픽셀을 테스트가 본다
+export interface StrokeCall { style: string; width: number; segments: number; moves: Array<[number, number]> }
 
-/** drawImage 시점의 (이미지 src, 변환행렬, alpha)와 바탕·격자 호출을 기록하는 가짜 2D 컨텍스트. */
+/** drawImage 시점의 (이미지 src, 변환행렬, alpha, 보간 여부)와 바탕·격자 호출을 기록하는 가짜 2D 컨텍스트. */
 export function recordingCtx() {
   const calls: DrawCall[] = [];
   const fills: FillCall[] = [];
@@ -22,6 +23,7 @@ export function recordingCtx() {
   const ops: string[] = [];
   let cur = [1, 0, 0, 1, 0, 0];
   let segments = 0;
+  let moves: Array<[number, number]> = [];
   const ctx = {
     globalAlpha: 1,
     imageSmoothingEnabled: true,
@@ -36,15 +38,15 @@ export function recordingCtx() {
       fills.push({ style: ctx.fillStyle, rect: [x, y, w, h] });
       ops.push('fillRect');
     },
-    beginPath() { segments = 0; },
-    moveTo() { segments += 1; },
+    beginPath() { segments = 0; moves = []; },
+    moveTo(x: number, y: number) { segments += 1; moves.push([x, y]); },
     lineTo() {},
     stroke() {
-      strokes.push({ style: ctx.strokeStyle, width: ctx.lineWidth, segments });
+      strokes.push({ style: ctx.strokeStyle, width: ctx.lineWidth, segments, moves: [...moves] });
       ops.push('stroke');
     },
     drawImage(img: { src: string }) {
-      calls.push({ src: img.src, transform: [...cur], alpha: ctx.globalAlpha });
+      calls.push({ src: img.src, transform: [...cur], alpha: ctx.globalAlpha, smoothing: ctx.imageSmoothingEnabled });
       ops.push('drawImage');
     },
   };

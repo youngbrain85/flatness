@@ -161,3 +161,81 @@ describe('PointPicker 클릭 -> 월드 좌표 (설계 결정 F7)', () => {
     }
   });
 });
+
+// ---- Task 9 변이 실험 보강 --------------------------------------------------------------------
+// 변이 실험(보고서 참고)으로 드러난 빈틈: 위 픽스처는 이미지가 늘 화면 (0,0)에 놓이고 가장자리·오류 해제·
+// 요청 실패(error 이벤트)·확대 렌더링을 찍지 않아, 환산식의 일부가 빠져도 통과했다.
+function stubRectAt(r: { left: number; top: number; width: number; height: number }) {
+  Object.defineProperty(HTMLImageElement.prototype, 'getBoundingClientRect', {
+    configurable: true,
+    value: () => ({
+      ...r, right: r.left + r.width, bottom: r.top + r.height, x: r.left, y: r.top, toJSON() {},
+    }),
+  });
+}
+
+describe('PointPicker 변이 실험 보강 (Task 9)', () => {
+  it('이미지 오른쪽·아래 끝을 찍어도 마지막 칸으로, 바깥쪽(음수)을 찍으면 첫 칸으로 모인다', () => {
+    const { onPick } = renderPicker();
+    const img = screen.getByRole('img', { name: /A 스캔/ });
+    // clientX=500 -> 100% -> floor(5)=5 칸이지만 마지막 칸(4)이어야 한다 / 음수는 첫 칸(0)
+    fireEvent.click(img, { clientX: 500, clientY: 300 });
+    fireEvent.click(img, { clientX: -20, clientY: -20 });
+
+    expect(onPick).toHaveBeenCalledTimes(2);
+    const [end, start] = onPick.mock.calls.map((c) => c[0]);
+    expect([end.px, end.py]).toEqual([4, 2]);
+    expect([start.px, start.py]).toEqual([0, 0]);
+  });
+
+  it('이미지 앞에 여백이 있어도(화면 안 위치가 달라도) 이미지 안쪽 비율로 칸을 고른다', () => {
+    const { onPick } = renderPicker();
+    stubRectAt({ left: 100, top: 100, width: 500, height: 300 });
+    // 이미지 왼쪽 위에서 (50, 50)만큼 안쪽 -> 가로 10%·세로 16.7% -> 칸 (0, 0)
+    // (left·top 을 빼지 않으면 가로 30%·세로 50% -> 칸 (1, 1)이 된다)
+    fireEvent.click(screen.getByRole('img', { name: /A 스캔/ }), { clientX: 150, clientY: 150 });
+
+    const p = onPick.mock.calls[0][0];
+    expect([p.px, p.py]).toEqual([0, 0]);
+  });
+
+  it('레이아웃 전(크기 0)에는 클릭을 무시하고 오류도 띄우지 않는다', () => {
+    const { onPick } = renderPicker();
+    stubRectAt({ left: 0, top: 0, width: 0, height: 0 });
+    fireEvent.click(screen.getByRole('img', { name: /A 스캔/ }), { clientX: 50, clientY: 250 });
+
+    expect(onPick).not.toHaveBeenCalled();
+    expect(screen.queryByText(/높이 값이 없어/)).toBeNull();
+  });
+
+  it('빈 셀을 잘못 찍어 뜬 오류는 다음에 제대로 찍으면 사라진다', () => {
+    const { onPick } = renderPicker();
+    const img = screen.getByRole('img', { name: /A 스캔/ });
+    fireEvent.click(img, { clientX: 350, clientY: 150 }); // median_z[1][3] === null
+    expect(screen.getByText(/높이 값이 없어/)).toBeInTheDocument();
+
+    fireEvent.click(img, { clientX: 50, clientY: 250 });
+    expect(onPick).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText(/높이 값이 없어/)).toBeNull();
+  });
+
+  it('그림 요청이 실패하면(error 이벤트) 그림 대신 폴백 안내를 보인다', () => {
+    renderPicker();
+    fireEvent.error(screen.getByRole('img', { name: /A 스캔/ }));
+
+    expect(screen.queryByRole('img', { name: /A 스캔/ })).toBeNull();
+    expect(screen.getByText(/높이 뷰를 불러오지 못했습니다/).closest('[data-alert]')).toHaveAttribute('data-alert', 'warning');
+  });
+
+  it('확대해도 칸 경계가 뭉개지지 않게 pixelated 로 그린다', () => {
+    renderPicker();
+    expect((screen.getByRole('img', { name: /A 스캔/ }) as HTMLImageElement).style.imageRendering).toBe('pixelated');
+  });
+
+  it('사이드카가 없으면 십자 커서가 아니라 금지 커서를 쓴다', () => {
+    renderPicker({ meta: null, metaError: '좌표 정보를 불러오지 못했습니다.' });
+    const img = screen.getByRole('img', { name: /A 스캔/ });
+    expect(img.className).toContain('cursor-not-allowed');
+    expect(img.className).not.toContain('cursor-crosshair');
+  });
+});

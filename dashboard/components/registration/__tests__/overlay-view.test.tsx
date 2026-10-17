@@ -13,7 +13,7 @@
 //      로드되지 않아 그리기 경로 자체가 실행되지 않는다)
 // 프로덕션 코드에 테스트 전용 주입 지점을 두지 않으려고 전역 스텁을 골랐다.
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { RegistrationOverlay } from '../overlay-view';
 import { plainPngUrl } from '@/lib/domain/height-view';
 import type { HeightViewMeta } from '@/lib/domain/height-view';
@@ -188,5 +188,100 @@ describe('RegistrationOverlay 그리기 배선', () => {
     expect(limit.closest('[data-alert]')).toHaveAttribute('data-alert', 'info');
     expect(limit).toHaveTextContent('수평 감도가 낮게 나오는 바닥이 정확히 이 경우');
     expect(limit).toHaveTextContent('대응점을 넓게 분산해 찍었는가');
+  });
+});
+
+// ---- Task 9 변이 실험 보강 --------------------------------------------------------------------
+// 변이 실험(보고서 참고)으로 위 테스트가 가르지 못한 것을 막는다: 격자의 간격·시작·방향·반 픽셀,
+// 보간 끄기, 캔버스 크기(가로가 가득 찬 그림과 세로가 가득 찬 그림), 슬라이더 배선과 재그리기 취소,
+// 캔버스의 접근성 이름.
+type OverlayProps = Parameters<typeof RegistrationOverlay>[0];
+
+// 세로로 긴 그림: 뷰가 높이에 막혀 가로가 MAX_W 보다 훨씬 좁아진다.
+const TALL: HeightViewMeta = {
+  schema_version: 1, bbox_min: [0, 0, 0], bbox_max: [20, 80, 1],
+  subcell_m_file: 10, shape: [8, 2],
+  median_z: Array.from({ length: 8 }, (_, r) => [r, r + 0.5]),
+};
+
+describe('RegistrationOverlay 변이 실험 보강 (Task 9)', () => {
+  it('격자는 40px 간격 세로선과 가로선을 반 픽셀 안쪽에 긋는다', async () => {
+    const { calls, strokes } = mount();
+    await vi.waitFor(() => expect(calls).toHaveLength(2));
+
+    const { width, height } = expectedView();
+    const { moves } = strokes[0];
+    // 세로선은 (x, 0)에서, 가로선은 (0, y)에서 시작한다
+    const verticals = moves.filter(([x, y]) => x > 0 && y === 0).map(([x]) => x);
+    const horizontals = moves.filter(([x, y]) => x === 0 && y > 0).map(([, y]) => y);
+    expect(verticals.length + horizontals.length).toBe(moves.length);
+    for (const [lines, extent] of [[verticals, width], [horizontals, height]] as const) {
+      expect(lines[0]).toBe(40.5);
+      // 간격은 모두 40이고, 마지막 선 다음 칸은 캔버스 밖이다
+      expect(lines.slice(1).every((v, i) => v - lines[i] === 40)).toBe(true);
+      expect(lines[lines.length - 1] - 0.5).toBeLessThan(extent);
+      expect(lines[lines.length - 1] - 0.5 + 40).toBeGreaterThanOrEqual(extent);
+    }
+  });
+
+  it('보간을 끄고 그린다 - 켜 두면 칸 경계가 뭉개져 어긋남이 흐려진다', async () => {
+    const { calls } = mount();
+    await vi.waitFor(() => expect(calls).toHaveLength(2));
+    expect(calls.map((c) => c.smoothing)).toEqual([false, false]);
+  });
+
+  // 가로가 가득 찬 그림(기본 픽스처)만 쓰면 canvas.width = MAX_W 같은 상수 대입이 우연히 맞아 통과한다.
+  it.each([
+    ['가로가 가득 찬 그림', {} as Partial<OverlayProps>],
+    ['세로가 가득 찬 그림', { metaA: TALL, metaB: TALL, unitScaleB: 1 } as Partial<OverlayProps>],
+  ])('%s: 캔버스 크기가 겹쳐보기 뷰 크기와 같다', async (label, over) => {
+    const { container, calls } = mount(over);
+    await vi.waitFor(() => expect(calls).toHaveLength(2));
+
+    const view = over.metaA
+      ? overlayView([imageCornersM(TALL, SCALE_A, null), imageCornersM(TALL, 1, T)], MAX_W, MAX_H)
+      : expectedView();
+    if (over.metaA) expect(view.width).toBeLessThan(MAX_W); // 이 픽스처가 정말 세로로 가득 찬 그림인지
+    const canvas = container.querySelector('canvas') as HTMLCanvasElement;
+    expect([canvas.width, canvas.height], label).toEqual([view.width, view.height]);
+  });
+
+  // 슬라이더 배선: 이전에는 클래스만 확인해서 onChange·재그리기 의존성이 비어 있어도 통과했다.
+  it('슬라이더를 움직이면 B만 새 alpha 로 다시 그리고, 값을 바꾸기 전의 그리기는 취소된다', async () => {
+    const { calls, strokes } = mount();
+    const slider = screen.getByRole('slider', { name: '맞춘 스캔(B) 진하기' });
+
+    // 이미지 로드(마이크로태스크)가 끝나기 전에 값을 바꾼다 -> 첫 그리기는 정리되고 두 번째만 그려야 한다
+    fireEvent.change(slider, { target: { value: '80' } });
+    await vi.waitFor(() => expect(calls).toHaveLength(2));
+    await new Promise((resolve) => setTimeout(resolve, 0)); // 남은 마이크로태스크를 비운다 - 취소가 안 되면 4가 된다
+    expect(calls).toHaveLength(2);
+    expect(calls[0].alpha).toBe(1);
+    expect(calls[1].alpha).toBeCloseTo(0.8, 6);
+    expect(screen.getByText('80%')).toBeInTheDocument();
+
+    // 한 번 더 바꾸면 바탕 → 격자 → A → B 를 처음부터 다시 그린다
+    fireEvent.change(slider, { target: { value: '30' } });
+    await vi.waitFor(() => expect(calls).toHaveLength(4));
+    expect(calls[2].alpha).toBe(1);
+    expect(calls[3].alpha).toBeCloseTo(0.3, 6);
+    expect(screen.getByText('30%')).toBeInTheDocument();
+    // 다시 그릴 때마다 경로를 새로 시작한다 - 안 하면 지난 선이 쌓여 선 수가 늘어난다
+    expect(strokes).toHaveLength(2);
+    expect(strokes[1].segments).toBe(strokes[0].segments);
+  });
+
+  it('불투명도 라벨은 눈썹 글씨(mono·dim)이고, 캔버스는 "두 스캔 겹쳐보기"라는 이름으로 스테이지 폭 안에서 줄어든다', async () => {
+    const { container, calls } = mount();
+    await vi.waitFor(() => expect(calls).toHaveLength(2));
+
+    const label = screen.getByText('맞춘 스캔(B) 진하기');
+    expect(label.className).toContain('font-mono');
+    expect(label.className).toContain('text-dim');
+    const canvas = screen.getByRole('img', { name: '두 스캔 겹쳐보기' });
+    expect(canvas).toBe(container.querySelector('canvas'));
+    // 휴대폰 폭에서 페이지 가로 스크롤이 생기지 않게 max-w-full, 비율을 지키려고 h-auto
+    expect(canvas.className).toContain('max-w-full');
+    expect(canvas.className).toContain('h-auto');
   });
 });

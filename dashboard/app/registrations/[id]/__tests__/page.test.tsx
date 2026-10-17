@@ -2,7 +2,7 @@
 //
 // Next.js 16 + Vitest는 async 서버 컴포넌트 render()를 지원하지 않는다 - 관례대로
 // @/lib/supabase/server를 모킹하고 페이지 함수를 await 해 반환 트리와 쿼리 배선을 본다.
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ReactElement } from 'react';
 
 vi.mock('@/lib/supabase/server', () => ({ createClient: vi.fn() }));
@@ -10,10 +10,12 @@ vi.mock('next/navigation', () => ({
   notFound: () => { throw new Error('NOT_FOUND'); },
   redirect: (to: string) => { throw new Error(`REDIRECT:${to}`); },
 }));
+// (Task 9 변이 실험 보강) 미로그인 케이스를 위해 헤더 스텁을 테스트마다 바꿀 수 있게 hoisted 저장소로 둔다.
+const { headerStore } = vi.hoisted(() => ({ headerStore: { loggedIn: true } }));
 // perf-auth-roundtrips: 페이지는 supabase.auth.getUser() 대신 proxy가 검증해 실은
 // x-flatness-user-* 요청 헤더를 읽는다(getRequestUser) - 실제 코드가 그대로 돈다.
 vi.mock('next/headers', () => ({
-  headers: async () => new Headers({
+  headers: async () => new Headers(!headerStore.loggedIn ? {} : {
     'x-flatness-user-id': 'u1',
     'x-flatness-user-email': encodeURIComponent('u1@example.com'),
   }),
@@ -22,7 +24,7 @@ vi.mock('@/components/shell/site-header', () => ({ SiteHeader: () => null }));
 vi.mock('@/components/shell/entry-header', () => ({ EntryHeader: () => null }));
 
 import { createClient } from '@/lib/supabase/server';
-import RegistrationPage, { statusTone } from '../page';
+import RegistrationPage, { metadata, statusTone } from '../page';
 import { RegistrationWorkbench } from '@/components/registration/registration-workbench';
 import { EntryHeader } from '@/components/shell/entry-header';
 import { SiteHeader } from '@/components/shell/site-header';
@@ -223,5 +225,105 @@ describe('statusTone (F2)', () => {
     ['processing', 'unknown'],
   ] as const)('%s -> %s', (status, tone) => {
     expect(statusTone(status as RegistrationStatus)).toBe(tone);
+  });
+});
+
+// ---- Task 9 변이 실험 보강 --------------------------------------------------------------------
+// 변이 실험(보고서 참고)으로 드러난 빈틈: 위 모의는 조회 인자를 무시하고 모든 스캔이 같은 측정위치·현장이라
+// .in()/.eq() 인자와 "어느 스캔의 측정위치를 쓰는가"가 틀려도 통과했다. 현장 행만 못 읽는 경우, 병합 스캔이
+// 없는 경우, 미로그인 가드, 화면 이름(<title>), 상태 글자 서식도 보지 않았다.
+
+/** 조회마다 (테이블, 메서드, 컬럼, 값)을 기록하는 모의. 측정위치·현장 id 를 스캔 id 와 다르게 둔다. */
+function mountSpied(o: { scans?: ScanRow[]; site?: unknown } = {}) {
+  const calls: [string, string, unknown, unknown][] = [];
+  const scanA = scan('scanA', { location_id: 'locA' });
+  const scanB = scan('scanB', { location_id: 'locB' });
+  vi.mocked(createClient).mockResolvedValue({
+    from: (table: string) => {
+      const record = (m: string, ...a: unknown[]) => {
+        if (m === 'eq' || m === 'in') calls.push([table, m, a[0], a[1]]);
+      };
+      if (table === 'registrations') return chain({ data: REG, error: null }, record);
+      if (table === 'scans') return chain({ data: o.scans ?? [scanA, scanB], error: null }, record);
+      if (table === 'locations') return chain({ data: { ...LOCATION, id: 'locX', site_id: 'siteX' }, error: null }, record);
+      if (table === 'sites') {
+        return chain({ data: o.site === undefined ? { ...SITE, id: 'siteX' } : o.site, error: null }, record);
+      }
+      throw new Error(`예상치 못한 테이블: ${table}`);
+    },
+  } as never);
+  return { calls, page: RegistrationPage({ params: Promise.resolve({ id: 'r1' }) }) };
+}
+
+describe('RegistrationPage 변이 실험 보강 (Task 9)', () => {
+  afterEach(() => { headerStore.loggedIn = true; });
+
+  it('정합·원본 스캔·측정위치·현장을 각자의 id 로 조회한다', async () => {
+    const { calls, page } = mountSpied();
+    await page;
+
+    expect(calls).toContainEqual(['registrations', 'eq', 'id', 'r1']);
+    expect(calls).toContainEqual(['scans', 'in', 'id', ['scanA', 'scanB']]);
+    // 측정위치는 원본 스캔 A 의 것을 쓴다(B 의 측정위치는 locB)
+    expect(calls).toContainEqual(['locations', 'eq', 'id', 'locA']);
+    expect(calls).toContainEqual(['sites', 'eq', 'id', 'siteX']);
+  });
+
+  it('원본 스캔 A 가 지워지고 B 만 남아도 B 의 측정위치로 현장 헤더를 그린다', async () => {
+    const { calls, page } = mountSpied({ scans: [scan('scanB', { location_id: 'locB' })] });
+    const el = await page;
+
+    expect(calls).toContainEqual(['locations', 'eq', 'id', 'locB']);
+    expect(findByType(el, SiteHeader)).not.toBeNull();
+    expect(findByType(el, EntryHeader)).toBeNull();
+  });
+
+  it('현장 행만 못 읽으면 헤더만 진입 헤더로 대신하고 측정위치 크럼은 그대로 둔다', async () => {
+    const el = await mountSpied({ site: null }).page;
+
+    expect(findByType(el, SiteHeader)).toBeNull();
+    expect(findByType(el, EntryHeader)).not.toBeNull();
+    expect((findByType(el, PageHeader)!.props as { crumbs: unknown }).crumbs).toEqual([
+      { href: '/sites/siteX/locations', label: '측정위치' },
+      { href: '/sites/siteX/locations#loc-locX', label: '본관 · 1층 · 로비 · 로비' },
+      { label: '스캔 정합' },
+    ]);
+  });
+
+  it('병합 스캔이 없으면 원본 스캔 안내에 링크를 달지 않는다', async () => {
+    const el = await mount({ scans: [] }); // REG.result_scan_id === null
+    expect(findByType(el, Alert)).not.toBeNull();
+    expect(findByType(el, LinkButton)).toBeNull();
+  });
+
+  it('로그인하지 않았으면 조회 전에 /login 으로 보낸다(방어 심층 가드 유지)', async () => {
+    headerStore.loggedIn = false;
+    vi.mocked(createClient).mockResolvedValue({
+      from: () => { throw new Error('리다이렉트 전에 조회하면 안 된다'); },
+    } as never);
+    await expect(RegistrationPage({ params: Promise.resolve({ id: 'r1' }) })).rejects.toThrow('REDIRECT:/login');
+  });
+
+  it('제목 옆 상태 글자는 제목(h1)의 글꼴·굵기를 물려받지 않는다', async () => {
+    const el = await mount();
+    const header = findByType(el, PageHeader)!.props as { title: ReactElement };
+    const className = (findByType(header.title, StatusIndicator)!.props as { className: string }).className;
+    expect(className).toContain('font-sans');
+    expect(className).toContain('font-normal');
+  });
+
+  it('화면 이름(<title>)은 "스캔 정합"이다 - 앞의 "Flatness · "는 루트 layout 의 template 가 붙인다', () => {
+    expect(metadata.title).toBe('스캔 정합');
+  });
+});
+
+// 원본 스캔이 지워진 정합의 안내는 사용자에게 보이는 문구다 - 한 글자도 바꾸지 않는다(브리프 규칙).
+describe('RegistrationPage 원본 스캔 없음 안내 전문 (Task 9)', () => {
+  it('제목과 안내 문단 전문', async () => {
+    const el = await mount({ scans: [] });
+    const alert = findByType(el, Alert)!.props as { title: string };
+    expect(alert.title).toBe('원본 스캔을 찾을 수 없습니다.');
+    expect(textOf(el)).toContain(
+      '정합에 쓰인 스캔이 삭제된 것 같습니다. 이 정합 이력은 남지만 대응점을 다시 찍을 수는 없습니다. 새 정합을 시작하세요.');
   });
 });
