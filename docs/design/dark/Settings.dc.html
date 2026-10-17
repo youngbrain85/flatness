@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>설정</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=IBM+Plex+Mono:wght@400;500&family=Montserrat:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="min-height: 100vh; background: #0a0d1c; color: #f2efe9; font-family: Montserrat, 'Noto Sans KR', system-ui, sans-serif; font-size: 15px; line-height: 1.5">
+<header style="display: flex; flex-wrap: wrap; align-items: center; gap: 4px 20px; min-height: 64px; padding: 8px clamp(16px, 3vw, 40px); box-sizing: border-box; border-bottom: 1px solid #1f2540">
+<a href="#" style="display: inline-flex; align-items: center; gap: 10px; min-height: 44px; color: #f2efe9; text-decoration: none">
+<svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 17l6-6 4 4 8-8" stroke="#F2EFE9" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path><path d="M14 7h7v7" stroke="#F2EFE9" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+<span style="font-weight: 700; font-size: 15px; letter-spacing: 0.14em">FLATNESS</span>
+</a>
+<button type="button" aria-haspopup="menu" aria-expanded="false" style="margin-left: auto; display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 12px; border-radius: 6px; border: 1px solid #2e3657; background: transparent; color: #b8b3ab; font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 12px; cursor: pointer">[계정 이메일]<svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m6 9 6 6 6-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg></button>
+</header>
+<main style="background-color: #0a0d1c; background-image: {{gridBg}}; background-size: 25% 100%, 100% 33.33%">
+<div style="max-width: 1360px; margin: 0 auto; padding: clamp(18px, 2.6vw, 28px) clamp(16px, 3vw, 40px) 56px; box-sizing: border-box; display: flex; flex-direction: column; gap: 20px">
+<nav aria-label="위치" style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 12px; color: #85817a">
+<a href="#" style="color: #b8b3ab">현장 목록</a>
+<span aria-hidden="true">/</span>
+<span aria-current="page" style="color: #f2efe9">설정</span>
+</nav>
+<div style="display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 14px 40px">
+<h1 style="margin: 0; font-family: 'Noto Sans KR', Montserrat, sans-serif; font-size: clamp(24px, 2.6vw, 30px); font-weight: 700; line-height: 1.2">설정</h1>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 12px">
+<section aria-labelledby="profileTitle" style="flex: 1 1 420px; min-width: 0; display: flex; flex-direction: column; gap: 16px; padding: 20px 22px; background: #10142a; border: 1px solid #242b47; border-radius: 12px">
+<h2 id="profileTitle" style="margin: 0; font-family: 'Noto Sans KR', Montserrat, sans-serif; font-size: 19px; font-weight: 600">프로필</h2>
+<div style="display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px">
+<div style="flex: 1 1 240px; max-width: 320px; min-width: 0; display: flex; flex-direction: column; gap: 6px">
+<label for="displayName" style="font-size: 14px; font-weight: 600; color: #f2efe9">표시 이름</label>
+<input id="displayName" type="text" defaultValue="[표시 이름]" style="width: 100%; min-height: 44px; box-sizing: border-box; padding: 0 12px; border-radius: 6px; border: 1px solid #2e3657; background: #0a0d1c; color: #f2efe9; font-family: inherit; font-size: 15px">
+</div>
+<button type="button" onClick="{{saveProfile}}" style="min-height: 44px; padding: 0 18px; border-radius: 6px; border: 1px solid #2e3657; background: transparent; color: #f2efe9; font-family: inherit; font-size: 15px; font-weight: 500; cursor: pointer">저장</button>
+<sc-if value="{{profileSaved}}" hint-placeholder-val="{{ false }}">
+<span role="status" style="display: inline-flex; align-items: center; min-height: 44px; font-size: 13px; color: #9a9690">저장되었습니다</span>
+</sc-if>
+</div>
+</section>
+<section aria-labelledby="uTitle" style="flex: 1 1 420px; min-width: 0; display: flex; flex-direction: column; gap: 16px; padding: 20px 22px; background: #10142a; border: 1px solid #242b47; border-radius: 12px">
+<h2 id="uTitle" style="margin: 0; font-family: 'Noto Sans KR', Montserrat, sans-serif; font-size: 19px; font-weight: 600">측정 불확도 U</h2>
+<p style="margin: 0; font-size: 14px; line-height: 1.6; color: #9a9690">판정식의 경계 구간 폭을 결정합니다. 분석 시점 값이 결과에 스냅샷되므로 수정해도 과거 분석·보고서는 바뀌지 않습니다. P5 반복 스캔 재현성 시험 후 갱신 예정.</p>
+<div style="display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px">
+<div style="flex: 0 1 120px; min-width: 96px; display: flex; flex-direction: column; gap: 6px">
+<label for="uFloor" style="font-size: 14px; font-weight: 600; color: #f2efe9; white-space: nowrap">바닥 U(mm)</label>
+<input id="uFloor" type="text" defaultValue="5.0" style="width: 100%; min-height: 44px; box-sizing: border-box; padding: 0 12px; border-radius: 6px; border: 1px solid #2e3657; background: #0a0d1c; color: #f2efe9; font-family: 'IBM Plex Mono', monospace; font-size: 15px; font-variant-numeric: tabular-nums">
+</div>
+<div style="flex: 0 1 120px; min-width: 96px; display: flex; flex-direction: column; gap: 6px">
+<label for="uWall" style="font-size: 14px; font-weight: 600; color: #f2efe9; white-space: nowrap">벽면 U(mm)</label>
+<input id="uWall" type="text" defaultValue="8.0" style="width: 100%; min-height: 44px; box-sizing: border-box; padding: 0 12px; border-radius: 6px; border: 1px solid #2e3657; background: #0a0d1c; color: #f2efe9; font-family: 'IBM Plex Mono', monospace; font-size: 15px; font-variant-numeric: tabular-nums">
+</div>
+<button type="button" onClick="{{saveU}}" style="min-height: 44px; padding: 0 18px; border-radius: 6px; border: 1px solid #f2efe9; background: #f2efe9; color: #0a0d1c; font-family: inherit; font-size: 15px; font-weight: 600; cursor: pointer">저장</button>
+<sc-if value="{{uSaved}}" hint-placeholder-val="{{ false }}">
+<span role="status" style="display: inline-flex; align-items: center; min-height: 44px; font-size: 13px; color: #9a9690">저장되었습니다 (이후 분석부터 적용)</span>
+</sc-if>
+</div>
+</section>
+</div>
+<section aria-labelledby="criteriaTitle" style="display: flex; flex-direction: column; gap: 14px">
+<h2 id="criteriaTitle" style="margin: 0; font-family: 'Noto Sans KR', Montserrat, sans-serif; font-size: 19px; font-weight: 600">판정 기준</h2>
+<div style="display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px">
+<h3 style="margin: 0; font-family: 'Noto Sans KR', Montserrat, sans-serif; font-size: 15px; font-weight: 600">전역 기본 기준</h3>
+<span style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: #9a9690">(16)</span>
+</div>
+<div style="overflow-x: auto; border: 1px solid #242b47; border-radius: 12px; background: #10142a; color-scheme: dark">
+<table style="width: 100%; min-width: 960px; border-collapse: collapse">
+<thead><tr><th scope="col" style="padding: 12px 16px; text-align: left; font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 11px; font-weight: 500; letter-spacing: 0.08em; color: #85817a; border-bottom: 1px solid #242b47; white-space: nowrap">기준 · 출처</th><th scope="col" style="padding: 12px 16px; text-align: left; font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 11px; font-weight: 500; letter-spacing: 0.08em; color: #85817a; border-bottom: 1px solid #242b47; white-space: nowrap">표면 · 버전</th><th scope="col" style="padding: 12px 16px; text-align: left; font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 11px; font-weight: 500; letter-spacing: 0.08em; color: #85817a; border-bottom: 1px solid #242b47; white-space: nowrap">임계값</th><th scope="col" style="padding: 12px 16px; text-align: center; font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 11px; font-weight: 500; letter-spacing: 0.08em; color: #85817a; border-bottom: 1px solid #242b47; white-space: nowrap">활성</th></tr></thead>
+<tbody>
+<tr>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-size: 14px; color: #f2efe9"><div style="display: flex; flex-direction: column; gap: 4px"><div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px"><span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 500">floor-kcs-exposed</span><span style="display: inline-flex; align-items: center; min-height: 22px; padding: 0 8px; border: 1px solid #2e3657; border-radius: 6px; color: #b8b3ab; font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 11px">기본</span></div><span style="font-size: 13px; color: #9a9690">KCS 14 20 10 표 3.7-1 (제물치장·얇은 마감)</span></div></td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-size: 14px; color: #b8b3ab; white-space: nowrap">바닥 · v1</td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-size: 14px; color: #f2efe9; white-space: nowrap; font-variant-numeric: tabular-nums">3m당 허용 7mm / 재시공 21mm</td>
+<td style="padding: 4px 16px; border-bottom: 1px solid #1f2540; text-align: center"><label for="act1" style="display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; cursor: pointer"><input id="act1" type="checkbox" defaultChecked="{{on}}" aria-label="floor-kcs-exposed 활성" style="width: 18px; height: 18px; margin: 0; accent-color: #f2efe9; color-scheme: dark; cursor: pointer"></label></td>
+</tr>
+<tr>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-size: 14px; color: #f2efe9"><div style="display: flex; flex-direction: column; gap: 4px"><div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px"><span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 500">floor-kcs-finish7minus</span></div><span style="font-size: 13px; color: #9a9690">KCS 14 20 10 표 3.7-1 (마감두께 7mm 미만)</span></div></td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-size: 14px; color: #b8b3ab; white-space: nowrap">바닥 · v1</td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-size: 14px; color: #f2efe9; white-space: nowrap; font-variant-numeric: tabular-nums">3m당 허용 10mm / 재시공 30mm</td>
+<td style="padding: 4px 16px; border-bottom: 1px solid #1f2540; text-align: center"><label for="act2" style="display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; cursor: pointer"><input id="act2" type="checkbox" defaultChecked="{{on}}" aria-label="floor-kcs-finish7minus 활성" style="width: 18px; height: 18px; margin: 0; accent-color: #f2efe9; color-scheme: dark; cursor: pointer"></label></td>
+</tr>
+<tr>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-size: 14px; color: #f2efe9"><div style="display: flex; flex-direction: column; gap: 4px"><div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px"><span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 500">floor-kcs-finish7plus</span></div><span style="font-size: 13px; color: #9a9690">KCS 14 20 10 표 3.7-1 (마감두께 7mm 이상)</span></div></td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-size: 14px; color: #b8b3ab; white-space: nowrap">바닥 · v1</td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-size: 14px; color: #f2efe9; white-space: nowrap; font-variant-numeric: tabular-nums">1m당 허용 10mm / 재시공 30mm</td>
+<td style="padding: 4px 16px; border-bottom: 1px solid #1f2540; text-align: center"><label for="act3" style="display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; cursor: pointer"><input id="act3" type="checkbox" defaultChecked="{{on}}" aria-label="floor-kcs-finish7plus 활성" style="width: 18px; height: 18px; margin: 0; accent-color: #f2efe9; color-scheme: dark; cursor: pointer"></label></td>
+</tr>
+<tr>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-size: 14px; color: #f2efe9"><div style="display: flex; flex-direction: column; gap: 4px"><div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px"><span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 500">floor-lh-exposed</span></div><span style="font-size: 13px; color: #9a9690">LHCS 14 20 10 05 표 3.11-7 (제물치장·도장·벽지)</span></div></td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-size: 14px; color: #b8b3ab; white-space: nowrap">바닥 · v1</td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-size: 14px; color: #f2efe9; white-space: nowrap; font-variant-numeric: tabular-nums">3m당 허용 6mm / 재시공 18mm</td>
+<td style="padding: 4px 16px; border-bottom: 1px solid #1f2540; text-align: center"><label for="act4" style="display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; cursor: pointer"><input id="act4" type="checkbox" defaultChecked="{{on}}" aria-label="floor-lh-exposed 활성" style="width: 18px; height: 18px; margin: 0; accent-color: #f2efe9; color-scheme: dark; cursor: pointer"></label></td>
+</tr>
+<tr>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-size: 14px; color: #f2efe9"><div style="display: flex; flex-direction: column; gap: 4px"><div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px"><span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 500">floor-lh-thick</span></div><span style="font-size: 13px; color: #9a9690">LHCS 14 20 10 05 표 3.11-7 (마감 13mm 초과)</span></div></td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-size: 14px; color: #b8b3ab; white-space: nowrap">바닥 · v1</td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-size: 14px; color: #f2efe9; white-space: nowrap; font-variant-numeric: tabular-nums">3m당 허용 10mm / 재시공 30mm</td>
+<td style="padding: 4px 16px; border-bottom: 1px solid #1f2540; text-align: center"><label for="act5" style="display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; cursor: pointer"><input id="act5" type="checkbox" defaultChecked="{{on}}" aria-label="floor-lh-thick 활성" style="width: 18px; height: 18px; margin: 0; accent-color: #f2efe9; color-scheme: dark; cursor: pointer"></label></td>
+</tr>
+<tr>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-size: 14px; color: #f2efe9"><div style="display: flex; flex-direction: column; gap: 4px"><div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px"><span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 500">floor-molit-cushion</span></div><span style="font-size: 13px; color: #9a9690">국토부 바닥충격음 고시 (완충재 바탕)</span></div></td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-size: 14px; color: #b8b3ab; white-space: nowrap">바닥 · v1</td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-size: 14px; color: #f2efe9; white-space: nowrap; font-variant-numeric: tabular-nums">3m당 허용 7mm / 재시공 21mm</td>
+<td style="padding: 4px 16px; border-bottom: 1px solid #1f2540; text-align: center"><label for="act6" style="display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; cursor: pointer"><input id="act6" type="checkbox" defaultChecked="{{on}}" aria-label="floor-molit-cushion 활성" style="width: 18px; height: 18px; margin: 0; accent-color: #f2efe9; color-scheme: dark; cursor: pointer"></label></td>
+</tr>
+<tr>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-size: 14px; color: #f2efe9"><div style="display: flex; flex-direction: column; gap: 4px"><div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px"><span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 500">slope-bathroom</span></div><span style="font-size: 13px; color: #9a9690">KCS 41 48 01 타일공사 §3.1(11)① 마. "바닥면은 물고임이 없도록 구배를 유지하되, 1/100을 넘지 않도록 한다" [원문대조]. 하한은 정성 규정이라 수치 근거 없음</span></div></td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-size: 14px; color: #b8b3ab; white-space: nowrap">바닥 · v1</td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-size: 14px; color: #f2efe9; white-space: nowrap; font-variant-numeric: tabular-nums">설계 0.5% · 적합 ±0.5%p · 재시공 1.5%p 초과</td>
+<td style="padding: 4px 16px; border-bottom: 1px solid #1f2540; text-align: center"><label for="act7" style="display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; cursor: pointer"><input id="act7" type="checkbox" defaultChecked="{{on}}" aria-label="slope-bathroom 활성" style="width: 18px; height: 18px; margin: 0; accent-color: #f2efe9; color-scheme: dark; cursor: pointer"></label></td>
+</tr>
+<tr>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-size: 14px; color: #f2efe9"><div style="display: flex; flex-direction: column; gap: 4px"><div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px"><span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 500">slope-indoor-level</span><span style="display: inline-flex; align-items: center; min-height: 22px; padding: 0 8px; border: 1px solid #2e3657; border-radius: 6px; color: #b8b3ab; font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 11px">기본</span></div><span style="font-size: 13px; color: #9a9690">설계 구배 0%(의도적 구배 없음). 허용폭은 기준 문서 근거가 없는 용역 설정값. 방향 판정 대상이 아니므로 배수구를 지정하지 말 것</span></div></td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-size: 14px; color: #b8b3ab; white-space: nowrap">바닥 · v1</td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-size: 14px; color: #f2efe9; white-space: nowrap; font-variant-numeric: tabular-nums">설계 0% · 적합 ±1%p · 재시공 3%p 초과</td>
+<td style="padding: 4px 16px; border-bottom: 1px solid #1f2540; text-align: center"><label for="act8" style="display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; cursor: pointer"><input id="act8" type="checkbox" defaultChecked="{{on}}" aria-label="slope-indoor-level 활성" style="width: 18px; height: 18px; margin: 0; accent-color: #f2efe9; color-scheme: dark; cursor: pointer"></label></td>
+</tr>
+<tr>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-size: 14px; color: #f2efe9"><div style="display: flex; flex-direction: column; gap: 4px"><div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px"><span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 500">slope-parking</span></div><span style="font-size: 13px; color: #9a9690">KDS 44 70 05 주차장 §4.1.3(3)① 가로방향 3% 이하 [원문대조, 상한만]. 배수를 위한 최소 구배 규정은 존재하지 않는다. 도로법상 도로의 주차장 기준이므로 건축물 부설주차장에는 준용</span></div></td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-size: 14px; color: #b8b3ab; white-space: nowrap">바닥 · v1</td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-size: 14px; color: #f2efe9; white-space: nowrap; font-variant-numeric: tabular-nums">설계 1.5% · 적합 ±1.5%p · 재시공 4.5%p 초과</td>
+<td style="padding: 4px 16px; border-bottom: 1px solid #1f2540; text-align: center"><label for="act9" style="display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; cursor: pointer"><input id="act9" type="checkbox" defaultChecked="{{on}}" aria-label="slope-parking 활성" style="width: 18px; height: 18px; margin: 0; accent-color: #f2efe9; color-scheme: dark; cursor: pointer"></label></td>
+</tr>
+<tr>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-size: 14px; color: #f2efe9"><div style="display: flex; flex-direction: column; gap: 4px"><div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px"><span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 500">slope-roof-exposed</span></div><span style="font-size: 13px; color: #9a9690">KCS 41 40 01 방수공사일반 §3.1.3(1) 노출방수(top coat 마감 또는 무마감) 1/50~1/20 [원문대조]. 재시공 임계는 저장소 관례(적합폭 3배), 방향 허용각은 용역 설정값</span></div></td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-size: 14px; color: #b8b3ab; white-space: nowrap">바닥 · v1</td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-size: 14px; color: #f2efe9; white-space: nowrap; font-variant-numeric: tabular-nums">설계 3.5% · 적합 ±1.5%p · 재시공 4.5%p 초과</td>
+<td style="padding: 4px 16px; border-bottom: 1px solid #1f2540; text-align: center"><label for="act10" style="display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; cursor: pointer"><input id="act10" type="checkbox" defaultChecked="{{on}}" aria-label="slope-roof-exposed 활성" style="width: 18px; height: 18px; margin: 0; accent-color: #f2efe9; color-scheme: dark; cursor: pointer"></label></td>
+</tr>
+<tr>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-size: 14px; color: #f2efe9"><div style="display: flex; flex-direction: column; gap: 4px"><div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px"><span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 500">slope-roof-protected</span></div><span style="font-size: 13px; color: #9a9690">KCS 41 40 01 방수공사일반 §3.1.3(1) 비노출(보호층) 1/100~1/50 [원문대조]. KCS 41 56 01 §1.5.2(3)의 1/50 이상과 상충하므로 지붕 전체 판정에는 노출방수 기준 검토 필요</span></div></td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-size: 14px; color: #b8b3ab; white-space: nowrap">바닥 · v1</td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-size: 14px; color: #f2efe9; white-space: nowrap; font-variant-numeric: tabular-nums">설계 1.5% · 적합 ±0.5%p · 재시공 1.5%p 초과</td>
+<td style="padding: 4px 16px; border-bottom: 1px solid #1f2540; text-align: center"><label for="act11" style="display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; cursor: pointer"><input id="act11" type="checkbox" defaultChecked="{{on}}" aria-label="slope-roof-protected 활성" style="width: 18px; height: 18px; margin: 0; accent-color: #f2efe9; color-scheme: dark; cursor: pointer"></label></td>
+</tr>
+<tr>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-size: 14px; color: #f2efe9"><div style="display: flex; flex-direction: column; gap: 4px"><div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px"><span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 500">wall-kcs-plumb</span></div><span style="font-size: 13px; color: #9a9690">KCS 21 50 05 §3.2.2 (H≤30m)</span></div></td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-size: 14px; color: #b8b3ab; white-space: nowrap">벽면 · v1</td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-size: 14px; color: #f2efe9; white-space: nowrap; font-variant-numeric: tabular-nums">수직도 허용 25mm / 재시공 75mm</td>
+<td style="padding: 4px 16px; border-bottom: 1px solid #1f2540; text-align: center"><label for="act12" style="display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; cursor: pointer"><input id="act12" type="checkbox" defaultChecked="{{on}}" aria-label="wall-kcs-plumb 활성" style="width: 18px; height: 18px; margin: 0; accent-color: #f2efe9; color-scheme: dark; cursor: pointer"></label></td>
+</tr>
+<tr>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-size: 14px; color: #f2efe9"><div style="display: flex; flex-direction: column; gap: 4px"><div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px"><span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 500">wall-kcs-tilt-exposed</span></div><span style="font-size: 13px; color: #9a9690">KCS 21 50 05 §3.2.6 (노출 모서리·줄눈)</span></div></td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-size: 14px; color: #b8b3ab; white-space: nowrap">벽면 · v1</td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-size: 14px; color: #f2efe9; white-space: nowrap; font-variant-numeric: tabular-nums">3m당 허용 6mm / 재시공 18mm</td>
+<td style="padding: 4px 16px; border-bottom: 1px solid #1f2540; text-align: center"><label for="act13" style="display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; cursor: pointer"><input id="act13" type="checkbox" defaultChecked="{{on}}" aria-label="wall-kcs-tilt-exposed 활성" style="width: 18px; height: 18px; margin: 0; accent-color: #f2efe9; color-scheme: dark; cursor: pointer"></label></td>
+</tr>
+<tr>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-size: 14px; color: #f2efe9"><div style="display: flex; flex-direction: column; gap: 4px"><div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px"><span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 500">wall-kcs-tilt-other</span><span style="display: inline-flex; align-items: center; min-height: 22px; padding: 0 8px; border: 1px solid #2e3657; border-radius: 6px; color: #b8b3ab; font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 11px">기본</span></div><span style="font-size: 13px; color: #9a9690">KCS 21 50 05 §3.2.6 (기타)</span></div></td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-size: 14px; color: #b8b3ab; white-space: nowrap">벽면 · v1</td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-size: 14px; color: #f2efe9; white-space: nowrap; font-variant-numeric: tabular-nums">3m당 허용 9mm / 재시공 27mm</td>
+<td style="padding: 4px 16px; border-bottom: 1px solid #1f2540; text-align: center"><label for="act14" style="display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; cursor: pointer"><input id="act14" type="checkbox" defaultChecked="{{on}}" aria-label="wall-kcs-tilt-other 활성" style="width: 18px; height: 18px; margin: 0; accent-color: #f2efe9; color-scheme: dark; cursor: pointer"></label></td>
+</tr>
+<tr>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-size: 14px; color: #f2efe9"><div style="display: flex; flex-direction: column; gap: 4px"><div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px"><span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 500">wall-plaster-base</span></div><span style="font-size: 13px; color: #9a9690">주택건설 전문시방서 31310 (미장 바탕면)</span></div></td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-size: 14px; color: #b8b3ab; white-space: nowrap">벽면 · v1</td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-size: 14px; color: #f2efe9; white-space: nowrap; font-variant-numeric: tabular-nums">3m당 허용 6mm / 재시공 18mm</td>
+<td style="padding: 4px 16px; border-bottom: 1px solid #1f2540; text-align: center"><label for="act15" style="display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; cursor: pointer"><input id="act15" type="checkbox" defaultChecked="{{on}}" aria-label="wall-plaster-base 활성" style="width: 18px; height: 18px; margin: 0; accent-color: #f2efe9; color-scheme: dark; cursor: pointer"></label></td>
+</tr>
+<tr>
+<td style="padding: 14px 16px; font-size: 14px; color: #f2efe9"><div style="display: flex; flex-direction: column; gap: 4px"><div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px"><span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 500">wall-plaster-surface</span></div><span style="font-size: 13px; color: #9a9690">주택건설 전문시방서 31310 (미장 바름면)</span></div></td>
+<td style="padding: 14px 16px; font-size: 14px; color: #b8b3ab; white-space: nowrap">벽면 · v1</td>
+<td style="padding: 14px 16px; font-size: 14px; color: #f2efe9; white-space: nowrap; font-variant-numeric: tabular-nums">3m당 허용 3mm / 재시공 9mm</td>
+<td style="padding: 4px 16px; text-align: center"><label for="act16" style="display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; cursor: pointer"><input id="act16" type="checkbox" defaultChecked="{{on}}" aria-label="wall-plaster-surface 활성" style="width: 18px; height: 18px; margin: 0; accent-color: #f2efe9; color-scheme: dark; cursor: pointer"></label></td>
+</tr>
+</tbody>
+</table>
+</div>
+<div style="display: flex; gap: 10px; padding: 14px 16px; border: 1px solid #2e3657; border-radius: 6px; background: #0a0d1c">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="flex: 0 0 auto; margin-top: 2px"><circle cx="12" cy="12" r="9" stroke="#B8B3AB" stroke-width="1.8"></circle><path d="M12 11v5M12 7.5v.5" stroke="#B8B3AB" stroke-width="1.8" stroke-linecap="round"></path></svg>
+<p style="margin: 0; font-size: 13px; line-height: 1.55; color: #b8b3ab">기준 신설·버전 개정·현장별 재정의 추가는 데모 범위 밖입니다. Supabase SQL Editor에서 <span style="font-family: 'IBM Plex Mono', monospace">criteria</span> 테이블에 직접 추가하세요(부분 유니크 제약: 활성 행 기준 (surface, name) 유일).</p>
+</div>
+</section>
+</div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"motif":{"editor":"boolean","default":true,"section":"Look"},"$preview":{"width":1440,"height":2060}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    // 저장 버튼을 누르면 앱(profile-form.tsx, uncertainty-form.tsx)처럼 버튼 옆에 결과 문구를 띄운다. 실제 저장은 하지 않는다
+    this.state = { profileSaved: false, uSaved: false };
+  }
+  renderVals() {
+    const motif = this.props.motif ?? true;
+    return {
+      on: true,
+      profileSaved: this.state.profileSaved,
+      uSaved: this.state.uSaved,
+      saveProfile: () => this.setState({ profileSaved: true }),
+      saveU: () => this.setState({ uSaved: true }),
+      gridBg: motif ? 'linear-gradient(to right, rgba(242, 239, 233, 0.07) 1px, transparent 1px), linear-gradient(to bottom, rgba(242, 239, 233, 0.07) 1px, transparent 1px)' : 'none'
+    };
+  }
+}
+</script>
+</body>
+</html>

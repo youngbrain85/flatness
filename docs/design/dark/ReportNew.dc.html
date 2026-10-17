@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>보고서 생성</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=IBM+Plex+Mono:wght@400;500&family=Montserrat:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="min-height: 100vh; background: #0a0d1c; color: #f2efe9; font-family: Montserrat, 'Noto Sans KR', system-ui, sans-serif; font-size: 15px; line-height: 1.5">
+<header style="display: flex; flex-wrap: wrap; align-items: center; gap: 4px 20px; min-height: 64px; padding: 8px clamp(16px, 3vw, 40px); box-sizing: border-box; border-bottom: 1px solid #1f2540">
+<a href="#" aria-label="FLATNESS, 현장 목록으로" style="display: inline-flex; align-items: center; gap: 10px; min-height: 44px; color: #f2efe9; text-decoration: none">
+<svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 17l6-6 4 4 8-8" stroke="#F2EFE9" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path><path d="M14 7h7v7" stroke="#F2EFE9" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+<span style="font-weight: 700; font-size: 15px; letter-spacing: 0.14em">FLATNESS</span>
+</a>
+<span aria-hidden="true" style="color: #2e3657; font-size: 20px">/</span>
+<button type="button" aria-haspopup="listbox" aria-expanded="false" style="display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 10px; border-radius: 6px; border: 1px solid transparent; background: transparent; color: #f2efe9; font-family: 'Noto Sans KR', Montserrat, sans-serif; font-size: 15px; font-weight: 700; cursor: pointer">세종 M2블록 아파트<svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m6 9 6 6 6-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg></button>
+<nav aria-label="현장 메뉴" style="display: flex; flex-wrap: wrap; gap: 0 22px">
+<a href="#" style="display: inline-flex; align-items: center; min-height: 44px; box-sizing: border-box; border-bottom: 2px solid transparent; color: #b8b3ab; font-weight: 500; text-decoration: none">대시보드</a>
+<a href="#" style="display: inline-flex; align-items: center; min-height: 44px; box-sizing: border-box; border-bottom: 2px solid transparent; color: #b8b3ab; font-weight: 500; text-decoration: none">측정위치</a>
+<a href="#" aria-current="page" style="display: inline-flex; align-items: center; min-height: 44px; box-sizing: border-box; border-bottom: 2px solid #f2efe9; color: #f2efe9; font-weight: 600; text-decoration: none">보고서</a>
+</nav>
+<div style="margin-left: auto; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px">
+<a href="#" style="display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 16px; box-sizing: border-box; border-radius: 6px; border: 1px solid #f2efe9; background: #f2efe9; color: #0a0d1c; font-size: 14px; font-weight: 600; text-decoration: none"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 16V4m0 0-5 5m5-5 5 5M4 20h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>스캔 업로드</a>
+<button type="button" aria-haspopup="menu" aria-expanded="false" style="display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 12px; border-radius: 6px; border: 1px solid #2e3657; background: transparent; color: #b8b3ab; font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 12px; cursor: pointer">[계정 이메일]<svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m6 9 6 6 6-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg></button>
+</div>
+</header>
+<main style="background-color: #0a0d1c; background-image: {{gridBg}}; background-size: 25% 100%, 100% 33.33%">
+<div style="max-width: 1360px; margin: 0 auto; padding: clamp(18px, 2.6vw, 28px) clamp(16px, 3vw, 40px) 56px; box-sizing: border-box; display: flex; flex-direction: column; gap: 20px">
+<div style="width: 100%; max-width: 760px; display: flex; flex-direction: column; gap: 20px">
+<nav aria-label="위치" style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 12px; color: #85817a">
+<a href="#" style="color: #b8b3ab">보고서</a>
+<span aria-hidden="true">/</span>
+<span aria-current="page" style="color: #f2efe9">보고서 생성</span>
+</nav>
+<div style="display: flex; flex-direction: column; gap: 8px; min-width: 0">
+<h1 style="margin: 0; font-family: 'Noto Sans KR', Montserrat, sans-serif; font-size: clamp(24px, 2.6vw, 30px); font-weight: 700; line-height: 1.2">보고서 생성</h1>
+<p style="margin: 0; font-size: 14px; color: #9a9690">101동 / 3층 / 301호 / 거실</p>
+</div>
+<div style="display: flex; flex-direction: column; gap: 22px; padding: 20px 22px; background: #10142a; border: 1px solid #242b47; border-radius: 12px">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<label for="reportTitle" style="font-size: 14px; font-weight: 600; color: #f2efe9">보고서 제목</label>
+<input id="reportTitle" type="text" defaultValue="101동 / 3층 / 301호 / 거실 평활도 분석 보고서" style="width: 100%; min-height: 44px; box-sizing: border-box; padding: 0 12px; border-radius: 6px; border: 1px solid #2e3657; background: #0a0d1c; color: #f2efe9; font-family: inherit; font-size: 15px">
+</div>
+<div role="group" aria-labelledby="candLabel" aria-describedby="candHelp" style="display: flex; flex-direction: column; gap: 8px">
+<p id="candLabel" style="margin: 0; font-size: 14px; font-weight: 600; color: #f2efe9">포함할 분석</p>
+<p id="candHelp" style="margin: 0; font-size: 13px; color: #9a9690">같은 측정위치의 완료된 최신 분석만 후보로 표시됩니다(평활도와 구배, 바닥과 벽면을 함께 묶을 수 있습니다).</p>
+<div style="display: flex; flex-direction: column; margin-top: 4px; border: 1px solid #242b47; border-radius: 6px; background: #0a0d1c; overflow: hidden">
+<label for="cand1" style="display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 6px 16px; box-sizing: border-box; border-bottom: 1px solid #1f2540; font-size: 14px; color: #f2efe9; cursor: pointer">
+<input id="cand1" type="checkbox" defaultChecked="{{on}}" style="flex: 0 0 auto; width: 18px; height: 18px; margin: 0; accent-color: #f2efe9; color-scheme: dark; cursor: pointer">
+<span style="min-width: 0">평활도 · 바닥 · <span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #b8b3ab">2026-09-03 10:42</span> · 판정 <span style="display: inline-flex; align-items: center; min-height: 22px; padding: 0 8px; border: 1px solid #fad647; border-radius: 6px; color: #fad647; font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 11px; vertical-align: middle">경계</span></span>
+</label>
+<label for="cand2" style="display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 6px 16px; box-sizing: border-box; border-bottom: 1px solid #1f2540; font-size: 14px; color: #f2efe9; cursor: pointer">
+<input id="cand2" type="checkbox" defaultChecked="{{on}}" style="flex: 0 0 auto; width: 18px; height: 18px; margin: 0; accent-color: #f2efe9; color-scheme: dark; cursor: pointer">
+<span style="min-width: 0">평활도 · 바닥 · <span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #b8b3ab">2026-08-27 15:10</span> · 판정 <span style="display: inline-flex; align-items: center; min-height: 22px; padding: 0 8px; border: 1px solid #38d454; border-radius: 6px; color: #38d454; font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 11px; vertical-align: middle">적합</span></span>
+</label>
+<label for="cand3" style="display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 6px 16px; box-sizing: border-box; border-bottom: 1px solid #1f2540; font-size: 14px; color: #f2efe9; cursor: pointer">
+<input id="cand3" type="checkbox" defaultChecked="{{on}}" style="flex: 0 0 auto; width: 18px; height: 18px; margin: 0; accent-color: #f2efe9; color-scheme: dark; cursor: pointer">
+<span style="min-width: 0">평활도 · 바닥 · <span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #b8b3ab">2026-08-12 09:58</span> · 판정 <span style="display: inline-flex; align-items: center; min-height: 22px; padding: 0 8px; border: 1px solid #ff332e; border-radius: 6px; color: #ff332e; font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 11px; vertical-align: middle">재시공</span></span>
+</label>
+<label for="cand4" style="display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 6px 16px; box-sizing: border-box; border-bottom: 1px solid #1f2540; font-size: 14px; color: #f2efe9; cursor: pointer">
+<input id="cand4" type="checkbox" defaultChecked="{{on}}" style="flex: 0 0 auto; width: 18px; height: 18px; margin: 0; accent-color: #f2efe9; color-scheme: dark; cursor: pointer">
+<span style="min-width: 0">평활도 · 벽면 · <span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #b8b3ab">2026-08-20 13:35</span> · 판정 <span style="display: inline-flex; align-items: center; min-height: 22px; padding: 0 8px; border: 1px solid #38d454; border-radius: 6px; color: #38d454; font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 11px; vertical-align: middle">적합</span></span>
+</label>
+<div style="display: flex; flex-direction: column; gap: 8px; padding: 6px 16px 16px">
+<label for="cand5" style="display: flex; align-items: center; gap: 12px; min-height: 44px; font-size: 14px; color: #85817a; cursor: not-allowed">
+<input id="cand5" type="checkbox" disabled="{{on}}" aria-describedby="cand5Why" style="flex: 0 0 auto; width: 18px; height: 18px; margin: 0; accent-color: #f2efe9; color-scheme: dark; cursor: not-allowed">
+<span style="min-width: 0">구배 · 바닥 · <span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px">2026-09-03 10:42</span> · 판정 <span style="display: inline-flex; align-items: center; min-height: 22px; padding: 0 8px; border: 1px solid #85817a; border-radius: 6px; color: #85817a; font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 11px; vertical-align: middle">보수</span></span>
+</label>
+<div id="cand5Why" role="status" style="display: flex; gap: 10px; padding: 14px 16px; border: 1px solid #e0b341; border-radius: 6px; background: #0a0d1c">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="flex: 0 0 auto; margin-top: 2px"><path d="M12 3 2 20h20L12 3Z" stroke="#E0B341" stroke-width="1.8" stroke-linejoin="round"></path><path d="M12 10v4M12 17v.5" stroke="#E0B341" stroke-width="1.8" stroke-linecap="round"></path></svg>
+<p style="margin: 0; font-size: 13px; line-height: 1.55; color: #b8b3ab">재판정 중이라 지금은 보고서에 넣을 수 없습니다. 지금 넣으면 곧 덮어쓰일 이전 판정이 발행본에 그대로 박제됩니다. 재판정이 끝난 뒤 이 화면을 새로고침하세요.</p>
+</div>
+</div>
+</div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px">
+<label for="reportOpinion" style="font-size: 14px; font-weight: 600; color: #f2efe9">종합의견</label>
+<textarea id="reportOpinion" rows="34" defaultValue="{{opinion}}" aria-describedby="opinionHelp" style="width: 100%; min-height: 44px; box-sizing: border-box; padding: 10px 12px; border-radius: 6px; border: 1px solid #2e3657; background: #0a0d1c; color: #f2efe9; font-family: inherit; font-size: 15px; line-height: 1.6; resize: vertical; color-scheme: dark"></textarea>
+<p id="opinionHelp" style="margin: 0; font-size: 13px; color: #9a9690">비워 두면 분석별 자동 의견이 그대로 보고서에 실립니다. 스크리닝 한계 문구는 항상 자동 포함됩니다.</p>
+</div>
+</div>
+<div style="display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 12px">
+<button type="button" style="min-height: 44px; padding: 0 18px; border-radius: 6px; border: 1px solid #f2efe9; background: #f2efe9; color: #0a0d1c; font-family: inherit; font-size: 15px; font-weight: 600; cursor: pointer">보고서 생성</button>
+</div>
+</div>
+</div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"motif":{"editor":"boolean","default":true,"section":"Look"},"$preview":{"width":1440,"height":1880}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const motif = this.props.motif ?? true;
+    // 종합의견 초안: 분석별 자동 의견을 [종류 표면] 머리말과 함께 빈 줄로 잇는다(앱 buildDraftOpinion 과 같은 모양).
+    // 문장은 옛 아트보드 ReportNew 의 문구 그대로, 한 문장이 한 줄이다
+    const paragraphs = [
+      [
+        '[평활도 바닥] 바닥면 평활도 분석 결과, 판정 셀 40개(유효 36개) 중 적합 30개, 경계 6개, 보수 0개, 재시공 0개, 판정 불가 4개로 나타났습니다. 적용 기준은 floor-kcs-exposed(허용 7mm, 불확도 U=5mm)입니다.',
+        '최대 편차는 9.57mm로 좌표 (3.5, 4.5) (구역 1) 부근에서 관측되었습니다.',
+        '일부 구간이 경계 판정입니다. 현장 재확인(실물 직선자 검측)을 권장합니다.',
+        '일부 구간은 공간 제약으로 축소 스팬(허용치 선형 환산)으로 판정되었습니다.',
+        '본 결과는 모바일 LiDAR 기반 스크리닝이며 공식 검측(실물 직선자·레벨 측량)을 대체하지 않습니다.'
+      ],
+      [
+        '[평활도 바닥] 바닥면 평활도 분석 결과, 판정 셀 40개(유효 37개) 중 적합 37개, 경계 0개, 보수 0개, 재시공 0개, 판정 불가 3개로 나타났습니다. 적용 기준은 floor-kcs-exposed(허용 7mm, 불확도 U=5mm)입니다.',
+        '최대 편차는 1.84mm로 좌표 (2.5, 1.5) (구역 1) 부근에서 관측되었습니다.',
+        '전 구간이 적용 기준을 만족합니다.',
+        '본 결과는 모바일 LiDAR 기반 스크리닝이며 공식 검측(실물 직선자·레벨 측량)을 대체하지 않습니다.'
+      ],
+      [
+        '[평활도 바닥] 바닥면 평활도 분석 결과, 판정 셀 40개(유효 38개) 중 적합 9개, 경계 14개, 보수 12개, 재시공 3개, 판정 불가 2개로 나타났습니다. 적용 기준은 floor-kcs-exposed(허용 7mm, 불확도 U=5mm)입니다.',
+        '최대 편차는 23.6mm로 좌표 (0.5, 3.5) (구역 1) 부근에서 관측되었습니다.',
+        '재시공 검토 대상 구간이 존재합니다. 정밀 검측 및 시공 검토가 필요합니다.',
+        '본 결과는 모바일 LiDAR 기반 스크리닝이며 공식 검측(실물 직선자·레벨 측량)을 대체하지 않습니다.'
+      ],
+      [
+        '[평활도 벽면] 벽면 평활도 분석 결과, 판정 셀 96개(유효 94개) 중 적합 94개, 경계 0개, 보수 0개, 재시공 0개, 판정 불가 2개로 나타났습니다. 적용 기준은 [기준명](허용 [허용치]mm, 불확도 U=[불확도]mm)입니다.',
+        '최대 편차는 1.36mm로 좌표 (1.2, 0.8) (벽 2) 부근에서 관측되었습니다.',
+        '전 구간이 적용 기준을 만족합니다.',
+        '수직도는 스캔 좌표계의 z축 기준 상대 지표입니다(중력 보정 아님).',
+        '본 결과는 모바일 LiDAR 기반 스크리닝이며 공식 검측(실물 직선자·레벨 측량)을 대체하지 않습니다.'
+      ]
+    ];
+    return {
+      on: true,
+      opinion: paragraphs.map((p) => p.join('\n')).join('\n\n'),
+      gridBg: motif ? 'linear-gradient(to right, rgba(242, 239, 233, 0.07) 1px, transparent 1px), linear-gradient(to bottom, rgba(242, 239, 233, 0.07) 1px, transparent 1px)' : 'none'
+    };
+  }
+}
+</script>
+</body>
+</html>

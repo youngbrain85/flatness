@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>스캔 결과 · 구배 분석</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=IBM+Plex+Mono:wght@400;500&family=Montserrat:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="min-height: 100vh; background: #0a0d1c; color: #f2efe9; font-family: Montserrat, 'Noto Sans KR', system-ui, sans-serif; font-size: 15px; line-height: 1.5">
+<header style="display: flex; flex-wrap: wrap; align-items: center; gap: 4px 20px; min-height: 64px; padding: 8px clamp(16px, 3vw, 40px); box-sizing: border-box; border-bottom: 1px solid #1f2540">
+<a href="#" aria-label="FLATNESS, 현장 목록으로" style="display: inline-flex; align-items: center; gap: 10px; min-height: 44px; color: #f2efe9; text-decoration: none">
+<svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 17l6-6 4 4 8-8" stroke="#F2EFE9" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path><path d="M14 7h7v7" stroke="#F2EFE9" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+<span style="font-weight: 700; font-size: 15px; letter-spacing: 0.14em">FLATNESS</span>
+</a>
+<span aria-hidden="true" style="color: #2e3657; font-size: 20px">/</span>
+<button type="button" aria-haspopup="listbox" aria-expanded="false" style="display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 10px; border-radius: 6px; border: 1px solid transparent; background: transparent; color: #f2efe9; font-family: 'Noto Sans KR', Montserrat, sans-serif; font-size: 15px; font-weight: 700; cursor: pointer">Test<svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m6 9 6 6 6-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg></button>
+<nav aria-label="현장 메뉴" style="display: flex; flex-wrap: wrap; gap: 0 22px">
+<a href="#" style="display: inline-flex; align-items: center; min-height: 44px; box-sizing: border-box; border-bottom: 2px solid transparent; color: #b8b3ab; font-weight: 500; text-decoration: none">대시보드</a>
+<a href="#" aria-current="page" style="display: inline-flex; align-items: center; min-height: 44px; box-sizing: border-box; border-bottom: 2px solid #f2efe9; color: #f2efe9; font-weight: 600; text-decoration: none">측정위치</a>
+<a href="#" style="display: inline-flex; align-items: center; min-height: 44px; box-sizing: border-box; border-bottom: 2px solid transparent; color: #b8b3ab; font-weight: 500; text-decoration: none">보고서</a>
+</nav>
+<div style="margin-left: auto; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px">
+<a href="#" style="display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 16px; box-sizing: border-box; border-radius: 6px; border: 1px solid #f2efe9; background: #f2efe9; color: #0a0d1c; font-size: 14px; font-weight: 600; text-decoration: none"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 16V4m0 0-5 5m5-5 5 5M4 20h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>스캔 업로드</a>
+<button type="button" aria-haspopup="menu" aria-expanded="false" style="display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 12px; border-radius: 6px; border: 1px solid #2e3657; background: transparent; color: #b8b3ab; font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 12px; cursor: pointer">[계정 이메일]<svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m6 9 6 6 6-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg></button>
+</div>
+</header>
+<main style="background-color: #0a0d1c; background-image: {{gridBg}}; background-size: 25% 100%, 100% 33.33%">
+<div style="max-width: 1360px; margin: 0 auto; padding: clamp(18px, 2.6vw, 28px) clamp(16px, 3vw, 40px) 56px; box-sizing: border-box; display: flex; flex-direction: column; gap: 20px">
+<nav aria-label="위치" style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 12px; color: #85817a">
+<a href="#" style="color: #b8b3ab">측정위치</a>
+<span aria-hidden="true">/</span>
+<a href="#" style="color: #b8b3ab">101 · 3 · 거실 · P1</a>
+<span aria-hidden="true">/</span>
+<span aria-current="page" style="color: #f2efe9">스캔 · 바닥 · 2026-07-30</span>
+</nav>
+<div style="display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 14px 40px">
+<div style="display: flex; flex-direction: column; gap: 8px; min-width: 0">
+<h1 style="margin: 0; font-family: 'Noto Sans KR', Montserrat, sans-serif; font-size: clamp(24px, 2.6vw, 30px); font-weight: 700; line-height: 1.2">스캔 · 바닥 · 2026-07-30</h1>
+<p style="margin: 0; font-size: 14px; color: #9a9690">측정위치 101 / 3 / 거실 / P1 · 원본 파일 <span style="font-family: 'IBM Plex Mono', monospace; color: #b8b3ab">demo_floor.ply</span> · 원시 점군</p>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 12px">
+<button type="button" style="min-height: 44px; padding: 0 18px; border-radius: 6px; border: 1px solid #2e3657; background: transparent; color: #f2efe9; font-family: inherit; font-size: 15px; font-weight: 500; cursor: pointer">구배 분석</button>
+<button type="button" style="min-height: 44px; padding: 0 18px; border-radius: 6px; border: 1px solid #f2efe9; background: #f2efe9; color: #0a0d1c; font-family: inherit; font-size: 15px; font-weight: 600; cursor: pointer">평활도 분석</button>
+</div>
+</div>
+<section aria-labelledby="resSlope" style="display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px">
+<h2 id="resSlope" style="margin: 0; font-size: 19px; font-weight: 600">구배 결과</h2>
+<span style="display: inline-flex; align-items: center; min-height: 22px; padding: 0 8px; box-sizing: border-box; border: 1px solid #2e3657; border-radius: 6px; color: #b8b3ab; font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 11px">구배</span>
+<span style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: #9a9690">2026-10-16 20:14 · 엔진 p4-0.5.0</span>
+</div>
+<div style="display: flex; gap: 10px; padding: 14px 16px; border: 1px solid #2e3657; border-radius: 6px; background: #0a0d1c">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="flex: 0 0 auto; margin-top: 2px"><circle cx="12" cy="12" r="9" stroke="#B8B3AB" stroke-width="1.8"></circle><path d="M12 11v5M12 8v.5" stroke="#B8B3AB" stroke-width="1.8" stroke-linecap="round"></path></svg>
+<p style="margin: 0; font-size: 13px; line-height: 1.55; color: #b8b3ab">이 기준(실내 평바닥)은 방향(역구배)을 판정하지 않습니다. 배수구를 지정해도 방향 결과를 신뢰할 수 없어 클릭을 비활성화했습니다. <a href="#" style="color: #f2efe9; font-weight: 600; text-underline-offset: 3px">구배 판정 지도(PNG) 다운로드</a></p>
+</div>
+<figure style="margin: 0; display: flex; flex-direction: column">
+<div style="padding: 16px; background: #000000; border: 1px solid #242b47; border-radius: 12px 12px 0 0; overflow: hidden">
+<img src="assets/slope_map_dark.png" alt="구배 판정 지도" width="960" height="840" style="display: block; width: 100%; max-width: 760px; height: auto; margin: 0 auto; cursor: not-allowed">
+</div>
+<figcaption style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 12px clamp(12px, 2vw, 18px); background: #10142a; border: 1px solid #242b47; border-top: 0; border-radius: 0 0 12px 12px; font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 12px; color: #b8b3ab">
+<span style="display: inline-flex; align-items: center; gap: 6px"><span aria-hidden="true" style="width: 12px; height: 12px; border-radius: 2px; background: #38d454"></span>적합</span>
+<span style="display: inline-flex; align-items: center; gap: 6px"><span aria-hidden="true" style="width: 12px; height: 12px; border-radius: 2px; background: #fad647"></span>경계</span>
+<span style="display: inline-flex; align-items: center; gap: 6px"><span aria-hidden="true" style="width: 12px; height: 12px; border-radius: 2px; background: #ff8c1f"></span>보수</span>
+<span style="display: inline-flex; align-items: center; gap: 6px"><span aria-hidden="true" style="width: 12px; height: 12px; border-radius: 2px; background: #ff332e"></span>재시공</span>
+<span style="display: inline-flex; align-items: center; gap: 6px"><span aria-hidden="true" style="width: 12px; height: 12px; border-radius: 2px; background: #85817a"></span>판정불가</span>
+<span style="display: inline-flex; align-items: center; gap: 6px"><span aria-hidden="true" style="width: 12px; height: 12px; border-radius: 999px; background: #6fcdeb"></span>배수구</span>
+<span style="font-family: Montserrat, 'Noto Sans KR', system-ui, sans-serif; color: #9a9690">얇은 화살표 = 내리막(물이 흐르는) 방향</span>
+<span style="font-family: Montserrat, 'Noto Sans KR', system-ui, sans-serif; color: #9a9690">굵은 화살표 = 역구배(물이 배수구 반대로 흐름)</span>
+</figcaption>
+</figure>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px">
+<div style="min-width: 0; display: flex; flex-direction: column; gap: 6px; padding: 18px 20px; background: #10142a; border: 1px solid #242b47; border-radius: 12px">
+<p style="margin: 0; font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 11px; letter-spacing: 0.08em; color: #85817a">판정 가능 비율</p>
+<p style="margin: 0; display: flex; align-items: baseline; gap: 6px"><span style="font-family: Anton, Impact, sans-serif; font-size: 40px; line-height: 1">100.0</span><span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #9a9690">%</span></p>
+</div>
+<div style="min-width: 0; display: flex; flex-direction: column; gap: 6px; padding: 18px 20px; background: #10142a; border: 1px solid #242b47; border-radius: 12px">
+<p style="margin: 0; font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 11px; letter-spacing: 0.08em; color: #85817a">평균 편차</p>
+<p style="margin: 0; display: flex; align-items: baseline; gap: 6px"><span style="font-family: Anton, Impact, sans-serif; font-size: 40px; line-height: 1">0.03</span><span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #9a9690">%</span></p>
+</div>
+<div style="min-width: 0; display: flex; flex-direction: column; gap: 6px; padding: 18px 20px; background: #10142a; border: 1px solid #242b47; border-radius: 12px">
+<p style="margin: 0; font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 11px; letter-spacing: 0.08em; color: #85817a">편차 표준편차</p>
+<p style="margin: 0; display: flex; align-items: baseline; gap: 6px"><span style="font-family: Anton, Impact, sans-serif; font-size: 40px; line-height: 1">0.02</span><span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #9a9690">%</span></p>
+</div>
+<div style="min-width: 0; display: flex; flex-direction: column; gap: 6px; padding: 18px 20px; background: #10142a; border: 1px solid #242b47; border-radius: 12px">
+<p style="margin: 0; font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 11px; letter-spacing: 0.08em; color: #85817a">최대 편차</p>
+<p style="margin: 0; display: flex; align-items: baseline; gap: 6px"><span style="font-family: Anton, Impact, sans-serif; font-size: 40px; line-height: 1">0.07</span><span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #9a9690">%</span></p>
+</div>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 12px">
+<div style="flex: 1 1 420px; min-width: 0; display: flex; flex-direction: column; gap: 18px; padding: 20px 22px; background: #10142a; border: 1px solid #242b47; border-radius: 12px">
+<div style="display: flex; flex-direction: column; gap: 10px">
+<p style="margin: 0; font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 11px; letter-spacing: 0.08em; color: #85817a">판정 요약</p>
+<div role="img" aria-label="적합 12, 경계 0, 보수 0, 재시공 0, 판정불가 0" style="display: flex; height: 10px; border-radius: 999px; overflow: hidden; background: #1f2540">
+<span style="flex: 12 1 0; background: #38d454"></span>
+</div>
+<p style="margin: 0; font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 12px; color: #9a9690">적합 12 · 경계 0 · 보수 0 · 재시공 0 · 판정불가 0</p>
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px">
+<p style="margin: 0; font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 11px; letter-spacing: 0.08em; color: #85817a">적용 기준</p>
+<p style="margin: 0; font-size: 14px">실내 평바닥 · 설계 구배 0% · 허용 1% · 재시공 3% · 방향 허용 180도</p>
+</div>
+</div>
+<div style="flex: 1 1 420px; min-width: 0; display: flex; flex-direction: column; gap: 18px; padding: 20px 22px; background: #10142a; border: 1px solid #242b47; border-radius: 12px">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<p style="margin: 0; font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 11px; letter-spacing: 0.08em; color: #85817a">현재 배수구</p>
+<p style="margin: 0; font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 14px">없음</p>
+<p style="margin: 0; font-size: 13px; color: #9a9690">이 판정에 사용됨: 없음</p>
+<p style="margin: 0; font-size: 13px; color: #e0b341">이 기준은 방향(역구배)을 판정 대상으로 삼지 않습니다.</p>
+</div>
+<div style="display: flex; flex-direction: column; gap: 10px">
+<p style="margin: 0; font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 11px; letter-spacing: 0.08em; color: #85817a">경고</p>
+<div role="status" style="display: flex; gap: 10px; padding: 14px 16px; border: 1px solid #e0b341; border-radius: 6px; background: #0a0d1c">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="flex: 0 0 auto; margin-top: 2px"><path d="M12 3 2 20h20L12 3Z" stroke="#E0B341" stroke-width="1.8" stroke-linejoin="round"></path><path d="M12 10v4M12 17v.5" stroke="#E0B341" stroke-width="1.8" stroke-linecap="round"></path></svg>
+<p style="margin: 0; font-size: 13px; line-height: 1.55; color: #b8b3ab">배수구 위치를 지정하지 않아 방향(역구배)을 판정하지 않았습니다. 크기만 판정한 결과입니다.</p>
+</div>
+</div>
+<p style="margin: 0; font-size: 13px; color: #9a9690">구역별 통계는 후속 단계에서 제공됩니다. 위 통계는 전역(바닥 전체) 기준입니다.</p>
+</div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 10px">
+<h3 style="margin: 0; font-size: 16px; font-weight: 600">셀별 결과표</h3>
+<div style="overflow-x: auto; border: 1px solid #242b47; border-radius: 12px; background: #10142a">
+<table style="width: 100%; min-width: 960px; border-collapse: collapse">
+<thead><tr>
+<th scope="col" style="padding: 12px 16px; text-align: left; font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 11px; font-weight: 500; letter-spacing: 0.08em; color: #85817a; border-bottom: 1px solid #242b47; white-space: nowrap">위치(cx,cy)</th>
+<th scope="col" style="padding: 12px 16px; text-align: right; font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 11px; font-weight: 500; letter-spacing: 0.08em; color: #85817a; border-bottom: 1px solid #242b47; white-space: nowrap">구배(%)</th>
+<th scope="col" style="padding: 12px 16px; text-align: right; font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 11px; font-weight: 500; letter-spacing: 0.08em; color: #85817a; border-bottom: 1px solid #242b47; white-space: nowrap">설계 대비 편차(%)</th>
+<th scope="col" style="padding: 12px 16px; text-align: left; font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 11px; font-weight: 500; letter-spacing: 0.08em; color: #85817a; border-bottom: 1px solid #242b47; white-space: nowrap">보정</th>
+<th scope="col" style="padding: 12px 16px; text-align: left; font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 11px; font-weight: 500; letter-spacing: 0.08em; color: #85817a; border-bottom: 1px solid #242b47; white-space: nowrap">등급</th>
+<th scope="col" style="padding: 12px 16px; text-align: left; font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 11px; font-weight: 500; letter-spacing: 0.08em; color: #85817a; border-bottom: 1px solid #242b47; white-space: nowrap">역구배 여부</th>
+<th scope="col" style="padding: 12px 16px; text-align: left; font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 11px; font-weight: 500; letter-spacing: 0.08em; color: #85817a; border-bottom: 1px solid #242b47; white-space: nowrap">방향 편차</th>
+<th scope="col" style="padding: 12px 16px; text-align: left; font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 11px; font-weight: 500; letter-spacing: 0.08em; color: #85817a; border-bottom: 1px solid #242b47; white-space: nowrap">사유</th>
+</tr></thead>
+<tbody>
+<tr>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-family: 'IBM Plex Mono', monospace; font-size: 14px; font-weight: 500; color: #f2efe9; white-space: nowrap">(0, 0)</td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; text-align: right; font-family: 'IBM Plex Mono', monospace; font-size: 14px; color: #f2efe9; white-space: nowrap">0.02%</td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; text-align: right; font-family: 'IBM Plex Mono', monospace; font-size: 14px; color: #f2efe9; white-space: nowrap">0.02%</td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-size: 14px; color: #f2efe9; white-space: nowrap">북동쪽 끝을 0.5mm 높임</td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-size: 14px; color: #f2efe9"><span style="display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: #f2efe9; white-space: nowrap"><span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 999px; background: #38d454"></span>적합</span></td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540"></td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540"></td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-size: 12px; color: #9a9690; white-space: nowrap">크기·방향 모두 허용 안</td>
+</tr>
+<tr>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-family: 'IBM Plex Mono', monospace; font-size: 14px; font-weight: 500; color: #f2efe9; white-space: nowrap">(1, 0)</td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; text-align: right; font-family: 'IBM Plex Mono', monospace; font-size: 14px; color: #f2efe9; white-space: nowrap">0.02%</td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; text-align: right; font-family: 'IBM Plex Mono', monospace; font-size: 14px; color: #f2efe9; white-space: nowrap">0.02%</td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-size: 14px; color: #f2efe9; white-space: nowrap">북서쪽 끝을 0.4mm 높임</td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-size: 14px; color: #f2efe9"><span style="display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: #f2efe9; white-space: nowrap"><span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 999px; background: #38d454"></span>적합</span></td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540"></td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540"></td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-size: 12px; color: #9a9690; white-space: nowrap">크기·방향 모두 허용 안</td>
+</tr>
+<tr>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-family: 'IBM Plex Mono', monospace; font-size: 14px; font-weight: 500; color: #f2efe9; white-space: nowrap">(2, 0)</td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; text-align: right; font-family: 'IBM Plex Mono', monospace; font-size: 14px; color: #f2efe9; white-space: nowrap">0.00%</td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; text-align: right; font-family: 'IBM Plex Mono', monospace; font-size: 14px; color: #f2efe9; white-space: nowrap">0.00%</td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-size: 14px; color: #f2efe9; white-space: nowrap">남쪽 끝을 0.1mm 높임</td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-size: 14px; color: #f2efe9"><span style="display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: #f2efe9; white-space: nowrap"><span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 999px; background: #38d454"></span>적합</span></td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540"></td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540"></td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-size: 12px; color: #9a9690; white-space: nowrap">크기·방향 모두 허용 안</td>
+</tr>
+<tr>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-family: 'IBM Plex Mono', monospace; font-size: 14px; font-weight: 500; color: #f2efe9; white-space: nowrap">(3, 0)</td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; text-align: right; font-family: 'IBM Plex Mono', monospace; font-size: 14px; color: #f2efe9; white-space: nowrap">0.03%</td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; text-align: right; font-family: 'IBM Plex Mono', monospace; font-size: 14px; color: #f2efe9; white-space: nowrap">0.03%</td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-size: 14px; color: #f2efe9; white-space: nowrap">북서쪽 끝을 0.5mm 높임</td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-size: 14px; color: #f2efe9"><span style="display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: #f2efe9; white-space: nowrap"><span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 999px; background: #38d454"></span>적합</span></td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540"></td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540"></td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-size: 12px; color: #9a9690; white-space: nowrap">크기·방향 모두 허용 안</td>
+</tr>
+<tr>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-family: 'IBM Plex Mono', monospace; font-size: 14px; font-weight: 500; color: #f2efe9; white-space: nowrap">(0, 1)</td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; text-align: right; font-family: 'IBM Plex Mono', monospace; font-size: 14px; color: #f2efe9; white-space: nowrap">0.03%</td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; text-align: right; font-family: 'IBM Plex Mono', monospace; font-size: 14px; color: #f2efe9; white-space: nowrap">0.03%</td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-size: 14px; color: #f2efe9; white-space: nowrap">남동쪽 끝을 0.6mm 높임</td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-size: 14px; color: #f2efe9"><span style="display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: #f2efe9; white-space: nowrap"><span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 999px; background: #38d454"></span>적합</span></td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540"></td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540"></td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-size: 12px; color: #9a9690; white-space: nowrap">크기·방향 모두 허용 안</td>
+</tr>
+<tr>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-family: 'IBM Plex Mono', monospace; font-size: 14px; font-weight: 500; color: #f2efe9; white-space: nowrap">(1, 1)</td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; text-align: right; font-family: 'IBM Plex Mono', monospace; font-size: 14px; color: #f2efe9; white-space: nowrap">0.04%</td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; text-align: right; font-family: 'IBM Plex Mono', monospace; font-size: 14px; color: #f2efe9; white-space: nowrap">0.04%</td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-size: 14px; color: #f2efe9; white-space: nowrap">남서쪽 끝을 0.7mm 높임</td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-size: 14px; color: #f2efe9"><span style="display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: #f2efe9; white-space: nowrap"><span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 999px; background: #38d454"></span>적합</span></td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540"></td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540"></td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-size: 12px; color: #9a9690; white-space: nowrap">크기·방향 모두 허용 안</td>
+</tr>
+<tr>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-family: 'IBM Plex Mono', monospace; font-size: 14px; font-weight: 500; color: #f2efe9; white-space: nowrap">(2, 1)</td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; text-align: right; font-family: 'IBM Plex Mono', monospace; font-size: 14px; color: #f2efe9; white-space: nowrap">0.07%</td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; text-align: right; font-family: 'IBM Plex Mono', monospace; font-size: 14px; color: #f2efe9; white-space: nowrap">0.07%</td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-size: 14px; color: #f2efe9; white-space: nowrap">남서쪽 끝을 1.4mm 높임</td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-size: 14px; color: #f2efe9"><span style="display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: #f2efe9; white-space: nowrap"><span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 999px; background: #38d454"></span>적합</span></td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540"></td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540"></td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-size: 12px; color: #9a9690; white-space: nowrap">크기·방향 모두 허용 안</td>
+</tr>
+<tr>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-family: 'IBM Plex Mono', monospace; font-size: 14px; font-weight: 500; color: #f2efe9; white-space: nowrap">(3, 1)</td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; text-align: right; font-family: 'IBM Plex Mono', monospace; font-size: 14px; color: #f2efe9; white-space: nowrap">0.00%</td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; text-align: right; font-family: 'IBM Plex Mono', monospace; font-size: 14px; color: #f2efe9; white-space: nowrap">0.00%</td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-size: 14px; color: #f2efe9; white-space: nowrap">동쪽 끝을 0.1mm 높임</td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-size: 14px; color: #f2efe9"><span style="display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: #f2efe9; white-space: nowrap"><span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 999px; background: #38d454"></span>적합</span></td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540"></td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540"></td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-size: 12px; color: #9a9690; white-space: nowrap">크기·방향 모두 허용 안</td>
+</tr>
+<tr>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-family: 'IBM Plex Mono', monospace; font-size: 14px; font-weight: 500; color: #f2efe9; white-space: nowrap">(0, 2)</td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; text-align: right; font-family: 'IBM Plex Mono', monospace; font-size: 14px; color: #f2efe9; white-space: nowrap">0.01%</td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; text-align: right; font-family: 'IBM Plex Mono', monospace; font-size: 14px; color: #f2efe9; white-space: nowrap">0.01%</td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-size: 14px; color: #f2efe9; white-space: nowrap">남서쪽 끝을 0.3mm 높임</td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-size: 14px; color: #f2efe9"><span style="display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: #f2efe9; white-space: nowrap"><span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 999px; background: #38d454"></span>적합</span></td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540"></td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540"></td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-size: 12px; color: #9a9690; white-space: nowrap">크기·방향 모두 허용 안</td>
+</tr>
+<tr>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-family: 'IBM Plex Mono', monospace; font-size: 14px; font-weight: 500; color: #f2efe9; white-space: nowrap">(1, 2)</td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; text-align: right; font-family: 'IBM Plex Mono', monospace; font-size: 14px; color: #f2efe9; white-space: nowrap">0.01%</td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; text-align: right; font-family: 'IBM Plex Mono', monospace; font-size: 14px; color: #f2efe9; white-space: nowrap">0.01%</td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-size: 14px; color: #f2efe9; white-space: nowrap">북동쪽 끝을 0.1mm 높임</td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-size: 14px; color: #f2efe9"><span style="display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: #f2efe9; white-space: nowrap"><span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 999px; background: #38d454"></span>적합</span></td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540"></td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540"></td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-size: 12px; color: #9a9690; white-space: nowrap">크기·방향 모두 허용 안</td>
+</tr>
+<tr>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-family: 'IBM Plex Mono', monospace; font-size: 14px; font-weight: 500; color: #f2efe9; white-space: nowrap">(2, 2)</td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; text-align: right; font-family: 'IBM Plex Mono', monospace; font-size: 14px; color: #f2efe9; white-space: nowrap">0.07%</td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; text-align: right; font-family: 'IBM Plex Mono', monospace; font-size: 14px; color: #f2efe9; white-space: nowrap">0.07%</td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-size: 14px; color: #f2efe9; white-space: nowrap">북서쪽 끝을 1.4mm 높임</td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-size: 14px; color: #f2efe9"><span style="display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: #f2efe9; white-space: nowrap"><span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 999px; background: #38d454"></span>적합</span></td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540"></td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540"></td>
+<td style="padding: 14px 16px; border-bottom: 1px solid #1f2540; font-size: 12px; color: #9a9690; white-space: nowrap">크기·방향 모두 허용 안</td>
+</tr>
+<tr>
+<td style="padding: 14px 16px; font-family: 'IBM Plex Mono', monospace; font-size: 14px; font-weight: 500; color: #f2efe9; white-space: nowrap">(3, 2)</td>
+<td style="padding: 14px 16px; text-align: right; font-family: 'IBM Plex Mono', monospace; font-size: 14px; color: #f2efe9; white-space: nowrap">0.01%</td>
+<td style="padding: 14px 16px; text-align: right; font-family: 'IBM Plex Mono', monospace; font-size: 14px; color: #f2efe9; white-space: nowrap">0.01%</td>
+<td style="padding: 14px 16px; font-size: 14px; color: #f2efe9; white-space: nowrap">남쪽 끝을 0.1mm 높임</td>
+<td style="padding: 14px 16px; font-size: 14px; color: #f2efe9"><span style="display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: #f2efe9; white-space: nowrap"><span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 999px; background: #38d454"></span>적합</span></td>
+<td style="padding: 14px 16px"></td>
+<td style="padding: 14px 16px"></td>
+<td style="padding: 14px 16px; font-size: 12px; color: #9a9690; white-space: nowrap">크기·방향 모두 허용 안</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</section>
+</div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"motif":{"editor":"boolean","default":true,"section":"Look"},"$preview":{"width":1440,"height":2320}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const motif = this.props.motif ?? true;
+    return {
+      gridBg: motif ? 'linear-gradient(to right, rgba(242, 239, 233, 0.07) 1px, transparent 1px), linear-gradient(to bottom, rgba(242, 239, 233, 0.07) 1px, transparent 1px)' : 'none'
+    };
+  }
+}
+</script>
+</body>
+</html>

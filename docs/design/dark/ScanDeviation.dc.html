@@ -1,0 +1,392 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>스캔 결과 · 정밀 편차맵</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=IBM+Plex+Mono:wght@400;500&family=Montserrat:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="min-height: 100vh; background: #0a0d1c; color: #f2efe9; font-family: Montserrat, 'Noto Sans KR', system-ui, sans-serif; font-size: 15px; line-height: 1.5">
+<header style="display: flex; flex-wrap: wrap; align-items: center; gap: 4px 20px; min-height: 64px; padding: 8px clamp(16px, 3vw, 40px); box-sizing: border-box; border-bottom: 1px solid #1f2540">
+<a href="#" aria-label="FLATNESS, 현장 목록으로" style="display: inline-flex; align-items: center; gap: 10px; min-height: 44px; color: #f2efe9; text-decoration: none">
+<svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 17l6-6 4 4 8-8" stroke="#F2EFE9" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path><path d="M14 7h7v7" stroke="#F2EFE9" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+<span style="font-weight: 700; font-size: 15px; letter-spacing: 0.14em">FLATNESS</span>
+</a>
+<span aria-hidden="true" style="color: #2e3657; font-size: 20px">/</span>
+<button type="button" aria-haspopup="listbox" aria-expanded="false" style="display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 10px; border-radius: 6px; border: 1px solid transparent; background: transparent; color: #f2efe9; font-family: 'Noto Sans KR', Montserrat, sans-serif; font-size: 15px; font-weight: 700; cursor: pointer">Test<svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m6 9 6 6 6-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg></button>
+<nav aria-label="현장 메뉴" style="display: flex; flex-wrap: wrap; gap: 0 22px">
+<a href="#" style="display: inline-flex; align-items: center; min-height: 44px; box-sizing: border-box; border-bottom: 2px solid transparent; color: #b8b3ab; font-weight: 500; text-decoration: none">대시보드</a>
+<a href="#" aria-current="page" style="display: inline-flex; align-items: center; min-height: 44px; box-sizing: border-box; border-bottom: 2px solid #f2efe9; color: #f2efe9; font-weight: 600; text-decoration: none">측정위치</a>
+<a href="#" style="display: inline-flex; align-items: center; min-height: 44px; box-sizing: border-box; border-bottom: 2px solid transparent; color: #b8b3ab; font-weight: 500; text-decoration: none">보고서</a>
+</nav>
+<div style="margin-left: auto; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px">
+<a href="#" style="display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 16px; box-sizing: border-box; border-radius: 6px; border: 1px solid #f2efe9; background: #f2efe9; color: #0a0d1c; font-size: 14px; font-weight: 600; text-decoration: none"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 16V4m0 0-5 5m5-5 5 5M4 20h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>스캔 업로드</a>
+<button type="button" aria-haspopup="menu" aria-expanded="false" style="display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 12px; border-radius: 6px; border: 1px solid #2e3657; background: transparent; color: #b8b3ab; font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 12px; cursor: pointer">[계정 이메일]<svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m6 9 6 6 6-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg></button>
+</div>
+</header>
+<main style="background-color: #0a0d1c; background-image: {{gridBg}}; background-size: 25% 100%, 100% 33.33%">
+<div style="max-width: 1360px; margin: 0 auto; padding: clamp(18px, 2.6vw, 28px) clamp(16px, 3vw, 40px) 56px; box-sizing: border-box; display: flex; flex-direction: column; gap: 20px">
+<nav aria-label="위치" style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 12px; color: #85817a">
+<a href="#" style="color: #b8b3ab">측정위치</a>
+<span aria-hidden="true">/</span>
+<a href="#" style="color: #b8b3ab">101 · 3 · 거실 · P1</a>
+<span aria-hidden="true">/</span>
+<span aria-current="page" style="color: #f2efe9">스캔 · 바닥 · 2026-07-30</span>
+</nav>
+<div style="display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 14px 40px">
+<div style="display: flex; flex-direction: column; gap: 8px; min-width: 0">
+<h1 style="margin: 0; font-family: 'Noto Sans KR', Montserrat, sans-serif; font-size: clamp(24px, 2.6vw, 30px); font-weight: 700; line-height: 1.2">스캔 · 바닥 · 2026-07-30</h1>
+<p style="margin: 0; font-size: 14px; color: #9a9690">측정위치 101 / 3 / 거실 / P1 · 원본 파일 <span style="font-family: 'IBM Plex Mono', monospace; color: #b8b3ab">demo_floor.ply</span> · 원시 점군</p>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 12px">
+<button type="button" style="min-height: 44px; padding: 0 18px; border-radius: 6px; border: 1px solid #2e3657; background: transparent; color: #f2efe9; font-family: inherit; font-size: 15px; font-weight: 500; cursor: pointer">구배 분석</button>
+<button type="button" style="min-height: 44px; padding: 0 18px; border-radius: 6px; border: 1px solid #f2efe9; background: #f2efe9; color: #0a0d1c; font-family: inherit; font-size: 15px; font-weight: 600; cursor: pointer">평활도 분석</button>
+</div>
+</div>
+<section aria-labelledby="resDev" style="display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 10px 24px">
+<div style="display: flex; flex-direction: column; gap: 10px; min-width: 0">
+<div style="display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px">
+<h2 id="resDev" style="margin: 0; font-size: 19px; font-weight: 600">평활도 결과</h2>
+<span style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: #9a9690">2026-10-04 15:49 · 엔진 p4-0.5.0</span>
+</div>
+<div role="group" aria-label="판정 셀" style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px">
+<span style="font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 11px; letter-spacing: 0.08em; color: #85817a">판정 셀</span>
+<button type="button" aria-pressed="true" style="min-height: 44px; padding: 0 14px; border-radius: 6px; border: 1px solid #f2efe9; background: #f2efe9; color: #0a0d1c; font-family: inherit; font-size: 14px; font-weight: 600; cursor: pointer">0.5 m</button>
+<button type="button" aria-pressed="false" style="min-height: 44px; padding: 0 14px; border-radius: 6px; border: 1px solid #2e3657; background: transparent; color: #f2efe9; font-family: inherit; font-size: 14px; font-weight: 500; cursor: pointer">1 m</button>
+<button type="button" aria-pressed="false" style="min-height: 44px; padding: 0 14px; border-radius: 6px; border: 1px solid #2e3657; background: transparent; color: #f2efe9; font-family: inherit; font-size: 14px; font-weight: 500; cursor: pointer">2 m</button>
+</div>
+</div>
+<div role="tablist" aria-label="결과 보기" style="display: flex; flex-wrap: wrap; gap: 8px">
+<button type="button" role="tab" aria-selected="false" style="min-height: 44px; padding: 0 16px; border-radius: 999px; border: 1px solid #2e3657; background: transparent; color: #b8b3ab; font-family: inherit; font-size: 14px; font-weight: 500; cursor: pointer">히트맵</button>
+<button type="button" role="tab" aria-selected="true" style="min-height: 44px; padding: 0 16px; border-radius: 999px; border: 1px solid #f2efe9; background: #161b33; color: #f2efe9; font-family: inherit; font-size: 14px; font-weight: 600; cursor: pointer">정밀 편차맵</button>
+<button type="button" role="tab" aria-selected="false" style="min-height: 44px; padding: 0 16px; border-radius: 999px; border: 1px solid #2e3657; background: transparent; color: #b8b3ab; font-family: inherit; font-size: 14px; font-weight: 500; cursor: pointer">3D 프리뷰</button>
+<button type="button" role="tab" aria-selected="false" style="min-height: 44px; padding: 0 16px; border-radius: 999px; border: 1px solid #2e3657; background: transparent; color: #b8b3ab; font-family: inherit; font-size: 14px; font-weight: 500; cursor: pointer">현장 사진</button>
+</div>
+</div>
+<div style="display: flex; flex-direction: column">
+<div style="position: relative; width: 100%; aspect-ratio: 2 / 1; min-height: 440px; box-sizing: border-box; background: #000000; border: 1px solid #242b47; border-radius: 12px 12px 0 0; overflow: hidden">
+<canvas ref="{{setCv}}" role="img" aria-label="{{cvLabel}}" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: block"></canvas>
+<div style="position: absolute; top: 16px; right: 18px; width: 176px; max-width: calc(100% - 36px); display: flex; flex-direction: column; gap: 6px; font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 12px; color: #f2efe9">
+<p style="margin: 0; font-size: 11px; color: #b8b3ab">편차 (mm), + 융기 / − 침하</p>
+<div aria-hidden="true" style="height: 10px; border-radius: 999px; background: linear-gradient(to right, #1a9850 0%, #66bd63 25%, #262c4a 50%, #f46d43 75%, #d73027 100%)"></div>
+<sc-if value="{{showTicks}}" hint-placeholder-val="{{ true }}">
+<div style="display: flex; justify-content: space-between; gap: 8px"><span>{{lgLo}}</span><span>0</span><span>{{lgHi}}</span></div>
+</sc-if>
+</div>
+<p style="position: absolute; left: 18px; bottom: 14px; margin: 0; padding-right: 8px; font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 12px; color: #f2efe9">{{hud}}</p>
+</div>
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px 22px; padding: 10px clamp(12px, 2vw, 18px); background: #10142a; border: 1px solid #242b47; border-top: 0; border-radius: 0 0 12px 12px">
+<div role="group" aria-label="표시 해상도" style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px">
+<span style="font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 11px; letter-spacing: 0.08em; color: #85817a">표시 해상도</span>
+<sc-for list="{{resBtns}}" as="v" hint-placeholder-count="3">
+<button type="button" aria-pressed="{{v.pressed}}" onClick="{{v.pick}}" style="min-height: 44px; padding: 0 14px; border-radius: 6px; border: 1px solid {{v.bd}}; background: {{v.bg}}; color: {{v.fg}}; font-family: inherit; font-size: 14px; font-weight: {{v.fw}}; cursor: pointer">{{v.label}}</button>
+</sc-for>
+</div>
+<p style="flex: 1 1 100%; min-width: 0; margin: 0; font-size: 13px; line-height: 1.65; color: #9a9690">{{resLabel}} 격자의 원시 편차 분포입니다. 0mm가 중앙(짙은 남색)이고 붉을수록 융기(벽은 돌출), 초록일수록 침하(벽은 함몰)이며 검게 비어 있는 곳은 데이터가 없는 구간입니다. 판정 등급 산출에는 사용되지 않으며, 등급은 히트맵 탭의 판정 셀 기준입니다.</p>
+</div>
+</div>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px">
+<div style="min-width: 0; display: flex; flex-direction: column; gap: 6px; padding: 18px 20px; background: #10142a; border: 1px solid #242b47; border-radius: 12px">
+<p style="margin: 0; font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 11px; letter-spacing: 0.08em; color: #85817a">판정</p>
+<p style="margin: 0; display: flex; align-items: center; gap: 10px; font-family: 'Noto Sans KR', sans-serif; font-size: 30px; font-weight: 700; line-height: 1.2; color: #ff8c1f"><span aria-hidden="true" style="width: 12px; height: 12px; border-radius: 999px; background: #ff8c1f"></span>보수</p>
+</div>
+<div style="min-width: 0; display: flex; flex-direction: column; gap: 6px; padding: 18px 20px; background: #10142a; border: 1px solid #242b47; border-radius: 12px">
+<p style="margin: 0; font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 11px; letter-spacing: 0.08em; color: #85817a">최대 편차</p>
+<p style="margin: 0; display: flex; align-items: baseline; gap: 6px"><span style="font-family: Anton, Impact, sans-serif; font-size: 40px; line-height: 1">15.53</span><span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #9a9690">mm</span></p>
+</div>
+<div style="min-width: 0; display: flex; flex-direction: column; gap: 6px; padding: 18px 20px; background: #10142a; border: 1px solid #242b47; border-radius: 12px">
+<p style="margin: 0; font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 11px; letter-spacing: 0.08em; color: #85817a">95퍼센타일</p>
+<p style="margin: 0; display: flex; align-items: baseline; gap: 6px"><span style="font-family: Anton, Impact, sans-serif; font-size: 40px; line-height: 1">13.98</span><span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #9a9690">mm</span></p>
+</div>
+<div style="min-width: 0; display: flex; flex-direction: column; gap: 6px; padding: 18px 20px; background: #10142a; border: 1px solid #242b47; border-radius: 12px">
+<p style="margin: 0; font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 11px; letter-spacing: 0.08em; color: #85817a">판정 셀(유효/전체)</p>
+<p style="margin: 0; display: flex; align-items: baseline; gap: 6px"><span style="font-family: Anton, Impact, sans-serif; font-size: 40px; line-height: 1">188</span><span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #9a9690">/ 192</span></p>
+</div>
+<div style="min-width: 0; display: flex; flex-direction: column; gap: 6px; padding: 18px 20px; background: #10142a; border: 1px solid #242b47; border-radius: 12px">
+<p style="margin: 0; font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 11px; letter-spacing: 0.08em; color: #85817a">바닥 인식률</p>
+<p style="margin: 0; display: flex; align-items: baseline; gap: 6px"><span style="font-family: Anton, Impact, sans-serif; font-size: 40px; line-height: 1">100</span><span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #9a9690">%</span></p>
+</div>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 12px">
+<div style="flex: 1 1 420px; min-width: 0; display: flex; flex-direction: column; gap: 18px; padding: 20px 22px; background: #10142a; border: 1px solid #242b47; border-radius: 12px">
+<div style="display: flex; flex-direction: column; gap: 10px">
+<p style="margin: 0; font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 11px; letter-spacing: 0.08em; color: #85817a">등급 분포</p>
+<div role="img" aria-label="적합 0, 경계 166, 보수 22, 재시공 0, 판정 불가 4" style="display: flex; height: 10px; border-radius: 999px; overflow: hidden; background: #1f2540">
+<span style="flex: 166 1 0; background: #fad647"></span>
+<span style="flex: 22 1 0; background: #ff8c1f"></span>
+<span style="flex: 4 1 0; background: #85817a"></span>
+</div>
+<p style="margin: 0; font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 12px; color: #9a9690">적합 0 · 경계 166 · 보수 22 · 재시공 0 · 판정 불가 4</p>
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px">
+<p style="margin: 0; font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 11px; letter-spacing: 0.08em; color: #85817a">적용 기준</p>
+<p style="margin: 0; font-family: 'IBM Plex Mono', monospace; font-size: 14px">floor-kcs-exposed</p>
+<p style="margin: 0; font-size: 13px; color: #9a9690">KCS 14 20 10 표 3.7-1 (제물치장·얇은 마감) · 3m당 허용 7mm · 재시공 21mm · 불확도 U=5mm</p>
+<p style="margin: 0; font-size: 13px; color: #9a9690">축소 스팬 적용 셀 145개 (허용치 선형 환산)</p>
+</div>
+</div>
+<div style="flex: 1 1 420px; min-width: 0; display: flex; flex-direction: column; gap: 16px; padding: 20px 22px; background: #10142a; border: 1px solid #242b47; border-radius: 12px">
+<div role="status" style="display: flex; gap: 10px; padding: 14px 16px; border: 1px solid #e0b341; border-radius: 6px; background: #0a0d1c">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="flex: 0 0 auto; margin-top: 2px"><path d="M12 3 2 20h20L12 3Z" stroke="#E0B341" stroke-width="1.8" stroke-linejoin="round"></path><path d="M12 10v4M12 17v.5" stroke="#E0B341" stroke-width="1.8" stroke-linecap="round"></path></svg>
+<p style="margin: 0; font-size: 13px; line-height: 1.55; color: #b8b3ab">공간 제약으로 기준 스팬보다 짧은 직선자 길이를 사용해 허용치와 불확도를 선형 환산했습니다.</p>
+</div>
+</div>
+</div>
+</section>
+</div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"motif":{"editor":"boolean","default":true,"section":"Look"},"$preview":{"width":1440,"height":1580}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    // res: 표시 해상도 배수(1 = 5cm 그대로, 2 = 10cm 2×2, 4 = 20cm 4×4 블록 평균)
+    // ready/failed: 5cm 편차 격자를 받았는지·못 받았는지
+    this.state = { res: 1, ready: false, failed: false };
+    this._ro = null;
+    this._cv = null;
+    this._grid = null;
+    this._folds = {};
+    this._alive = false;
+    // 캔버스가 붙거나 떨어질 때 크기 관찰을 다시 건다
+    this._setCv = (el) => {
+      if (this._ro) { this._ro.disconnect(); this._ro = null; }
+      this._cv = el;
+      if (el) {
+        if (typeof ResizeObserver !== 'undefined') {
+          this._ro = new ResizeObserver(() => this.draw());
+          this._ro.observe(el);
+        }
+        this.draw();
+      }
+    };
+  }
+  componentDidMount() {
+    this._alive = true;
+    // 글꼴이 늦게 오면 축 숫자를 IBM Plex Mono 로 다시 그린다
+    if (typeof document !== 'undefined' && document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(() => this.draw());
+    }
+    this.load();
+    this.draw();
+  }
+  componentDidUpdate() { this.draw(); }
+  componentWillUnmount() {
+    this._alive = false;
+    if (this._ro) { this._ro.disconnect(); this._ro = null; }
+    this._cv = null;
+  }
+  // 같은 바닥의 5cm 서브셀 편차 격자(엔진 출력). 값은 0.1mm 정수, nodata 는 데이터 없음,
+  // rows_bottom_up 은 첫 행이 아래쪽(y=0) 행이다
+  load() {
+    if (this._grid || typeof fetch === 'undefined') return;
+    fetch('assets/residual-5cm.json')
+      .then((r) => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then((j) => {
+        if (!this._alive) return;
+        this._grid = this.decode(j);
+        this._folds = {};
+        this.setState({ ready: true, failed: false });
+      })
+      .catch(() => { if (this._alive) this.setState({ failed: true }); });
+  }
+  // 행 배열을 한 줄로 편다. 평균을 낸 뒤에 mm 로 바꾸려고 0.1mm 정수를 그대로 두고, 데이터 없음은 NaN 으로 둔다
+  decode(j) {
+    const nx = j.nx, ny = j.ny, rows = j.rows_bottom_up;
+    if (!(nx > 0) || !(ny > 0) || !Array.isArray(rows) || rows.length < ny) throw new Error('격자 모양이 맞지 않습니다');
+    const raw = new Float64Array(nx * ny);
+    for (let y = 0; y < ny; y++) {
+      const row = rows[y] || [];
+      for (let x = 0; x < nx; x++) {
+        const q = row[x];
+        raw[y * nx + x] = (typeof q === 'number' && q !== j.nodata) ? q : NaN;
+      }
+    }
+    return { nx: nx, ny: ny, u: j.unit_mm > 0 ? j.unit_mm : 0.1, size: j.size_m > 0 ? j.size_m : 0.05, raw: raw };
+  }
+  // f×f 블록마다 유효값만 평균한다. 블록이 전부 비면 빈칸(NaN). 해상도별로 한 번만 계산해 둔다
+  fold(f) {
+    const G = this._grid;
+    if (!G) return null;
+    if (this._folds[f]) return this._folds[f];
+    const gx = Math.ceil(G.nx / f), gy = Math.ceil(G.ny / f);
+    const v = new Float64Array(gx * gy);
+    let lo = Infinity, hi = -Infinity, n = 0;
+    for (let by = 0; by < gy; by++) {
+      for (let bx = 0; bx < gx; bx++) {
+        const yEnd = Math.min(G.ny, by * f + f), xEnd = Math.min(G.nx, bx * f + f);
+        let s = 0, c = 0;
+        for (let y = by * f; y < yEnd; y++) {
+          for (let x = bx * f; x < xEnd; x++) {
+            const q = G.raw[y * G.nx + x];
+            if (q === q) { s += q; c += 1; }   // NaN(데이터 없음)은 건너뛴다
+          }
+        }
+        const m = c ? (s / c) * G.u : NaN;
+        v[by * gx + bx] = m;
+        if (c) {
+          n += 1;
+          if (m < lo) lo = m;
+          if (m > hi) hi = m;
+        }
+      }
+    }
+    // 색은 0mm 를 가운데 둔 대칭 정규화 ±vmax(접은 값의 절댓값 최대, 최소 0.5mm)
+    const F = { f: f, gx: gx, gy: gy, size: G.size * f, v: v, n: n, lo: n ? lo : 0, hi: n ? hi : 0, vmax: n ? Math.max(Math.abs(lo), Math.abs(hi), 0.5) : 0.5, img: null };
+    this._folds[f] = F;
+    return F;
+  }
+  // t(0 = −vmax, 0.5 = 0mm, 1 = +vmax)를 다섯 색 사이 RGB 선형 보간으로 바꾼다. 침하 초록, 0mm 짙은 남색, 융기 빨강
+  ramp(t) {
+    const S = [[26, 152, 80], [102, 189, 99], [38, 44, 74], [244, 109, 67], [215, 48, 39]];
+    const x = Math.max(0, Math.min(1, t)) * 4;
+    const i = Math.min(3, Math.floor(x));
+    const k = x - i;
+    const a = S[i], b = S[i + 1];
+    return [Math.round(a[0] + (b[0] - a[0]) * k), Math.round(a[1] + (b[1] - a[1]) * k), Math.round(a[2] + (b[2] - a[2]) * k)];
+  }
+  // 한 칸을 1px 로 칠한 작은 그림(화면에 붙이지 않는 캔버스). paint 에서 확대해 옮긴다. 빈칸은 투명으로 두어 검정이 비치게 한다
+  raster(F) {
+    if (typeof document === 'undefined') return null;
+    const oc = document.createElement('canvas');
+    oc.width = F.gx;
+    oc.height = F.gy;
+    const octx = oc.getContext('2d');
+    if (!octx) return null;
+    const id = octx.createImageData(F.gx, F.gy);
+    const d = id.data;
+    for (let by = 0; by < F.gy; by++) {
+      const py = F.gy - 1 - by;   // 첫 행(y=0)이 그림의 맨 아래 줄
+      for (let bx = 0; bx < F.gx; bx++) {
+        const m = F.v[by * F.gx + bx];
+        if (m !== m) continue;
+        const col = this.ramp((m / F.vmax + 1) / 2);
+        const o = (py * F.gx + bx) * 4;
+        d[o] = col[0];
+        d[o + 1] = col[1];
+        d[o + 2] = col[2];
+        d[o + 3] = 255;
+      }
+    }
+    octx.putImageData(id, 0, 0);
+    return oc;
+  }
+  draw() {
+    try { this.paint(); } catch (e) { /* 시안 그림이 실패해도 화면은 그대로 둔다 */ }
+  }
+  paint() {
+    const cv = this._cv;
+    if (!cv) return;
+    const w = cv.clientWidth, h = cv.clientHeight;
+    if (!w || !h) return;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const bw = Math.round(w * dpr), bh = Math.round(h * dpr);
+    if (cv.width !== bw || cv.height !== bh) { cv.width = bw; cv.height = bh; }
+    const ctx = cv.getContext('2d');
+    if (!ctx) return;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(0, 0, w, h);
+    // 격자를 받기 전이거나 받지 못했으면 검정 바탕만 둔다. 상태는 HUD 가 알린다
+    const F = this.fold(this.state.res);
+    if (!F || !F.n) return;
+    // 둘레 여백. 왼쪽은 y축 숫자, 아래는 x축 숫자와 HUD, 오른쪽 위는 색 막대 범례(가로 LW, 세로 LH) 자리다
+    const ML = 44, MR = 22, MT = 24, MB = 60, LW = 208, LH = 92;
+    // 칸은 정사각형. 범례 왼쪽에 두는 배치와 범례 아래에 두는 배치 중 그림이 큰 쪽을 쓴다(넓은 화면은 왼쪽, 휴대폰은 아래)
+    const cSide = Math.min((w - ML - MR - LW) / F.gx, (h - MT - MB) / F.gy);
+    const cBelow = Math.min((w - ML - MR) / F.gx, (h - LH - MB) / F.gy);
+    const side = cSide >= cBelow;
+    const c = side ? cSide : cBelow;
+    if (!(c > 0)) return;
+    const gw = Math.round(c * F.gx), gh = Math.round(c * F.gy);
+    if (gw < 40 || gh < 30) return;   // 너무 좁으면 바탕만 둔다
+    const limit = side ? w - MR - LW : w - MR;   // 그림 오른쪽 끝이 넘으면 안 되는 선
+    const top = side ? MT : LH;
+    const x0 = Math.round(Math.max(ML, Math.min((w - gw) / 2, limit - gw)));
+    const y0 = Math.round(top + (h - MB - top - gh) / 2);
+    const Wm = F.gx * F.size, Hm = F.gy * F.size;   // 그림이 덮는 실제 크기(m)
+    const ppm = gw / Wm;                            // 1m 가 몇 px 인지
+    // 1m 격자선을 그림 왼쪽 아래 모서리에 맞춰 스테이지 전체에 깐다. 간격이 8px 보다 좁으면 생략한다(선 수는 화면 폭 / 8 이하)
+    if (ppm >= 8) {
+      ctx.strokeStyle = 'rgba(242, 239, 233, 0.10)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (let x = x0 - Math.floor(x0 / ppm) * ppm; x <= w; x += ppm) { const X = Math.round(x) + 0.5; ctx.moveTo(X, 0); ctx.lineTo(X, h); }
+      const yb = y0 + gh;
+      for (let y = yb - Math.floor(yb / ppm) * ppm; y <= h; y += ppm) { const Y = Math.round(y) + 0.5; ctx.moveTo(0, Y); ctx.lineTo(w, Y); }
+      ctx.stroke();
+    }
+    // 그림 자리는 다시 검정으로 덮는다. 빈칸은 칠하지 않으므로 이 검정이 비친다
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(x0, y0, gw, gh);
+    if (!F.img) F.img = this.raster(F);
+    if (F.img) {
+      ctx.imageSmoothingEnabled = false;   // 칸 경계를 흐리지 않고 그대로 키운다
+      ctx.drawImage(F.img, x0, y0, gw, gh);
+    }
+    // 축 숫자(m, 1m 간격). x 는 아래, y 는 왼쪽. 마지막 x 숫자에만 단위를 붙이고 숫자는 다른 숫자처럼 선 가운데에 둔다
+    ctx.fillStyle = '#9a9690';
+    ctx.font = '11px "IBM Plex Mono", ui-monospace, monospace';
+    ctx.textBaseline = 'middle';
+    ctx.textAlign = 'center';
+    const nX = Math.floor(Wm + 1e-6), nY = Math.floor(Hm + 1e-6);
+    for (let q = 0; q < nX; q++) ctx.fillText(String(q), x0 + q * ppm, y0 + gh + 14);
+    ctx.textAlign = 'left';
+    ctx.fillText(nX + ' m', x0 + nX * ppm - ctx.measureText(String(nX)).width / 2, y0 + gh + 14);
+    ctx.textAlign = 'right';
+    for (let q = 0; q <= nY; q++) ctx.fillText(String(q), x0 - 10, y0 + gh - q * ppm);
+  }
+  renderVals() {
+    const st = this.state;
+    const motif = this.props.motif ?? true;
+    // 해상도 분절 버튼은 Stage 의 시점 버튼과 같은 모양(눌린 버튼은 밝게 채운다)
+    const tool = (on) => ({
+      bg: on ? '#f2efe9' : 'transparent',
+      fg: on ? '#0a0d1c' : '#f2efe9',
+      bd: on ? '#f2efe9' : '#2e3657',
+      fw: on ? '600' : '500',
+      pressed: on ? 'true' : 'false'
+    });
+    const resBtns = [[1, '5 cm'], [2, '10 cm'], [4, '20 cm']].map((p) =>
+      Object.assign({ label: p[1], pick: () => this.setState({ res: p[0] }) }, tool(st.res === p[0])));
+    const resLabel = (5 * st.res) + 'cm';
+    // 부호를 붙인 소수 한 자리. 음수에는 빼기 기호(−)를 쓴다
+    const sgn = (v) => {
+      const s = Math.abs(v).toFixed(1);
+      return s === '0.0' ? s : (v < 0 ? '−' : '+') + s;
+    };
+    const F = this.fold(st.res);
+    let hud = st.failed ? '자료를 불러오지 못했습니다' : '불러오는 중';
+    let lgLo = '', lgHi = '';
+    if (F && F.n) {
+      hud = resLabel + ' 격자 · ' + F.gx + ' × ' + F.gy + '칸 · ' + sgn(F.lo) + ' ~ ' + sgn(F.hi) + ' mm';
+      lgLo = '−' + F.vmax.toFixed(1);
+      lgHi = '+' + F.vmax.toFixed(1);
+    } else if (F) {
+      hud = '표시할 편차 값이 없습니다';
+    }
+    return {
+      setCv: this._setCv,
+      cvLabel: '정밀 편차맵 평면도. ' + hud + (F && F.n ? '. 0mm 짙은 남색, 융기 빨강, 침하 초록' : ''),
+      hud: hud,
+      showTicks: !!(F && F.n),
+      lgLo: lgLo,
+      lgHi: lgHi,
+      resBtns: resBtns,
+      resLabel: resLabel,
+      gridBg: motif ? 'linear-gradient(to right, rgba(242, 239, 233, 0.07) 1px, transparent 1px), linear-gradient(to bottom, rgba(242, 239, 233, 0.07) 1px, transparent 1px)' : 'none'
+    };
+  }
+}
+</script>
+</body>
+</html>

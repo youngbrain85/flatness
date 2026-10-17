@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>스캔 정합</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=IBM+Plex+Mono:wght@400;500&family=Montserrat:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="min-height: 100vh; background: #0a0d1c; color: #f2efe9; font-family: Montserrat, 'Noto Sans KR', system-ui, sans-serif; font-size: 15px; line-height: 1.5">
+<header style="display: flex; flex-wrap: wrap; align-items: center; gap: 4px 20px; min-height: 64px; padding: 8px clamp(16px, 3vw, 40px); box-sizing: border-box; border-bottom: 1px solid #1f2540">
+<a href="#" aria-label="FLATNESS, 현장 목록으로" style="display: inline-flex; align-items: center; gap: 10px; min-height: 44px; color: #f2efe9; text-decoration: none">
+<svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 17l6-6 4 4 8-8" stroke="#F2EFE9" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path><path d="M14 7h7v7" stroke="#F2EFE9" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+<span style="font-weight: 700; font-size: 15px; letter-spacing: 0.14em">FLATNESS</span>
+</a>
+<span aria-hidden="true" style="color: #2e3657; font-size: 20px">/</span>
+<button type="button" aria-haspopup="listbox" aria-expanded="false" style="display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 10px; border-radius: 6px; border: 1px solid transparent; background: transparent; color: #f2efe9; font-family: 'Noto Sans KR', Montserrat, sans-serif; font-size: 15px; font-weight: 700; cursor: pointer">세종 M2블록 아파트<svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m6 9 6 6 6-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg></button>
+<nav aria-label="현장 메뉴" style="display: flex; flex-wrap: wrap; gap: 0 22px">
+<a href="#" style="display: inline-flex; align-items: center; min-height: 44px; box-sizing: border-box; border-bottom: 2px solid transparent; color: #b8b3ab; font-weight: 500; text-decoration: none">대시보드</a>
+<a href="#" aria-current="page" style="display: inline-flex; align-items: center; min-height: 44px; box-sizing: border-box; border-bottom: 2px solid #f2efe9; color: #f2efe9; font-weight: 600; text-decoration: none">측정위치</a>
+<a href="#" style="display: inline-flex; align-items: center; min-height: 44px; box-sizing: border-box; border-bottom: 2px solid transparent; color: #b8b3ab; font-weight: 500; text-decoration: none">보고서</a>
+</nav>
+<div style="margin-left: auto; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px">
+<a href="#" style="display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 16px; box-sizing: border-box; border-radius: 6px; border: 1px solid #f2efe9; background: #f2efe9; color: #0a0d1c; font-size: 14px; font-weight: 600; text-decoration: none"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 16V4m0 0-5 5m5-5 5 5M4 20h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>스캔 업로드</a>
+<button type="button" aria-haspopup="menu" aria-expanded="false" style="display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 12px; border-radius: 6px; border: 1px solid #2e3657; background: transparent; color: #b8b3ab; font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 12px; cursor: pointer">[계정 이메일]<svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m6 9 6 6 6-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg></button>
+</div>
+</header>
+<main style="background-color: #0a0d1c; background-image: {{gridBg}}; background-size: 25% 100%, 100% 33.33%">
+<div style="max-width: 1360px; margin: 0 auto; padding: clamp(18px, 2.6vw, 28px) clamp(16px, 3vw, 40px) 56px; box-sizing: border-box; display: flex; flex-direction: column; gap: 20px">
+<nav aria-label="위치" style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 12px; color: #85817a">
+<a href="#" style="color: #b8b3ab">측정위치</a>
+<span aria-hidden="true">/</span>
+<a href="#" style="color: #b8b3ab">101동 · 3층 · 301호 · 거실</a>
+<span aria-hidden="true">/</span>
+<span aria-current="page" style="color: #f2efe9">스캔 정합</span>
+</nav>
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px">
+<h1 style="margin: 0; font-family: 'Noto Sans KR', Montserrat, sans-serif; font-size: clamp(24px, 2.6vw, 30px); font-weight: 700; line-height: 1.2">스캔 정합</h1>
+<sc-if value="{{done}}" hint-placeholder-val="{{ true }}">
+<span style="display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: #f2efe9"><span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 999px; background: #38d454"></span>정합 완료</span>
+</sc-if>
+<sc-if value="{{picking}}" hint-placeholder-val="{{ false }}">
+<span style="display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: #f2efe9"><span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 999px; background: #9a9690"></span>대응점 지정 대기</span>
+</sc-if>
+</div>
+<sc-if value="{{done}}" hint-placeholder-val="{{ true }}">
+<div style="display: flex; flex-direction: column; gap: 20px">
+<section aria-labelledby="regResult" style="display: flex; flex-direction: column; gap: 16px; padding: 20px 22px; background: #10142a; border: 1px solid #242b47; border-radius: 12px">
+<h2 id="regResult" style="margin: 0; font-size: 19px; font-weight: 600">정합 결과</h2>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 18px 24px">
+<div style="min-width: 0; display: flex; flex-direction: column; gap: 6px">
+<p style="margin: 0; font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 11px; letter-spacing: 0.08em; color: #85817a">정합 잔차 RMSE</p>
+<p style="margin: 0; display: flex; align-items: baseline; gap: 6px"><span style="font-family: Anton, Impact, sans-serif; font-size: 34px; line-height: 1">0.93</span><span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #9a9690">mm</span></p>
+</div>
+<div style="min-width: 0; display: flex; flex-direction: column; gap: 6px">
+<p style="margin: 0; font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 11px; letter-spacing: 0.08em; color: #85817a">ICP 반복</p>
+<p style="margin: 0; display: flex; align-items: baseline; gap: 6px"><span style="font-family: Anton, Impact, sans-serif; font-size: 34px; line-height: 1">23</span></p>
+</div>
+<div style="min-width: 0; display: flex; flex-direction: column; gap: 6px">
+<p style="margin: 0; font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 11px; letter-spacing: 0.08em; color: #85817a">겹친 영역(추정)</p>
+<p style="margin: 0; display: flex; align-items: baseline; gap: 6px"><span style="font-family: Anton, Impact, sans-serif; font-size: 34px; line-height: 1">89</span><span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #9a9690">%</span></p>
+</div>
+</div>
+<div role="status" style="display: flex; gap: 10px; padding: 14px 16px; border: 1px solid #e0b341; border-radius: 6px; background: #0a0d1c">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="flex: 0 0 auto; margin-top: 2px"><path d="M12 3 2 20h20L12 3Z" stroke="#E0B341" stroke-width="1.8" stroke-linejoin="round"></path><path d="M12 10v4M12 17v.5" stroke="#E0B341" stroke-width="1.8" stroke-linecap="round"></path></svg>
+<p style="margin: 0; font-size: 13px; line-height: 1.6; color: #b8b3ab">이 수치는 수직 방향 일치만 보증합니다. 평탄한 바닥에서는 두 스캔이 수평으로 수 미터 어긋나 있어도 이 값이 1mm 근처로 나옵니다(설계 검증에서 실측한 사실입니다). RMSE는 수직, 아래 겹쳐보기는 수평 - 두 확인은 서로 다른 축을 보며 어느 한쪽이 다른 쪽을 대신하지 못합니다. 이 숫자만 보고 승인하지 마세요.</p>
+</div>
+<div style="display: flex; gap: 10px; padding: 14px 16px; border: 1px solid #2e3657; border-radius: 6px; background: #0a0d1c">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="flex: 0 0 auto; margin-top: 2px"><circle cx="12" cy="12" r="9" stroke="#B8B3AB" stroke-width="1.8"></circle><path d="M12 11v5M12 8v.5" stroke="#B8B3AB" stroke-width="1.8" stroke-linecap="round"></path></svg>
+<div style="min-width: 0; display: flex; flex-direction: column; gap: 6px">
+<p style="margin: 0; font-size: 14px; font-weight: 600; color: #f2efe9">수평 검증 가능성: 낮음 (수평 감도 1.084, 기준 1.1)</p>
+<p style="margin: 0; font-size: 13px; line-height: 1.6; color: #b8b3ab">바닥이 평탄할수록 이 값은 낮게 나옵니다. 평탄한 면은 자기 위로 밀어도 모양이 같아서, 두 스캔의 수평 위치를 데이터만으로 판별할 정보가 원래 없기 때문입니다. 이 용역의 대상인 ±5mm 평탄 바닥에서는 낮게 나오는 것이 정상이고 흔합니다.</p>
+<p style="margin: 0; font-size: 13px; line-height: 1.6; color: #b8b3ab">같은 이유로 아래 겹쳐보기도 이 바닥에서는 신호가 약합니다. 즉 수치로도 그림으로도 수평 방향을 확실히 보장할 수는 없습니다. 대응점을 서로 멀리 떨어뜨려 넓게 분산해 찍은 것이 이 방향의 유일한 보장이므로, 찍은 자리가 두 스캔에서 정말 같은 지점이었는지 되짚어 보세요. 확신이 없으면 대응점을 다시 찍되 더 넓게 흩어 고르세요.</p>
+</div>
+</div>
+</section>
+<section aria-labelledby="regOverlay" style="display: flex; flex-direction: column; gap: 16px; padding: 20px 22px; background: #10142a; border: 1px solid #242b47; border-radius: 12px">
+<h2 id="regOverlay" style="margin: 0; font-size: 19px; font-weight: 600">겹쳐보기 (정합 결과 육안 확인)</h2>
+<div style="display: flex; flex-wrap: wrap; align-items: flex-start; gap: 24px">
+<div style="flex: 1 1 560px; max-width: 640px; min-width: 0">
+<div style="padding: 16px; background: #000000; border: 1px solid #242b47; border-radius: 12px; overflow: hidden">
+<div style="position: relative; width: 100%; aspect-ratio: 4 / 3">
+<svg viewBox="0 0 560 420" aria-hidden="true" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: block"><path d="M40 0V420M80 0V420M120 0V420M160 0V420M200 0V420M240 0V420M280 0V420M320 0V420M360 0V420M400 0V420M440 0V420M480 0V420M520 0V420M0 40H560M0 80H560M0 120H560M0 160H560M0 200H560M0 240H560M0 280H560M0 320H560M0 360H560M0 400H560" fill="none" stroke="rgba(242, 239, 233, 0.10)" stroke-width="1"></path></svg>
+<img src="assets/height_view_plain_dark_a.png" alt="기준 스캔(A) 높이 뷰(무장식)" width="256" height="192" style="position: absolute; left: 7.142857%; top: 9.52381%; display: block; width: 64.285714%; height: auto; image-rendering: pixelated">
+<img src="assets/height_view_plain_dark_b.png" alt="맞춘 스캔(B) 높이 뷰(무장식)" width="256" height="192" style="position: absolute; left: 14.285714%; top: 9.52381%; display: block; width: 64.285714%; height: auto; image-rendering: pixelated; opacity: {{bOpacity}}">
+<span aria-hidden="true" style="position: absolute; left: 7.142857%; top: 9.52381%; width: 64.285714%; height: 64.285714%; box-sizing: border-box; border: 1px solid #b8b3ab"></span>
+<span aria-hidden="true" style="position: absolute; left: 14.285714%; top: 9.52381%; width: 64.285714%; height: 64.285714%; box-sizing: border-box; border: 1px dashed #f2efe9"></span>
+</div>
+</div>
+</div>
+<div style="flex: 1 1 300px; min-width: 0; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px">
+<label for="bOpacity" style="font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 11px; letter-spacing: 0.08em; color: #85817a; white-space: nowrap">맞춘 스캔(B) 진하기</label>
+<div style="display: flex; align-items: center; gap: 12px">
+<input id="bOpacity" type="range" min="0" max="100" step="1" value="{{opQ}}" onChange="{{onOp}}" style="width: 180px; min-height: 44px; margin: 0; accent-color: #f2efe9">
+<span style="min-width: 44px; font-family: 'IBM Plex Mono', monospace; font-size: 13px">{{opQ}}%</span>
+</div>
+</div>
+<p style="margin: 0; font-size: 13px; line-height: 1.6; color: #9a9690">슬라이더를 좌우로 움직이며 두 그림의 벽·기둥·모서리 같은 특징이 같은 자리에 오는지 보세요. 겹쳐지지 않고 나란히 밀려 있으면 수평으로 어긋난 정합입니다.</p>
+<div style="display: flex; gap: 10px; padding: 14px 16px; border: 1px solid #2e3657; border-radius: 6px; background: #0a0d1c">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="flex: 0 0 auto; margin-top: 2px"><circle cx="12" cy="12" r="9" stroke="#B8B3AB" stroke-width="1.8"></circle><path d="M12 11v5M12 8v.5" stroke="#B8B3AB" stroke-width="1.8" stroke-linecap="round"></path></svg>
+<p style="margin: 0; font-size: 13px; line-height: 1.6; color: #b8b3ab">겹쳐보기의 한계: 미터급 어긋남은 확실히 드러나지만 수십 cm급은 정합된 것과 구별하기 어렵습니다(실측 30cm 오정합의 무늬 상관 0.840 대 정합 0.896). 평탄해서 벽·기둥·요철 같은 특징이 없는 바닥일수록 그렇습니다 - 수평 감도가 낮게 나오는 바닥이 정확히 이 경우입니다. 이 방향의 보장은 결국 대응점을 넓게 분산해 찍었는가에 달려 있습니다.</p>
+</div>
+</div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 14px; padding-top: 16px; border-top: 1px solid #1f2540">
+<div style="display: flex; align-items: center; gap: 12px; min-height: 44px">
+<input id="confirmOverlay" type="checkbox" onChange="{{onConfirm}}" style="flex: 0 0 auto; width: 18px; height: 18px; margin: 0; accent-color: #f2efe9">
+<label for="confirmOverlay" style="font-size: 15px; color: #f2efe9; cursor: pointer">겹쳐보기에서 두 스캔이 실제로 포개지는 것을 확인했습니다.</label>
+</div>
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px">
+<sc-if value="{{confirmed}}" hint-placeholder-val="{{ false }}">
+<a href="#" style="display: inline-flex; align-items: center; min-height: 44px; padding: 0 18px; box-sizing: border-box; border-radius: 6px; border: 1px solid #f2efe9; background: #f2efe9; color: #0a0d1c; font-size: 15px; font-weight: 600; text-decoration: none">병합 스캔 열기</a>
+</sc-if>
+<sc-if value="{{notConfirmed}}" hint-placeholder-val="{{ true }}">
+<button type="button" disabled="{{ true }}" style="min-height: 44px; padding: 0 18px; border-radius: 6px; border: 1px solid #2e3657; background: transparent; color: #85817a; font-family: inherit; font-size: 15px; font-weight: 600; cursor: not-allowed">병합 스캔 열기</button>
+</sc-if>
+<sc-if value="{{askRepick}}" hint-placeholder-val="{{ false }}">
+<span style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px">
+<span style="font-size: 14px; color: #e05a4e">이 정합으로 만들어진 병합 스캔이 삭제됩니다. 계속할까요?</span>
+<button type="button" onClick="{{confirmRepick}}" style="min-height: 44px; padding: 0 18px; border-radius: 6px; border: 1px solid #e05a4e; background: transparent; color: #e05a4e; font-family: inherit; font-size: 15px; font-weight: 600; cursor: pointer">삭제하고 다시 찍기</button>
+<button type="button" onClick="{{cancelRepick}}" style="min-height: 44px; padding: 0 18px; border-radius: 6px; border: 1px solid #2e3657; background: transparent; color: #f2efe9; font-family: inherit; font-size: 15px; font-weight: 500; cursor: pointer">취소</button>
+</span>
+</sc-if>
+<sc-if value="{{notAskRepick}}" hint-placeholder-val="{{ true }}">
+<button type="button" onClick="{{openRepick}}" style="min-height: 44px; padding: 0 18px; border-radius: 6px; border: 1px solid #2e3657; background: transparent; color: #f2efe9; font-family: inherit; font-size: 15px; font-weight: 500; cursor: pointer">대응점 다시 찍기</button>
+</sc-if>
+</div>
+<p style="margin: 0; font-size: 13px; line-height: 1.6; color: #9a9690">병합 스캔은 정합이 성공한 시점에 이미 만들어져 있습니다(데이터 계보 "정합 병합"). 위 확인은 이 화면의 안내 장치일 뿐 시스템 차원의 승인 절차가 아닙니다. 체크하지 않아도 병합 스캔은 측정위치 목록과 스캔 상세에 이미 나타나 있고, 스캔 상세의 "평활도 분석" 버튼을 누르면 이 겹쳐보기를 한 번도 보지 않은 채로 분석이 시작됩니다. 그러니 이 정합을 쓰지 않기로 했다면 아래 "대응점 다시 찍기"로 병합 스캔을 정리하세요.</p>
+</div>
+</section>
+</div>
+</sc-if>
+<sc-if value="{{picking}}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; flex-direction: column; gap: 20px">
+<div style="display: flex; gap: 10px; padding: 14px 16px; border: 1px solid #2e3657; border-radius: 6px; background: #0a0d1c">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="flex: 0 0 auto; margin-top: 2px"><circle cx="12" cy="12" r="9" stroke="#B8B3AB" stroke-width="1.8"></circle><path d="M12 11v5M12 8v.5" stroke="#B8B3AB" stroke-width="1.8" stroke-linecap="round"></path></svg>
+<p style="margin: 0; font-size: 13px; line-height: 1.6; color: #b8b3ab">두 그림에서 <span style="font-weight: 600; color: #f2efe9">같은 지점</span>을 번갈아 클릭해 쌍을 만드세요. 최소 3쌍이 필요하고 4쌍 이상을 권장합니다. 쌍은 서로 1m 넘게 떨어뜨리고 한 직선 위에 놓이지 않게 넓게 흩어 고르세요. 한곳에 몰리거나 일직선이면 정합이 거부됩니다. 색이 없는(비어 있는) 칸은 높이 값이 없어 쓸 수 없습니다.</p>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 20px">
+<section aria-labelledby="pickA" style="flex: 1 1 420px; min-width: 0; display: flex; flex-direction: column; gap: 10px">
+<h3 id="pickA" style="margin: 0; font-size: 15px; font-weight: 600; overflow-wrap: anywhere">A 스캔 (기준) · <span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 500; color: #b8b3ab">scan_101_301_living.csv · 2026-09-03 10:42</span></h3>
+<div style="padding: 16px; background: #000000; border: 1px solid #242b47; border-radius: 12px; overflow: hidden">
+<div style="position: relative">
+<img src="assets/height_view_plain_dark_a.png" alt="A 스캔 (기준) · scan_101_301_living.csv · 2026-09-03 10:42 높이 뷰(무장식) - 클릭해 대응점을 찍습니다" width="256" height="192" style="display: block; width: 100%; height: auto; image-rendering: pixelated; cursor: crosshair">
+<span aria-hidden="true" style="position: absolute; left: 20%; top: 22%; transform: translate(-50%, -50%); display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 22px; padding: 0 6px; box-sizing: border-box; border: 2px solid #000000; border-radius: 999px; background: #f2efe9; color: #0a0d1c; font-family: 'IBM Plex Mono', monospace; font-size: 11px; font-weight: 500; line-height: 1">1</span>
+<span aria-hidden="true" style="position: absolute; left: 80%; top: 20%; transform: translate(-50%, -50%); display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 22px; padding: 0 6px; box-sizing: border-box; border: 2px solid #000000; border-radius: 999px; background: #f2efe9; color: #0a0d1c; font-family: 'IBM Plex Mono', monospace; font-size: 11px; font-weight: 500; line-height: 1">2</span>
+<span aria-hidden="true" style="position: absolute; left: 76%; top: 80%; transform: translate(-50%, -50%); display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 22px; padding: 0 6px; box-sizing: border-box; border: 2px solid #000000; border-radius: 999px; background: #f2efe9; color: #0a0d1c; font-family: 'IBM Plex Mono', monospace; font-size: 11px; font-weight: 500; line-height: 1">3</span>
+<span aria-hidden="true" style="position: absolute; left: 24%; top: 76%; transform: translate(-50%, -50%); display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 22px; padding: 0 6px; box-sizing: border-box; border: 2px solid #000000; border-radius: 999px; background: #f2efe9; color: #0a0d1c; font-family: 'IBM Plex Mono', monospace; font-size: 11px; font-weight: 500; line-height: 1">4</span>
+</div>
+</div>
+</section>
+<section aria-labelledby="pickB" style="flex: 1 1 420px; min-width: 0; display: flex; flex-direction: column; gap: 10px">
+<h3 id="pickB" style="margin: 0; font-size: 15px; font-weight: 600; overflow-wrap: anywhere">B 스캔 (맞출 대상) · <span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 500; color: #b8b3ab">scan_101_301_living_0827.csv · 2026-08-27 15:10</span></h3>
+<div style="padding: 16px; background: #000000; border: 1px solid #242b47; border-radius: 12px; overflow: hidden">
+<div style="position: relative">
+<img src="assets/height_view_plain_dark_b.png" alt="B 스캔 (맞출 대상) · scan_101_301_living_0827.csv · 2026-08-27 15:10 높이 뷰(무장식) - 클릭해 대응점을 찍습니다" width="256" height="192" style="display: block; width: 100%; height: auto; image-rendering: pixelated; cursor: crosshair">
+<span aria-hidden="true" style="position: absolute; left: 9%; top: 22%; transform: translate(-50%, -50%); display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 22px; padding: 0 6px; box-sizing: border-box; border: 2px solid #000000; border-radius: 999px; background: #f2efe9; color: #0a0d1c; font-family: 'IBM Plex Mono', monospace; font-size: 11px; font-weight: 500; line-height: 1">1</span>
+<span aria-hidden="true" style="position: absolute; left: 69%; top: 20%; transform: translate(-50%, -50%); display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 22px; padding: 0 6px; box-sizing: border-box; border: 2px solid #000000; border-radius: 999px; background: #f2efe9; color: #0a0d1c; font-family: 'IBM Plex Mono', monospace; font-size: 11px; font-weight: 500; line-height: 1">2</span>
+<span aria-hidden="true" style="position: absolute; left: 65%; top: 80%; transform: translate(-50%, -50%); display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 22px; padding: 0 6px; box-sizing: border-box; border: 2px solid #000000; border-radius: 999px; background: #f2efe9; color: #0a0d1c; font-family: 'IBM Plex Mono', monospace; font-size: 11px; font-weight: 500; line-height: 1">3</span>
+<span aria-hidden="true" style="position: absolute; left: 13%; top: 76%; transform: translate(-50%, -50%); display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 22px; padding: 0 6px; box-sizing: border-box; border: 2px solid #000000; border-radius: 999px; background: #f2efe9; color: #0a0d1c; font-family: 'IBM Plex Mono', monospace; font-size: 11px; font-weight: 500; line-height: 1">4</span>
+</div>
+</div>
+</section>
+</div>
+<section aria-labelledby="pairsTitle" style="display: flex; flex-direction: column; gap: 16px; padding: 20px 22px; background: #10142a; border: 1px solid #242b47; border-radius: 12px">
+<h2 id="pairsTitle" style="margin: 0; font-size: 19px; font-weight: 600">대응점 4쌍</h2>
+<ul style="margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px">
+<li style="display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; min-height: 44px; padding: 0 4px 0 14px; box-sizing: border-box; border: 1px solid #242b47; border-radius: 6px; background: #0a0d1c">
+<span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 500">1</span>
+<span style="min-width: 0; font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 12px; color: #9a9690; overflow-wrap: anywhere">A([x], [y], [z]) / B([x], [y], [z])</span>
+<button type="button" aria-label="1번 쌍 지우기" style="margin-left: auto; min-height: 44px; padding: 0 12px; border: 0; background: transparent; color: #f2efe9; font-family: inherit; font-size: 14px; font-weight: 500; text-decoration: underline; text-underline-offset: 3px; cursor: pointer">지우기</button>
+</li>
+<li style="display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; min-height: 44px; padding: 0 4px 0 14px; box-sizing: border-box; border: 1px solid #242b47; border-radius: 6px; background: #0a0d1c">
+<span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 500">2</span>
+<span style="min-width: 0; font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 12px; color: #9a9690; overflow-wrap: anywhere">A([x], [y], [z]) / B([x], [y], [z])</span>
+<button type="button" aria-label="2번 쌍 지우기" style="margin-left: auto; min-height: 44px; padding: 0 12px; border: 0; background: transparent; color: #f2efe9; font-family: inherit; font-size: 14px; font-weight: 500; text-decoration: underline; text-underline-offset: 3px; cursor: pointer">지우기</button>
+</li>
+<li style="display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; min-height: 44px; padding: 0 4px 0 14px; box-sizing: border-box; border: 1px solid #242b47; border-radius: 6px; background: #0a0d1c">
+<span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 500">3</span>
+<span style="min-width: 0; font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 12px; color: #9a9690; overflow-wrap: anywhere">A([x], [y], [z]) / B([x], [y], [z])</span>
+<button type="button" aria-label="3번 쌍 지우기" style="margin-left: auto; min-height: 44px; padding: 0 12px; border: 0; background: transparent; color: #f2efe9; font-family: inherit; font-size: 14px; font-weight: 500; text-decoration: underline; text-underline-offset: 3px; cursor: pointer">지우기</button>
+</li>
+<li style="display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; min-height: 44px; padding: 0 4px 0 14px; box-sizing: border-box; border: 1px solid #242b47; border-radius: 6px; background: #0a0d1c">
+<span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 500">4</span>
+<span style="min-width: 0; font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 12px; color: #9a9690; overflow-wrap: anywhere">A([x], [y], [z]) / B([x], [y], [z])</span>
+<button type="button" aria-label="4번 쌍 지우기" style="margin-left: auto; min-height: 44px; padding: 0 12px; border: 0; background: transparent; color: #f2efe9; font-family: inherit; font-size: 14px; font-weight: 500; text-decoration: underline; text-underline-offset: 3px; cursor: pointer">지우기</button>
+</li>
+</ul>
+<p style="margin: 0; font-size: 13px; color: #9a9690">좌표는 각 스캔 파일의 단위 그대로입니다(미터로 환산하지 않습니다).</p>
+</section>
+<div style="display: flex; justify-content: flex-end">
+<button type="button" onClick="{{runRegistration}}" style="min-height: 44px; padding: 0 18px; border-radius: 6px; border: 1px solid #f2efe9; background: #f2efe9; color: #0a0d1c; font-family: inherit; font-size: 15px; font-weight: 600; cursor: pointer">정합 실행</button>
+</div>
+</div>
+</sc-if>
+</div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"motif":{"editor":"boolean","default":true,"section":"Look"},"$preview":{"width":1440,"height":1520}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    // mode: 'done' 은 옛 아트보드의 정합 완료 화면, 'picking' 은 대응점 다시 찍기 뒤의 대응점 지정 화면
+    this.state = { mode: 'done', opQ: 55, confirmed: false, askRepick: false };
+  }
+  renderVals() {
+    const st = this.state;
+    const motif = this.props.motif ?? true;
+    const done = st.mode === 'done';
+    return {
+      done: done,
+      picking: !done,
+      opQ: st.opQ,
+      bOpacity: String(st.opQ / 100),
+      onOp: (e) => this.setState({ opQ: Number(e.target.value) }),
+      confirmed: st.confirmed,
+      notConfirmed: !st.confirmed,
+      onConfirm: (e) => this.setState({ confirmed: !!e.target.checked }),
+      askRepick: st.askRepick,
+      notAskRepick: !st.askRepick,
+      openRepick: () => this.setState({ askRepick: true }),
+      cancelRepick: () => this.setState({ askRepick: false }),
+      // 앱처럼 직전 대응점을 되살린 채 대응점 지정 화면으로 넘어간다
+      confirmRepick: () => this.setState({ mode: 'picking', askRepick: false, confirmed: false }),
+      // 시안에서는 정합 실행이 곧바로 정합 완료 화면으로 돌아간다
+      runRegistration: () => this.setState({ mode: 'done', askRepick: false, confirmed: false }),
+      gridBg: motif ? 'linear-gradient(to right, rgba(242, 239, 233, 0.07) 1px, transparent 1px), linear-gradient(to bottom, rgba(242, 239, 233, 0.07) 1px, transparent 1px)' : 'none'
+    };
+  }
+}
+</script>
+</body>
+</html>

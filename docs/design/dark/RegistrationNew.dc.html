@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>스캔 정합 시작</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=IBM+Plex+Mono:wght@400;500&family=Montserrat:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="min-height: 100vh; background: #0a0d1c; color: #f2efe9; font-family: Montserrat, 'Noto Sans KR', system-ui, sans-serif; font-size: 15px; line-height: 1.5">
+<header style="display: flex; flex-wrap: wrap; align-items: center; gap: 4px 20px; min-height: 64px; padding: 8px clamp(16px, 3vw, 40px); box-sizing: border-box; border-bottom: 1px solid #1f2540">
+<a href="#" aria-label="FLATNESS, 현장 목록으로" style="display: inline-flex; align-items: center; gap: 10px; min-height: 44px; color: #f2efe9; text-decoration: none">
+<svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 17l6-6 4 4 8-8" stroke="#F2EFE9" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path><path d="M14 7h7v7" stroke="#F2EFE9" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+<span style="font-weight: 700; font-size: 15px; letter-spacing: 0.14em">FLATNESS</span>
+</a>
+<span aria-hidden="true" style="color: #2e3657; font-size: 20px">/</span>
+<button type="button" aria-haspopup="listbox" aria-expanded="false" style="display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 10px; border-radius: 6px; border: 1px solid transparent; background: transparent; color: #f2efe9; font-family: 'Noto Sans KR', Montserrat, sans-serif; font-size: 15px; font-weight: 700; cursor: pointer">세종 M2블록 아파트<svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m6 9 6 6 6-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg></button>
+<nav aria-label="현장 메뉴" style="display: flex; flex-wrap: wrap; gap: 0 22px">
+<a href="#" style="display: inline-flex; align-items: center; min-height: 44px; box-sizing: border-box; border-bottom: 2px solid transparent; color: #b8b3ab; font-weight: 500; text-decoration: none">대시보드</a>
+<a href="#" aria-current="page" style="display: inline-flex; align-items: center; min-height: 44px; box-sizing: border-box; border-bottom: 2px solid #f2efe9; color: #f2efe9; font-weight: 600; text-decoration: none">측정위치</a>
+<a href="#" style="display: inline-flex; align-items: center; min-height: 44px; box-sizing: border-box; border-bottom: 2px solid transparent; color: #b8b3ab; font-weight: 500; text-decoration: none">보고서</a>
+</nav>
+<div style="margin-left: auto; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px">
+<a href="#" style="display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 16px; box-sizing: border-box; border-radius: 6px; border: 1px solid #f2efe9; background: #f2efe9; color: #0a0d1c; font-size: 14px; font-weight: 600; text-decoration: none"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 16V4m0 0-5 5m5-5 5 5M4 20h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>스캔 업로드</a>
+<button type="button" aria-haspopup="menu" aria-expanded="false" style="display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 12px; border-radius: 6px; border: 1px solid #2e3657; background: transparent; color: #b8b3ab; font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 12px; cursor: pointer">[계정 이메일]<svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m6 9 6 6 6-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg></button>
+</div>
+</header>
+<main style="background-color: #0a0d1c; background-image: {{gridBg}}; background-size: 25% 100%, 100% 33.33%">
+<div style="max-width: 1360px; margin: 0 auto; padding: clamp(18px, 2.6vw, 28px) clamp(16px, 3vw, 40px) 56px; box-sizing: border-box; display: flex; flex-direction: column; gap: 20px">
+<nav aria-label="위치" style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 12px; color: #85817a">
+<a href="#" style="color: #b8b3ab">측정위치</a>
+<span aria-hidden="true">/</span>
+<a href="#" style="color: #b8b3ab">101동 · 3층 · 301호 · 거실</a>
+<span aria-hidden="true">/</span>
+<span aria-current="page" style="color: #f2efe9">스캔 정합 시작</span>
+</nav>
+<div style="width: 100%; max-width: 760px; display: flex; flex-direction: column; gap: 20px">
+<div style="display: flex; flex-direction: column; gap: 8px; min-width: 0">
+<h1 style="margin: 0; font-family: 'Noto Sans KR', Montserrat, sans-serif; font-size: clamp(24px, 2.6vw, 30px); font-weight: 700; line-height: 1.2">스캔 정합 시작</h1>
+<p style="margin: 0; font-size: 14px; line-height: 1.65; color: #9a9690">101동 / 3층 / 301호 / 거실 측정위치의 바닥 스캔 두 개를 하나로 합칩니다. 같은 공간을 나눠 찍은 스캔에서 같은 지점을 번갈아 찍어 대응점을 만들고, 그 대응점으로 정합한 뒤 서브셀 중앙값 점군 하나로 병합합니다.</p>
+</div>
+<section aria-labelledby="regPick" style="display: flex; flex-direction: column; gap: 16px; padding: 20px 22px; background: #10142a; border: 1px solid #242b47; border-radius: 12px">
+<h2 id="regPick" style="margin: 0; font-size: 19px; font-weight: 600">스캔 선택</h2>
+<div style="display: flex; flex-direction: column; gap: 6px">
+<label for="regA" style="font-size: 14px; font-weight: 600; color: #f2efe9">기준 스캔 (A)</label>
+<div style="position: relative">
+<select id="regA" defaultValue="scan-0903" aria-describedby="regAHelp" onChange="{{onA}}" style="width: 100%; min-height: 44px; box-sizing: border-box; padding: 0 40px 0 12px; border-radius: 6px; border: 1px solid #2e3657; background: #0a0d1c; color: #f2efe9; font-family: inherit; font-size: 15px; appearance: none; -webkit-appearance: none; color-scheme: dark; cursor: pointer">
+<option value="scan-0903">scan_101_301_living.csv · 2026-09-03 10:42</option>
+<option value="scan-0827">scan_101_301_living_0827.csv · 2026-08-27 15:10</option>
+</select>
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="position: absolute; top: 50%; right: 14px; margin-top: -8px; pointer-events: none"><path d="M6 9l6 6 6-6" stroke="#B8B3AB" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+</div>
+<p id="regAHelp" style="margin: 0; font-size: 13px; color: #9a9690">이 스캔의 좌표계를 유지합니다</p>
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px">
+<label for="regB" style="font-size: 14px; font-weight: 600; color: #f2efe9">맞출 스캔 (B)</label>
+<div style="position: relative">
+<select id="regB" defaultValue="scan-0827" aria-describedby="regBHelp" onChange="{{onB}}" style="width: 100%; min-height: 44px; box-sizing: border-box; padding: 0 40px 0 12px; border-radius: 6px; border: 1px solid #2e3657; background: #0a0d1c; color: #f2efe9; font-family: inherit; font-size: 15px; appearance: none; -webkit-appearance: none; color-scheme: dark; cursor: pointer">
+<option value="scan-0903">scan_101_301_living.csv · 2026-09-03 10:42</option>
+<option value="scan-0827">scan_101_301_living_0827.csv · 2026-08-27 15:10</option>
+</select>
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="position: absolute; top: 50%; right: 14px; margin-top: -8px; pointer-events: none"><path d="M6 9l6 6 6-6" stroke="#B8B3AB" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+</div>
+<p id="regBHelp" style="margin: 0; font-size: 13px; color: #9a9690">A에 맞춰 회전·이동합니다</p>
+</div>
+<sc-if value="{{showErr}}" hint-placeholder-val="{{ false }}">
+<div role="alert" style="display: flex; gap: 10px; padding: 14px 16px; border: 1px solid #e05a4e; border-radius: 6px; background: #0a0d1c">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="flex: 0 0 auto; margin-top: 2px"><circle cx="12" cy="12" r="9" stroke="#E05A4E" stroke-width="1.8"></circle><path d="M12 7.5v5.5M12 16.5v.5" stroke="#E05A4E" stroke-width="1.8" stroke-linecap="round"></path></svg>
+<p style="margin: 0; font-size: 13px; line-height: 1.55; color: #b8b3ab">서로 다른 스캔 두 개를 고르세요. 같은 스캔끼리는 정합할 수 없습니다.</p>
+</div>
+</sc-if>
+</section>
+<div style="display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 12px">
+<button type="button" onClick="{{start}}" style="min-height: 44px; padding: 0 18px; border-radius: 6px; border: 1px solid #f2efe9; background: #f2efe9; color: #0a0d1c; font-family: inherit; font-size: 15px; font-weight: 600; cursor: pointer">대응점 찍기 시작</button>
+</div>
+</div>
+</div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"motif":{"editor":"boolean","default":true,"section":"Look"},"$preview":{"width":1440,"height":780}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    // 처음 값은 옛 아트보드와 같다: A 는 09-03 스캔, B 는 08-27 스캔. tried 는 시작 버튼을 한 번이라도 눌렀는지
+    this.state = { a: 'scan-0903', b: 'scan-0827', tried: false };
+  }
+  renderVals() {
+    const st = this.state;
+    const motif = this.props.motif ?? true;
+    return {
+      onA: (e) => this.setState({ a: e.target.value }),
+      onB: (e) => this.setState({ b: e.target.value }),
+      // 앱처럼 시작을 누를 때 검사한다. 같은 스캔 둘이면 오류 상자를 보인다
+      start: () => this.setState({ tried: true }),
+      showErr: st.tried && st.a === st.b,
+      gridBg: motif ? 'linear-gradient(to right, rgba(242, 239, 233, 0.07) 1px, transparent 1px), linear-gradient(to bottom, rgba(242, 239, 233, 0.07) 1px, transparent 1px)' : 'none'
+    };
+  }
+}
+</script>
+</body>
+</html>

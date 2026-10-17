@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>진입 페이지 · 검색 중심</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=IBM+Plex+Mono:wght@400;500&family=Montserrat:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="min-height: 100vh; background: #0a0d1c; color: #f2efe9; font-family: Montserrat, 'Noto Sans KR', system-ui, sans-serif; font-size: 15px; line-height: 1.5">
+<header style="display: flex; flex-wrap: wrap; align-items: center; gap: 4px 20px; min-height: 64px; padding: 8px clamp(16px, 3vw, 40px); box-sizing: border-box; border-bottom: 1px solid #1f2540">
+<a href="#" style="display: inline-flex; align-items: center; gap: 10px; min-height: 44px; color: #f2efe9; text-decoration: none">
+<svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 17l6-6 4 4 8-8" stroke="#F2EFE9" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path><path d="M14 7h7v7" stroke="#F2EFE9" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+<span style="font-weight: 700; font-size: 15px; letter-spacing: 0.14em">FLATNESS</span>
+</a>
+<button type="button" aria-haspopup="menu" aria-expanded="false" style="margin-left: auto; display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 12px; border-radius: 6px; border: 1px solid #2e3657; background: transparent; color: #b8b3ab; font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 12px; cursor: pointer">[계정 이메일]<svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m6 9 6 6 6-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg></button>
+</header>
+<main style="background-color: #0a0d1c; background-image: {{gridBg}}; background-size: 25% 100%, 100% 33.33%">
+<div style="max-width: 1360px; margin: 0 auto; padding: clamp(18px, 2.6vw, 28px) clamp(16px, 3vw, 40px) 56px; box-sizing: border-box; display: flex; flex-direction: column; gap: 20px">
+<div style="width: 100%; max-width: 880px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px">
+<section aria-labelledby="entryTitle" style="display: flex; flex-direction: column; align-items: center; gap: 18px; padding: clamp(8px, 3.4vw, 44px) 0 clamp(4px, 1vw, 12px); text-align: center">
+<div style="display: flex; flex-direction: column; align-items: center; gap: 10px">
+<h1 id="entryTitle" style="margin: 0; font-family: 'Noto Sans KR', Montserrat, sans-serif; font-size: clamp(34px, 4vw, 48px); font-weight: 700; line-height: 1.15">현장</h1>
+<p style="margin: 0; font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 13px; color: #9a9690">6곳 · 측정위치 42 · 스캔 130 · 처리 중 3건</p>
+</div>
+<div style="width: 100%; display: flex; flex-wrap: wrap; justify-content: center; gap: 12px">
+<div role="search" style="position: relative; flex: 1 1 320px; min-width: 0">
+<label for="entryQuery" style="position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0">현장 이름으로 찾기</label>
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="position: absolute; left: 16px; top: 17px; color: #9a9690; pointer-events: none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.8"></circle><path d="m20 20-3.5-3.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path></svg>
+<input id="entryQuery" type="text" placeholder="현장 이름으로 찾기" onChange="{{onQuery}}" style="width: 100%; min-height: 52px; box-sizing: border-box; padding: 0 16px 0 46px; border-radius: 6px; border: 1px solid #2e3657; background: #0a0d1c; color: #f2efe9; font-family: inherit; font-size: 17px; text-align: left">
+</div>
+<button type="button" ref="{{setToggleEl}}" aria-expanded="{{newExpanded}}" aria-controls="newSiteCard" onClick="{{toggleNew}}" style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 52px; padding: 0 20px; border-radius: 6px; border: 1px solid {{newBd}}; background: {{newBg}}; color: #f2efe9; font-family: inherit; font-size: 15px; font-weight: 500; cursor: pointer"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="#F2EFE9" stroke-width="1.8" stroke-linecap="round"></path></svg><span>새 현장</span></button>
+</div>
+</section>
+<sc-if value="{{newOpen}}" hint-placeholder-val="{{ false }}">
+<section id="newSiteCard" aria-labelledby="newSiteTitle" style="display: flex; flex-direction: column; gap: 18px; padding: 20px 22px; background: #10142a; border: 1px solid #242b47; border-radius: 12px">
+<h2 id="newSiteTitle" style="margin: 0; font-family: 'Noto Sans KR', Montserrat, sans-serif; font-size: 19px; font-weight: 600">새 현장 등록</h2>
+<div style="display: flex; flex-wrap: wrap; gap: 18px 16px">
+<div style="flex: 1 1 280px; min-width: 0; display: flex; flex-direction: column; gap: 6px">
+<label for="newSiteName" style="font-size: 14px; font-weight: 600; color: #f2efe9">현장명 <span style="font-weight: 500; color: #9a9690">(필수)</span></label>
+<input id="newSiteName" type="text" aria-required="true" defaultValue="{{prefill}}" ref="{{setNameEl}}" style="width: 100%; min-height: 44px; box-sizing: border-box; padding: 0 12px; border-radius: 6px; border: 1px solid #2e3657; background: #0a0d1c; color: #f2efe9; font-family: inherit; font-size: 15px">
+</div>
+<div style="flex: 1 1 280px; min-width: 0; display: flex; flex-direction: column; gap: 6px">
+<label for="newSiteAddress" style="font-size: 14px; font-weight: 600; color: #f2efe9">주소</label>
+<input id="newSiteAddress" type="text" style="width: 100%; min-height: 44px; box-sizing: border-box; padding: 0 12px; border-radius: 6px; border: 1px solid #2e3657; background: #0a0d1c; color: #f2efe9; font-family: inherit; font-size: 15px">
+</div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px">
+<label for="newSiteMemo" style="font-size: 14px; font-weight: 600; color: #f2efe9">메모</label>
+<textarea id="newSiteMemo" rows="4" style="width: 100%; min-height: 112px; box-sizing: border-box; padding: 10px 12px; border-radius: 6px; border: 1px solid #2e3657; background: #0a0d1c; color: #f2efe9; font-family: inherit; font-size: 15px; line-height: 1.5; resize: vertical"></textarea>
+</div>
+<div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 12px">
+<button type="button" onClick="{{closeNew}}" style="min-height: 44px; padding: 0 18px; border-radius: 6px; border: 1px solid #2e3657; background: transparent; color: #f2efe9; font-family: inherit; font-size: 15px; font-weight: 500; cursor: pointer">취소</button>
+<button type="button" style="display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 18px; border-radius: 6px; border: 1px solid #f2efe9; background: #f2efe9; color: #0a0d1c; font-family: inherit; font-size: 15px; font-weight: 600; cursor: pointer"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="#0A0D1C" stroke-width="1.8" stroke-linecap="round"></path></svg><span>현장 등록</span></button>
+</div>
+</section>
+</sc-if>
+<section aria-labelledby="siteListTitle" style="display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 20px">
+<div style="display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px">
+<h2 id="siteListTitle" style="margin: 0; font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 11px; font-weight: 500; letter-spacing: 0.08em; color: #85817a">현장 목록</h2>
+<span aria-live="polite" style="font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 12px; color: #9a9690">{{shownCount}}곳 · 최근 측정일 순</span>
+</div>
+<p style="margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 12px; color: #b8b3ab">
+<span style="font-size: 11px; letter-spacing: 0.08em; color: #85817a">판정 분포</span>
+<span style="display: inline-flex; align-items: center; gap: 6px; white-space: nowrap"><span aria-hidden="true" style="flex: 0 0 auto; width: 8px; height: 8px; border-radius: 999px; background: #38d454"></span>적합</span>
+<span style="display: inline-flex; align-items: center; gap: 6px; white-space: nowrap"><span aria-hidden="true" style="flex: 0 0 auto; width: 8px; height: 8px; border-radius: 999px; background: #fad647"></span>주의</span>
+<span style="display: inline-flex; align-items: center; gap: 6px; white-space: nowrap"><span aria-hidden="true" style="flex: 0 0 auto; width: 8px; height: 8px; border-radius: 999px; background: #ff332e"></span>재시공</span>
+</p>
+</div>
+<sc-if value="{{anyShown}}" hint-placeholder-val="{{ true }}">
+<div style="display: flex; flex-direction: column; gap: 1px; background: #1f2540; border: 1px solid #242b47; border-radius: 12px; overflow: hidden">
+<a href="#" style="display: {{vis.s1}}; position: relative; flex-wrap: wrap; align-items: center; gap: 10px 24px; min-height: 76px; padding: 14px 52px 14px clamp(16px, 2vw, 22px); box-sizing: border-box; background: #10142a; color: #f2efe9; text-decoration: none; outline-offset: -3px">
+<span style="flex: 1 1 240px; min-width: 0; display: flex; flex-direction: column; gap: 2px">
+<span style="font-family: 'Noto Sans KR', Montserrat, sans-serif; font-size: 17px; font-weight: 700; line-height: 1.45">세종 M2블록 아파트</span>
+<span style="font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 12px; color: #9a9690">측정위치 <span style="color: #f2efe9">14</span> · 스캔 <span style="color: #f2efe9">42</span></span>
+</span>
+<span style="flex: 0 1 492px; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px">
+<span style="flex: 0 1 200px; min-width: 0; display: flex; align-items: center; gap: 12px">
+<span role="img" aria-label="적합 31, 주의 6, 재시공 2" style="display: flex; flex: 1 1 auto; min-width: 64px; height: 8px; border-radius: 999px; overflow: hidden; background: #1f2540"><span style="flex: 31 1 0; background: #38d454"></span><span style="flex: 6 1 0; background: #fad647"></span><span style="flex: 2 1 0; background: #ff332e"></span></span>
+<span aria-hidden="true" style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: #9a9690; white-space: nowrap">31 · 6 · 2</span>
+</span>
+<span style="flex: 0 0 124px; font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 13px; color: #b8b3ab; white-space: nowrap"><span style="color: #85817a">최근</span> 2026-09-03</span>
+<span style="flex: 0 0 120px; display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: #f2efe9; white-space: nowrap"><span aria-hidden="true" style="flex: 0 0 auto; width: 8px; height: 8px; border-radius: 999px; border: 2px solid #f2efe9; box-sizing: border-box; background: transparent"></span>처리 중 3건</span>
+</span>
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="position: absolute; right: 20px; top: 50%; margin-top: -8px"><path d="M9 6l6 6-6 6" stroke="#9A9690" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+</a>
+<a href="#" style="display: {{vis.s2}}; position: relative; flex-wrap: wrap; align-items: center; gap: 10px 24px; min-height: 76px; padding: 14px 52px 14px clamp(16px, 2vw, 22px); box-sizing: border-box; background: #10142a; color: #f2efe9; text-decoration: none; outline-offset: -3px">
+<span style="flex: 1 1 240px; min-width: 0; display: flex; flex-direction: column; gap: 2px">
+<span style="font-family: 'Noto Sans KR', Montserrat, sans-serif; font-size: 17px; font-weight: 700; line-height: 1.45">대전 도안 A1블록</span>
+<span style="font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 12px; color: #9a9690">측정위치 <span style="color: #f2efe9">9</span> · 스캔 <span style="color: #f2efe9">27</span></span>
+</span>
+<span style="flex: 0 1 492px; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px">
+<span style="flex: 0 1 200px; min-width: 0; display: flex; align-items: center; gap: 12px">
+<span role="img" aria-label="적합 20, 주의 5, 재시공 1" style="display: flex; flex: 1 1 auto; min-width: 64px; height: 8px; border-radius: 999px; overflow: hidden; background: #1f2540"><span style="flex: 20 1 0; background: #38d454"></span><span style="flex: 5 1 0; background: #fad647"></span><span style="flex: 1 1 0; background: #ff332e"></span></span>
+<span aria-hidden="true" style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: #9a9690; white-space: nowrap">20 · 5 · 1</span>
+</span>
+<span style="flex: 0 0 124px; font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 13px; color: #b8b3ab; white-space: nowrap"><span style="color: #85817a">최근</span> 2026-09-01</span>
+<span style="flex: 0 0 120px; display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: #f2efe9; white-space: nowrap"><span aria-hidden="true" style="flex: 0 0 auto; width: 8px; height: 8px; border-radius: 999px; background: #38d454"></span>완료</span>
+</span>
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="position: absolute; right: 20px; top: 50%; margin-top: -8px"><path d="M9 6l6 6-6 6" stroke="#9A9690" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+</a>
+<a href="#" style="display: {{vis.s3}}; position: relative; flex-wrap: wrap; align-items: center; gap: 10px 24px; min-height: 76px; padding: 14px 52px 14px clamp(16px, 2vw, 22px); box-sizing: border-box; background: #10142a; color: #f2efe9; text-decoration: none; outline-offset: -3px">
+<span style="flex: 1 1 240px; min-width: 0; display: flex; flex-direction: column; gap: 2px">
+<span style="font-family: 'Noto Sans KR', Montserrat, sans-serif; font-size: 17px; font-weight: 700; line-height: 1.45">청주 오송 B2블록</span>
+<span style="font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 12px; color: #9a9690">측정위치 <span style="color: #f2efe9">7</span> · 스캔 <span style="color: #f2efe9">21</span></span>
+</span>
+<span style="flex: 0 1 492px; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px">
+<span style="flex: 0 1 200px; min-width: 0; display: flex; align-items: center; gap: 12px">
+<span role="img" aria-label="적합 15, 주의 4, 재시공 2" style="display: flex; flex: 1 1 auto; min-width: 64px; height: 8px; border-radius: 999px; overflow: hidden; background: #1f2540"><span style="flex: 15 1 0; background: #38d454"></span><span style="flex: 4 1 0; background: #fad647"></span><span style="flex: 2 1 0; background: #ff332e"></span></span>
+<span aria-hidden="true" style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: #9a9690; white-space: nowrap">15 · 4 · 2</span>
+</span>
+<span style="flex: 0 0 124px; font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 13px; color: #b8b3ab; white-space: nowrap"><span style="color: #85817a">최근</span> 2026-08-28</span>
+<span style="flex: 0 0 120px; display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: #f2efe9; white-space: nowrap"><span aria-hidden="true" style="flex: 0 0 auto; width: 8px; height: 8px; border-radius: 999px; background: #38d454"></span>완료</span>
+</span>
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="position: absolute; right: 20px; top: 50%; margin-top: -8px"><path d="M9 6l6 6-6 6" stroke="#9A9690" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+</a>
+<a href="#" style="display: {{vis.s4}}; position: relative; flex-wrap: wrap; align-items: center; gap: 10px 24px; min-height: 76px; padding: 14px 52px 14px clamp(16px, 2vw, 22px); box-sizing: border-box; background: #10142a; color: #f2efe9; text-decoration: none; outline-offset: -3px">
+<span style="flex: 1 1 240px; min-width: 0; display: flex; flex-direction: column; gap: 2px">
+<span style="font-family: 'Noto Sans KR', Montserrat, sans-serif; font-size: 17px; font-weight: 700; line-height: 1.45">천안 성성 3블록</span>
+<span style="font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 12px; color: #9a9690">측정위치 <span style="color: #f2efe9">5</span> · 스캔 <span style="color: #f2efe9">18</span></span>
+</span>
+<span style="flex: 0 1 492px; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px">
+<span style="flex: 0 1 200px; min-width: 0; display: flex; align-items: center; gap: 12px">
+<span role="img" aria-label="적합 12, 주의 3, 재시공 3" style="display: flex; flex: 1 1 auto; min-width: 64px; height: 8px; border-radius: 999px; overflow: hidden; background: #1f2540"><span style="flex: 12 1 0; background: #38d454"></span><span style="flex: 3 1 0; background: #fad647"></span><span style="flex: 3 1 0; background: #ff332e"></span></span>
+<span aria-hidden="true" style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: #9a9690; white-space: nowrap">12 · 3 · 3</span>
+</span>
+<span style="flex: 0 0 124px; font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 13px; color: #b8b3ab; white-space: nowrap"><span style="color: #85817a">최근</span> 2026-08-25</span>
+<span style="flex: 0 0 120px; display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: #f2efe9; white-space: nowrap"><span aria-hidden="true" style="flex: 0 0 auto; width: 8px; height: 8px; border-radius: 999px; background: #38d454"></span>완료</span>
+</span>
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="position: absolute; right: 20px; top: 50%; margin-top: -8px"><path d="M9 6l6 6-6 6" stroke="#9A9690" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+</a>
+<a href="#" style="display: {{vis.s5}}; position: relative; flex-wrap: wrap; align-items: center; gap: 10px 24px; min-height: 76px; padding: 14px 52px 14px clamp(16px, 2vw, 22px); box-sizing: border-box; background: #10142a; color: #f2efe9; text-decoration: none; outline-offset: -3px">
+<span style="flex: 1 1 240px; min-width: 0; display: flex; flex-direction: column; gap: 2px">
+<span style="font-family: 'Noto Sans KR', Montserrat, sans-serif; font-size: 17px; font-weight: 700; line-height: 1.45">한밭대 시험동</span>
+<span style="font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 12px; color: #9a9690">측정위치 <span style="color: #f2efe9">3</span> · 스캔 <span style="color: #f2efe9">12</span></span>
+</span>
+<span style="flex: 0 1 492px; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px">
+<span style="flex: 0 1 200px; min-width: 0; display: flex; align-items: center; gap: 12px">
+<span role="img" aria-label="적합 9, 주의 2, 재시공 1" style="display: flex; flex: 1 1 auto; min-width: 64px; height: 8px; border-radius: 999px; overflow: hidden; background: #1f2540"><span style="flex: 9 1 0; background: #38d454"></span><span style="flex: 2 1 0; background: #fad647"></span><span style="flex: 1 1 0; background: #ff332e"></span></span>
+<span aria-hidden="true" style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: #9a9690; white-space: nowrap">9 · 2 · 1</span>
+</span>
+<span style="flex: 0 0 124px; font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 13px; color: #b8b3ab; white-space: nowrap"><span style="color: #85817a">최근</span> 2026-08-20</span>
+<span style="flex: 0 0 120px; display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: #f2efe9; white-space: nowrap"><span aria-hidden="true" style="flex: 0 0 auto; width: 8px; height: 8px; border-radius: 999px; background: #38d454"></span>완료</span>
+</span>
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="position: absolute; right: 20px; top: 50%; margin-top: -8px"><path d="M9 6l6 6-6 6" stroke="#9A9690" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+</a>
+<a href="#" style="display: {{vis.s6}}; position: relative; flex-wrap: wrap; align-items: center; gap: 10px 24px; min-height: 76px; padding: 14px 52px 14px clamp(16px, 2vw, 22px); box-sizing: border-box; background: #10142a; color: #f2efe9; text-decoration: none; outline-offset: -3px">
+<span style="flex: 1 1 240px; min-width: 0; display: flex; flex-direction: column; gap: 2px">
+<span style="font-family: 'Noto Sans KR', Montserrat, sans-serif; font-size: 17px; font-weight: 700; line-height: 1.45">공주 월송 1블록</span>
+<span style="font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 12px; color: #9a9690">측정위치 <span style="color: #f2efe9">4</span> · 스캔 <span style="color: #f2efe9">10</span></span>
+</span>
+<span style="flex: 0 1 492px; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px">
+<span style="flex: 0 1 200px; min-width: 0; display: flex; align-items: center; gap: 12px">
+<span role="img" aria-label="적합 6, 주의 1, 재시공 0" style="display: flex; flex: 1 1 auto; min-width: 64px; height: 8px; border-radius: 999px; overflow: hidden; background: #1f2540"><span style="flex: 6 1 0; background: #38d454"></span><span style="flex: 1 1 0; background: #fad647"></span></span>
+<span aria-hidden="true" style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: #9a9690; white-space: nowrap">6 · 1 · 0</span>
+</span>
+<span style="flex: 0 0 124px; font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 13px; color: #b8b3ab; white-space: nowrap"><span style="color: #85817a">최근</span> 2026-08-14</span>
+<span style="flex: 0 0 120px; display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: #f2efe9; white-space: nowrap"><span aria-hidden="true" style="flex: 0 0 auto; width: 8px; height: 8px; border-radius: 999px; background: #85817a"></span>판정 불가 3건</span>
+</span>
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="position: absolute; right: 20px; top: 50%; margin-top: -8px"><path d="M9 6l6 6-6 6" stroke="#9A9690" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+</a>
+</div>
+</sc-if>
+<sc-if value="{{noneShown}}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 44px 22px; background: #10142a; border: 1px solid #242b47; border-radius: 12px; text-align: center">
+<span aria-hidden="true" style="display: inline-flex; align-items: center; justify-content: center; width: 48px; height: 48px; border-radius: 999px; border: 1px solid #2e3657; color: #9a9690"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.8"></circle><path d="m20 20-3.5-3.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path></svg></span>
+<div style="display: flex; flex-direction: column; gap: 4px; min-width: 0">
+<p style="margin: 0; font-family: 'Noto Sans KR', Montserrat, sans-serif; font-size: 17px; font-weight: 700">찾는 현장이 없습니다</p>
+<p style="margin: 0; font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 13px; color: #9a9690; overflow-wrap: anywhere">검색어 · {{qShown}}</p>
+</div>
+<button type="button" onClick="{{openFromEmpty}}" style="display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 18px; border-radius: 6px; border: 1px solid #f2efe9; background: #f2efe9; color: #0a0d1c; font-family: inherit; font-size: 15px; font-weight: 600; cursor: pointer"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="#0A0D1C" stroke-width="1.8" stroke-linecap="round"></path></svg><span>새 현장</span></button>
+</div>
+</sc-if>
+</section>
+</div>
+</div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"motif":{"editor":"boolean","default":true,"section":"Look"},"$preview":{"width":1440,"height":960}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    // q: 검색어 / open: 새 현장 카드 펼침 / prefill: 카드를 열 때 현장명 칸에 미리 넣을 값
+    this.state = { q: '', open: false, prefill: '' };
+    this._nameEl = null;
+    this._toggleEl = null;
+    this._wantFocus = false;
+    // 카드가 펼쳐지면 현장명 칸으로 초점을 옮긴다
+    this._setNameEl = (el) => {
+      this._nameEl = el;
+      if (el && this._wantFocus) {
+        this._wantFocus = false;
+        try { el.focus(); } catch (e) { /* 초점을 못 옮겨도 화면은 그대로 둔다 */ }
+      }
+    };
+    // 카드를 닫을 때 초점을 돌려줄 "새 현장" 버튼
+    this._setToggleEl = (el) => { this._toggleEl = el; };
+  }
+  renderVals() {
+    const st = this.state;
+    const motif = this.props.motif ?? true;
+    // 마크업의 줄과 같은 순서·같은 이름(Home.dc.html 현장 표, 최근 측정일 내림차순)
+    const sites = [
+      ['s1', '세종 M2블록 아파트'],
+      ['s2', '대전 도안 A1블록'],
+      ['s3', '청주 오송 B2블록'],
+      ['s4', '천안 성성 3블록'],
+      ['s5', '한밭대 시험동'],
+      ['s6', '공주 월송 1블록']
+    ];
+    // 현장명 포함 검색(앞뒤 공백 제거, 대소문자 무시). 앱 site-table.tsx 와 같은 규칙이다
+    const q = st.q.trim().toLowerCase();
+    const vis = {};
+    let shown = 0;
+    for (let i = 0; i < sites.length; i++) {
+      const ok = q === '' || sites[i][1].toLowerCase().indexOf(q) !== -1;
+      vis[sites[i][0]] = ok ? 'flex' : 'none';
+      if (ok) shown += 1;
+    }
+    return {
+      vis: vis,
+      shownCount: shown,
+      anyShown: shown > 0,
+      noneShown: shown === 0,
+      qShown: st.q.trim(),
+      onQuery: (e) => this.setState({ q: e.target.value }),
+      newOpen: st.open,
+      newExpanded: st.open ? 'true' : 'false',
+      newBg: st.open ? '#161b33' : 'transparent',
+      newBd: st.open ? '#f2efe9' : '#2e3657',
+      prefill: st.prefill,
+      setNameEl: this._setNameEl,
+      setToggleEl: this._setToggleEl,
+      // 위쪽 "새 현장" 버튼은 카드를 열고 닫는다
+      toggleNew: () => {
+        const next = !this.state.open;
+        this._wantFocus = next;
+        this.setState({ open: next, prefill: '' });
+      },
+      // 0건 안내의 "새 현장" 버튼은 카드를 열고 검색어를 현장명 칸에 넣어 둔다
+      openFromEmpty: () => {
+        if (this.state.open) {
+          if (this._nameEl) {
+            try { this._nameEl.focus(); } catch (e) { /* 그대로 둔다 */ }
+          }
+          return;
+        }
+        this._wantFocus = true;
+        this.setState({ open: true, prefill: this.state.q.trim() });
+      },
+      closeNew: () => {
+        this._wantFocus = false;
+        this.setState({ open: false });
+        if (this._toggleEl) {
+          try { this._toggleEl.focus(); } catch (e) { /* 그대로 둔다 */ }
+        }
+      },
+      gridBg: motif ? 'linear-gradient(to right, rgba(242, 239, 233, 0.07) 1px, transparent 1px), linear-gradient(to bottom, rgba(242, 239, 233, 0.07) 1px, transparent 1px)' : 'none'
+    };
+  }
+}
+</script>
+</body>
+</html>

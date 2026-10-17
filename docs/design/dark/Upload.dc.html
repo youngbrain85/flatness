@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>스캔 업로드</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=IBM+Plex+Mono:wght@400;500&family=Montserrat:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="min-height: 100vh; background: #0a0d1c; color: #f2efe9; font-family: Montserrat, 'Noto Sans KR', system-ui, sans-serif; font-size: 15px; line-height: 1.5">
+<header style="display: flex; flex-wrap: wrap; align-items: center; gap: 4px 20px; min-height: 64px; padding: 8px clamp(16px, 3vw, 40px); box-sizing: border-box; border-bottom: 1px solid #1f2540">
+<a href="#" aria-label="FLATNESS, 현장 목록으로" style="display: inline-flex; align-items: center; gap: 10px; min-height: 44px; color: #f2efe9; text-decoration: none">
+<svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 17l6-6 4 4 8-8" stroke="#F2EFE9" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path><path d="M14 7h7v7" stroke="#F2EFE9" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+<span style="font-weight: 700; font-size: 15px; letter-spacing: 0.14em">FLATNESS</span>
+</a>
+<span aria-hidden="true" style="color: #2e3657; font-size: 20px">/</span>
+<button type="button" aria-haspopup="listbox" aria-expanded="false" style="display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 10px; border-radius: 6px; border: 1px solid transparent; background: transparent; color: #f2efe9; font-family: 'Noto Sans KR', Montserrat, sans-serif; font-size: 15px; font-weight: 700; cursor: pointer">세종 M2블록 아파트<svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m6 9 6 6 6-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg></button>
+<nav aria-label="현장 메뉴" style="display: flex; flex-wrap: wrap; gap: 0 22px">
+<a href="#" style="display: inline-flex; align-items: center; min-height: 44px; box-sizing: border-box; border-bottom: 2px solid transparent; color: #b8b3ab; font-weight: 500; text-decoration: none">대시보드</a>
+<a href="#" aria-current="page" style="display: inline-flex; align-items: center; min-height: 44px; box-sizing: border-box; border-bottom: 2px solid #f2efe9; color: #f2efe9; font-weight: 600; text-decoration: none">측정위치</a>
+<a href="#" style="display: inline-flex; align-items: center; min-height: 44px; box-sizing: border-box; border-bottom: 2px solid transparent; color: #b8b3ab; font-weight: 500; text-decoration: none">보고서</a>
+</nav>
+<div style="margin-left: auto; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px">
+<a href="#" style="display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 16px; box-sizing: border-box; border-radius: 6px; border: 1px solid #f2efe9; background: #f2efe9; color: #0a0d1c; font-size: 14px; font-weight: 600; text-decoration: none"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 16V4m0 0-5 5m5-5 5 5M4 20h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>스캔 업로드</a>
+<button type="button" aria-haspopup="menu" aria-expanded="false" style="display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 12px; border-radius: 6px; border: 1px solid #2e3657; background: transparent; color: #b8b3ab; font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 12px; cursor: pointer">[계정 이메일]<svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m6 9 6 6 6-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg></button>
+</div>
+</header>
+<main style="background-color: #0a0d1c; background-image: {{gridBg}}; background-size: 25% 100%, 100% 33.33%">
+<div style="max-width: 1360px; margin: 0 auto; padding: clamp(18px, 2.6vw, 28px) clamp(16px, 3vw, 40px) 56px; box-sizing: border-box; display: flex; flex-direction: column; gap: 20px">
+<nav aria-label="위치" style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 12px; color: #85817a">
+<a href="#" style="color: #b8b3ab">측정위치</a>
+<span aria-hidden="true">/</span>
+<span aria-current="page" style="color: #f2efe9">스캔 업로드</span>
+</nav>
+<h1 style="margin: 0; font-family: 'Noto Sans KR', Montserrat, sans-serif; font-size: clamp(24px, 2.6vw, 30px); font-weight: 700; line-height: 1.2">스캔 업로드</h1>
+<section aria-labelledby="upInfo" style="display: flex; flex-direction: column; gap: 16px; padding: 20px 22px; background: #10142a; border: 1px solid #242b47; border-radius: 12px">
+<h2 id="upInfo" style="margin: 0; font-size: 19px; font-weight: 600">업로드 정보</h2>
+<div role="radiogroup" aria-label="업로드 방식" style="display: flex; flex-wrap: wrap; gap: 8px">
+<label for="upModeScan" style="display: inline-flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 16px; box-sizing: border-box; border-radius: 6px; border: 1px solid {{mScan.bd}}; background: {{mScan.bg}}; color: {{mScan.fg}}; font-size: 14px; font-weight: {{mScan.fw}}; cursor: pointer"><input id="upModeScan" type="radio" name="upMode" value="scan" defaultChecked="true" onChange="{{onMode}}" style="flex: 0 0 auto; width: 16px; height: 16px; margin: 0; accent-color: #f2efe9; color-scheme: dark; cursor: pointer">스캔 분석</label>
+<label for="upModeImport" style="display: inline-flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 16px; box-sizing: border-box; border-radius: 6px; border: 1px solid {{mImp.bd}}; background: {{mImp.bg}}; color: {{mImp.fg}}; font-size: 14px; font-weight: {{mImp.fw}}; cursor: pointer"><input id="upModeImport" type="radio" name="upMode" value="import" onChange="{{onMode}}" style="flex: 0 0 auto; width: 16px; height: 16px; margin: 0; accent-color: #f2efe9; color-scheme: dark; cursor: pointer">기존 결과 가져오기(CSV/JSON)</label>
+</div>
+<sc-if value="{{isImport}}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; gap: 10px; padding: 14px 16px; border: 1px solid #2e3657; border-radius: 6px; background: #0a0d1c">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="flex: 0 0 auto; margin-top: 2px"><circle cx="12" cy="12" r="9" stroke="#B8B3AB" stroke-width="1.8"></circle><path d="M12 11v5M12 7.5v.5" stroke="#B8B3AB" stroke-width="1.8" stroke-linecap="round"></path></svg>
+<p style="margin: 0; font-size: 13px; line-height: 1.55; color: #b8b3ab">기존 Colab 노트북 결과 CSV(X, Y, Signed_Distance_mm 컬럼 필수) 또는 범용 연계 JSON(format: "flatness-import-v1", points[].x/y/deviation_mm)을 등록합니다. 바닥 결과만 지원하며, 결과 화면에 "외부 결과" 배지가 표시됩니다.</p>
+</div>
+</sc-if>
+<div style="display: flex; flex-wrap: wrap; gap: 28px 40px">
+<div style="flex: 1 1 420px; min-width: 0; display: flex; flex-direction: column; gap: 22px">
+<div style="display: flex; flex-direction: column; gap: 8px">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<label for="upLoc" style="font-size: 14px; font-weight: 600; color: #f2efe9">측정위치</label>
+<div style="position: relative">
+<select id="upLoc" defaultValue="loc-301" style="width: 100%; min-height: 44px; box-sizing: border-box; padding: 0 40px 0 12px; border-radius: 6px; border: 1px solid #2e3657; background: #0a0d1c; color: #f2efe9; font-family: inherit; font-size: 15px; appearance: none; -webkit-appearance: none; color-scheme: dark; cursor: pointer">
+<option value="">선택...</option>
+<option value="loc-301">101동 / 3층 / 301호 / 거실</option>
+</select>
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="position: absolute; top: 50%; right: 14px; margin-top: -8px; pointer-events: none"><path d="M6 9l6 6 6-6" stroke="#B8B3AB" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+</div>
+</div>
+<button type="button" aria-expanded="{{newLocOpen}}" aria-controls="upNewLoc" onClick="{{toggleNewLoc}}" style="align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 4px; border: 0; background: transparent; color: #f2efe9; font-family: inherit; font-size: 14px; font-weight: 600; cursor: pointer"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="#F2EFE9" stroke-width="1.8" stroke-linecap="round"></path></svg>새 측정위치</button>
+<sc-if value="{{newLoc}}" hint-placeholder-val="{{ true }}">
+<div id="upNewLoc" style="display: flex; flex-direction: column; gap: 16px; padding: 16px; border: 1px solid #242b47; border-radius: 6px; background: #0a0d1c">
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 12px">
+<div style="min-width: 0; display: flex; flex-direction: column; gap: 6px">
+<label for="upNewBuilding" style="font-size: 14px; font-weight: 600; color: #f2efe9">동</label>
+<input id="upNewBuilding" type="text" style="width: 100%; min-height: 44px; box-sizing: border-box; padding: 0 12px; border-radius: 6px; border: 1px solid #2e3657; background: #0a0d1c; color: #f2efe9; font-family: inherit; font-size: 15px">
+</div>
+<div style="min-width: 0; display: flex; flex-direction: column; gap: 6px">
+<label for="upNewFloor" style="font-size: 14px; font-weight: 600; color: #f2efe9">층</label>
+<input id="upNewFloor" type="text" style="width: 100%; min-height: 44px; box-sizing: border-box; padding: 0 12px; border-radius: 6px; border: 1px solid #2e3657; background: #0a0d1c; color: #f2efe9; font-family: inherit; font-size: 15px">
+</div>
+<div style="min-width: 0; display: flex; flex-direction: column; gap: 6px">
+<label for="upNewRoom" style="font-size: 14px; font-weight: 600; color: #f2efe9">공간</label>
+<input id="upNewRoom" type="text" style="width: 100%; min-height: 44px; box-sizing: border-box; padding: 0 12px; border-radius: 6px; border: 1px solid #2e3657; background: #0a0d1c; color: #f2efe9; font-family: inherit; font-size: 15px">
+</div>
+<div style="min-width: 0; display: flex; flex-direction: column; gap: 6px">
+<label for="upNewName" style="font-size: 14px; font-weight: 600; color: #f2efe9">이름</label>
+<input id="upNewName" type="text" style="width: 100%; min-height: 44px; box-sizing: border-box; padding: 0 12px; border-radius: 6px; border: 1px solid #2e3657; background: #0a0d1c; color: #f2efe9; font-family: inherit; font-size: 15px">
+</div>
+</div>
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px">
+<button type="button" style="min-height: 44px; padding: 0 18px; border-radius: 6px; border: 1px solid #2e3657; background: transparent; color: #f2efe9; font-family: inherit; font-size: 15px; font-weight: 500; cursor: pointer">저장</button>
+<button type="button" onClick="{{closeNewLoc}}" style="min-height: 44px; padding: 0 12px; border: 0; border-radius: 6px; background: transparent; color: #b8b3ab; font-family: inherit; font-size: 15px; font-weight: 500; cursor: pointer">취소</button>
+</div>
+</div>
+</sc-if>
+</div>
+<div style="display: {{scanOnly}}; flex-direction: column; gap: 22px">
+<fieldset style="margin: 0; padding: 0; border: 0; min-width: 0">
+<legend style="margin: 0; padding: 0 0 8px; font-size: 14px; font-weight: 600; color: #f2efe9">표면 유형</legend>
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<label for="upSurfFloor" style="display: inline-flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 16px; box-sizing: border-box; border-radius: 6px; border: 1px solid {{sFloor.bd}}; background: {{sFloor.bg}}; color: {{sFloor.fg}}; font-size: 14px; font-weight: {{sFloor.fw}}; cursor: pointer"><input id="upSurfFloor" type="radio" name="upSurface" value="floor" defaultChecked="true" onChange="{{onSurface}}" style="flex: 0 0 auto; width: 16px; height: 16px; margin: 0; accent-color: #f2efe9; color-scheme: dark; cursor: pointer">바닥</label>
+<label for="upSurfWall" style="display: inline-flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 16px; box-sizing: border-box; border-radius: 6px; border: 1px solid {{sWall.bd}}; background: {{sWall.bg}}; color: {{sWall.fg}}; font-size: 14px; font-weight: {{sWall.fw}}; cursor: pointer"><input id="upSurfWall" type="radio" name="upSurface" value="wall" onChange="{{onSurface}}" style="flex: 0 0 auto; width: 16px; height: 16px; margin: 0; accent-color: #f2efe9; color-scheme: dark; cursor: pointer">벽면</label>
+</div>
+</fieldset>
+<div style="display: flex; flex-direction: column; gap: 10px">
+<fieldset style="margin: 0; padding: 0; border: 0; min-width: 0">
+<legend style="margin: 0; padding: 0 0 8px; font-size: 14px; font-weight: 600; color: #f2efe9">데이터 계보</legend>
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<label for="upLinRaw" style="display: inline-flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 16px; box-sizing: border-box; border-radius: 6px; border: 1px solid {{lRaw.bd}}; background: {{lRaw.bg}}; color: {{lRaw.fg}}; font-size: 14px; font-weight: {{lRaw.fw}}; cursor: pointer"><input id="upLinRaw" type="radio" name="upLineage" value="raw" onChange="{{onLineage}}" style="flex: 0 0 auto; width: 16px; height: 16px; margin: 0; accent-color: #f2efe9; color-scheme: dark; cursor: pointer">원시 점군</label>
+<label for="upLinFused" style="display: inline-flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 16px; box-sizing: border-box; border-radius: 6px; border: 1px solid {{lFused.bd}}; background: {{lFused.bg}}; color: {{lFused.fg}}; font-size: 14px; font-weight: {{lFused.fw}}; cursor: pointer"><input id="upLinFused" type="radio" name="upLineage" value="fused_mesh" onChange="{{onLineage}}" style="flex: 0 0 auto; width: 16px; height: 16px; margin: 0; accent-color: #f2efe9; color-scheme: dark; cursor: pointer">융합 메시</label>
+<label for="upLinUnknown" style="display: inline-flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 16px; box-sizing: border-box; border-radius: 6px; border: 1px solid {{lUnknown.bd}}; background: {{lUnknown.bg}}; color: {{lUnknown.fg}}; font-size: 14px; font-weight: {{lUnknown.fw}}; cursor: pointer"><input id="upLinUnknown" type="radio" name="upLineage" value="unknown" defaultChecked="true" onChange="{{onLineage}}" style="flex: 0 0 auto; width: 16px; height: 16px; margin: 0; accent-color: #f2efe9; color-scheme: dark; cursor: pointer">모름</label>
+</div>
+</fieldset>
+<sc-if value="{{isFused}}" hint-placeholder-val="{{ false }}">
+<div role="status" style="display: flex; gap: 10px; padding: 14px 16px; border: 1px solid #e0b341; border-radius: 6px; background: #0a0d1c">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="flex: 0 0 auto; margin-top: 2px"><path d="M12 3 2 20h20L12 3Z" stroke="#E0B341" stroke-width="1.8" stroke-linejoin="round"></path><path d="M12 10v4M12 17v.5" stroke="#E0B341" stroke-width="1.8" stroke-linecap="round"></path></svg>
+<p style="margin: 0; font-size: 13px; line-height: 1.55; color: #b8b3ab">융합 메시는 앱이 스무딩한 데이터라 실제보다 양호하게 나올 수 있습니다. 분석 결과와 보고서에 경고가 표시됩니다.</p>
+</div>
+</sc-if>
+</div>
+</div>
+</div>
+<div style="flex: 1 1 420px; min-width: 0; display: flex; flex-direction: column; gap: 22px">
+<fieldset style="margin: 0; padding: 0; border: 0; min-width: 0">
+<legend style="margin: 0; padding: 0 0 8px; font-size: 14px; font-weight: 600; color: #f2efe9">적용 기준</legend>
+<div style="display: flex; flex-direction: column; border: 1px solid #2e3657; border-radius: 6px; overflow: hidden">
+<label for="upCrit1" style="display: flex; align-items: flex-start; gap: 12px; padding: 12px 14px 12px 12px; border-bottom: 1px solid #1f2540; border-left: 2px solid {{c1.bar}}; background: {{c1.bg}}; cursor: pointer">
+<input id="upCrit1" type="radio" name="upCrit" value="floor-kcs-finish7plus" onChange="{{onCrit}}" style="flex: 0 0 auto; width: 16px; height: 16px; margin: 2px 0 0; accent-color: #f2efe9; color-scheme: dark; cursor: pointer">
+<span style="display: flex; flex-direction: column; gap: 2px; min-width: 0">
+<span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #f2efe9">floor-kcs-finish7plus</span>
+<span style="font-size: 12px; color: #9a9690">KCS 14 20 10 표 3.7-1 (마감두께 7mm 이상)</span>
+</span>
+</label>
+<label for="upCrit2" style="display: flex; align-items: flex-start; gap: 12px; padding: 12px 14px 12px 12px; border-bottom: 1px solid #1f2540; border-left: 2px solid {{c2.bar}}; background: {{c2.bg}}; cursor: pointer">
+<input id="upCrit2" type="radio" name="upCrit" value="floor-kcs-finish7minus" onChange="{{onCrit}}" style="flex: 0 0 auto; width: 16px; height: 16px; margin: 2px 0 0; accent-color: #f2efe9; color-scheme: dark; cursor: pointer">
+<span style="display: flex; flex-direction: column; gap: 2px; min-width: 0">
+<span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #f2efe9">floor-kcs-finish7minus</span>
+<span style="font-size: 12px; color: #9a9690">KCS 14 20 10 표 3.7-1 (마감두께 7mm 미만)</span>
+</span>
+</label>
+<label for="upCrit3" style="display: flex; align-items: flex-start; gap: 12px; padding: 12px 14px 12px 12px; border-bottom: 1px solid #1f2540; border-left: 2px solid {{c3.bar}}; background: {{c3.bg}}; cursor: pointer">
+<input id="upCrit3" type="radio" name="upCrit" value="floor-kcs-exposed" defaultChecked="true" onChange="{{onCrit}}" style="flex: 0 0 auto; width: 16px; height: 16px; margin: 2px 0 0; accent-color: #f2efe9; color-scheme: dark; cursor: pointer">
+<span style="display: flex; flex-direction: column; gap: 2px; min-width: 0">
+<span style="display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 8px"><span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #f2efe9">floor-kcs-exposed</span><span style="font-size: 12px; color: #9a9690">(기본)</span></span>
+<span style="font-size: 12px; color: #9a9690">KCS 14 20 10 표 3.7-1 (제물치장·얇은 마감)</span>
+</span>
+</label>
+<label for="upCrit4" style="display: flex; align-items: flex-start; gap: 12px; padding: 12px 14px 12px 12px; border-bottom: 1px solid #1f2540; border-left: 2px solid {{c4.bar}}; background: {{c4.bg}}; cursor: pointer">
+<input id="upCrit4" type="radio" name="upCrit" value="floor-molit-cushion" onChange="{{onCrit}}" style="flex: 0 0 auto; width: 16px; height: 16px; margin: 2px 0 0; accent-color: #f2efe9; color-scheme: dark; cursor: pointer">
+<span style="display: flex; flex-direction: column; gap: 2px; min-width: 0">
+<span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #f2efe9">floor-molit-cushion</span>
+<span style="font-size: 12px; color: #9a9690">국토부 바닥충격음 고시 (완충재 바탕)</span>
+</span>
+</label>
+<label for="upCrit5" style="display: flex; align-items: flex-start; gap: 12px; padding: 12px 14px 12px 12px; border-bottom: 1px solid #1f2540; border-left: 2px solid {{c5.bar}}; background: {{c5.bg}}; cursor: pointer">
+<input id="upCrit5" type="radio" name="upCrit" value="floor-lh-exposed" onChange="{{onCrit}}" style="flex: 0 0 auto; width: 16px; height: 16px; margin: 2px 0 0; accent-color: #f2efe9; color-scheme: dark; cursor: pointer">
+<span style="display: flex; flex-direction: column; gap: 2px; min-width: 0">
+<span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #f2efe9">floor-lh-exposed</span>
+<span style="font-size: 12px; color: #9a9690">LHCS 14 20 10 05 표 3.11-7 (제물치장·도장·벽지)</span>
+</span>
+</label>
+<label for="upCrit6" style="display: flex; align-items: flex-start; gap: 12px; padding: 12px 14px 12px 12px; border-left: 2px solid {{c6.bar}}; background: {{c6.bg}}; cursor: pointer">
+<input id="upCrit6" type="radio" name="upCrit" value="floor-lh-thick" onChange="{{onCrit}}" style="flex: 0 0 auto; width: 16px; height: 16px; margin: 2px 0 0; accent-color: #f2efe9; color-scheme: dark; cursor: pointer">
+<span style="display: flex; flex-direction: column; gap: 2px; min-width: 0">
+<span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #f2efe9">floor-lh-thick</span>
+<span style="font-size: 12px; color: #9a9690">LHCS 14 20 10 05 표 3.11-7 (마감 13mm 초과)</span>
+</span>
+</label>
+</div>
+</fieldset>
+<div style="display: flex; flex-wrap: wrap; gap: 16px">
+<div style="flex: 1 0 180px; min-width: 0; display: flex; flex-direction: column; gap: 6px">
+<label for="upDate" style="font-size: 14px; font-weight: 600; color: #f2efe9">측정일자</label>
+<input id="upDate" type="date" defaultValue="2026-09-03" style="width: 100%; min-height: 44px; box-sizing: border-box; padding: 0 12px; border-radius: 6px; border: 1px solid #2e3657; background: #0a0d1c; color: #f2efe9; font-family: 'IBM Plex Mono', monospace; font-size: 15px; color-scheme: dark">
+</div>
+<div style="flex: 999 1 240px; min-width: 0; display: flex; flex-direction: column; gap: 6px">
+<label for="upDevice" style="font-size: 14px; font-weight: 600; color: #f2efe9">장비</label>
+<input id="upDevice" type="text" placeholder="예: iPhone 15 Pro + 3d Scanner App" style="width: 100%; min-height: 44px; box-sizing: border-box; padding: 0 12px; border-radius: 6px; border: 1px solid #2e3657; background: #0a0d1c; color: #f2efe9; font-family: inherit; font-size: 15px">
+</div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px">
+<label for="upOperator" style="font-size: 14px; font-weight: 600; color: #f2efe9">담당자 이름(직접 입력, 비우면 로그인 사용자)</label>
+<input id="upOperator" type="text" style="width: 100%; min-height: 44px; box-sizing: border-box; padding: 0 12px; border-radius: 6px; border: 1px solid #2e3657; background: #0a0d1c; color: #f2efe9; font-family: inherit; font-size: 15px">
+</div>
+<div style="display: flex; flex-direction: column; gap: 8px">
+<label for="upFile" style="font-size: 14px; font-weight: 600; color: #f2efe9">{{fileLabel}}</label>
+<div style="position: relative; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 10px 14px; min-height: 112px; padding: 20px; box-sizing: border-box; border: 1px dashed #2e3657; border-radius: 6px; background: #0a0d1c; text-align: center">
+<span aria-hidden="true" style="display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 18px; box-sizing: border-box; border-radius: 6px; border: 1px solid #2e3657; color: #f2efe9; font-size: 15px; font-weight: 500"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M4 20h16" stroke="#F2EFE9" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>파일 선택</span>
+<span aria-hidden="true" style="font-size: 14px; color: #9a9690">또는 파일을 여기에 끌어다 놓기</span>
+<input id="upFile" type="file" onChange="{{onFile}}" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; margin: 0; padding: 0; opacity: 0; cursor: pointer">
+</div>
+<sc-if value="{{hasFile}}" hint-placeholder-val="{{ true }}">
+<div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; padding: 0 0 0 12px; border: 1px solid #242b47; border-radius: 6px; background: #0a0d1c">
+<span style="display: inline-flex; align-items: center; gap: 8px; min-width: 0">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="flex: 0 0 auto"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5z" stroke="#9A9690" stroke-width="1.8" stroke-linejoin="round"></path><path d="M14 3v5h5" stroke="#9A9690" stroke-width="1.8" stroke-linejoin="round"></path></svg>
+<span style="min-width: 0; font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #f2efe9; overflow-wrap: anywhere">{{fileName}}</span>
+</span>
+<button type="button" aria-label="선택한 파일 빼기" onClick="{{clearFile}}" style="flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 6px; background: transparent; cursor: pointer"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="#B8B3AB" stroke-width="1.8" stroke-linecap="round"></path></svg></button>
+</div>
+</sc-if>
+<p style="margin: 0; font-size: 13px; color: #9a9690">파일은 Supabase Storage에 저장됩니다. 파일당 최대 <span style="font-family: 'IBM Plex Mono', monospace">50</span>MB입니다.</p>
+</div>
+</div>
+</div>
+</section>
+<div style="display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 12px">
+<button type="button" style="display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 18px; border-radius: 6px; border: 1px solid #f2efe9; background: #f2efe9; color: #0a0d1c; font-family: inherit; font-size: 15px; font-weight: 600; cursor: pointer"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M4 20h16" stroke="#0A0D1C" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>{{submitLabel}}</button>
+</div>
+</div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"motif":{"editor":"boolean","default":true,"section":"Look"},"$preview":{"width":1440,"height":1440}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    // 처음 값은 옛 아트보드의 선택 상태다: 스캔 분석, 바닥, 모름, floor-kcs-exposed, 새 측정위치 펼침, 파일 하나 고름
+    this.state = {
+      mode: 'scan',
+      surface: 'floor',
+      lineage: 'unknown',
+      crit: 'floor-kcs-exposed',
+      newLoc: true,
+      fileName: 'scan_101_301_living.csv'
+    };
+  }
+  renderVals() {
+    const st = this.state;
+    const motif = this.props.motif ?? true;
+    // 고른 선택지는 밝은 테두리와 surface-2 바탕, 나머지는 line-3 테두리
+    const chip = (on) => ({
+      bd: on ? '#f2efe9' : '#2e3657',
+      bg: on ? '#161b33' : 'transparent',
+      fg: on ? '#f2efe9' : '#b8b3ab',
+      fw: on ? '600' : '500'
+    });
+    // 적용 기준 목록의 고른 줄은 surface-2 바탕과 왼쪽 2px 막대
+    const row = (on) => ({
+      bg: on ? '#161b33' : 'transparent',
+      bar: on ? '#f2efe9' : 'transparent'
+    });
+    const isImport = st.mode === 'import';
+    return {
+      mScan: chip(!isImport),
+      mImp: chip(isImport),
+      onMode: (e) => this.setState({ mode: e.target.value }),
+      isImport: isImport,
+      // 결과 가져오기는 바닥 결과만 받으므로 표면 유형과 데이터 계보를 감춘다(앱과 같다)
+      scanOnly: isImport ? 'none' : 'flex',
+      sFloor: chip(st.surface === 'floor'),
+      sWall: chip(st.surface === 'wall'),
+      onSurface: (e) => this.setState({ surface: e.target.value }),
+      lRaw: chip(st.lineage === 'raw'),
+      lFused: chip(st.lineage === 'fused_mesh'),
+      lUnknown: chip(st.lineage === 'unknown'),
+      onLineage: (e) => this.setState({ lineage: e.target.value }),
+      isFused: st.lineage === 'fused_mesh',
+      c1: row(st.crit === 'floor-kcs-finish7plus'),
+      c2: row(st.crit === 'floor-kcs-finish7minus'),
+      c3: row(st.crit === 'floor-kcs-exposed'),
+      c4: row(st.crit === 'floor-molit-cushion'),
+      c5: row(st.crit === 'floor-lh-exposed'),
+      c6: row(st.crit === 'floor-lh-thick'),
+      onCrit: (e) => this.setState({ crit: e.target.value }),
+      newLoc: st.newLoc,
+      newLocOpen: st.newLoc ? 'true' : 'false',
+      // 현장은 헤더가 정하므로 새 측정위치 패널에는 현장 고르기가 없다. 패널은 열고 닫기만 한다
+      toggleNewLoc: () => this.setState({ newLoc: !this.state.newLoc }),
+      closeNewLoc: () => this.setState({ newLoc: false }),
+      fileLabel: isImport ? '결과 파일 (csv/json)' : '스캔 파일 (ply/las/laz/xyz/txt/csv/pts)',
+      fileName: st.fileName,
+      hasFile: st.fileName !== '',
+      onFile: (e) => {
+        const f = e.target.files && e.target.files[0];
+        if (f) this.setState({ fileName: f.name });
+        // 같은 파일을 다시 골라도 change 가 나도록 비운다
+        e.target.value = '';
+      },
+      clearFile: () => this.setState({ fileName: '' }),
+      submitLabel: isImport ? '가져오기 시작' : '업로드 후 사전 검사',
+      gridBg: motif ? 'linear-gradient(to right, rgba(242, 239, 233, 0.07) 1px, transparent 1px), linear-gradient(to bottom, rgba(242, 239, 233, 0.07) 1px, transparent 1px)' : 'none'
+    };
+  }
+}
+</script>
+</body>
+</html>

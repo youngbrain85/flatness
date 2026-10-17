@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>스캔 · 단위 확인</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=IBM+Plex+Mono:wght@400;500&family=Montserrat:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="min-height: 100vh; background: #0a0d1c; color: #f2efe9; font-family: Montserrat, 'Noto Sans KR', system-ui, sans-serif; font-size: 15px; line-height: 1.5">
+<header style="display: flex; flex-wrap: wrap; align-items: center; gap: 4px 20px; min-height: 64px; padding: 8px clamp(16px, 3vw, 40px); box-sizing: border-box; border-bottom: 1px solid #1f2540">
+<a href="#" aria-label="FLATNESS, 현장 목록으로" style="display: inline-flex; align-items: center; gap: 10px; min-height: 44px; color: #f2efe9; text-decoration: none">
+<svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 17l6-6 4 4 8-8" stroke="#F2EFE9" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path><path d="M14 7h7v7" stroke="#F2EFE9" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+<span style="font-weight: 700; font-size: 15px; letter-spacing: 0.14em">FLATNESS</span>
+</a>
+<span aria-hidden="true" style="color: #2e3657; font-size: 20px">/</span>
+<button type="button" aria-haspopup="listbox" aria-expanded="false" style="display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 10px; border-radius: 6px; border: 1px solid transparent; background: transparent; color: #f2efe9; font-family: 'Noto Sans KR', Montserrat, sans-serif; font-size: 15px; font-weight: 700; cursor: pointer">세종 M2블록 아파트<svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m6 9 6 6 6-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg></button>
+<nav aria-label="현장 메뉴" style="display: flex; flex-wrap: wrap; gap: 0 22px">
+<a href="#" style="display: inline-flex; align-items: center; min-height: 44px; box-sizing: border-box; border-bottom: 2px solid transparent; color: #b8b3ab; font-weight: 500; text-decoration: none">대시보드</a>
+<a href="#" aria-current="page" style="display: inline-flex; align-items: center; min-height: 44px; box-sizing: border-box; border-bottom: 2px solid #f2efe9; color: #f2efe9; font-weight: 600; text-decoration: none">측정위치</a>
+<a href="#" style="display: inline-flex; align-items: center; min-height: 44px; box-sizing: border-box; border-bottom: 2px solid transparent; color: #b8b3ab; font-weight: 500; text-decoration: none">보고서</a>
+</nav>
+<div style="margin-left: auto; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px">
+<a href="#" style="display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 16px; box-sizing: border-box; border-radius: 6px; border: 1px solid #f2efe9; background: #f2efe9; color: #0a0d1c; font-size: 14px; font-weight: 600; text-decoration: none"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 16V4m0 0-5 5m5-5 5 5M4 20h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>스캔 업로드</a>
+<button type="button" aria-haspopup="menu" aria-expanded="false" style="display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 12px; border-radius: 6px; border: 1px solid #2e3657; background: transparent; color: #b8b3ab; font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 12px; cursor: pointer">[계정 이메일]<svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m6 9 6 6 6-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg></button>
+</div>
+</header>
+<main style="background-color: #0a0d1c; background-image: {{gridBg}}; background-size: 25% 100%, 100% 33.33%">
+<div style="max-width: 1360px; margin: 0 auto; padding: clamp(18px, 2.6vw, 28px) clamp(16px, 3vw, 40px) 56px; box-sizing: border-box; display: flex; flex-direction: column; gap: 20px">
+<nav aria-label="위치" style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 12px; color: #85817a">
+<a href="#" style="color: #b8b3ab">측정위치</a>
+<span aria-hidden="true">/</span>
+<a href="#" style="color: #b8b3ab">101동 · 3층 · 301호 · 거실</a>
+<span aria-hidden="true">/</span>
+<span aria-current="page" style="color: #f2efe9">스캔 · 바닥 · 2026-09-03 10:42</span>
+</nav>
+<h1 style="margin: 0; font-family: 'Noto Sans KR', Montserrat, sans-serif; font-size: clamp(24px, 2.6vw, 30px); font-weight: 700; line-height: 1.2">스캔 · 바닥 · <span style="font-family: 'IBM Plex Mono', monospace; font-weight: 500; white-space: nowrap">2026-09-03 10:42</span></h1>
+<ol aria-label="스캔 진행 단계" style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; margin: 0; padding: 0; list-style: none; font-size: 14px">
+<li style="display: flex; align-items: center; gap: 8px; color: #b8b3ab"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="flex: 0 0 auto"><circle cx="12" cy="12" r="9" stroke="#38D454" stroke-width="1.8"></circle><path d="M8 12.5l2.5 2.5L16 9.5" stroke="#38D454" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>업로드</li>
+<li style="display: flex; align-items: center; gap: 12px; color: #b8b3ab"><span aria-hidden="true" style="flex: 0 0 auto; width: 40px; height: 1px; background: #2e3657"></span><span style="display: inline-flex; align-items: center; gap: 8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="flex: 0 0 auto"><circle cx="12" cy="12" r="9" stroke="#38D454" stroke-width="1.8"></circle><path d="M8 12.5l2.5 2.5L16 9.5" stroke="#38D454" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>사전 검사</span></li>
+<li aria-current="step" style="display: flex; align-items: center; gap: 12px; color: #f2efe9; font-weight: 600"><span aria-hidden="true" style="flex: 0 0 auto; width: 40px; height: 1px; background: #2e3657"></span><span style="display: inline-flex; align-items: center; gap: 8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="flex: 0 0 auto"><circle cx="12" cy="12" r="8" stroke="#F2EFE9" stroke-width="2.4"></circle></svg>단위 확정</span></li>
+<li style="display: flex; align-items: center; gap: 12px; color: #9a9690"><span aria-hidden="true" style="flex: 0 0 auto; width: 40px; height: 1px; background: #2e3657"></span><span style="display: inline-flex; align-items: center; gap: 8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="flex: 0 0 auto"><circle cx="12" cy="12" r="9" stroke="#9A9690" stroke-width="1.8"></circle><path d="M8 12h8" stroke="#9A9690" stroke-width="1.8" stroke-linecap="round"></path></svg>분석</span></li>
+<li style="display: flex; align-items: center; gap: 12px; color: #9a9690"><span aria-hidden="true" style="flex: 0 0 auto; width: 40px; height: 1px; background: #2e3657"></span><span style="display: inline-flex; align-items: center; gap: 8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="flex: 0 0 auto"><circle cx="12" cy="12" r="9" stroke="#9A9690" stroke-width="1.8"></circle><path d="M8 12h8" stroke="#9A9690" stroke-width="1.8" stroke-linecap="round"></path></svg>완료</span></li>
+</ol>
+<section aria-labelledby="scanInfoTitle" style="display: flex; flex-direction: column; gap: 16px; padding: 20px 22px; background: #10142a; border: 1px solid #242b47; border-radius: 12px">
+<h2 id="scanInfoTitle" style="margin: 0; font-size: 19px; font-weight: 600">스캔 정보</h2>
+<dl style="margin: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 18px 24px">
+<div style="min-width: 0; display: flex; flex-direction: column; gap: 6px">
+<dt style="font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 11px; letter-spacing: 0.08em; color: #85817a">측정위치</dt>
+<dd style="margin: 0; font-size: 15px">101동 / 3층 / 301호 / 거실</dd>
+</div>
+<div style="min-width: 0; display: flex; flex-direction: column; gap: 6px">
+<dt style="font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 11px; letter-spacing: 0.08em; color: #85817a">원본 파일</dt>
+<dd style="margin: 0; font-family: 'IBM Plex Mono', monospace; font-size: 14px; overflow-wrap: anywhere">scan_101_301_living.csv</dd>
+</div>
+<div style="min-width: 0; display: flex; flex-direction: column; gap: 6px">
+<dt style="font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 11px; letter-spacing: 0.08em; color: #85817a">장비</dt>
+<dd style="margin: 0; font-size: 15px">[장비명]</dd>
+</div>
+<div style="min-width: 0; display: flex; flex-direction: column; gap: 6px">
+<dt style="font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 11px; letter-spacing: 0.08em; color: #85817a">데이터 계보</dt>
+<dd style="margin: 0; font-size: 15px">원시 점군</dd>
+</div>
+<div style="min-width: 0; display: flex; flex-direction: column; gap: 6px">
+<dt style="font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 11px; letter-spacing: 0.08em; color: #85817a">점 개수</dt>
+<dd style="margin: 0; font-family: 'IBM Plex Mono', monospace; font-size: 14px">1,248,320</dd>
+</div>
+<div style="min-width: 0; display: flex; flex-direction: column; gap: 6px">
+<dt style="font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 11px; letter-spacing: 0.08em; color: #85817a">상태</dt>
+<dd style="margin: 0"><span style="display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: #f2efe9"><span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 999px; background: #9a9690"></span>단위 확인 대기</span></dd>
+</div>
+<div style="min-width: 0; display: flex; flex-direction: column; gap: 6px">
+<dt style="font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 11px; letter-spacing: 0.08em; color: #85817a">단위 배율</dt>
+<dd style="margin: 0; font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 14px">미확정</dd>
+</div>
+</dl>
+</section>
+<section aria-labelledby="unitTitle" style="display: flex; flex-direction: column; gap: 16px; padding: 20px 22px; background: #10142a; border: 1px solid #242b47; border-radius: 12px">
+<h2 id="unitTitle" style="margin: 0; font-size: 19px; font-weight: 600">단위 확인</h2>
+<p style="margin: 0; font-size: 15px; color: #b8b3ab">파일 좌표가 m·cm·mm 중 무엇인지 확정하는 단계입니다. 높이 뷰가 있으면 그 축 눈금과 실제 공간 크기를 견주어 고르고, 없으면 파일명과 스캔 앱의 내보내기 설정으로 판단하세요.</p>
+<div style="display: flex; flex-wrap: wrap; align-items: flex-start; gap: 24px">
+<div style="flex: 3 1 520px; min-width: 0; display: flex; flex-direction: column; gap: 10px">
+<h3 style="position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0">높이 뷰 (평면도)</h3>
+<a href="#" style="display: flex; flex-direction: column; gap: 8px; color: #f2efe9; text-decoration: none">
+<div style="padding: 16px; background: #000000; border: 1px solid #242b47; border-radius: 12px; overflow: hidden">
+<img src="assets/height_view_dark.png" alt="높이 뷰: 위에서 내려다본 점군의 상대 높이" width="1512" height="1057" style="display: block; width: 100%; height: auto">
+</div>
+<span style="display: flex; align-items: center; justify-content: flex-end; gap: 6px; min-height: 44px; font-size: 14px; font-weight: 600; text-decoration: underline; text-underline-offset: 3px">원본 크기로 열기 (새 탭)<svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="flex: 0 0 auto"><path d="M14 4h6v6M20 4l-9 9M18 13v6H5V6h6" stroke="#F2EFE9" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg></span>
+</a>
+<p style="margin: 0; font-size: 13px; line-height: 1.65; color: #9a9690">위에서 내려다본 점군의 상대 높이입니다. 축 눈금은 미터가 아니라 <span style="font-weight: 600; color: #f2efe9">파일 단위</span>이므로, 눈금이 가리키는 크기와 실제 공간 크기를 견주어 단위를 고르세요. 예를 들어 8m짜리 방인데 눈금이 8000까지 간다면 mm입니다. 점이 성겨 색이 거의 없거나 "유효 데이터 없음" 경고가 찍힌 그림이어도 축 눈금은 유효하니 눈금만 보고 판단하면 됩니다.</p>
+</div>
+<form style="flex: 2 1 340px; min-width: 0; display: flex; flex-direction: column; gap: 18px">
+<div style="display: flex; gap: 10px; padding: 14px 16px; border: 1px solid #2e3657; border-radius: 6px; background: #0a0d1c">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="flex: 0 0 auto; margin-top: 2px"><circle cx="12" cy="12" r="9" stroke="#B8B3AB" stroke-width="1.8"></circle><path d="M12 11v5M12 8v.5" stroke="#B8B3AB" stroke-width="1.8" stroke-linecap="round"></path></svg>
+<div style="min-width: 0; display: flex; flex-direction: column; gap: 4px">
+<p style="margin: 0; font-family: 'IBM Plex Mono', 'Noto Sans KR', monospace; font-size: 13px; font-weight: 500; color: #f2efe9; overflow-wrap: anywhere">scan_101_301_living.csv</p>
+<p style="margin: 0; font-size: 13px; line-height: 1.55; color: #b8b3ab">파일 좌표의 길이 단위를 확정해야 분석을 시작할 수 있습니다. 단위가 틀리면 결과 전체가 왜곡되므로 스캔 앱의 내보내기 설정을 확인하세요.</p>
+</div>
+</div>
+<div role="radiogroup" aria-labelledby="unitGroupLabel" style="display: flex; flex-direction: column; gap: 8px">
+<p id="unitGroupLabel" style="margin: 0 0 2px; font-size: 14px; font-weight: 600; color: #f2efe9">파일 좌표 단위</p>
+<sc-for list="{{units}}" as="u" hint-placeholder-count="3">
+<label for="{{u.inputId}}" style="display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 0 14px; box-sizing: border-box; border-radius: 6px; border: 1px solid {{u.bd}}; background: {{u.bg}}; color: #f2efe9; font-size: 15px; font-weight: {{u.fw}}; cursor: pointer"><input id="{{u.inputId}}" type="radio" name="unitScale" checked="{{u.checked}}" onChange="{{u.pick}}" style="flex: 0 0 auto; width: 18px; height: 18px; margin: 0; accent-color: #f2efe9">{{u.label}}</label>
+</sc-for>
+</div>
+<div style="display: flex">
+<button type="button" style="display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 18px; border-radius: 6px; border: 1px solid #f2efe9; background: #f2efe9; color: #0a0d1c; font-family: inherit; font-size: 15px; font-weight: 600; cursor: pointer"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="flex: 0 0 auto"><circle cx="12" cy="12" r="9" stroke="#0A0D1C" stroke-width="1.8"></circle><path d="M8 12.5l2.5 2.5L16 9.5" stroke="#0A0D1C" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>단위 확정 후 분석 시작</button>
+</div>
+</form>
+</div>
+</section>
+</div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"motif":{"editor":"boolean","default":true,"section":"Look"},"$preview":{"width":1440,"height":1400}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    // 높이 뷰 눈금이 0~8(파일 단위)인 8m 방이라 예시 선택은 m 이다
+    this.state = { unit: 'm' };
+  }
+  renderVals() {
+    const st = this.state;
+    const motif = this.props.motif ?? true;
+    // 고른 단위 칸만 밝은 테두리와 surface-2 바탕으로 표시한다
+    const units = [['m', 'unitM', 'm(미터)'], ['cm', 'unitCm', 'cm(센티미터)'], ['mm', 'unitMm', 'mm(밀리미터)']].map((u) => {
+      const on = st.unit === u[0];
+      return {
+        inputId: u[1],
+        label: u[2],
+        checked: on,
+        bd: on ? '#f2efe9' : '#2e3657',
+        bg: on ? '#161b33' : '#0a0d1c',
+        fw: on ? '600' : '500',
+        pick: () => this.setState({ unit: u[0] })
+      };
+    });
+    return {
+      units: units,
+      gridBg: motif ? 'linear-gradient(to right, rgba(242, 239, 233, 0.07) 1px, transparent 1px), linear-gradient(to bottom, rgba(242, 239, 233, 0.07) 1px, transparent 1px)' : 'none'
+    };
+  }
+}
+</script>
+</body>
+</html>
