@@ -9,6 +9,7 @@ import { LocationTree, type ScanWithCurrent } from '@/components/location-tree';
 import { NewLocationForm } from '@/components/new-location-form';
 import { PhotoGallery } from '@/components/photo-gallery';
 import { RefreshOnUpload } from '@/components/refresh-on-upload';
+import { ScrollToHash } from '@/components/scroll-to-hash';
 import { SupabaseErrorNotice } from '@/components/supabase-error';
 import { Container } from '@/components/ui/container';
 import { PAGE_MAIN } from '@/components/ui/page';
@@ -68,6 +69,9 @@ export default async function LocationsPage({ params }: { params: Promise<{ id: 
   }
   return (
     <div className={PAGE_MAIN}>
+      {/* 대시보드 타일의 #loc-<id> 닻: loading.tsx 가 Next 의 한 번뿐인 해시 스크롤을 먼저 써 버려서, 본문과 함께
+          마운트되는 이 컴포넌트가 다시 스크롤한다(components/scroll-to-hash.tsx). 화면에는 아무것도 그리지 않는다. */}
+      <ScrollToHash />
       {/* 스펙 §5 행 04: 제목 '측정위치 (개수)'. 개수는 PageHeader 의 counter(아트보드처럼 h1 옆 mono 13px muted). */}
       <PageHeader title="측정위치" counter={locations.length} />
       {/* 아트보드: 트리 카드는 제목 없이 h1 바로 아래에 온다(제목은 h1이 대신한다). */}

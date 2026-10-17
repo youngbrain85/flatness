@@ -138,4 +138,123 @@ describe('NewLocationForm', () => {
     expect(notice.className).toContain('text-err');
     expect(refreshMock).not.toHaveBeenCalled();
   });
+
+  // insert 가 끝나는 때를 테스트가 정하는 스텁: 저장 중 상태(잠금·옛 안내)를 본다. finish 는 가장 최근 insert 를 끝낸다.
+  function pendingSupabase(insertSpy?: (row: unknown) => void) {
+    type Result = { error: { code?: string; message: string } | null };
+    let finish: (r: Result) => void = () => {};
+    const client = {
+      from: () => ({
+        insert: (row: unknown) => {
+          insertSpy?.(row);
+          return new Promise<Result>((resolve) => { finish = resolve; });
+        },
+      }),
+    };
+    return { client, finish: (r: Result) => finish(r) };
+  }
+
+  // 리뷰 Important 1: 오류 안내는 실패 분기에서만 설정돼서, 한 번 뜨면 다음 제출이 성공해도 남았다.
+  it('중복(23505) 안내 뒤에 다음 제출이 성공하면 옛 안내를 지운다', async () => {
+    vi.mocked(createClient)
+      .mockReturnValueOnce(stubSupabase({ error: { code: '23505', message: 'dup' } }) as never)
+      .mockReturnValueOnce(stubSupabase({ error: null }) as never);
+    render(<NewLocationForm siteId="s1" />);
+
+    fireEvent.change(screen.getByLabelText('측정위치'), { target: { value: '거실' } });
+    fireEvent.click(screen.getByRole('button', { name: '위치 추가' }));
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('측정위치'), { target: { value: '안방' } });
+    fireEvent.click(screen.getByRole('button', { name: '위치 추가' }));
+
+    await vi.waitFor(() => expect(refreshMock).toHaveBeenCalled());
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('다음 제출이 시작되면 저장 결과를 기다리는 동안에도 옛 안내는 보이지 않는다', async () => {
+    const pending = pendingSupabase();
+    vi.mocked(createClient)
+      .mockReturnValueOnce(stubSupabase({ error: { code: '23505', message: 'dup' } }) as never)
+      .mockReturnValueOnce(pending.client as never);
+    render(<NewLocationForm siteId="s1" />);
+    fireEvent.change(screen.getByLabelText('측정위치'), { target: { value: '거실' } });
+    fireEvent.click(screen.getByRole('button', { name: '위치 추가' }));
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '위치 추가' }));
+
+    expect(screen.queryByRole('alert')).toBeNull();
+    pending.finish({ error: null });
+    await vi.waitFor(() => expect(refreshMock).toHaveBeenCalled());
+  });
+
+  // 리뷰 Important 1(옛 동작): 제출 중 잠금이 없어 두 번 누르면 두 번째 insert 가 23505 로 돌아와
+  // 성공 직후에 "중복" 안내가 떴다. 저장하는 동안 버튼을 잠그고 실패하면 다시 푼다(entry/new-site-card.tsx 와 같은 결).
+  it('저장하는 동안 "위치 추가"를 잠그고, 실패하면 다시 푼다', async () => {
+    const pending = pendingSupabase();
+    vi.mocked(createClient).mockReturnValueOnce(pending.client as never);
+    render(<NewLocationForm siteId="s1" />);
+    fireEvent.change(screen.getByLabelText('측정위치'), { target: { value: '거실' } });
+    const submit = screen.getByRole('button', { name: '위치 추가' });
+    expect(submit).toBeEnabled();
+
+    fireEvent.click(submit);
+    expect(submit).toBeDisabled();
+
+    pending.finish({ error: { message: '연결 실패' } });
+    expect(await screen.findByRole('alert')).toHaveTextContent('연결 실패');
+    expect(submit).toBeEnabled();
+  });
+
+  it('저장이 성공해도 잠금은 풀려, 이 폼에서 다음 위치를 이어서 넣을 수 있다', async () => {
+    const pending = pendingSupabase();
+    vi.mocked(createClient).mockReturnValueOnce(pending.client as never);
+    render(<NewLocationForm siteId="s1" />);
+    fireEvent.change(screen.getByLabelText('측정위치'), { target: { value: '거실' } });
+    const submit = screen.getByRole('button', { name: '위치 추가' });
+    fireEvent.click(submit);
+    expect(submit).toBeDisabled();
+
+    pending.finish({ error: null });
+
+    await vi.waitFor(() => expect(refreshMock).toHaveBeenCalled());
+    await vi.waitFor(() => expect(submit).toBeEnabled());
+  });
+
+  it('저장 중에 다시 제출해도(버튼을 거치지 않는 제출 포함) insert는 한 번만 보낸다', async () => {
+    const insertSpy = vi.fn();
+    const pending = pendingSupabase(insertSpy);
+    vi.mocked(createClient).mockReturnValue(pending.client as never);
+    render(<NewLocationForm siteId="s1" />);
+    fireEvent.change(screen.getByLabelText('측정위치'), { target: { value: '거실' } });
+    const form = screen.getByRole('button', { name: '위치 추가' }).closest('form') as HTMLFormElement;
+
+    fireEvent.submit(form);
+    fireEvent.submit(form);
+
+    expect(insertSpy).toHaveBeenCalledTimes(1);
+    pending.finish({ error: null });
+    await vi.waitFor(() => expect(refreshMock).toHaveBeenCalled());
+  });
+
+  // 리뷰 Important 2: WebKit 은 inputmode="numeric"이면 빼기 키가 없는 숫자 키패드를 띄워 iPhone 에서
+  // 음수 층 순서(지하)를 칠 수 없다. floor_order 는 제약 없는 정수고, 아트보드·옛 입력에도 inputmode 가 없다.
+  it('층 순서 입력에는 inputmode를 달지 않는다(음수 층을 칠 수 있어야 한다)', () => {
+    render(<NewLocationForm siteId="s1" />);
+    expect(screen.getByLabelText('층 순서(정수)')).not.toHaveAttribute('inputmode');
+  });
+
+  it('음수 층 순서(지하)도 그대로 insert한다', async () => {
+    const insertSpy = vi.fn();
+    vi.mocked(createClient).mockReturnValue(stubSupabase({ error: null }, insertSpy) as never);
+    render(<NewLocationForm siteId="s1" />);
+
+    fireEvent.change(screen.getByLabelText('층 순서(정수)'), { target: { value: '-1' } });
+    fireEvent.change(screen.getByLabelText('측정위치'), { target: { value: '주차장' } });
+    fireEvent.click(screen.getByRole('button', { name: '위치 추가' }));
+
+    await vi.waitFor(() => expect(refreshMock).toHaveBeenCalled());
+    expect(insertSpy).toHaveBeenCalledWith(expect.objectContaining({ floor_order: -1 }));
+  });
 });

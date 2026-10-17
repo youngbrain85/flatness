@@ -12,6 +12,7 @@ import { LocationTree } from '@/components/location-tree';
 import { NewLocationForm } from '@/components/new-location-form';
 import { PhotoGallery } from '@/components/photo-gallery';
 import { RefreshOnUpload } from '@/components/refresh-on-upload';
+import { ScrollToHash } from '@/components/scroll-to-hash';
 import { SupabaseErrorNotice } from '@/components/supabase-error';
 import { Container } from '@/components/ui/container';
 import { PAGE_MAIN } from '@/components/ui/page';
@@ -247,5 +248,15 @@ describe('LocationsPage 화면 구조 (다크 C안)', () => {
     expect(findAll(el, NewLocationForm)[0].props.siteId).toBe('s1');
     expect(findAll(el, RefreshOnUpload)[0].props.target).toEqual({ site_id: 's1' });
     expect(findAll(el, PhotoGallery)[0].props.photos).toEqual([PHOTO]);
+  });
+
+  // 대시보드 타일의 #loc-<id> 닻: loading.tsx 가 Next 의 한 번뿐인 해시 스크롤을 먼저 써 버리므로, 본문과 함께
+  // 마운트되는 ScrollToHash 가 다시 스크롤한다(components/scroll-to-hash.tsx).
+  it('정상 화면에는 해시 닻 스크롤(ScrollToHash)을 한 번 그린다', async () => {
+    vi.mocked(createClient).mockResolvedValue(stub() as never);
+
+    const el = await LocationsPage(props());
+
+    expect(findAll(el, ScrollToHash)).toHaveLength(1);
   });
 });
