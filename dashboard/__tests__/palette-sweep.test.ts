@@ -5,6 +5,8 @@
 import { describe, expect, it } from 'vitest';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
+import { GRADE_COLOR } from '@/lib/domain/labels';
+import { SLOPE_GRADE_COLOR } from '@/lib/domain/slope-heatmap';
 
 // vitest는 __dirname을 준다. import.meta.url은 file: 스킴이 아니라 fileURLToPath가 던진다(실측).
 const ROOT = join(__dirname, '..'); // dashboard/
@@ -48,5 +50,44 @@ describe('팔레트 잔재 스윕 (T12)', () => {
       .filter((f) => /ui\/(metric-card|status-dot)'/.test(readFileSync(f, 'utf8')))
       .map(rel);
     expect(importers).toEqual([]);
+  });
+});
+
+// 다크 C안 Task 1: 다시 그린 공통 부품·캔버스 색 상수·루트 레이아웃에는 옛 cs-* 토큰과 엔진 등급 hex
+// (GRADE_COLOR·SLOPE_GRADE_COLOR, PDF·엔진 PNG 전용)가 다시 들어오면 안 된다. 화면 전체(app·components·lib)의
+// cs-* 0건은 Task 12 가 이 검사를 넓혀서 지킨다. 테스트 파일(__tests__)은 뺀다 - "cs- 가 없다"는 부정 단언에
+// 그 글자가 들어가야 하기 때문이다.
+const DARK_ONLY = ['components/ui', 'lib/domain/palette.ts', 'app/layout.tsx'];
+const CS_TOKEN = /\bcs-[a-z]/;
+const ENGINE_HEX = [...Object.values(GRADE_COLOR), ...Object.values(SLOPE_GRADE_COLOR)].map((h) => h.toLowerCase());
+
+function darkOnlyFiles(): string[] {
+  return DARK_ONLY.flatMap((p) => {
+    const abs = join(ROOT, p);
+    return statSync(abs).isDirectory() ? walk(abs).filter((f) => !f.split(sep).includes('__tests__')) : [abs];
+  });
+}
+
+describe('다크 토큰 가드 (다크 C안 Task 1)', () => {
+  it('공통 부품·palette.ts·layout.tsx 에 cs-* 토큰과 엔진 등급 hex 가 0건이다', () => {
+    const found: string[] = [];
+    for (const file of darkOnlyFiles()) {
+      readFileSync(file, 'utf8').split('\n').forEach((line, i) => {
+        if (CS_TOKEN.test(line)) found.push(`${rel(file)}:${i + 1}: ${line.trim()}`);
+        for (const hex of ENGINE_HEX) {
+          if (line.toLowerCase().includes(hex)) found.push(`${rel(file)}:${i + 1}: ${hex}`);
+        }
+      });
+    }
+    expect(found).toEqual([]);
+  });
+
+  it('검사 대상에 새 부품(grade·kpi·stage)과 palette.ts·layout.tsx 가 들어 있다(대상이 비어 통과하지 않게)', () => {
+    const scanned = darkOnlyFiles().map(rel);
+    for (const f of ['components/ui/grade.tsx', 'components/ui/kpi.tsx', 'components/ui/stage.tsx',
+      'components/ui/button.tsx', 'lib/domain/palette.ts', 'app/layout.tsx']) {
+      expect(scanned).toContain(f);
+    }
+    expect(scanned.some((f) => f.includes('__tests__'))).toBe(false);
   });
 });

@@ -1,12 +1,15 @@
-// 16px 스트로크 아이콘 세트(Cloudscape 어휘). 이모지·딩뱃 금지 규칙의 구현체 -
-// 화면의 모든 아이콘은 이 컴포넌트를 거친다. data-icon으로 테스트가 식별한다.
+// 16px 스트로크 아이콘 세트. 이모지·딩뱃 금지 규칙의 구현체 - 화면의 모든 아이콘은 이 컴포넌트를
+// 거친다. data-icon으로 테스트가 식별한다. 선 굵기 1.8 은 다크 C안 아트보드의 인라인 SVG 와 같다.
 import type { ReactNode, SVGProps } from 'react';
 
 // 최종 리뷰 Important 4(T1): Record<string, …>이면 IconName에 이름을 더해도 PATHS 누락이
 // 컴파일에 안 걸려 아이콘이 조용히 빈 svg로 나간다. IconName으로 키를 좁혀 전수 강제한다.
 const PATHS: Record<IconName, ReactNode> = {
   'check-circle': <><circle cx="12" cy="12" r="9" /><path d="M8 12.5l2.5 2.5L16 9.5" /></>,
-  'alert-triangle': <><path d="M12 3l10 18H2L12 3z" /><path d="M12 10v4M12 17.5v.5" /></>,
+  // 아트보드 경고 상자(Stage·Upload)의 삼각형 그대로
+  'alert-triangle': <><path d="M12 3 2 20h20L12 3z" /><path d="M12 10v4M12 17v.5" /></>,
+  // 아트보드 오류 상자(RegistrationNew·ReportDetail)의 원 + 느낌표
+  'alert-circle': <><circle cx="12" cy="12" r="9" /><path d="M12 7.5v5.5M12 16.5v.5" /></>,
   'x-circle': <><circle cx="12" cy="12" r="9" /><path d="M15 9l-6 6M9 9l6 6" /></>,
   'info-circle': <><circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 8v.5" /></>,
   clock: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>,
@@ -29,14 +32,14 @@ const PATHS: Record<IconName, ReactNode> = {
 };
 
 export type IconName =
-  | 'check-circle' | 'alert-triangle' | 'x-circle' | 'info-circle' | 'clock' | 'minus-circle'
+  | 'check-circle' | 'alert-triangle' | 'alert-circle' | 'x-circle' | 'info-circle' | 'clock' | 'minus-circle'
   | 'chevron-right' | 'chevron-down' | 'chevron-left' | 'search' | 'plus' | 'upload' | 'user'
   | 'menu' | 'logout' | 'trend' | 'download' | 'external' | 'photo' | 'refresh';
 
 export function Icon({ name, size = 16, className, ...rest }:
   { name: IconName; size?: number } & Omit<SVGProps<SVGSVGElement>, 'name'>) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}
       strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" data-icon={name}
       className={`shrink-0${className ? ` ${className}` : ''}`} {...rest}>
       {PATHS[name]}

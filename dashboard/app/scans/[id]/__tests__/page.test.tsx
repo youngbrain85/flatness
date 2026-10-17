@@ -803,10 +803,10 @@ describe('ScanPage 단위 확인 인라인 (D6 이월: confirm-unit 삭제로 �
   // 쓰는 페이지 폭(max-w-6xl)과 안내 문단이 무방비였다. max-w-md로 되돌리면 그림이
   // 폼 폭으로 쪼그라들어 축 눈금을 못 읽는데(이 화면의 존재 이유가 무너진다) 아무도
   // 못 잡는다."
-  // Cloudscape(스펙 §5): 본문은 최대폭 없이 PAGE_MAIN 하나다(모든 page/loading이 같은 문자열 -
-  // 전환 점프 방지). 높이 뷰 2열 배치가 쓰는 폭이 max-w-md 같은 값으로 쪼그라들면 축 눈금을
-  // 못 읽으므로, 폭 제한이 끼어들지 않는지 여기서 계속 지킨다.
-  it('단계 E 리뷰 7: 본문 클래스는 PAGE_MAIN이고 최대폭 제한이 없다(높이 뷰 2열 배치가 쓰는 폭이다)', async () => {
+  // 다크 C안: 본문은 PAGE_MAIN 하나다(모든 page/loading이 같은 문자열 - 전환 점프 방지). 최대폭은
+  // 아트보드 본문 틀의 1360px 하나뿐이다. 높이 뷰 2열 배치가 쓰는 폭이 max-w-md 같은 값으로
+  // 쪼그라들면 축 눈금을 못 읽으므로, 더 좁은 폭 제한이 끼어들지 않는지 여기서 계속 지킨다.
+  it('단계 E 리뷰 7: 본문 클래스는 PAGE_MAIN이고 최대폭은 본문 틀 1360px 하나다(높이 뷰 2열 배치가 쓰는 폭이다)', async () => {
     vi.mocked(createClient).mockResolvedValue(
       stubSupabase(mkScan({
         status: 'awaiting_unit_confirm', unit_scale: null,
@@ -818,7 +818,7 @@ describe('ScanPage 단위 확인 인라인 (D6 이월: confirm-unit 삭제로 �
 
     expect(main.type).toBe('main');
     expect(main.props.className).toBe(PAGE_MAIN);
-    expect(main.props.className).not.toContain('max-w-');
+    expect(main.props.className.match(/max-w-\S+/g)).toEqual(['max-w-[1360px]']);
   });
 
   it.each([

@@ -37,11 +37,11 @@ describe('ReportDeleteButton', () => {
     vi.mocked(createClient).mockReturnValue(stubSupabase(null, spy) as never);
     render(<ReportDeleteButton report={{ id: 'r1', status: 'draft' }} />);
 
-    // T8: 삭제 버튼은 normal 알약(primary는 상세 화면의 발행뿐)
-    expect(screen.getByRole('button', { name: '삭제' }).className).toContain('border-cs-link');
+    // T8: 삭제 버튼은 normal(primary는 상세 화면의 발행뿐)
+    expect(screen.getByRole('button', { name: '삭제' }).className).toContain('border-line-3');
     fireEvent.click(screen.getByRole('button', { name: '삭제' }));
     expect(screen.getByText(/삭제할까요/).closest('[data-alert]')).toHaveAttribute('data-alert', 'error');
-    expect(screen.getByRole('button', { name: '삭제 확인' }).className).not.toContain('bg-cs-link');
+    expect(screen.getByRole('button', { name: '삭제 확인' }).className).not.toContain('bg-ink');
     expect(spy).not.toHaveBeenCalled();
   });
 

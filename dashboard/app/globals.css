@@ -1,7 +1,45 @@
 @import "tailwindcss";
 
-/* Cloudscape 어휘 토큰(스펙 §3). 이 표 밖의 색을 쓰지 않는다. */
+/* 다크 C안 의미 토큰(스펙 §3). 이 표 밖의 색을 쓰지 않는다.
+   캔버스는 CSS 토큰을 못 읽으므로 lib/domain/palette.ts 가 같은 값을 들고 있다(palette.test 가 대조). */
 @theme inline {
+  /* 바탕·면·선 */
+  --color-ground: #0a0d1c;
+  --color-surface: #10142a;
+  --color-surface-2: #161b33;
+  --color-line: #1f2540;
+  --color-line-2: #242b47;
+  --color-line-3: #2e3657;
+  /* 글자 */
+  --color-ink: #f2efe9;
+  --color-ink-2: #b8b3ab;
+  --color-muted: #9a9690;
+  --color-dim: #85817a;
+  /* 점군·히트맵·엔진 그림이 놓이는 검정 스테이지 */
+  --color-stage: #000000;
+  /* 등급 색(화면용). PDF·엔진 PNG 는 엔진 hex(GRADE_COLOR)를 계속 쓴다 */
+  --color-grade-pass: #38d454;
+  --color-grade-borderline: #fad647;
+  --color-grade-repair: #ff8c1f;
+  --color-grade-rework: #ff332e;
+  --color-grade-na: #85817a;
+  /* 상태 색 */
+  --color-ok: #38d454;
+  --color-warn: #e0b341;
+  --color-err: #e05a4e;
+  /* 데이터 색: 구배 배수구 표시 전용 */
+  --color-drain: #6fcdeb;
+
+  --font-sans: var(--font-montserrat), var(--font-noto-sans-kr), system-ui, sans-serif;
+  --font-heading: var(--font-noto-sans-kr), var(--font-montserrat), sans-serif;
+  --font-mono: var(--font-plex-mono), var(--font-noto-sans-kr), ui-monospace, monospace;
+  --font-display: var(--font-anton), Impact, sans-serif;
+
+  --radius-control: 6px;
+  --radius-card: 12px;
+
+  /* 옛 Cloudscape 토큰: Task 2~11 동안 옛 화면이 깨지지 않게 남긴다. Task 12 가 지운다.
+     새로 쓰는 코드는 cs-* 를 쓰지 않는다. */
   --color-cs-text: #000716;
   --color-cs-text-secondary: #5f6b7a;
   --color-cs-nav-text: #414d5c;
@@ -24,8 +62,29 @@
   --color-cs-external-bg: #f5f0fa;
   --shadow-cs-container: 0 1px 1px 1px #e9ebed, 0 1px 8px 2px rgba(0, 7, 22, 0.12);
   --radius-cs-container: 16px;
-  --font-sans: var(--font-open-sans), var(--font-noto-sans-kr), "Helvetica Neue", Arial, sans-serif;
-  --font-mono: var(--font-geist-mono), ui-monospace, Menlo, Consolas, monospace;
+}
+
+/* 본문(main) 도면 격자(스펙 §3, 아트보드 gridBg): 1px ink 7% 선, 가로 4칸 · 세로 3칸.
+   데이터 스테이지 안에는 깔지 않는다. 쓰는 곳은 components/ui/page.tsx 의 MAIN_BG 하나다. */
+@utility drafting-grid {
+  background-image:
+    linear-gradient(to right, rgba(242, 239, 233, 0.07) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(242, 239, 233, 0.07) 1px, transparent 1px);
+  background-size: 25% 100%, 100% 33.33%;
+}
+
+/* 반드시 @layer base 안에 둔다. unlayered 규칙은 Tailwind 유틸리티 레이어를 항상 이긴다(아래 사고 주석). */
+@layer base {
+  /* 앱은 어두운 팔레트 하나다(스펙 §3 "테마 분기 없음"). 스크롤바·날짜 선택기·select 목록 같은
+     브라우저 기본 부품도 어둡게 그리게 한다. prefers-color-scheme 분기가 아니다. */
+  html {
+    color-scheme: dark;
+  }
+  /* 키보드 포커스만 2px ink 외곽선(스펙 §3). 마우스 클릭에는 :focus-visible 이 걸리지 않는다. */
+  :focus-visible {
+    outline: 2px solid --theme(--color-ink);
+    outline-offset: 2px;
+  }
 }
 
 /* 리뷰 Important 4(이력 보존): unlayered 다크모드 규칙은 Tailwind v4 @layer보다

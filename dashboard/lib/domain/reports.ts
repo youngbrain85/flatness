@@ -27,9 +27,8 @@ export function canRegenerate(report: {
 
 // D7: 보고서 목록(Badge)·상세(StatusIndicator, TONE_STATUS로 변환)가 같은 판단을 재사용한다.
 // tone은 두 표의 교집합만 쓴다(BadgeTone엔 'busy'가, TONE_STATUS엔 'neutral'이 없다) -
-// 이러면 어느 쪽에 꽂아도 어댑터 없이 그대로 유효한 값이 된다. TONE 정의(badge.tsx)에서
-// unknown과 neutral은 완전히 같은 색이라 진행 중·미발행 초안 둘 다 unknown으로 묶어도
-// 시각적 손실이 없다 - 구분은 라벨 문구가 한다.
+// 이러면 어느 쪽에 꽂아도 어댑터 없이 그대로 유효한 값이 된다. 진행 중·미발행 초안은 둘 다
+// unknown(StatusIndicator 로는 pending, muted 점)으로 묶는다 - 구분은 라벨 문구가 한다.
 export function reportStatusBadge(report: { status: ReportStatus; gen_status: ReportGenStatus }): {
   tone: 'pass' | 'fail' | 'unknown'; label: string;
 } {

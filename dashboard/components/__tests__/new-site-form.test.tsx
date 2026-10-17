@@ -59,13 +59,13 @@ describe('NewSiteForm', () => {
   it('폼 해부: 컨테이너 안 FormField 3개 + 컨테이너 밖 primary "현장 등록"', () => {
     const { container } = render(<NewSiteForm />);
     const section = container.querySelector('section');
-    expect(section?.className).toContain('shadow-cs-container');
-    expect(screen.getByText('현장명 (필수)').className).toContain('font-bold');
-    expect(screen.getByLabelText('현장명 (필수)').className).toContain('border-cs-input-border');
-    expect(screen.getByLabelText('주소').className).toContain('border-cs-input-border');
-    expect(screen.getByLabelText('메모').className).toContain('min-h-24');
+    expect(section?.className).toContain('rounded-card');
+    expect(screen.getByText('현장명 (필수)').className).toContain('font-semibold');
+    expect(screen.getByLabelText('현장명 (필수)').className).toContain('border-line-3');
+    expect(screen.getByLabelText('주소').className).toContain('border-line-3');
+    expect(screen.getByLabelText('메모').className).toContain('min-h-28');
     const submit = screen.getByRole('button', { name: '현장 등록' });
-    expect(submit.className).toContain('bg-cs-link');
+    expect(submit.className).toContain('bg-ink');
     expect(section?.contains(submit)).toBe(false);
   });
 });

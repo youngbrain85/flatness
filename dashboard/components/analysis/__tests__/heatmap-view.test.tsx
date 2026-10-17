@@ -78,7 +78,7 @@ describe('HeatmapView Cloudscape 해부 (T7)', () => {
     fireEvent.click(canvas, { clientX: 240, clientY: 240 });
     expect(screen.getByText('직선자 값').className).toContain('text-cs-text-secondary');
     expect(screen.getByText('직선자 값').closest('dl')?.className).toContain('border-cs-divider');
-    expect(screen.getAllByText('적합').some((el) => el.className.includes('bg-cs-success-bg'))).toBe(true);
+    expect(screen.getAllByText('적합').some((el) => el.getAttribute('data-tone') === 'pass')).toBe(true);
     expect(container.innerHTML).not.toMatch(/zinc-/);
   });
 });

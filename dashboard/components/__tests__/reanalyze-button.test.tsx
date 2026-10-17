@@ -268,19 +268,19 @@ describe('ReanalyzeButton kind=slope 기준 선택 (코드리뷰(4차) N1)', () 
   });
 });
 
-// T6 Cloudscape 재스킨: 버튼은 normal 알약(진행 중이면 cs-disabled 보더), 구배 기준 라디오는
+// T6 Cloudscape 재스킨: 버튼은 normal(진행 중이면 disabled - dim 글자), 구배 기준 라디오는
 // FormField 안 네이티브 라디오(checkClass)이고 순서는 RPC 반환 순서 그대로다(재정렬 금지).
 describe('ReanalyzeButton Cloudscape 재스킨 (T6)', () => {
-  it('활성 버튼은 normal(cs-link 보더), 진행 중이면 disabled(cs-disabled 보더)다', () => {
+  it('활성 버튼은 normal(line-3 테두리), 진행 중이면 disabled(dim 글자)다', () => {
     const { rerender } = render(<ReanalyzeButton scanId="s1" userId="u1" surface="floor" kind="flatness"
       criteriaId="cr1" latestStatus="done" isImport={false} />);
-    expect(screen.getByRole('button', { name: '평활도 분석' }).className).toContain('border-cs-link');
+    expect(screen.getByRole('button', { name: '평활도 분석' }).className).toContain('border-line-3');
 
     rerender(<ReanalyzeButton scanId="s1" userId="u1" surface="floor" kind="flatness"
       criteriaId="cr1" latestStatus="processing" isImport={false} />);
     const btn = screen.getByRole('button', { name: '평활도 분석' });
     expect(btn).toBeDisabled();
-    expect(btn.className).toContain('border-cs-disabled');
+    expect(btn.className).toContain('text-dim');
     expect(screen.getByText(/진행 중인 분석이 끝난 뒤/).className).toContain('text-cs-text-secondary');
   });
 
@@ -291,10 +291,10 @@ describe('ReanalyzeButton Cloudscape 재스킨 (T6)', () => {
 
     const radios = screen.getAllByRole('radio');
     expect(radios).toHaveLength(3);
-    expect(radios[0].className).toContain('accent-cs-link');
+    expect(radios[0].className).toContain('accent-ink');
     // 픽스처 순서(옥상 → 욕실 → 실내) 그대로 - is_default(실내)를 앞으로 끌어올리지 않는다.
     const names = radios.map((r) => r.closest('label')?.querySelector('span > span')?.textContent);
     expect(names).toEqual(['옥상 슬래브(노출방수)', '욕실·화장실 바닥', '실내 평바닥']);
-    expect(screen.getByText('적용 기준').className).toContain('font-bold');
+    expect(screen.getByText('적용 기준').className).toContain('font-semibold');
   });
 });

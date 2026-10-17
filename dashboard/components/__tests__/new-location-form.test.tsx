@@ -26,14 +26,14 @@ afterEach(() => {
 });
 
 describe('NewLocationForm', () => {
-  it('폼 해부: 라벨 5개(700) + inputClass + primary "위치 추가"(plus 아이콘)', () => {
+  it('폼 해부: 라벨 5개(600) + inputClass + primary "위치 추가"(plus 아이콘)', () => {
     const { container } = render(<NewLocationForm siteId="s1" />);
     for (const label of ['동', '층', '층 순서(정수)', '공간', '측정위치']) {
-      expect(screen.getByText(label).className).toContain('font-bold');
-      expect(screen.getByLabelText(label).className).toContain('border-cs-input-border');
+      expect(screen.getByText(label).className).toContain('font-semibold');
+      expect(screen.getByLabelText(label).className).toContain('border-line-3');
     }
     const submit = screen.getByRole('button', { name: '위치 추가' });
-    expect(submit.className).toContain('bg-cs-link');
+    expect(submit.className).toContain('bg-ink');
     expect(container.querySelector('[data-icon="plus"]')).toBeInTheDocument();
   });
 

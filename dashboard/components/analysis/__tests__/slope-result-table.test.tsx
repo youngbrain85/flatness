@@ -61,7 +61,7 @@ describe('SlopeResultTable (스펙 §7.2·§5.3: 구배 %, 설계 대비 편차,
     render(<SlopeResultTable results={rows} designPct={2.0} dirPassDeg={30} />);
     const badge = screen.getByText('알수없음');
     expect(badge).toHaveAttribute('data-status', 'pending');
-    expect(badge.className).toContain('text-cs-na');
+    expect(badge.querySelector('[data-dot]')?.className).toContain('bg-muted');
   });
 
   it('측정 불가(ok=false) 셀은 구배·보정에 "-"를 보여준다', () => {
@@ -138,11 +138,11 @@ describe('SlopeResultTable Cloudscape 해부 (T7)', () => {
     const { container } = render(<SlopeResultTable results={rows} designPct={2.0} dirPassDeg={30} />);
     expect(screen.getByText('적합')).toHaveAttribute('data-status', 'success');
     expect(screen.getByText('재시공')).toHaveAttribute('data-status', 'error');
-    expect(screen.getByText('역구배').className).toContain('bg-cs-error-bg');
-    expect(screen.getByText('45.3도(허용 30도 초과)').className).toContain('bg-cs-warning-bg');
+    expect(screen.getByText('역구배')).toHaveAttribute('data-tone', 'fail');
+    expect(screen.getByText('45.3도(허용 30도 초과)')).toHaveAttribute('data-tone', 'warn');
     const th = screen.getByRole('columnheader', { name: '구배(%)' });
     expect(th.className).toContain('text-right');
-    expect(th.className).toContain('h-10');
+    expect(th.className).toContain('font-mono');
     expect(screen.getAllByText('1.50%')[0].className).toContain('font-mono');
     expect(screen.getByText('크기·방향 모두 허용 안').className).toContain('text-cs-text-secondary');
     expect(screen.getByText('(0, 0)').className).toContain('font-bold');

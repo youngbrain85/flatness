@@ -165,7 +165,7 @@ describe('RegistrationWorkbench 대응점 수집 (스펙 §7.4)', () => {
     const run = screen.getByRole('button', { name: /정합 실행/ });
     expect(run).toBeEnabled();
     // 대응점 지정 뷰의 유일한 primary. 안내문은 info Alert.
-    expect(run.className).toContain('bg-cs-link');
+    expect(run.className).toContain('bg-ink');
     expect(screen.getByText(/번갈아 클릭해 쌍을 만드세요/).closest('[data-alert]')).toHaveAttribute('data-alert', 'info');
   });
 
@@ -255,7 +255,7 @@ describe('RegistrationWorkbench 진행·실패 표시 (설계 결정 F10)', () =
     expect(await screen.findByText(/중첩이 부족합니다\(약 6%\)/)).toBeInTheDocument();
     // 실패는 error Alert, 다음 행동(대응점 다시 찍기)이 이 뷰의 primary
     expect(screen.getByText(/정합에 실패했습니다/).closest('[data-alert]')).toHaveAttribute('data-alert', 'error');
-    expect(screen.getByRole('button', { name: /대응점 다시 찍기/ }).className).toContain('bg-cs-link');
+    expect(screen.getByRole('button', { name: /대응점 다시 찍기/ }).className).toContain('bg-ink');
   });
 });
 
@@ -297,13 +297,13 @@ describe('RegistrationWorkbench 결과 표시 (스펙 §9.3.2·§9.3.4)', () => 
     await screen.findByText(/1\.01/);
 
     expect(screen.getByRole('heading', { level: 2, name: '정합 결과' })).toBeInTheDocument();
-    expect(container.querySelectorAll('.rounded-cs-container')).toHaveLength(2);
-    expect(screen.getByText('정합 잔차 RMSE').className).toContain('font-bold');
+    expect(container.querySelectorAll('section.rounded-card')).toHaveLength(2);
+    expect(screen.getByText('정합 잔차 RMSE').className).toContain('text-dim'); // KeyValuePairs 라벨은 눈썹
     expect(screen.getByText(/1\.01/).className).toContain('font-mono');
     expect(screen.getByText(/수직 방향 일치만 보증/).closest('[data-alert]')).toHaveAttribute('data-alert', 'warning');
-    expect(screen.getByRole('checkbox', { name: /포개지는/ }).className).toContain('accent-cs-link');
-    expect(screen.getByRole('button', { name: /병합 스캔/ }).className).toContain('border-cs-disabled');
-    expect(screen.getByRole('button', { name: /대응점 다시 찍기/ }).className).toContain('text-cs-link');
+    expect(screen.getByRole('checkbox', { name: /포개지는/ }).className).toContain('accent-ink');
+    expect(screen.getByRole('button', { name: /병합 스캔/ }).className).toContain('text-dim');
+    expect(screen.getByRole('button', { name: /대응점 다시 찍기/ }).className).toContain('border-line-3');
     expect(screen.getByText(/시스템 차원의 승인 절차가 아닙니다/).className).toContain('text-cs-text-secondary');
   });
 

@@ -29,14 +29,14 @@ describe('ProfileForm', () => {
     expect(input.value).toBe('새이름');
   });
 
-  it('저장은 normal 버튼(파랑 보더, 채움 없음)이고 입력·안내는 cs 토큰을 쓴다 - 이 뷰의 primary는 U 저장 하나다', async () => {
+  it('저장은 normal 버튼(line-3 테두리, 채움 없음)이고 입력은 line-3 테두리, 안내는 보조색이다 - 이 뷰의 primary는 U 저장 하나다', async () => {
     fromMock.mockClear();
     render(<ProfileForm userId="u1" initialName="홍길동" />);
     const btn = screen.getByRole('button', { name: '저장' });
     expect(btn).toHaveAttribute('type', 'submit');
-    expect(btn.className).toContain('border-cs-link');
-    expect(btn.className).not.toContain('bg-cs-link');
-    expect(screen.getByLabelText('표시 이름').className).toContain('border-cs-input-border');
+    expect(btn.className).toContain('border-line-3');
+    expect(btn.className).not.toContain('bg-ink');
+    expect(screen.getByLabelText('표시 이름').className).toContain('border-line-3');
     // 안내 메시지는 보조색 토큰(text-cs-text-secondary)
     fireEvent.change(screen.getByLabelText('표시 이름'), { target: { value: ' ' } });
     fireEvent.click(btn);

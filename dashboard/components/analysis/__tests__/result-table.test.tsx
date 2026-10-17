@@ -52,22 +52,22 @@ describe('ResultTable (하단 구간별 결과표 - 스펙 §5.1.7 필드와 동
   });
 });
 
-// Cloudscape 리스킨(T7): tableClass 프리셋(헤더 40px 700, 행 44px, 수치 열 우측 mono) + StatusIndicator
+// 리스킨: tableClass 프리셋(머리 IBM Plex Mono 11px dim, 행 padding 14px 16px, 수치 열 우측 mono) + StatusIndicator
 describe('ResultTable Cloudscape 해부 (T7)', () => {
-  it('헤더는 h-10 700, 수치 열은 text-right mono, 행 구분은 cs-divider, 첫 열은 700이다', () => {
+  it('헤더는 mono 11px dim, 수치 열은 text-right mono, 행 구분은 line, 첫 열은 700이다', () => {
     const { container } = render(<ResultTable stats={floorStats} cells={[cell(1, 10, 'repair')]} />);
     expect(container.firstElementChild?.className).toContain('border-cs-divider');
     const th = screen.getByRole('columnheader', { name: '최대(mm)' });
-    expect(th.className).toContain('h-10');
-    expect(th.className).toContain('font-bold');
+    expect(th.className).toContain('font-mono');
+    expect(th.className).toContain('text-dim');
     expect(th.className).toContain('text-right');
     expect(screen.getByRole('columnheader', { name: '상태' }).className).not.toContain('text-right');
     // 셀이 하나뿐인 픽스처라 최대·최소·평균이 모두 10.00이다 - 첫 수치 td(최대)로 해부를 본다
     const td = screen.getAllByText('10.00')[0];
     expect(td.className).toContain('font-mono');
     expect(td.className).toContain('text-right');
-    expect(td.className).toContain('h-11');
-    expect(td.closest('tr')?.className).toContain('border-cs-divider');
+    expect(td.className).toContain('py-3.5');
+    expect(td.closest('tr')?.className).toContain('border-line');
     expect(screen.getByText('구역 1').className).toContain('font-bold');
     expect(container.innerHTML).not.toMatch(/zinc-/);
   });

@@ -1,20 +1,24 @@
-// 판정 분포 바(적합·주의·재시공 3버킷) + 범례. 색은 TONE(badge.tsx)이 유일한 정의처.
-import { TONE } from './badge';
+// 판정 분포 바 + 범례: 3묶음 "적합 · 경계 · 보수·재시공"(스펙 §9). 묶음 규칙(toBarCounts)은 그대로이고
+// 이름만 바꿨다 - 셋째 묶음에는 보수가 들어 있고, 둘째 묶음은 등급 이름(경계)과 같아야 한다.
+// 색은 등급 색(GRADE_CLASS): 적합 = pass, 경계 = borderline, 보수·재시공 = rework (아트보드 DashStatus).
+import { GRADE_CLASS } from './grade';
 
 export type VerdictCounts = { pass: number; warn: number; fail: number };
 
+const BUCKETS = [
+  { key: 'pass', label: '적합', cls: GRADE_CLASS.pass.bg },
+  { key: 'warn', label: '경계', cls: GRADE_CLASS.borderline.bg },
+  { key: 'fail', label: '보수·재시공', cls: GRADE_CLASS.rework.bg },
+] as const;
+
 export function VerdictBar({ counts }: { counts: VerdictCounts }) {
   const total = counts.pass + counts.warn + counts.fail;
-  if (total === 0) return <p className="text-xs text-cs-text-secondary">판정 없음</p>;
-  const seg = [
-    { n: counts.pass, cls: TONE.pass.dot },
-    { n: counts.warn, cls: TONE.warn.dot },
-    { n: counts.fail, cls: TONE.fail.dot },
-  ];
+  if (total === 0) return <p className="text-xs text-muted">판정 없음</p>;
   return (
-    <div className="flex h-2 overflow-hidden rounded bg-cs-divider">
-      {seg.filter((s) => s.n > 0).map((s, i) => (
-        <div key={i} data-seg className={s.cls} style={{ width: `${(s.n / total) * 100}%` }} />
+    <div role="img" aria-label={BUCKETS.map((b) => `${b.label} ${counts[b.key]}`).join(', ')}
+      className="flex h-2 overflow-hidden rounded-full bg-line">
+      {BUCKETS.filter((b) => counts[b.key] > 0).map((b) => (
+        <div key={b.key} data-seg={b.key} className={b.cls} style={{ width: `${(counts[b.key] / total) * 100}%` }} />
       ))}
     </div>
   );
@@ -22,16 +26,14 @@ export function VerdictBar({ counts }: { counts: VerdictCounts }) {
 
 export function VerdictLegend({ counts, na }: { counts: VerdictCounts; na?: number }) {
   const items = [
-    { label: `적합 ${counts.pass}`, cls: TONE.pass.dot },
-    { label: `주의 ${counts.warn}`, cls: TONE.warn.dot },
-    { label: `재시공 ${counts.fail}`, cls: TONE.fail.dot },
-    ...(na !== undefined ? [{ label: `불가 ${na}`, cls: TONE.unknown.dot }] : []),
+    ...BUCKETS.map((b) => ({ label: `${b.label} ${counts[b.key]}`, cls: b.cls })),
+    ...(na !== undefined ? [{ label: `불가 ${na}`, cls: GRADE_CLASS.na.bg }] : []),
   ];
   return (
-    <div className="flex flex-wrap gap-x-2.5 gap-y-1 text-xs leading-4 text-cs-text-secondary tabular-nums">
+    <div className="flex flex-wrap gap-x-3 gap-y-0.5 font-mono text-xs tabular-nums text-ink-2">
       {items.map((it) => (
-        <span key={it.label} className="inline-flex items-center gap-1 whitespace-nowrap">
-          <span aria-hidden className={`h-2 w-2 rounded-full ${it.cls}`} />{it.label}
+        <span key={it.label} className="inline-flex items-center gap-1.5 whitespace-nowrap">
+          <span aria-hidden="true" className={`h-2 w-2 shrink-0 rounded-full ${it.cls}`} />{it.label}
         </span>
       ))}
     </div>

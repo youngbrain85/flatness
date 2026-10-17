@@ -74,9 +74,7 @@ describe('VerdictPanel Cloudscape 해부 (T7)', () => {
     // text-lg 금지: Tailwind v4는 .text-lg를 .text-sm보다 앞에 내보내 StatusIndicator의 text-sm이 이긴다
     expect(head.className).toContain('text-[18px]');
     expect(head.className).not.toContain('text-lg');
-    const badge = screen.getByText('외부 결과');
-    expect(badge.className).toContain('bg-cs-external-bg');
-    expect(badge.className).toContain('text-cs-external');
+    expect(screen.getByText('외부 결과')).toHaveAttribute('data-tone', 'external');
   });
 
   it('overall_verdict가 없으면 pending 헤드라인 "판정 없음"을 그린다', () => {
@@ -85,10 +83,10 @@ describe('VerdictPanel Cloudscape 해부 (T7)', () => {
     expect(screen.queryByText('외부 결과')).not.toBeInTheDocument();
   });
 
-  it('수치는 KeyValuePairs 2열(라벨 700, 값 mono tabular, 최대 편차만 700)이다', () => {
+  it('수치는 KeyValuePairs 2열 폭(라벨은 눈썹, 값 mono tabular, 최대 편차만 700)이다', () => {
     const { container } = render(<VerdictPanel analysis={analysis} stats={stats} />);
-    expect(container.querySelector('dl')?.className).toContain('grid-cols-2');
-    expect(screen.getByText('최대 편차(mm)').className).toContain('font-bold');
+    expect(container.querySelector('dl')?.className).toContain('minmax(min(100%,240px),1fr)'); // columns={2}
+    expect(screen.getByText('최대 편차(mm)').className).toContain('text-dim');
     expect(screen.getByText('12.34').className).toContain('font-mono');
     expect(screen.getByText('12.34').className).toContain('font-bold');
     expect(screen.getByText('0.50').className).not.toContain('font-bold');
@@ -111,13 +109,13 @@ describe('VerdictPanel Cloudscape 해부 (T7)', () => {
   it('적용 기준 코드는 mono, 종합의견 textarea는 textareaClass, 저장은 normal 버튼이고 이 패널에 primary는 없다', () => {
     render(<VerdictPanel analysis={analysis} stats={stats} />);
     expect(screen.getByText('floor-kcs-exposed').className).toContain('font-mono');
-    expect(screen.getByLabelText('종합의견(사용자 수정)').className).toContain('border-cs-input-border');
+    expect(screen.getByLabelText('종합의견(사용자 수정)').className).toContain('border-line-3');
     // 뷰당 primary 1개(스펙 §4): ScanDone 뷰의 primary는 헤더의 '이 위치의 보고서 생성'(T6)이므로 저장은 normal
     const save = screen.getByRole('button', { name: '저장' });
-    expect(save.className).toContain('border-cs-link');
-    expect(save.className).not.toContain('bg-cs-link');
-    expect(save.className).toContain('rounded-full');
-    expect(screen.getAllByRole('button').filter((b) => b.className.includes('bg-cs-link'))).toHaveLength(0);
+    expect(save.className).toContain('border-line-3');
+    expect(save.className).not.toContain('bg-ink');
+    expect(save.className).toContain('rounded-control');
+    expect(screen.getAllByRole('button').filter((b) => b.className.split(' ').includes('bg-ink'))).toHaveLength(0);
   });
 
   it('구 팔레트 클래스(zinc/amber/purple/red/green)가 남아 있지 않다', () => {

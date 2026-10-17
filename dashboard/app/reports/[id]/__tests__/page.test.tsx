@@ -131,7 +131,7 @@ describe('ReportPage PDF 미리보기 (T8: 컨테이너 안 iframe)', () => {
     expect(frame.className).toContain('rounded-lg');
     // 컨테이너에 꽉 채우지 않는다 - padded={false} + 아래 모서리만 둥근 옛 배치가 아니다
     expect(frame.className).not.toContain('rounded-b-cs-container');
-    expect(frame.parentElement?.className).toContain('p-5'); // Container padded 기본값
+    expect(frame.parentElement?.className).toContain('px-[22px]'); // Container padded 기본값(본문 여백 20px 22px)
   });
 
   it('PDF가 없으면 안내 문구를 보여준다', async () => {
@@ -140,7 +140,7 @@ describe('ReportPage PDF 미리보기 (T8: 컨테이너 안 iframe)', () => {
     expect(notice).toBeInTheDocument();
     // 여백은 컨테이너가 준다 - 안내 문구가 자체 p-5를 덧대지 않는다
     expect(notice.className).not.toContain('p-5');
-    expect(notice.parentElement?.className).toContain('p-5');
+    expect(notice.parentElement?.className).toContain('px-[22px]');
     expect(screen.queryByTitle('보고서 PDF 미리보기')).toBeNull();
   });
 });

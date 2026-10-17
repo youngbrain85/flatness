@@ -96,14 +96,14 @@ describe('RegistrationCreateForm', () => {
     expect(screen.getByRole('heading', { level: 2, name: '스캔 선택' })).toBeInTheDocument();
     const a = screen.getByLabelText('기준 스캔 (A)');
     const b = screen.getByLabelText('맞출 스캔 (B)');
-    expect(a.className).toContain('border-cs-input-border');
+    expect(a.className).toContain('border-line-3');
     expect(b.className).toContain('appearance-none');
-    expect(screen.getByText('이 스캔의 좌표계를 유지합니다').className).toContain('text-cs-text-secondary');
+    expect(screen.getByText('이 스캔의 좌표계를 유지합니다').className).toContain('text-muted');
     expect(screen.getByText('A에 맞춰 회전·이동합니다')).toBeInTheDocument();
     // 셀렉트 옵션 문구(optionLabel, ISO 원문)는 그대로 - 두 셀렉트에 하나씩
     expect(screen.getAllByRole('option', { name: '동쪽.ply · 2026-08-01' })).toHaveLength(2);
     const submit = screen.getByRole('button', { name: /대응점 찍기 시작/ });
-    expect(submit.className).toContain('bg-cs-link');
-    expect(submit.className).toContain('rounded-full');
+    expect(submit.className).toContain('bg-ink');
+    expect(submit.className).toContain('rounded-control');
   });
 });

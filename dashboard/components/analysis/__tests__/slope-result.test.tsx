@@ -83,7 +83,7 @@ describe('SlopeResult - cells_json 없는 분석(D7): slope-placeholder.tsx 방�
     // Cloudscape 리스킨(T7): 안내는 info Alert, 경고 목록은 warning Alert, 종류 배지는 neutral Badge
     expect(screen.getByText(/이 분석은 재판정할 수 없습니다/).closest('[data-alert]')).toHaveAttribute('data-alert', 'info');
     expect(screen.getByText(/방향\(역구배\)을 판정하지 않았습니다/).closest('[data-alert]')).toHaveAttribute('data-alert', 'warning');
-    expect(screen.getByText('구배').className).toContain('bg-cs-divider');
+    expect(screen.getByText('구배')).toHaveAttribute('data-tone', 'neutral');
     expect(screen.getByText('경고').className).toContain('font-bold');
     expect(document.body.innerHTML).not.toMatch(/zinc-|amber-|red-/);
   });

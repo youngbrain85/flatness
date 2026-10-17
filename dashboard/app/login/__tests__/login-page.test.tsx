@@ -23,11 +23,11 @@ describe('LoginPage', () => {
     expect(main.className).not.toMatch(/zinc-/);
   });
 
-  it('카드: 400px 컨테이너(그림자·16px 라운드), 헤더 h1 24px 700 + cs-divider 구분선, 본문 p-5', () => {
+  it('카드: 400px 카드(surface · line-2 테두리 · 12px), 헤더 h1 24px 700 + cs-divider 구분선, 본문 p-5', () => {
     const { container } = render(<LoginPage />);
     const card = container.querySelector('section') as HTMLElement;
     expect(card).not.toBeNull();
-    for (const c of ['shadow-cs-container', 'rounded-cs-container', 'max-w-[400px]']) {
+    for (const c of ['bg-surface', 'border-line-2', 'rounded-card', 'max-w-[400px]']) {
       expect(card.className).toContain(c);
     }
     const h1 = screen.getByRole('heading', { level: 1, name: '평활도 분석 대시보드' });

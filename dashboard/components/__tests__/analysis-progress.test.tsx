@@ -49,12 +49,12 @@ describe('AnalysisProgress Cloudscape 재스킨 (T6)', () => {
     expect(screen.getByText(/3회 자동 재시도 후에도 실패한 상태입니다/)).toBeInTheDocument();
   });
 
-  it('done 링크는 normal 알약 버튼(파랑 보더, 채움 없음)이다', () => {
+  it('done 링크는 normal 버튼(line-3 테두리, 채움 없음)이다', () => {
     useRowStatusMock.mockReturnValue('done');
     render(<AnalysisProgress analysisId="a1" initialStatus="done" scanId="s1" />);
 
     const link = screen.getByText('분석 완료 - 결과 보기');
-    expect(link.className).toContain('border-cs-link');
-    expect(link.className).not.toContain('bg-cs-link');
+    expect(link.className).toContain('border-line-3');
+    expect(link.className).not.toContain('bg-ink');
   });
 });

@@ -103,8 +103,8 @@ describe('ReportCreateForm', () => {
 
   it('보고서 생성 버튼은 이 화면의 유일한 primary이고, 체크박스는 accent 색을 쓴다(T8)', () => {
     renderForm();
-    expect(screen.getByRole('button', { name: '보고서 생성' }).className).toContain('bg-cs-link');
-    for (const box of screen.getAllByRole('checkbox')) expect(box.className).toContain('accent-cs-link');
+    expect(screen.getByRole('button', { name: '보고서 생성' }).className).toContain('bg-ink');
+    for (const box of screen.getAllByRole('checkbox')) expect(box.className).toContain('accent-ink');
   });
 
   it('중복 엔큐(23505)는 안내 문구로 바꾸되, 보고서 상세로 이동해 재시도 경로를 찾게 한다(I3)', async () => {

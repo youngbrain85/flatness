@@ -33,14 +33,14 @@ describe.each(CASES)('%s', (_file, Loading) => {
   });
 });
 
-// 스펙 §4 "Spinner 유지(색만 토큰으로)": 트랙 cs-divider + 회전 호 cs-link(진행 색 = ProgressBar 채움과
-// 동일, T12 ui.test.tsx의 Spinner 색 단언과 같은 토큰). 루트 로딩 하나로 대표한다.
+// 다크 C안 스펙 §6 "Spinner: 토큰만 바꾼다": 트랙 line + 회전 호 ink(진행 막대 채움과 같은 ink,
+// ui.test.tsx의 Spinner 색 단언과 같은 토큰). 루트 로딩 하나로 대표한다.
 describe('Spinner 색 토큰', () => {
-  it('링 색은 cs-divider 트랙 + cs-link 회전 호이고 zinc가 없다', () => {
+  it('링 색은 line 트랙 + ink 회전 호이고 zinc·cs 토큰이 없다', () => {
     render(<RootLoading />);
     const spinner = screen.getByRole('status');
-    expect(spinner.className).toContain('border-cs-divider');
-    expect(spinner.className).toContain('border-t-cs-text');
-    expect(spinner.className).not.toMatch(/zinc-/);
+    expect(spinner.className).toContain('border-line');
+    expect(spinner.className).toContain('border-t-ink');
+    expect(spinner.className).not.toMatch(/zinc-|cs-/);
   });
 });

@@ -40,11 +40,11 @@ function pickFilter(label: string) {
 }
 
 describe('ReportTable 열 (아트보드 Reports: 제목·측정위치·상태·생성일)', () => {
-  it('제목 링크(cs-link)·측정위치·생성일(mono)을 그리고 건수를 보여준다', () => {
+  it('제목 링크(ink 600 밑줄)·측정위치·생성일(mono)을 그리고 건수를 보여준다', () => {
     render(<ReportTable rows={rows} />);
     const link = screen.getByRole('link', { name: '거실 평활도 보고서' });
     expect(link).toHaveAttribute('href', '/reports/r1');
-    expect(link.className).toContain('text-cs-link');
+    expect(link.className.split(' ')).toEqual(expect.arrayContaining(['font-semibold', 'text-ink', 'underline']));
     expect(screen.getByText('101동 / 3층 / 거실')).toBeInTheDocument();
     expect(screen.getByText('2026-09-03').className).toContain('font-mono');
     expect(screen.getByText('총 3건')).toBeInTheDocument();
@@ -97,7 +97,7 @@ describe('ReportTable 상태 필터 (클라이언트 필터 - 스펙 §7-3, 검�
       '전체', '작성 중', '발행됨', '생성 실패', 'PDF 생성 중·대기',
     ]);
     const select = screen.getByRole('combobox', { name: '상태 필터' });
-    expect(select.className).toContain('border-cs-input-border');
+    expect(select.className).toContain('border-line-3');
     expect(container.querySelector('[data-icon="chevron-down"]')).toBeInTheDocument();
     expect(reportTitles()).toHaveLength(5);
     expect(screen.getByText('총 5건')).toBeInTheDocument();

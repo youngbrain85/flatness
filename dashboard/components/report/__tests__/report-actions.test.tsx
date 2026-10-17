@@ -76,20 +76,20 @@ describe('ReportActions', () => {
     expect(state.updated).toBeNull();
   });
 
-  it('발행만 primary이고 다운로드·재생성은 normal 알약이다(뷰당 primary 1개)', () => {
+  it('발행만 primary이고 다운로드·재생성은 normal 버튼이다(뷰당 primary 1개)', () => {
     // gen_status failed + pdf_path 있음: 다운로드·재생성은 있고 발행은 없다
     render(<ReportActions report={{ ...doneDraft, gen_status: 'failed' }} />);
     const download = screen.getByRole('link', { name: 'PDF 다운로드' });
     expect(download).toHaveAttribute('download');
-    expect(download.className).toContain('rounded-full');
-    expect(download.className).not.toContain('bg-cs-link');
+    expect(download.className).toContain('rounded-control');
+    expect(download.className).not.toContain('bg-ink');
     const regen = screen.getByRole('button', { name: 'PDF 다시 생성' });
-    expect(regen.className).toContain('border-cs-link');
-    expect(regen.className).not.toContain('bg-cs-link');
+    expect(regen.className).toContain('border-line-3');
+    expect(regen.className).not.toContain('bg-ink');
   });
 
-  it('발행 버튼은 primary(파랑 채움)다', () => {
+  it('발행 버튼은 primary(ink 채움)다', () => {
     render(<ReportActions report={doneDraft} />);
-    expect(screen.getByRole('button', { name: '발행' }).className).toContain('bg-cs-link');
+    expect(screen.getByRole('button', { name: '발행' }).className).toContain('bg-ink');
   });
 });

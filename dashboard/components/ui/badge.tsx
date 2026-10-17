@@ -1,19 +1,24 @@
-// 판정·상태 배지. TONE은 색의 유일한 정의처(VerdictBar·StatusIndicator 호환 dot 필드 포함).
+// 상태·분류 배지(스펙 §6): 테두리 태그 - 1px 색 테두리 + 같은 색 글자, IBM Plex Mono 11px, 반지름 6px, 높이 22px.
+// 판정 등급은 이 3묶음 톤이 아니라 grade.tsx 의 GradeBadge(등급 색 다섯)로 그린다.
+// TONE 은 톤 색의 유일한 정의처다. dot 필드는 점으로 상태를 그리는 곳이 같은 색을 얻게 남긴다.
 export const TONE = {
-  pass:     { bg: 'bg-cs-success-bg',  text: 'text-cs-success',        dot: 'bg-cs-success' },
-  warn:     { bg: 'bg-cs-warning-bg',  text: 'text-cs-warning',        dot: 'bg-cs-warning' },
-  fail:     { bg: 'bg-cs-error-bg',    text: 'text-cs-error',          dot: 'bg-cs-error' },
-  unknown:  { bg: 'bg-cs-divider',     text: 'text-cs-text-secondary', dot: 'bg-cs-na' },
-  neutral:  { bg: 'bg-cs-divider',     text: 'text-cs-text-secondary', dot: 'bg-cs-na' },
-  busy:     { bg: 'bg-cs-divider',     text: 'text-cs-text-secondary', dot: 'bg-cs-text-secondary' },
-  // '외부 결과'(임포트 출처 경고): 판정 4색과 오독되지 않게 purple(스펙 §3)
-  external: { bg: 'bg-cs-external-bg', text: 'text-cs-external',       dot: 'bg-cs-external' },
+  pass:     { border: 'border-ok',                  text: 'text-ok',    dot: 'bg-ok' },
+  warn:     { border: 'border-warn',                text: 'text-warn',  dot: 'bg-warn' },
+  fail:     { border: 'border-err',                 text: 'text-err',   dot: 'bg-err' },
+  unknown:  { border: 'border-dim',                 text: 'text-dim',   dot: 'bg-dim' },
+  neutral:  { border: 'border-line-3',              text: 'text-ink-2', dot: 'bg-muted' },
+  busy:     { border: 'border-line-3',              text: 'text-ink-2', dot: 'bg-ink' },
+  // '외부 결과'(임포트 출처 경고): 점선 ink-2 - 등급 색과 오독되지 않는다(스펙 §6)
+  external: { border: 'border-dashed border-ink-2', text: 'text-ink-2', dot: 'bg-ink-2' },
 } as const;
 
 // Badge는 busy를 제외한 톤만 허용(busy는 StatusIndicator(TONE_STATUS) 전용)
 export type BadgeTone = Exclude<keyof typeof TONE, 'busy'>;
 
+// 배지 모양(색 제외). GradeBadge 가 같은 모양을 쓰도록 내보낸다.
+export const BADGE_BASE = 'inline-flex min-h-[22px] items-center whitespace-nowrap rounded-control border px-2 font-mono text-[11px]';
+
 export function Badge({ tone, children }: { tone: BadgeTone; children: React.ReactNode }) {
   const t = TONE[tone];
-  return <span className={`inline-block rounded px-1.5 py-0.5 text-xs font-bold ${t.bg} ${t.text}`}>{children}</span>;
+  return <span data-tone={tone} className={`${BADGE_BASE} ${t.border} ${t.text}`}>{children}</span>;
 }

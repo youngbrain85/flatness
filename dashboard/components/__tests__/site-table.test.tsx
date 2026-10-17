@@ -42,12 +42,11 @@ describe('SiteTable 열 (아트보드 Main: 현장명·측정위치·스캔·최
     ]);
   });
 
-  it('현장명은 /sites/[id] 링크(cs-link 700), 수치는 우측 mono, 최근 측정일은 mono, 분포는 120px 바 + 보조 텍스트', () => {
+  it('현장명은 /sites/[id] 링크(ink 600 밑줄), 수치는 우측 mono, 최근 측정일은 mono, 분포는 120px 바 + 보조 텍스트', () => {
     render(<SiteTable rows={ROWS} />);
     const link = screen.getByRole('link', { name: '세종 M2블록 아파트' });
     expect(link).toHaveAttribute('href', '/sites/s1');
-    expect(link.className).toContain('text-cs-link');
-    expect(link.className).toContain('font-bold');
+    expect(link.className.split(' ')).toEqual(expect.arrayContaining(['font-semibold', 'text-ink', 'underline']));
 
     const cells = within(screen.getAllByRole('row')[1]).getAllByRole('cell'); // [0]은 머리글 행
     expect(cells[1].textContent).toBe('14');
@@ -104,11 +103,11 @@ describe('상태 열 (처리 중 > 판정 불가 > 완료 > 분석 없음)', () 
 });
 
 describe('도구 줄 (클라이언트 필터 - 스펙 §7-3, 페이지네이션 없음)', () => {
-  it('검색 입력(placeholder 현장 검색, 2px cs-input-border)·판정 필터 5종·"총 n곳", 페이지네이션 아이콘 없음', () => {
+  it('검색 입력(placeholder 현장 검색, 1px line-3 테두리)·판정 필터 5종·"총 n곳", 페이지네이션 아이콘 없음', () => {
     const { container } = render(<SiteTable rows={ROWS} />);
     const input = screen.getByRole('textbox', { name: '현장 검색' });
     expect(input).toHaveAttribute('placeholder', '현장 검색');
-    expect(input.className).toContain('border-cs-input-border');
+    expect(input.className).toContain('border-line-3');
     expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual([
       '전체', '재시공 있음', '주의 있음', '판정 불가 있음', '처리 중',
     ]);

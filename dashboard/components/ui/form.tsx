@@ -1,22 +1,24 @@
-// 폼 해부: 라벨 14px 700 위, 설명 12px 보조색, 필드 32px · 2px 보더 · radius 8px.
-// 라디오·체크박스는 네이티브 + accent 색(스펙 §7-6).
+// 폼 해부(스펙 §6 FormField, 아트보드 입력 필드): 라벨 14px 600 위, 입력칸 44px · ground 바탕 ·
+// line-3 테두리 · 반지름 6px · 15px, 도움말은 입력칸 아래 13px muted.
+// 라디오·체크박스는 네이티브 + accent ink(어두운 브라우저 부품은 globals.css 의 color-scheme: dark).
+// 포커스 외곽선은 globals.css 의 :focus-visible 규칙이 그린다(여기서 outline-none 으로 끄지 않는다).
 import type { ReactNode } from 'react';
 import { Icon } from './icons';
 
-export const inputClass = 'h-8 w-full rounded-lg border-2 border-cs-input-border bg-white px-2 text-sm text-cs-text placeholder:text-cs-text-secondary focus:border-cs-link focus:outline-none disabled:border-cs-disabled disabled:text-cs-disabled';
-export const selectClass = `${inputClass} appearance-none pr-8`;
-export const textareaClass = 'min-h-24 w-full rounded-lg border-2 border-cs-input-border bg-white px-2 py-1.5 text-sm text-cs-text placeholder:text-cs-text-secondary focus:border-cs-link focus:outline-none';
-export const checkClass = 'h-4 w-4 shrink-0 accent-cs-link';
+export const inputClass = 'min-h-11 w-full rounded-control border border-line-3 bg-ground px-3 text-[15px] text-ink placeholder:text-muted disabled:cursor-not-allowed disabled:text-dim';
+export const selectClass = `${inputClass} appearance-none pr-10`;
+export const textareaClass = 'min-h-28 w-full rounded-control border border-line-3 bg-ground px-3 py-2.5 text-[15px] leading-normal text-ink placeholder:text-muted';
+export const checkClass = 'h-4 w-4 shrink-0 accent-ink';
 
 export function FormField({ label, htmlFor, description, error, children }: {
   label: ReactNode; htmlFor?: string; description?: ReactNode; error?: ReactNode; children: ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-1">
-      <label htmlFor={htmlFor} className="text-sm font-bold">{label}</label>
-      {description && <p className="text-xs leading-4 text-cs-text-secondary">{description}</p>}
+    <div className="flex min-w-0 flex-col gap-1.5">
+      <label htmlFor={htmlFor} className="text-sm font-semibold text-ink">{label}</label>
       {children}
-      {error && <p className="text-xs leading-4 text-cs-error">{error}</p>}
+      {description && <p className="text-[13px] text-muted">{description}</p>}
+      {error && <p className="text-[13px] text-err">{error}</p>}
     </div>
   );
 }
@@ -26,7 +28,7 @@ export function SelectWrap({ children, className }: { children: ReactNode; class
   return (
     <div className={`relative${className ? ` ${className}` : ''}`}>
       {children}
-      <Icon name="chevron-down" size={14} className="pointer-events-none absolute right-2 top-[9px] text-cs-text-secondary" />
+      <Icon name="chevron-down" className="pointer-events-none absolute right-3.5 top-1/2 -mt-2 text-ink-2" />
     </div>
   );
 }

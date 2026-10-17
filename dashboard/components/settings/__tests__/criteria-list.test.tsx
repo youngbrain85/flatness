@@ -53,7 +53,7 @@ describe('CriteriaList', () => {
     expect(source.className).not.toMatch(/truncate|line-clamp/);
     expect(screen.getByText('바닥 · v1').className).toContain('text-cs-nav-text');
     expect(screen.getByText('3m당 허용 7mm / 재시공 21mm').className).toContain('tabular-nums');
-    expect(screen.getByRole('checkbox', { name: /활성/ }).className).toContain('accent-cs-link');
+    expect(screen.getByRole('checkbox', { name: /활성/ }).className).toContain('accent-ink');
   });
 
   it('현장별 기준은 "현장 기준: <현장명>" 그룹으로 전역 표 아래에 따로 그린다', () => {

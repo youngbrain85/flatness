@@ -107,9 +107,9 @@ describe('LocationTree (Cloudscape 재스킨: StatusIndicator + 카드 + 액션)
     expect(screen.getByRole('link', { name: '보고서' })).toHaveAttribute('href', '/reports?location=l1');
     const upload = screen.getByRole('link', { name: '스캔 업로드' });
     expect(upload).toHaveAttribute('href', '/upload?site=s1&location=l1');
-    expect(upload.className).toContain('border-cs-link');
-    expect(upload.className).toContain('rounded-full');
-    expect(upload.className).not.toContain('bg-cs-link'); // normal(뷰의 primary는 '위치 추가')
+    expect(upload.className).toContain('border-line-3');
+    expect(upload.className).toContain('rounded-control');
+    expect(upload.className).not.toContain('bg-ink'); // normal(뷰의 primary는 '위치 추가')
     expect(container.querySelector('[data-icon="upload"]')).toBeInTheDocument();
   });
 

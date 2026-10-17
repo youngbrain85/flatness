@@ -30,8 +30,8 @@ describe('ReportLocationPicker', () => {
     const sel = screen.getByLabelText('측정위치') as HTMLSelectElement;
     const groups = [...sel.querySelectorAll('optgroup')];
     expect(groups.map((g) => g.label)).toEqual(['현장A', '현장B']);
-    // T8: selectClass(2px cs-input-border) + SelectWrap의 chevron
-    expect(sel.className).toContain('border-cs-input-border');
+    // T8: selectClass(1px line-3 테두리) + SelectWrap의 chevron
+    expect(sel.className).toContain('border-line-3');
     expect(container.querySelector('[data-icon="chevron-down"]')).toBeInTheDocument();
   });
 

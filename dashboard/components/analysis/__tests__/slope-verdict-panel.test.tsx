@@ -152,8 +152,8 @@ describe('SlopeVerdictPanel Cloudscape 해부 (T7)', () => {
         drainPoints={[{ x: 3.2, y: 5.1 }]} directionAware />,
     );
     expect(container.firstElementChild?.className).toContain('rounded-cs-container');
-    expect(container.querySelector('dl')?.className).toContain('grid-cols-2');
-    expect(screen.getByText('평균 편차').className).toContain('font-bold');
+    expect(container.querySelector('dl')?.className).toContain('minmax(min(100%,240px),1fr)'); // columns={2}
+    expect(screen.getByText('평균 편차').className).toContain('text-dim'); // 라벨은 눈썹(mono 11px dim)
     expect(screen.getByText('(3.2, 5.1)').className).toContain('font-mono');
     expect(screen.getByText(/지도에서 배수구 위치를 클릭하세요/).className).toContain('text-cs-warning');
     expect(screen.getByText('w1').closest('[data-alert]')).toHaveAttribute('data-alert', 'warning'); // 미지 코드는 원문(warningLabel)

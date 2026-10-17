@@ -328,15 +328,15 @@ describe('UnitConfirmForm 높이 뷰 (단계 E)', () => {
 });
 
 // T6 Cloudscape 재스킨: 파일 안내는 info Alert, 라디오는 네이티브 + accent 토큰(스펙 §7-6),
-// 확정 버튼은 이 뷰의 유일한 primary다. 색은 cs-* 토큰만 본다.
+// 확정 버튼은 이 뷰의 유일한 primary다. 색은 토큰 클래스만 본다.
 describe('UnitConfirmForm Cloudscape 재스킨 (T6)', () => {
-  it('파일 안내는 info Alert, 단위 라디오는 checkClass, 라벨 700, 확정 버튼은 primary다', () => {
+  it('파일 안내는 info Alert, 단위 라디오는 checkClass, 라벨 600, 확정 버튼은 primary다', () => {
     const { container } = render(<UnitConfirmForm scan={scan} userId="u1" />);
 
     expect(container.querySelector('[data-alert="info"]')).not.toBeNull();
-    expect(screen.getByLabelText(/mm/).className).toContain('accent-cs-link');
-    expect(screen.getByText('파일 좌표 단위').className).toContain('font-bold');
-    expect(screen.getByRole('button', { name: '단위 확정 후 분석 시작' }).className).toContain('bg-cs-link');
+    expect(screen.getByLabelText(/mm/).className).toContain('accent-ink');
+    expect(screen.getByText('파일 좌표 단위').className).toContain('font-semibold');
+    expect(screen.getByRole('button', { name: '단위 확정 후 분석 시작' }).className).toContain('bg-ink');
   });
 
   it('높이 뷰 폴백은 warning Alert다', () => {

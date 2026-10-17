@@ -438,21 +438,21 @@ describe('UploadForm 인라인 생성 리뷰 픽스', () => {
 
 // T5(Cloudscape 리스킨): 로직·문구는 그대로 두고 JSX·클래스만 바뀌었다는 것을 클래스가
 // 아니라 의미 속성(data-alert, data-icon, type=submit)으로 최대한 읽는다. 클래스 단언은
-// 토큰 클래스(cs-*)에 한정한다.
+// 토큰 클래스에 한정한다.
 describe('UploadForm Cloudscape 해부 (T5)', () => {
-  it('입력·셀렉트는 cs 토큰 클래스, 측정위치 셀렉트는 chevron 아이콘을 얹는다', () => {
+  it('입력·셀렉트는 토큰 클래스(line-3 테두리), 측정위치 셀렉트는 chevron 아이콘을 얹는다', () => {
     vi.mocked(createClient).mockReturnValue(stubSupabase(null) as never);
     const { container } = render(<UploadForm sites={[site]} locations={[location]} userId="u1" />);
 
     const sel = screen.getByLabelText('측정위치');
-    expect(sel.className).toContain('border-cs-input-border');
+    expect(sel.className).toContain('border-line-3');
     expect(sel.className).toContain('appearance-none');
     expect(sel.parentElement?.querySelector('[data-icon="chevron-down"]')).toBeInTheDocument();
-    expect(screen.getByLabelText('장비').className).toContain('border-cs-input-border');
+    expect(screen.getByLabelText('장비').className).toContain('border-line-3');
     expect(screen.getByLabelText('측정일자').className).toContain('font-mono');
     // 라디오는 네이티브 + accent(스펙 §7-6)
-    expect(screen.getByLabelText('스캔 분석').className).toContain('accent-cs-link');
-    expect(screen.getByLabelText('바닥').className).toContain('accent-cs-link');
+    expect(screen.getByLabelText('스캔 분석').className).toContain('accent-ink');
+    expect(screen.getByLabelText('바닥').className).toContain('accent-ink');
     // 컨테이너 제목 '업로드 정보'는 시스템 크롬으로 채택(스펙 §7-8)
     expect(screen.getByRole('heading', { level: 2, name: '업로드 정보' })).toBeInTheDocument();
     // 잔재 스윕: 옛 팔레트 클래스(zinc-*, amber-*, red-* …)가 이 화면에 없다
@@ -466,17 +466,17 @@ describe('UploadForm Cloudscape 해부 (T5)', () => {
 
     const submit = screen.getByRole('button', { name: '업로드 후 사전 검사' });
     expect(submit).toHaveAttribute('type', 'submit');
-    expect(submit.className).toContain('bg-cs-link');
+    expect(submit.className).toContain('bg-ink');
     expect(submit.querySelector('[data-icon="upload"]')).toBeInTheDocument();
 
     const primaries = Array.from(container.querySelectorAll('button'))
-      .filter((b) => b.className.includes('bg-cs-link'));
+      .filter((b) => b.className.split(' ').includes('bg-ink'));
     expect(primaries).toHaveLength(1);
-    // 미니폼 '저장'은 normal(파랑 보더), '취소'는 링크형 - 둘 다 제출 버튼이 아니다
+    // 미니폼 '저장'은 normal(line-3 테두리), '취소'는 링크형 - 둘 다 제출 버튼이 아니다
     const save = screen.getByRole('button', { name: '저장' });
     expect(save).toHaveAttribute('type', 'button');
-    expect(save.className).toContain('border-cs-link');
-    expect(save.className).not.toContain('bg-cs-link');
+    expect(save.className).toContain('border-line-3');
+    expect(save.className).not.toContain('bg-ink');
     expect(screen.getByRole('button', { name: '취소' })).toHaveAttribute('type', 'button');
   });
 

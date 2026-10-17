@@ -74,7 +74,7 @@ describe('SlopeAnalysisContainer 아트보드 배치 (ScanDone.dc.html 172-205)'
     // 본문: '적용 기준' 라벨 + 라디오 전부.
     expect(within(body).getByText('적용 기준')).toBeInTheDocument();
     expect(body.querySelectorAll('input[type="radio"]')).toHaveLength(2);
-    expect(body.className).toContain('p-5'); // 아트보드 본문 패딩 20px
+    expect(body.className).toContain('px-[22px]'); // 아트보드 카드 본문 여백 20px 22px
   });
 
   it('본문 children(진행 상태·이전 이력)은 적용 기준 아래에 온다', async () => {
