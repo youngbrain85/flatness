@@ -1,6 +1,7 @@
 'use client';
 // 계정 메뉴(스펙 §4.3): 이메일을 라벨로 한 단추 → "설정"(/settings)·"로그아웃"(LogoutButton 동작 그대로).
-// 열고 닫기·키보드·바깥 누름 규칙은 현장 바꾸기와 같다(use-popup.ts).
+// 열고 닫기·키보드·바깥 누름·포커스 이동 규칙은 현장 바꾸기와 같다(use-popup.ts). 단추는 aria-haspopup="menu",
+// 패널은 role="menu"(항목은 role="menuitem")다 - 팝업 컨테이너의 role 과 aria-haspopup 값이 맞는다.
 import Link from 'next/link';
 import { useId } from 'react';
 import { LogoutButton } from '@/components/logout-button';
@@ -16,10 +17,10 @@ export function AccountMenu({ email }: { email: string | null }) {
   const menuId = useId();
   const {
     open, rootRef, triggerRef, panelRef,
-    onTriggerClick, onTriggerKeyDown, onTriggerKeyUp, onPanelKeyDown, close,
+    onTriggerClick, onTriggerKeyDown, onTriggerKeyUp, onPanelKeyDown, onRootBlur, close,
   } = usePopup();
   return (
-    <div ref={rootRef} className="relative">
+    <div ref={rootRef} onBlur={onRootBlur} className="relative">
       <button type="button" ref={triggerRef} aria-haspopup="menu" aria-expanded={open}
         aria-controls={open ? menuId : undefined}
         onClick={onTriggerClick} onKeyDown={onTriggerKeyDown} onKeyUp={onTriggerKeyUp} className={TRIGGER}>

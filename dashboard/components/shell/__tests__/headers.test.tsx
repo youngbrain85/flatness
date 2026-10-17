@@ -49,10 +49,10 @@ describe('SiteHeader', () => {
     expect(within(banner).getByRole('link', { name: 'FLATNESS, 현장 목록으로' })).toHaveAttribute('href', '/');
   });
 
-  it('현장 이름 단추가 현장 바꾸기 목록(listbox)을 연다고 알린다(처음엔 닫힘)', () => {
+  it('현장 이름 단추가 현장 바꾸기 패널(dialog)을 연다고 알린다(처음엔 닫힘)', () => {
     const banner = renderSite();
     const switcher = within(banner).getByRole('button', { name: '세종 M2블록 아파트' });
-    expect(switcher).toHaveAttribute('aria-haspopup', 'listbox');
+    expect(switcher).toHaveAttribute('aria-haspopup', 'dialog');
     expect(switcher).toHaveAttribute('aria-expanded', 'false');
   });
 

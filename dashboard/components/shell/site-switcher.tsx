@@ -2,7 +2,10 @@
 // 현장 바꾸기(스펙 §4.3): 지금 현장 이름 단추 → 검색칸 + 현장 이름 목록 + "모든 현장 보기"(/).
 // 목록은 처음 펼칠 때 브라우저 Supabase 로 sites 를 name 순으로 읽는다. 최근 활동 순은 sites 에 시각
 // 컬럼이 없어 집계가 필요하므로 하지 않는다(스펙 §4.3). 한 번 읽으면 이 헤더가 사는 동안 다시 쓰고,
-// 실패했을 때만 다음 펼침에서 다시 읽는다. 키보드·바깥 누름 규칙은 use-popup.ts.
+// 실패했을 때만 다음 펼침에서 다시 읽는다. 키보드·바깥 누름·포커스 이동 규칙은 use-popup.ts.
+// 펼친 패널은 role="dialog"(이름 "현장 바꾸기")이고 단추는 aria-haspopup="dialog"다. 패널 안에 검색칸·listbox·
+// 바깥 링크가 함께 있어 listbox 는 팝업 컨테이너가 아니다 - ARIA 1.2 는 aria-haspopup 값이 팝업 컨테이너의 role
+// 과 맞아야 한다(MUST)고 정한다. 항목 목록만 role="listbox"로 둔다.
 import Link from 'next/link';
 import { useId, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
@@ -28,7 +31,7 @@ export function SiteSwitcher({ current }: { current: { id: string; name: string 
   const panelId = useId();
   const {
     open, rootRef, triggerRef, panelRef,
-    onTriggerClick, onTriggerKeyDown, onTriggerKeyUp, onPanelKeyDown, close,
+    onTriggerClick, onTriggerKeyDown, onTriggerKeyUp, onPanelKeyDown, onRootBlur, close,
   } = usePopup({
     onOpen: () => {
       setQuery(''); // 펼칠 때마다 검색어를 비운다
@@ -51,15 +54,15 @@ export function SiteSwitcher({ current }: { current: { id: string; name: string 
     // 패널 위치: 휴대폰 폭(640px 미만)에서는 이 상자가 기준점이 아니어서(static) 패널이 헤더(relative)
     // 기준으로 좌우 16px 안에 펼쳐진다. 단추가 오른쪽에 있어도 화면 밖으로 나가지 않는다(가로 스크롤 금지).
     // 640px 이상에서는 이 상자가 기준점이 되어 단추 바로 아래 360px 로 펼쳐진다.
-    <div ref={rootRef} className="sm:relative">
-      <button type="button" ref={triggerRef} aria-haspopup="listbox" aria-expanded={open}
+    <div ref={rootRef} onBlur={onRootBlur} className="sm:relative">
+      <button type="button" ref={triggerRef} aria-haspopup="dialog" aria-expanded={open}
         aria-controls={open ? panelId : undefined}
         onClick={onTriggerClick} onKeyDown={onTriggerKeyDown} onKeyUp={onTriggerKeyUp} className={TRIGGER}>
         {current.name}
         <Icon name="chevron-down" size={14} />
       </button>
       {open && (
-        <div id={panelId} ref={panelRef} onKeyDown={onPanelKeyDown}
+        <div id={panelId} ref={panelRef} role="dialog" aria-label="현장 바꾸기" onKeyDown={onPanelKeyDown}
           className="absolute left-4 right-4 top-full z-30 mt-1 flex flex-col gap-1 rounded-card border border-line-2 bg-surface p-2 sm:left-0 sm:right-auto sm:w-[360px]">
           <label className="relative mb-1 block">
             <span className="sr-only">현장 이름으로 찾기</span>

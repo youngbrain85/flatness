@@ -1,7 +1,9 @@
 // 현장 바꾸기(스펙 §4.3·§8): 펼칠 때 sites 를 name 순으로 한 번 읽고, 검색칸이 이름으로 거르고,
-// 키보드(Enter/Space 로 열기, 화살표로 이동, Esc 로 닫고 단추로 복귀)와 바깥 누름 닫기를 지킨다.
+// 키보드(Enter/Space 로 열기, 화살표로 이동, Esc 로 닫고 단추로 복귀), 바깥 누름(pointerdown)과 포커스가
+// 바깥으로 나가는 것(Tab 포함)으로 닫기를 지킨다. 패널은 이름 있는 dialog 이고 단추는 aria-haspopup="dialog"
+// 다(ARIA 1.2: aria-haspopup 값은 팝업 컨테이너의 role 과 맞아야 한다).
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import type { ComponentProps } from 'react';
 
 const { db } = vi.hoisted(() => ({
@@ -33,6 +35,7 @@ vi.mock('next/link', () => ({
 }));
 
 import { SiteSwitcher } from '../site-switcher';
+import { AccountMenu } from '../account-menu';
 
 const SITES = [
   { id: 's1', name: '세종 M2블록 아파트' },
@@ -66,12 +69,16 @@ const search = () => screen.getByRole('searchbox', { name: '현장 이름으로 
 const options = () => within(screen.getByRole('listbox')).getAllByRole('option');
 const allSites = () => screen.getByRole('link', { name: '모든 현장 보기' });
 const fromCalls = () => db.calls.filter(([op]) => op === 'from').length;
+// 브라우저가 Tab 으로 하는 일(포커스가 다른 요소로 가며 focusout 이 relatedTarget 과 함께 온다)을 jsdom 의
+// 실제 focus() 로 흉내 낸다. 그 focusout 이 일으키는 상태 변경이 바로 반영되도록 act 로 감싼다.
+const moveFocusTo = (el: HTMLElement) => act(() => { el.focus(); });
 
 describe('SiteSwitcher 목록', () => {
   it('처음에는 닫혀 있고 Supabase 를 부르지 않는다', () => {
     const trigger = renderSwitcher();
-    expect(trigger).toHaveAttribute('aria-haspopup', 'listbox');
+    expect(trigger).toHaveAttribute('aria-haspopup', 'dialog');
     expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('dialog')).toBeNull();
     expect(screen.queryByRole('listbox')).toBeNull();
     expect(db.calls).toEqual([]);
   });
@@ -184,12 +191,91 @@ describe('SiteSwitcher 키보드·바깥 누름', () => {
     expect(trigger).toHaveFocus();
   });
 
-  it('목록 안을 누르면 닫지 않고, 바깥을 누르면 닫는다', async () => {
+  // pointerdown 은 마우스·터치·펜을 한꺼번에 덮는다(iOS Safari 는 클릭할 수 없는 요소를 탭하면 mousedown 같은
+  // 마우스 호환 이벤트를 보내지 않을 수 있다).
+  it('목록 안을 누르면 닫지 않고, 바깥을 누르면(pointerdown) 닫는다', async () => {
     const trigger = await openAndLoad();
-    fireEvent.mouseDown(search());
+    fireEvent.pointerDown(search());
     expect(screen.getByRole('listbox')).toBeInTheDocument();
-    fireEvent.mouseDown(screen.getByRole('button', { name: '바깥' }));
+    fireEvent.pointerDown(screen.getByRole('button', { name: '바깥' }));
     expect(screen.queryByRole('listbox')).toBeNull();
     expect(trigger).toHaveAttribute('aria-expanded', 'false');
+  });
+});
+
+describe('SiteSwitcher ARIA(스펙 §8, ARIA 1.2)', () => {
+  it('단추는 dialog 를 연다고 알리고, aria-controls 가 가리키는 패널은 이름 있는 dialog 다', async () => {
+    const trigger = await openAndLoad();
+    expect(trigger).toHaveAttribute('aria-haspopup', 'dialog');
+    const dialog = screen.getByRole('dialog', { name: '현장 바꾸기' });
+    expect(trigger).toHaveAttribute('aria-controls', dialog.id);
+    // 안의 구성은 그대로다: 검색칸 + 항목 listbox + 바깥 링크
+    expect(within(dialog).getByRole('searchbox', { name: '현장 이름으로 찾기' })).toBeInTheDocument();
+    expect(within(dialog).getByRole('listbox', { name: '현장 목록' })).toBeInTheDocument();
+    expect(within(dialog).getByRole('link', { name: '모든 현장 보기' })).toBeInTheDocument();
+  });
+});
+
+// 포커스가 팝업 바깥의 다른 요소로 가면 닫는다(APG 메뉴 버튼: Tab 으로 닫힘). 닫지 않으면 z-30 패널이
+// 본문을 덮은 채 남고 Esc 도 더 듣지 않으며, 키보드로 두 목록이 동시에 열리기도 한다.
+describe('SiteSwitcher 포커스가 바깥으로 나가면', () => {
+  const outside = () => screen.getByRole('button', { name: '바깥' });
+
+  it('Tab 으로 바깥 요소에 가면 닫고, Tab 을 막지 않는다(포커스를 가두지 않는다)', async () => {
+    const trigger = await openAndLoad();
+    // fireEvent 는 기본 동작이 막히지 않았을 때 true 를 돌려준다 - Tab 의 포커스 이동을 우리가 막지 않는다
+    expect(fireEvent.keyDown(search(), { key: 'Tab' })).toBe(true);
+    // 브라우저가 Tab 으로 하는 일: 항목은 tabIndex=-1 이라 다음 탭 대상(바깥 단추)으로 포커스가 간다
+    moveFocusTo(outside());
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('listbox')).toBeNull();
+    expect(outside()).toHaveFocus(); // 포커스는 가야 할 곳(바깥)에 그대로 있다
+  });
+
+  it.each<[string, () => Promise<HTMLElement>]>([
+    ['검색칸', () => openAndLoad()],
+    ['목록 항목', async () => { const t = await openAndLoad(); fireEvent.keyDown(search(), { key: 'ArrowDown' }); return t; }],
+    ['현장 이름 단추', async () => { const t = await openAndLoad(); moveFocusTo(t); return t; }],
+  ])('포커스가 %s 에서 바깥의 다른 요소로 옮겨 가면 닫는다', async (_where, setup) => {
+    const trigger = await setup();
+    expect(trigger).toHaveAttribute('aria-expanded', 'true');
+    moveFocusTo(outside());
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('포커스가 팝업 안(검색칸 → 항목 → 단추)에서만 움직이면 닫지 않는다', async () => {
+    const trigger = await openAndLoad();
+    fireEvent.keyDown(search(), { key: 'ArrowDown' });
+    expect(options()[0]).toHaveFocus();
+    moveFocusTo(trigger);
+    expect(trigger).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  // relatedTarget 이 없는 blur: 단추를 눌러도 포커스를 주지 않는 브라우저(macOS Safari), 창 전환, 패널의 빈 곳
+  // 누름(포커스가 body 로 감). 여기서 닫으면 Safari 에서 "닫혔다가 곧바로 다시 열리는" 결함이 생긴다.
+  it('relatedTarget 이 없는 blur 는 닫지 않고, 그 뒤 단추를 누르면 한 번 닫힌 채로 끝난다', async () => {
+    const trigger = await openAndLoad();
+    fireEvent.blur(search(), { relatedTarget: null });
+    expect(trigger).toHaveAttribute('aria-expanded', 'true');
+    fireEvent.click(trigger);
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('키보드로 계정 메뉴 단추로 옮겨 열면 현장 바꾸기 목록은 닫힌다(두 목록이 동시에 열리지 않는다)', async () => {
+    render(
+      <div>
+        <SiteSwitcher current={{ id: 's1', name: '세종 M2블록 아파트' }} />
+        <AccountMenu email="u1@example.com" />
+      </div>,
+    );
+    const switcher = screen.getByRole('button', { name: '세종 M2블록 아파트' });
+    fireEvent.click(switcher);
+    await screen.findByRole('listbox');
+    const account = screen.getByRole('button', { name: 'u1@example.com' });
+    moveFocusTo(account); // Tab 으로 계정 단추에 간다
+    fireEvent.keyDown(account, { key: 'Enter' }); // Enter 로 연다
+    expect(switcher).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('listbox')).toBeNull();
+    expect(screen.getByRole('menu', { name: '계정 메뉴' })).toBeInTheDocument();
   });
 });
