@@ -15,15 +15,23 @@ vi.mock('next/navigation', () => ({
 // headers()는 요청 스코프 밖(테스트)에서 던지므로 proxy가 실어 준 것과 같은 형태의
 // 헤더를 공급한다 - getRequestUser의 실제 코드가 그대로 돈다.
 vi.mock('next/headers', () => ({
-  headers: async () => new Headers({ 'x-flatness-user-id': 'u1' }),
+  // Task 2: 셸 헤더(계정 메뉴)가 이메일도 쓴다 - proxy 처럼 인코딩해 싣는다.
+  headers: async () => new Headers({
+    'x-flatness-user-id': 'u1', 'x-flatness-user-email': encodeURIComponent('u1@example.com'),
+  }),
 }));
+// 셸 헤더 내부는 components/shell 테스트가 맡는다 - 여기서는 페이지가 넘긴 props 만 본다.
+vi.mock('@/components/shell/site-header', () => ({ SiteHeader: () => null }));
+vi.mock('@/components/shell/entry-header', () => ({ EntryHeader: () => null }));
 
 import { createClient } from '@/lib/supabase/server';
 import RegistrationPage, { statusTone } from '../page';
+import { SiteHeader } from '@/components/shell/site-header';
+import { EntryHeader } from '@/components/shell/entry-header';
 import { RegistrationWorkbench } from '@/components/registration/registration-workbench';
 import { Alert } from '@/components/ui/alert';
 import { LinkButton } from '@/components/ui/button';
-import { PAGE_MAIN } from '@/components/ui/page';
+import { MAIN_BG, PAGE_MAIN } from '@/components/ui/page';
 import { PageHeader } from '@/components/ui/page-header';
 import { StatusIndicator } from '@/components/ui/status-indicator';
 import type { RegistrationRow, RegistrationStatus, ScanRow } from '@/lib/domain/types';
@@ -186,8 +194,11 @@ describe('RegistrationPage 브레드크럼 (D8)', () => {
     ['failed', 'error', '정합 실패'],
   ] as const)('%s 상태를 PageHeader title 안 StatusIndicator(%s)로 그린다', async (status, type, label) => {
     const el = await mount({ registration: { ...REG, status } });
-    expect(el.type).toBe('main');
-    expect((el.props as { className: string }).className).toBe(PAGE_MAIN);
+    // Task 2: 셸 헤더 + 도면 격자 본문(main, MAIN_BG) 안에 본문 상자(div, PAGE_MAIN) - 현장 화면 공통 구조.
+    const main = findByType(el, 'main') as ReactElement<{ className: string; children: ReactElement<{ className: string }> }>;
+    expect(main.props.className).toBe(MAIN_BG);
+    expect(main.props.children.type).toBe('div');
+    expect(main.props.children.props.className).toBe(PAGE_MAIN);
     const header = findByType(el, PageHeader)!.props as { title: ReactElement; description?: unknown };
     expect(header.description).toBeUndefined();
     const status_ = findByType(header.title, StatusIndicator);
@@ -202,6 +213,23 @@ describe('RegistrationPage 브레드크럼 (D8)', () => {
 
     expect((header!.props as { crumbs: { href?: string; label: string }[] }).crumbs)
       .toEqual([{ href: '/', label: '현장' }]);
+  });
+});
+
+// Task 2 셸(스펙 §4.2): 정합 화면은 URL 을 그대로 두고 현장 헤더(측정위치) 안에서 그린다.
+describe('RegistrationPage 셸 헤더 (Task 2)', () => {
+  it('원본 스캔 → 측정위치 → 현장으로 찾은 현장과 요청 사용자 이메일을 SiteHeader 에 넘긴다', async () => {
+    const el = await mount();
+
+    expect(findByType(el, SiteHeader)?.props).toEqual({ site: { id: 's1', name: '본관 현장' }, email: 'u1@example.com' });
+    expect(findByType(el, EntryHeader)).toBeNull();
+  });
+
+  it('원본 스캔이 둘 다 지워져 현장을 모르면 진입 헤더로 대신한다', async () => {
+    const el = await mount({ scans: [] });
+
+    expect(findByType(el, SiteHeader)).toBeNull();
+    expect((findByType(el, EntryHeader)?.props as { email: string | null }).email).toBe('u1@example.com');
   });
 });
 

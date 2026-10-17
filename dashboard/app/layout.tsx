@@ -1,9 +1,6 @@
 import type { Metadata } from 'next';
 import { Anton, IBM_Plex_Mono, Montserrat, Noto_Sans_KR } from 'next/font/google';
 import './globals.css';
-import { ConsoleShell } from '@/components/shell/console-shell';
-import { TopNav } from '@/components/shell/top-nav';
-import { SideNav } from '@/components/shell/side-nav';
 
 // 다크 C안 글꼴(스펙 §3): 본문 Montserrat + 한글 Noto Sans KR, 라벨·숫자·파일명 IBM Plex Mono,
 // 큰 KPI 숫자 Anton. CSS 변수 이름은 globals.css @theme 의 --font-* 가 부르는 이름과 같아야 한다
@@ -26,7 +23,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="ko">
       <body className={`${montserrat.variable} ${notoSansKr.variable} ${plexMono.variable} ${anton.variable} min-h-screen bg-ground font-sans text-[15px] leading-normal text-ink antialiased`}>
-        <ConsoleShell topNav={<TopNav />} sideNav={<SideNav />}>{children}</ConsoleShell>
+        {/* 전역 셸은 없다(스펙 §4.3). 셸은 화면이 고른다 - 진입 헤더(/·/settings), 현장 헤더
+            (app/sites/[id]/layout.tsx 와 현장 밖 URL 의 현장 화면), 로그인 상표 헤더(/login). */}
+        {children}
       </body>
     </html>
   );

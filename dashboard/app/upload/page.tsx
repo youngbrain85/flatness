@@ -1,37 +1,23 @@
-import { redirect } from 'next/navigation';
-import { getRequestUser } from '@/lib/auth/request-user';
+// 옛 업로드 경로(스펙 §4.2 "옛 경로 처리"): 업로드는 이제 현장 안(/sites/[id]/upload)에서 한다.
+// ?location=X 가 있으면 X 가 속한 현장의 업로드로 영구 이동(308)하고 위치 프리필을 잇는다.
+// 위치가 없거나 찾지 못하면 진입 페이지로 보낸다(임시 이동 307 - 실패 결과를 브라우저가 기억하지 않게).
+// 옛 링크(/upload?site=...&location=...)의 site 값은 믿지 않는다: 위치가 속한 현장은 DB 의 site_id 가 정한다.
+import { permanentRedirect, redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
-import { PAGE_MAIN } from '@/components/ui/page';
-import { PageHeader } from '@/components/ui/page-header';
-import { UploadForm } from '@/components/upload-form';
-import type { LocationRow, SiteRow } from '@/lib/domain/types';
 
 export const dynamic = 'force-dynamic';
 
-export default async function UploadPage({ searchParams }: {
-  searchParams: Promise<{ location?: string }>;
+export default async function LegacyUploadPage({ searchParams }: {
+  searchParams: Promise<{ location?: string | string[]; site?: string | string[] }>;
 }) {
   const { location } = await searchParams;
-  const supabase = await createClient();
-  // proxy가 검증한 헤더를 읽는다(Auth 왕복 0회). 가드는 방어 심층으로 유지.
-  const user = await getRequestUser();
-  if (!user) redirect('/login');
-  const [sitesRes, locationsRes] = await Promise.all([
-    supabase.from('sites').select('*').order('name'),
-    supabase.from('locations').select('*'),
-  ]);
-  const sites = (sitesRes.data ?? []) as SiteRow[];
-  const locations = (locationsRes.data ?? []) as LocationRow[];
-  return (
-    <main className={PAGE_MAIN}>
-      {/* 최종 리뷰 M2: 타 화면(설정·현장 상세·스캔 작업대 등)과 루트 크럼 라벨을
-          '현장'으로 통일한다 - 이 화면만 '홈'을 쓰고 있었다.
-          Cloudscape(스펙 §7-2): 마지막 크럼은 현재 페이지(비링크)이므로 href 없이 넘긴다. */}
-      <PageHeader crumbs={[{ href: '/', label: '현장' }, { label: '스캔 업로드' }]} title="스캔 업로드" />
-      {/* D4: 측정위치가 0개인 현장도 폼 안에서 바로 만들 수 있다(인라인 생성) -
-          업로드 전 별도 페이지로 보내던 빈 상태 분기와 sites[0] 하드코딩을 없애고
-          폼을 항상 렌더한다. */}
-      <UploadForm sites={sites} locations={locations} userId={user.id} initialLocationId={location} />
-    </main>
-  );
+  if (typeof location === 'string' && location) {
+    const supabase = await createClient();
+    const { data } = await supabase.from('locations').select('id, site_id').eq('id', location).maybeSingle();
+    if (data) {
+      // 두 id 모두 방금 DB 에서 확인한 값이다
+      permanentRedirect(`/sites/${(data as { site_id: string }).site_id}/upload?location=${location}`);
+    }
+  }
+  redirect('/');
 }

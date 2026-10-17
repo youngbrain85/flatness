@@ -2,10 +2,12 @@
 import { notFound, redirect } from 'next/navigation';
 import { getRequestUser } from '@/lib/auth/request-user';
 import { createClient } from '@/lib/supabase/server';
+import { EntryHeader } from '@/components/shell/entry-header';
+import { SiteHeader } from '@/components/shell/site-header';
 import { RegistrationWorkbench } from '@/components/registration/registration-workbench';
 import { Alert } from '@/components/ui/alert';
 import { LinkButton } from '@/components/ui/button';
-import { PAGE_MAIN } from '@/components/ui/page';
+import { MAIN_BG, PAGE_MAIN } from '@/components/ui/page';
 import { PageHeader } from '@/components/ui/page-header';
 import { StatusIndicator, TONE_STATUS } from '@/components/ui/status-indicator';
 import { REGISTRATION_STATUS_LABEL } from '@/lib/domain/labels';
@@ -53,6 +55,8 @@ export default async function RegistrationPage({ params }: { params: Promise<{ i
   // 스캔을 찾을 수 없습니다" 분기) 위치를 알 수 없으니 현장 홈 링크만 남긴다.
   const scanForLocation = scanA ?? scanB;
   let crumbs: { href?: string; label: string }[] = [{ href: '/', label: '현장' }];
+  // 셸 헤더(Task 2)가 쓸 현장. 원본 스캔·측정위치·현장 중 하나라도 없으면 null 로 남아 진입 헤더가 대신한다.
+  let site: SiteRow | null = null;
   if (scanForLocation) {
     const { data: locRow } = await supabase.from('locations').select('*')
       .eq('id', scanForLocation.location_id).maybeSingle();
@@ -60,6 +64,7 @@ export default async function RegistrationPage({ params }: { params: Promise<{ i
       const loc = locRow as LocationRow;
       const { data: siteRow } = await supabase.from('sites').select('*')
         .eq('id', loc.site_id).maybeSingle();
+      site = (siteRow as SiteRow | null) ?? null;
       const locationLabel = [loc.building, loc.floor, loc.room, loc.name].filter(Boolean).join(' / ');
       crumbs = [
         { href: '/', label: '현장' },
@@ -69,8 +74,8 @@ export default async function RegistrationPage({ params }: { params: Promise<{ i
     }
   }
 
-  return (
-    <main className={PAGE_MAIN}>
+  const content = (
+    <div className={PAGE_MAIN}>
       {/* 아트보드 RegistrationDetail(63-69행): h1 '스캔 정합'과 진행 상태 StatusIndicator가
           flex + gap 한 줄에 나란히 놓인다 - PageHeader의 description은 h1 아래 별도 줄로
           떨어지므로 쓸 수 없다. title 자리에 h1 + StatusIndicator를 함께 넣어 한 줄로
@@ -101,6 +106,15 @@ export default async function RegistrationPage({ params }: { params: Promise<{ i
           )}
         </Alert>
       )}
-    </main>
+    </div>
+  );
+  // 셸(스펙 §4.2): 정합 화면은 URL 을 그대로 두고 현장 헤더(측정위치) + 도면 격자 본문 안에서 그린다.
+  return (
+    <>
+      {site
+        ? <SiteHeader site={{ id: site.id, name: site.name }} email={user.email} />
+        : <EntryHeader email={user.email} />}
+      <main className={MAIN_BG}>{content}</main>
+    </>
   );
 }

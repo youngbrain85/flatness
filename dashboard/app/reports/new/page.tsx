@@ -1,14 +1,17 @@
 // 보고서 생성 화면 (스펙 §7.6 전반부)
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { getRequestUser } from '@/lib/auth/request-user';
 import { createClient } from '@/lib/supabase/server';
+import { EntryHeader } from '@/components/shell/entry-header';
+import { SiteHeader } from '@/components/shell/site-header';
 import { SupabaseErrorNotice } from '@/components/supabase-error';
 import { ReportCreateForm, type ReportCandidate } from '@/components/report/report-create-form';
 import { ReportLocationPicker } from '@/components/report/report-location-picker';
 import { Alert } from '@/components/ui/alert';
 import { Container } from '@/components/ui/container';
 import { EmptyState } from '@/components/ui/empty-state';
-import { PAGE_MAIN } from '@/components/ui/page';
+import { MAIN_BG, PAGE_MAIN } from '@/components/ui/page';
 import { PageHeader } from '@/components/ui/page-header';
 import { GRADE_LABEL } from '@/lib/domain/labels';
 import type {
@@ -46,6 +49,8 @@ export default async function NewReportPage({ searchParams }: {
 }) {
   const { location: locationId } = await searchParams;
   const supabase = await createClient();
+  // 셸 헤더의 계정 메뉴 라벨. proxy 가 실어 준 헤더만 읽는다(Auth 왕복 0회).
+  const email = (await getRequestUser())?.email ?? null;
 
   // D7 Step 1: notFound() 대신 측정위치 선택 UI를 먼저 보여준다. 선택하면
   // ReportLocationPicker가 '/reports/new?location=...'로 다시 요청하고, 그 재요청이
@@ -58,7 +63,12 @@ export default async function NewReportPage({ searchParams }: {
     ]);
     const listError = sitesRes.error ?? locationsRes.error;
     if (listError) {
-      return <main className={PAGE_MAIN}><SupabaseErrorNotice message={listError.message} /></main>;
+      return (
+        <>
+          <EntryHeader email={email} />
+          <main className={MAIN_BG}><div className={PAGE_MAIN}><SupabaseErrorNotice message={listError.message} /></div></main>
+        </>
+      );
     }
     const allLocations = (locationsRes.data ?? []) as LocationRow[];
     // 리뷰 F1: 측정위치가 하나도 없으면(모든 현장이 빈 현장인 경우도 포함 - 시·현장
@@ -68,32 +78,49 @@ export default async function NewReportPage({ searchParams }: {
     // 업로드 화면으로 보낸다.
     if (allLocations.length === 0) {
       // 브레드크럼 마지막 항목은 현재 페이지(비링크, 스펙 §7-2)
+      // 셸: 측정위치를 고르기 전이라 현장을 모른다 - 진입 헤더로 그린다(Task 2)
       return (
-        <main className={PAGE_MAIN}>
-          <PageHeader crumbs={[{ href: '/', label: '현장' }, { label: '보고서 생성' }]} title="보고서 생성" />
-          <EmptyState
-            message="아직 측정위치가 없습니다. 업로드 화면에서 현장·측정위치 생성부터 스캔 업로드까지 한 번에 할 수 있습니다."
-            actionHref="/upload"
-            actionLabel="업로드로 시작"
-          />
-        </main>
+        <>
+          <EntryHeader email={email} />
+          <main className={MAIN_BG}>
+            <div className={PAGE_MAIN}>
+              <PageHeader crumbs={[{ href: '/', label: '현장' }, { label: '보고서 생성' }]} title="보고서 생성" />
+              <EmptyState
+                message="아직 측정위치가 없습니다. 업로드 화면에서 현장·측정위치 생성부터 스캔 업로드까지 한 번에 할 수 있습니다."
+                actionHref="/upload"
+                actionLabel="업로드로 시작"
+              />
+            </div>
+          </main>
+        </>
       );
     }
     // 안내 문구는 '측정위치 선택' 컨테이너의 설명(스펙 §7-8: 컨테이너 헤더는 시스템 크롬)
+    // 셸: 측정위치를 고르기 전이라 현장을 모른다 - 진입 헤더로 그린다(Task 2)
     return (
-      <main className={PAGE_MAIN}>
-        <PageHeader crumbs={[{ href: '/', label: '현장' }, { label: '보고서 생성' }]} title="보고서 생성" />
-        <Container title="측정위치 선택" description="보고서를 만들 측정위치를 먼저 선택하세요.">
-          <ReportLocationPicker sites={(sitesRes.data ?? []) as SiteRow[]} locations={allLocations} />
-        </Container>
-      </main>
+      <>
+        <EntryHeader email={email} />
+        <main className={MAIN_BG}>
+          <div className={PAGE_MAIN}>
+            <PageHeader crumbs={[{ href: '/', label: '현장' }, { label: '보고서 생성' }]} title="보고서 생성" />
+            <Container title="측정위치 선택" description="보고서를 만들 측정위치를 먼저 선택하세요.">
+              <ReportLocationPicker sites={(sitesRes.data ?? []) as SiteRow[]} locations={allLocations} />
+            </Container>
+          </div>
+        </main>
+      </>
     );
   }
 
   const { data: location, error } = await supabase
     .from('locations').select('*').eq('id', locationId).maybeSingle();
   if (error) {
-    return <main className={PAGE_MAIN}><SupabaseErrorNotice message={error.message} /></main>;
+    return (
+      <>
+        <EntryHeader email={email} />
+        <main className={MAIN_BG}><div className={PAGE_MAIN}><SupabaseErrorNotice message={error.message} /></div></main>
+      </>
+    );
   }
   if (!location) notFound();
   const loc = location as LocationRow;
@@ -111,6 +138,12 @@ export default async function NewReportPage({ searchParams }: {
     { href: `/sites/${loc.site_id}`, label: site ? (site as SiteRow).name : '현장 상세' },
     { label: locationLabel },
   ];
+  // 셸(스펙 §4.2): 보고서 생성은 URL 을 그대로 두고 측정위치의 현장으로 현장 헤더(보고서)를 그린다.
+  // 현장 행을 못 찾으면 진입 헤더로 대신한다.
+  const siteRow = site as SiteRow | null;
+  const header = siteRow
+    ? <SiteHeader site={{ id: siteRow.id, name: siteRow.name }} email={email} />
+    : <EntryHeader email={email} />;
   const scanRows = (scans ?? []) as ScanRow[];
   const scanById = new Map(scanRows.map((s) => [s.id, s]));
   // kind 필터는 **지우지 않고 넓힌다**(단계 H). 단계 C가 이 필터를 넣은 이유는 둘이었다:
@@ -135,7 +168,12 @@ export default async function NewReportPage({ searchParams }: {
         .in('kind', ['flatness', 'slope']).is('deleted_at', null)
     : { data: [], error: null };
   if (analysesRes.error) {
-    return <main className={PAGE_MAIN}><SupabaseErrorNotice message={analysesRes.error.message} /></main>;
+    return (
+      <>
+        {header}
+        <main className={MAIN_BG}><div className={PAGE_MAIN}><SupabaseErrorNotice message={analysesRes.error.message} /></div></main>
+      </>
+    );
   }
 
   const candidates: ReportCandidate[] = (analysesRes.data ?? []).map((a) => {
@@ -157,8 +195,8 @@ export default async function NewReportPage({ searchParams }: {
 
   // 아트보드 ReportNew: h1 아래 설명이 측정위치 라벨. 후보 0건은 폼 자리에 info Alert
   // (막다른 화면 금지 - 업로드 링크 유지). 폼 자체(컨테이너 + primary)는 ReportCreateForm이 그린다.
-  return (
-    <main className={PAGE_MAIN}>
+  const content = (
+    <div className={PAGE_MAIN}>
       <PageHeader crumbs={crumbs} title="보고서 생성" description={locationLabel} />
       {candidates.length === 0 ? (
         <Container title="보고서 생성">
@@ -171,6 +209,12 @@ export default async function NewReportPage({ searchParams }: {
       ) : (
         <ReportCreateForm locationId={locationId} locationLabel={locationLabel} candidates={candidates} />
       )}
-    </main>
+    </div>
+  );
+  return (
+    <>
+      {header}
+      <main className={MAIN_BG}>{content}</main>
+    </>
   );
 }

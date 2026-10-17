@@ -17,12 +17,20 @@ vi.mock('@/lib/supabase/server', () => ({ createClient: vi.fn() }));
 // headers()는 요청 스코프 밖(테스트)에서 던지므로 proxy가 실어 준 것과 같은 형태의
 // 헤더를 공급한다 - getRequestUser의 실제 코드가 그대로 돈다.
 vi.mock('next/headers', () => ({
-  headers: async () => new Headers({ 'x-flatness-user-id': 'u1' }),
+  // Task 2: 셸 헤더(계정 메뉴)가 이메일도 쓴다 - proxy 처럼 인코딩해 싣는다.
+  headers: async () => new Headers({
+    'x-flatness-user-id': 'u1', 'x-flatness-user-email': encodeURIComponent('u1@example.com'),
+  }),
 }));
+// 셸 헤더 내부는 components/shell 테스트가 맡는다 - 여기서는 페이지가 넘긴 props 만 본다.
+vi.mock('@/components/shell/site-header', () => ({ SiteHeader: () => null }));
+vi.mock('@/components/shell/entry-header', () => ({ EntryHeader: () => null }));
 
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
 import ScanPage from '../page';
+import { SiteHeader } from '@/components/shell/site-header';
+import { EntryHeader } from '@/components/shell/entry-header';
 import { AnalysisProgress } from '@/components/analysis-progress';
 import { ReanalyzeButton } from '@/components/reanalyze-button';
 import { SlopeAnalysisContainer } from '@/components/slope-analysis-container';
@@ -35,7 +43,7 @@ import { Alert } from '@/components/ui/alert';
 import { LinkButton } from '@/components/ui/button';
 import { Container } from '@/components/ui/container';
 import { KeyValuePairs } from '@/components/ui/key-value';
-import { PAGE_MAIN } from '@/components/ui/page';
+import { MAIN_BG, PAGE_MAIN } from '@/components/ui/page';
 import type { AnalysisKind, AnalysisRow, LocationRow, ScanRow, SiteRow, Stats } from '@/lib/domain/types';
 
 // D5: searchParams(?analysis=)가 페이지 시그니처에 들어왔다. 모든 호출이 이 헬퍼를
@@ -814,9 +822,14 @@ describe('ScanPage 단위 확인 인라인 (D6 이월: confirm-unit 삭제로 �
       }), []) as never);
 
     const el = await ScanPage(pageProps());
-    const main = el as { type: string; props: { className: string } };
+    // Task 2: 셸 헤더 + 도면 격자 본문(main, MAIN_BG) 안에 본문 상자(div, PAGE_MAIN)가 놓인다(현장 화면 공통 구조).
+    // 높이 뷰 2열이 쓰는 폭은 본문 상자가 정하므로 그 div 를 본다(아래 단언과 맞추려고 변수 이름은 main 그대로).
+    expect(findAll(el, 'main').map((m) => m.props.className)).toEqual([MAIN_BG]);
+    const main = findAll(el, 'div').find((d) => d.props.className === PAGE_MAIN) as unknown as {
+      type: string; props: { className: string };
+    };
 
-    expect(main.type).toBe('main');
+    expect(main.type).toBe('div');
     expect(main.props.className).toBe(PAGE_MAIN);
     expect(main.props.className.match(/max-w-\S+/g)).toEqual(['max-w-[1360px]']);
   });
@@ -1161,5 +1174,28 @@ describe('ScanPage Cloudscape 골격 (T6)', () => {
     expect(head).toContain('평활도 결과');
     expect(head).toContain('2026-07-01 00:00');
     expect(head).toContain('p4-0.5.0');
+  });
+});
+
+// Task 2 셸(스펙 §4.2): 스캔 작업대는 URL 을 그대로 두고 현장 헤더(측정위치) 안에서 그린다.
+// 현장은 스캔 → 측정위치 → 현장으로 찾는다(이미 하던 브레드크럼용 sites 조회를 그대로 쓴다).
+describe('ScanPage 셸 헤더 (Task 2)', () => {
+  it('찾은 현장(id·name)과 요청 사용자 이메일을 SiteHeader 에 넘긴다', async () => {
+    vi.mocked(createClient).mockResolvedValue(stubSupabase(mkScan(), []) as never);
+
+    const el = await ScanPage(pageProps());
+
+    expect(findAll(el, SiteHeader).map((h) => h.props))
+      .toEqual([{ site: { id: 'site1', name: '테스트 현장' }, email: 'u1@example.com' }]);
+    expect(findAll(el, EntryHeader)).toHaveLength(0);
+  });
+
+  it('측정위치가 지워진 레거시 스캔은 현장을 알 수 없어 진입 헤더로 대신한다', async () => {
+    vi.mocked(createClient).mockResolvedValue(stubSupabase(mkScan(), [], null) as never);
+
+    const el = await ScanPage(pageProps());
+
+    expect(findAll(el, SiteHeader)).toHaveLength(0);
+    expect(findAll(el, EntryHeader).map((h) => h.props.email)).toEqual(['u1@example.com']);
   });
 });

@@ -1,10 +1,10 @@
 // 로그인 화면 구조(스펙 §5·§6 Login, 아트보드 Login.dc.html): 상단 바(44px) 아래 남은 높이의
 // 중앙에 400px 흰 카드(그림자·16px 라운드), 카드 헤더 = 페이지 h1(24px/30px 700) + 1px 구분선,
 // 본문 padding 20px 안에 LoginForm. LoginPage는 데이터가 없는 동기 서버 컴포넌트라 render()로
-// 그릴 수 있다(async 페이지의 엘리먼트 트리 탐색 패턴은 필요 없다). 사이드 내비 생략은
-// ConsoleShell(T1) 테스트가 맡는다.
+// 그릴 수 있다(async 페이지의 엘리먼트 트리 탐색 패턴은 필요 없다). 셸은 전역이 아니라 이 페이지가
+// 그리는 로그인 상표 헤더(LoginHeader, Task 2)다.
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 
 vi.mock('@/lib/supabase/client', () => ({
   createClient: () => ({ auth: { signInWithPassword: vi.fn() } }),
@@ -14,10 +14,18 @@ vi.mock('@/lib/auth/ensure-profile', () => ({ ensureProfile: vi.fn() }));
 import LoginPage from '../page';
 
 describe('LoginPage', () => {
-  it('main은 상단 바 44px을 뺀 높이의 중앙에 카드를 놓는다', () => {
+  it('상표만 있는 로그인 헤더를 그린다 - 계정 메뉴도 현장 메뉴도 없다(스펙 §4.2)', () => {
+    render(<LoginPage />);
+    const banner = screen.getByRole('banner');
+    expect(within(banner).getByRole('link', { name: 'FLATNESS' })).toHaveAttribute('href', '/');
+    expect(within(banner).queryByRole('button')).toBeNull();
+    expect(within(banner).queryByRole('navigation')).toBeNull();
+  });
+
+  it('main은 로그인 헤더 최소 높이 64px을 뺀 높이의 중앙에 카드를 놓는다', () => {
     render(<LoginPage />);
     const main = screen.getByRole('main');
-    for (const c of ['min-h-[calc(100vh-44px)]', 'items-center', 'justify-center', 'px-4']) {
+    for (const c of ['min-h-[calc(100vh-64px)]', 'items-center', 'justify-center', 'px-4']) {
       expect(main.className).toContain(c);
     }
     expect(main.className).not.toMatch(/zinc-/);

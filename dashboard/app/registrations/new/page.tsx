@@ -2,10 +2,12 @@
 import { notFound, redirect } from 'next/navigation';
 import { getRequestUser } from '@/lib/auth/request-user';
 import { createClient } from '@/lib/supabase/server';
+import { EntryHeader } from '@/components/shell/entry-header';
+import { SiteHeader } from '@/components/shell/site-header';
 import { RegistrationCreateForm } from '@/components/registration/registration-create-form';
 import { Alert } from '@/components/ui/alert';
 import { LinkButton } from '@/components/ui/button';
-import { PAGE_MAIN } from '@/components/ui/page';
+import { MAIN_BG, PAGE_MAIN } from '@/components/ui/page';
 import { PageHeader } from '@/components/ui/page-header';
 import type { LocationRow, ScanRow, SiteRow } from '@/lib/domain/types';
 
@@ -56,8 +58,8 @@ export default async function NewRegistrationPage(
   // 아트보드 RegistrationNew: 안내문은 h1 아래 설명(PageHeader description) - 문구는 그대로.
   const description = `${locationLabel} 측정위치의 바닥 스캔 두 개를 하나로 합칩니다. 같은 공간을 나눠 찍은 스캔에서 같은 지점을 번갈아 찍어 대응점을 만들고, 그 대응점으로 정합한 뒤 서브셀 중앙값 점군 하나로 병합합니다.`;
 
-  return (
-    <main className={PAGE_MAIN}>
+  const content = (
+    <div className={PAGE_MAIN}>
       <PageHeader crumbs={crumbs} title="스캔 정합 시작" description={description} />
       {candidates.length < 2 ? (
         // 막다른 화면 금지: 후보가 모자라면 업로드로 가는 버튼이 이 뷰의 유일한(primary) 행동이다.
@@ -75,6 +77,16 @@ export default async function NewRegistrationPage(
       ) : (
         <RegistrationCreateForm scans={candidates} userId={user.id} />
       )}
-    </main>
+    </div>
+  );
+  // 셸(스펙 §4.2): 측정위치의 현장으로 현장 헤더(측정위치)를 그린다. 현장 행을 못 찾으면 진입 헤더로 대신한다.
+  const siteRow = site as SiteRow | null;
+  return (
+    <>
+      {siteRow
+        ? <SiteHeader site={{ id: siteRow.id, name: siteRow.name }} email={user.email} />
+        : <EntryHeader email={user.email} />}
+      <main className={MAIN_BG}>{content}</main>
+    </>
   );
 }

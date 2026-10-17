@@ -2,14 +2,17 @@
 // 아트보드: docs/design/cloudscape/ReportDetail.dc.html
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { getRequestUser } from '@/lib/auth/request-user';
 import { createClient } from '@/lib/supabase/server';
+import { EntryHeader } from '@/components/shell/entry-header';
+import { SiteHeader } from '@/components/shell/site-header';
 import { SupabaseErrorNotice } from '@/components/supabase-error';
 import { ReportActions } from '@/components/report/report-actions';
 import { ReportDeleteButton } from '@/components/report/report-delete-button';
 import { ReportProgress } from '@/components/report/report-progress';
 import { Container } from '@/components/ui/container';
 import { tableClass } from '@/components/ui/data-table';
-import { PAGE_MAIN } from '@/components/ui/page';
+import { MAIN_BG, PAGE_MAIN } from '@/components/ui/page';
 import { PageHeader } from '@/components/ui/page-header';
 import { StatusIndicator, TONE_STATUS } from '@/components/ui/status-indicator';
 import { GRADE_LABEL, SURFACE_LABEL } from '@/lib/domain/labels';
@@ -22,12 +25,19 @@ export const dynamic = 'force-dynamic';
 export default async function ReportPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = await createClient();
+  // 셸 헤더의 계정 메뉴 라벨. proxy 가 실어 준 헤더만 읽는다(Auth 왕복 0회).
+  const email = (await getRequestUser())?.email ?? null;
   // snapshot은 용량이 커서 화면에서 쓰지 않는다(렌더러 전용) - 선택 목록에서 제외
   const { data: report, error } = await supabase.from('reports')
     .select('id, location_id, title, status, opinion_text, pdf_path, gen_status, gen_error, created_at')
     .eq('id', id).is('deleted_at', null).maybeSingle();
   if (error) {
-    return <main className={PAGE_MAIN}><SupabaseErrorNotice message={error.message} /></main>;
+    return (
+      <>
+        <EntryHeader email={email} />
+        <main className={MAIN_BG}><div className={PAGE_MAIN}><SupabaseErrorNotice message={error.message} /></div></main>
+      </>
+    );
   }
   if (!report) notFound();
   const r = report as Omit<ReportRow, 'snapshot' | 'created_by'>;
@@ -71,8 +81,8 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
 
   // 헤더 액션(아트보드 순서): 삭제 · PDF 다운로드 · PDF 다시 생성 · 발행(primary). 삭제 확인 패널과
   // 발행/재생성 메시지는 각 컴포넌트가 버튼 아래로 펼치므로 위쪽 정렬(items-start)로 감싼다.
-  return (
-    <main className={PAGE_MAIN}>
+  const content = (
+    <div className={PAGE_MAIN}>
       <PageHeader crumbs={crumbs} title={r.title}
         description={<StatusIndicator type={TONE_STATUS[badge.tone]}>{badge.label}</StatusIndicator>}
         actions={
@@ -110,6 +120,17 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
           <p className="text-sm text-cs-text-secondary">PDF가 아직 생성되지 않았습니다.</p>
         )}
       </Container>
-    </main>
+    </div>
+  );
+  // 셸(스펙 §4.2): 보고서 상세는 URL 을 그대로 두고 보고서의 측정위치 → 현장으로 현장 헤더(보고서)를 그린다.
+  // 측정위치가 지워진 레거시 보고서는 현장을 모르므로 진입 헤더로 대신한다.
+  const siteRow = site as SiteRow | null;
+  return (
+    <>
+      {siteRow
+        ? <SiteHeader site={{ id: siteRow.id, name: siteRow.name }} email={email} />
+        : <EntryHeader email={email} />}
+      <main className={MAIN_BG}>{content}</main>
+    </>
   );
 }

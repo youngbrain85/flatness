@@ -10,17 +10,20 @@ import ReportsLoading from '../reports/loading';
 import ScanLoading from '../scans/[id]/loading';
 import SiteLoading from '../sites/[id]/loading';
 
-const CASES: [string, () => ReactElement][] = [
-  ['app/loading.tsx', RootLoading],
-  ['app/reports/loading.tsx', ReportsLoading],
-  ['app/scans/[id]/loading.tsx', ScanLoading],
-  ['app/sites/[id]/loading.tsx', SiteLoading],
+// 셋째 칸은 로딩이 여는 본문 태그다. 현장 안 로딩은 app/sites/[id]/layout.tsx 의 <main> 안에 그려지므로
+// main 을 또 두지 않고 div 로 연다(Task 2) - 문서에 main 이 둘이면 랜드마크가 깨진다.
+const CASES: [string, () => ReactElement, 'main' | 'div'][] = [
+  ['app/loading.tsx', RootLoading, 'main'],
+  ['app/reports/loading.tsx', ReportsLoading, 'main'],
+  ['app/scans/[id]/loading.tsx', ScanLoading, 'main'],
+  ['app/sites/[id]/loading.tsx', SiteLoading, 'div'],
 ];
 
-describe.each(CASES)('%s', (_file, Loading) => {
-  it('main은 PAGE_MAIN 그대로 + aria-busy, 중앙 스피너 + "불러오는 중…"(보조색)', () => {
-    render(<Loading />);
-    const main = screen.getByRole('main');
+describe.each(CASES)('%s', (_file, Loading, tag) => {
+  it('본문은 PAGE_MAIN 그대로 + aria-busy, 중앙 스피너 + "불러오는 중…"(보조색)', () => {
+    const { container } = render(<Loading />);
+    const main = container.firstElementChild as HTMLElement;
+    expect(main.tagName.toLowerCase()).toBe(tag);
     expect(main.className).toBe(PAGE_MAIN);
     expect(main).toHaveAttribute('aria-busy', 'true');
     expect(screen.getByRole('status')).toBeInTheDocument();

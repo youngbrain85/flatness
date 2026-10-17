@@ -1,21 +1,15 @@
-// 새 현장 페이지: PAGE_MAIN 본문 + 브레드크럼(현장 › 새 현장 등록, 마지막은 비링크) + h1 + 폼.
-// 동기 서버 컴포넌트라 render()로 그릴 수 있다(폼은 클라이언트 컴포넌트 - 라우터만 mock).
+// 옛 새 현장 화면(스펙 §4.2): 새 현장은 진입 페이지 안에서 만든다 - /sites/new 는 진입 페이지로 보낸다.
+// NewSiteForm 의 검증 테스트(components/__tests__/new-site-form.test.tsx)는 Task 3 이 인라인 입력 카드로 옮길 때까지 남는다.
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
 
-vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }));
-vi.mock('@/lib/supabase/client', () => ({ createClient: vi.fn(() => ({})) }));
+vi.mock('next/navigation', () => ({
+  redirect: (to: string) => { throw new Error(`REDIRECT:${to}`); },
+}));
 
-import NewSitePage from '../page';
-import { PAGE_MAIN } from '@/components/ui/page';
+import LegacyNewSitePage from '../page';
 
-describe('NewSitePage (Cloudscape)', () => {
-  it('PAGE_MAIN 본문 + 브레드크럼(현장 › 새 현장 등록) + h1 + 폼', () => {
-    render(<NewSitePage />);
-    expect(screen.getByRole('main').className).toBe(PAGE_MAIN);
-    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('새 현장 등록');
-    expect(screen.getByRole('link', { name: '현장' })).toHaveAttribute('href', '/');
-    expect(screen.queryByRole('link', { name: '새 현장 등록' })).toBeNull();
-    expect(screen.getByRole('button', { name: '현장 등록' })).toBeInTheDocument();
+describe('옛 /sites/new', () => {
+  it('진입 페이지(/)로 보낸다', () => {
+    expect(() => LegacyNewSitePage()).toThrow(/^REDIRECT:\/$/);
   });
 });

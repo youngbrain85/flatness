@@ -9,6 +9,22 @@ import { render, screen } from '@testing-library/react';
 import type { ReactElement } from 'react';
 
 vi.mock('@/lib/supabase/server', () => ({ createClient: vi.fn() }));
+// Task 2: 셸 헤더(계정 메뉴)가 요청 사용자 이메일을 쓴다 - proxy 가 실어 주는 헤더 형태로 공급한다.
+vi.mock('next/headers', () => ({
+  headers: async () => new Headers({
+    'x-flatness-user-id': 'u1', 'x-flatness-user-email': encodeURIComponent('u1@example.com'),
+  }),
+}));
+// 셸 헤더 내부는 components/shell 테스트가 맡는다. 여기서는 그려진 자리에 넘긴 현장·이메일만 본다
+// (진짜 헤더를 그리면 헤더의 "FLATNESS, 현장 목록으로" 같은 링크가 이 파일의 getByRole 단언과 겹친다).
+vi.mock('@/components/shell/site-header', () => ({
+  SiteHeader: ({ site, email }: { site: { id: string; name: string }; email: string | null }) => (
+    <div data-testid="site-header" data-site-id={site.id} data-site-name={site.name} data-email={email ?? ''} />
+  ),
+}));
+vi.mock('@/components/shell/entry-header', () => ({
+  EntryHeader: ({ email }: { email: string | null }) => <div data-testid="entry-header" data-email={email ?? ''} />,
+}));
 
 // 하위 클라이언트 컴포넌트(ReportProgress·ReportActions·ReportDeleteButton)는 각자
 // useRouter/Realtime 구독을 쓴다 - 이 페이지 테스트의 관심사(브레드크럼·상태 배지·
@@ -142,5 +158,34 @@ describe('ReportPage PDF 미리보기 (T8: 컨테이너 안 iframe)', () => {
     expect(notice.className).not.toContain('p-5');
     expect(notice.parentElement?.className).toContain('px-[22px]');
     expect(screen.queryByTitle('보고서 PDF 미리보기')).toBeNull();
+  });
+});
+
+// Task 2 셸(스펙 §4.2): 보고서 상세는 URL 을 그대로 두고 현장 헤더(보고서) 안에서 그린다.
+describe('ReportPage 셸 헤더 (Task 2)', () => {
+  it('보고서의 측정위치 → 현장으로 SiteHeader 를 그리고 요청 사용자 이메일을 넘긴다', async () => {
+    await renderPage();
+    const header = screen.getByTestId('site-header');
+    expect(header).toHaveAttribute('data-site-id', 's1');
+    expect(header).toHaveAttribute('data-site-name', '현장A');
+    expect(header).toHaveAttribute('data-email', 'u1@example.com');
+    expect(screen.queryByTestId('entry-header')).toBeNull();
+  });
+
+  it('측정위치가 지워진 레거시 보고서는 진입 헤더로 대신한다', async () => {
+    vi.mocked(createClient).mockResolvedValue({
+      from: (t: string) => {
+        if (t === 'reports') return table([reportRow()]);
+        if (t === 'locations') return table([]);
+        if (t === 'report_analyses') return table([link]);
+        if (t === 'analyses') return table([analysis]);
+        if (t === 'scans') return table([scan]);
+        throw new Error(`예상치 못한 테이블: ${t}`);
+      },
+    } as never);
+    const el = await ReportPage({ params: Promise.resolve({ id: 'r1' }) });
+    render(el as ReactElement);
+    expect(screen.queryByTestId('site-header')).toBeNull();
+    expect(screen.getByTestId('entry-header')).toHaveAttribute('data-email', 'u1@example.com');
   });
 });

@@ -1,13 +1,14 @@
 // 설정 화면 (스펙 §7.7) - Cloudscape 아트보드 docs/design/cloudscape/Settings.dc.html
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
+import { EntryHeader } from '@/components/shell/entry-header';
 import { ensureProfile } from '@/lib/auth/ensure-profile';
 import { getRequestUser } from '@/lib/auth/request-user';
 import { CriteriaList } from '@/components/settings/criteria-list';
 import { ProfileForm } from '@/components/settings/profile-form';
 import { UncertaintyForm } from '@/components/settings/uncertainty-form';
 import { Container } from '@/components/ui/container';
-import { PAGE_MAIN } from '@/components/ui/page';
+import { MAIN_BG, PAGE_MAIN } from '@/components/ui/page';
 import { PageHeader } from '@/components/ui/page-header';
 import type { CriteriaRow } from '@/lib/domain/types';
 
@@ -29,8 +30,8 @@ export default async function SettingsPage() {
   ]);
   const u = (settingRes.data?.value ?? { floor: 5.0, wall: 8.0 }) as { floor: number; wall: number };
   const siteNames = new Map((sitesRes.data ?? []).map((s) => [s.id as string, s.name as string]));
-  return (
-    <main className={PAGE_MAIN}>
+  const content = (
+    <div className={PAGE_MAIN}>
       {/* 최종 리뷰 M1: 타 상세 화면과 같은 루트 크럼 라벨('현장')로 통일한다
           (스펙 §6.4는 "홈 ›"이라 적었지만, 실제로는 모든 화면이 '현장'을 쓴다 -
           app/sites/[id]/page.tsx, app/scans/[id]/page.tsx 등). */}
@@ -52,6 +53,13 @@ export default async function SettingsPage() {
       <Container title="판정 기준" padded={false} className="overflow-hidden">
         <CriteriaList criteria={(criteriaRes.data ?? []) as CriteriaRow[]} siteNames={siteNames} />
       </Container>
-    </main>
+    </div>
+  );
+  // 셸(스펙 §4.2): 설정은 진입 헤더 + 도면 격자 본문(MAIN_BG) 안의 본문 상자(PAGE_MAIN). 본문은 Task 11 몫.
+  return (
+    <>
+      <EntryHeader email={user.email} />
+      <main className={MAIN_BG}>{content}</main>
+    </>
   );
 }

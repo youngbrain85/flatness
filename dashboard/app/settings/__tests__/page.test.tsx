@@ -8,6 +8,8 @@ vi.mock('@/lib/supabase/server', () => ({ createClient: vi.fn() }));
 vi.mock('@/lib/supabase/client', () => ({ createClient: () => ({}) }));
 vi.mock('@/lib/auth/request-user', () => ({ getRequestUser: vi.fn() }));
 vi.mock('@/lib/auth/ensure-profile', () => ({ ensureProfile: vi.fn() }));
+// Task 2: 셸 헤더 내부는 components/shell 테스트가 맡는다 - 여기서는 페이지가 넘긴 props 만 본다.
+vi.mock('@/components/shell/entry-header', () => ({ EntryHeader: () => null }));
 vi.mock('next/navigation', () => ({
   // 실제 redirect()는 throw로 렌더를 끊는다 - 같은 계약으로 흉내낸다.
   redirect: vi.fn((to: string) => { throw new Error(`NEXT_REDIRECT:${to}`); }),
@@ -19,7 +21,8 @@ import { createClient } from '@/lib/supabase/server';
 import { getRequestUser } from '@/lib/auth/request-user';
 import { ensureProfile } from '@/lib/auth/ensure-profile';
 import SettingsPage from '../page';
-import { PAGE_MAIN } from '@/components/ui/page';
+import { EntryHeader } from '@/components/shell/entry-header';
+import { MAIN_BG, PAGE_MAIN } from '@/components/ui/page';
 import { PageHeader } from '@/components/ui/page-header';
 import { Container } from '@/components/ui/container';
 import { ProfileForm } from '@/components/settings/profile-form';
@@ -95,8 +98,11 @@ describe('SettingsPage 렌더 (Cloudscape 아트보드 Settings)', () => {
     loggedIn();
     const el = (await SettingsPage()) as { type: unknown; props: Record<string, unknown> };
 
-    expect(el.type).toBe('main');
-    expect(el.props.className).toBe(PAGE_MAIN);
+    // Task 2: 진입 헤더(스펙 §4.2) + 도면 격자 본문(main, MAIN_BG) 안에 본문 상자(div, PAGE_MAIN) 하나.
+    expect(findAll(el, EntryHeader).map((h) => h.props.email)).toEqual(['u1@example.com']);
+    const mains = findAll(el, 'main');
+    expect(mains.map((m) => m.props.className)).toEqual([MAIN_BG]);
+    expect(findAll(el, 'div').filter((d) => d.props.className === PAGE_MAIN)).toHaveLength(1);
 
     const [header] = findAll(el, PageHeader);
     expect(header.props.title).toBe('설정');

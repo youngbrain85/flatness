@@ -3,6 +3,8 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getRequestUser } from '@/lib/auth/request-user';
 import { createClient } from '@/lib/supabase/server';
+import { EntryHeader } from '@/components/shell/entry-header';
+import { SiteHeader } from '@/components/shell/site-header';
 import { AnalysisProgress } from '@/components/analysis-progress';
 import { AnalysisResult } from '@/components/analysis/analysis-result';
 import { SlopeResult } from '@/components/analysis/slope-result';
@@ -16,7 +18,7 @@ import { Badge } from '@/components/ui/badge';
 import { LinkButton } from '@/components/ui/button';
 import { Container } from '@/components/ui/container';
 import { KeyValuePairs } from '@/components/ui/key-value';
-import { PAGE_MAIN } from '@/components/ui/page';
+import { MAIN_BG, PAGE_MAIN } from '@/components/ui/page';
 import { PageHeader } from '@/components/ui/page-header';
 import { SCAN_STATUS_TYPE, StatusIndicator } from '@/components/ui/status-indicator';
 import {
@@ -237,8 +239,8 @@ export default async function ScanPage({ params, searchParams }: {
       ]
     : [{ href: '/', label: '현장' }];
 
-  return (
-    <main className={PAGE_MAIN}>
+  const content = (
+    <div className={PAGE_MAIN}>
       <PageHeader
         crumbs={crumbs}
         title={<>스캔 · {SURFACE_LABEL[s.surface]} · <span className="font-mono text-[22px]">{s.scanned_at}</span></>}
@@ -492,6 +494,18 @@ export default async function ScanPage({ params, searchParams }: {
             className="font-bold text-cs-link hover:text-cs-link-hover hover:underline">스캔 상세에서 진행 상태 보기</Link>
         </Alert>
       )}
-    </main>
+    </div>
+  );
+  // 셸(스펙 §4.2): URL 은 그대로 두고 현장 헤더(측정위치) + 도면 격자 본문 안에서 그린다. 현장은 스캔 →
+  // 측정위치 → 현장으로 찾는다(위 siteRes). 측정위치·현장이 지워진 레거시 스캔은 현장 헤더를 그릴 수 없어
+  // 진입 헤더로 대신한다(현장 목록으로 돌아갈 길은 남는다).
+  const email = user?.email ?? null;
+  return (
+    <>
+      {site
+        ? <SiteHeader site={{ id: site.id, name: site.name }} email={email} />
+        : <EntryHeader email={email} />}
+      <main className={MAIN_BG}>{content}</main>
+    </>
   );
 }

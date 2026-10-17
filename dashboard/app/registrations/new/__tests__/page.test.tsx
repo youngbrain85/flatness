@@ -10,15 +10,23 @@ vi.mock('next/navigation', () => ({
 // perf-auth-roundtrips: 페이지는 이제 supabase.auth.getUser() 대신 proxy가 검증해
 // 실은 x-flatness-user-* 요청 헤더를 읽는다(getRequestUser) - 실제 코드가 그대로 돈다.
 vi.mock('next/headers', () => ({
-  headers: async () => new Headers({ 'x-flatness-user-id': 'u1' }),
+  // Task 2: 셸 헤더(계정 메뉴)가 이메일도 쓴다 - proxy 처럼 인코딩해 싣는다.
+  headers: async () => new Headers({
+    'x-flatness-user-id': 'u1', 'x-flatness-user-email': encodeURIComponent('u1@example.com'),
+  }),
 }));
+// 셸 헤더 내부는 components/shell 테스트가 맡는다 - 여기서는 페이지가 넘긴 props 만 본다.
+vi.mock('@/components/shell/site-header', () => ({ SiteHeader: () => null }));
+vi.mock('@/components/shell/entry-header', () => ({ EntryHeader: () => null }));
 
 import { createClient } from '@/lib/supabase/server';
 import NewRegistrationPage from '../page';
+import { SiteHeader } from '@/components/shell/site-header';
+import { EntryHeader } from '@/components/shell/entry-header';
 import { RegistrationCreateForm } from '@/components/registration/registration-create-form';
 import { Alert } from '@/components/ui/alert';
 import { LinkButton } from '@/components/ui/button';
-import { PAGE_MAIN } from '@/components/ui/page';
+import { MAIN_BG, PAGE_MAIN } from '@/components/ui/page';
 import { PageHeader } from '@/components/ui/page-header';
 import type { ScanRow } from '@/lib/domain/types';
 
@@ -148,10 +156,39 @@ describe('NewRegistrationPage 브레드크럼 (D8)', () => {
   // 아트보드 RegistrationNew: 안내문은 h1 아래 설명(PageHeader description), 본문은 공용 PAGE_MAIN.
   it('안내문을 PageHeader description으로, 본문을 PAGE_MAIN으로 그린다', async () => {
     const el = await mount([scan('a'), scan('b')]);
-    expect(el.type).toBe('main');
-    expect((el.props as { className: string }).className).toBe(PAGE_MAIN);
+    // Task 2: 셸 헤더 + 도면 격자 본문(main, MAIN_BG) 안에 본문 상자(div, PAGE_MAIN) - 현장 화면 공통 구조.
+    const main = findByType(el, 'main') as ReactElement<{ className: string; children: ReactElement<{ className: string }> }>;
+    expect(main.props.className).toBe(MAIN_BG);
+    expect(main.props.children.type).toBe('div');
+    expect(main.props.children.props.className).toBe(PAGE_MAIN);
     const props = findByType(el, PageHeader)!.props as { description: string };
     expect(props.description).toContain('본관 / 1층 / 로비 / 로비 측정위치의 바닥 스캔 두 개를 하나로 합칩니다');
     expect(props.description).toContain('서브셀 중앙값 점군 하나로 병합합니다.');
+  });
+});
+
+// Task 2 셸(스펙 §4.2): 정합 시작은 URL 을 그대로 두고 측정위치의 현장으로 현장 헤더(측정위치)를 그린다.
+describe('NewRegistrationPage 셸 헤더 (Task 2)', () => {
+  it('측정위치의 현장(id·name)과 요청 사용자 이메일을 SiteHeader 에 넘긴다', async () => {
+    const el = await mount([scan('a'), scan('b')]);
+
+    expect(findByType(el, SiteHeader)?.props).toEqual({ site: { id: 's1', name: '본관 현장' }, email: 'u1@example.com' });
+    expect(findByType(el, EntryHeader)).toBeNull();
+  });
+
+  it('현장 행을 찾지 못하면 진입 헤더로 대신한다', async () => {
+    vi.mocked(createClient).mockResolvedValue({
+      from: (table: string) => {
+        if (table === 'locations') return chain({ data: LOCATION, error: null });
+        if (table === 'sites') return chain({ data: null, error: null });
+        if (table === 'scans') return chain({ data: [], error: null });
+        throw new Error(`예상치 못한 테이블: ${table}`);
+      },
+    } as never);
+
+    const el = await NewRegistrationPage({ searchParams: Promise.resolve({ location: 'l1' }) });
+
+    expect(findByType(el, SiteHeader)).toBeNull();
+    expect((findByType(el, EntryHeader)?.props as { email: string | null }).email).toBe('u1@example.com');
   });
 });

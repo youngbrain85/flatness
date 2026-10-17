@@ -1,7 +1,9 @@
 // 홈(현장 목록) - PageHeader + 개요 KeyValuePairs + 현장 테이블(클라이언트 도구 줄).
 // 아트보드: docs/design/cloudscape/Main.dc.html (브레드크럼 없음 - 스펙 §7-2).
 // 조회·집계 로직은 무변경 - 처리 중 조회에 scan_id를 더한 표시용 확장(스펙 §2)만.
+import { getRequestUser } from '@/lib/auth/request-user';
 import { createClient } from '@/lib/supabase/server';
+import { EntryHeader } from '@/components/shell/entry-header';
 import { buildSiteSummaries, countInProgress } from '@/lib/domain/summary';
 import { SupabaseErrorNotice } from '@/components/supabase-error';
 import { SiteTable, type SiteTableRow } from '@/components/site-table';
@@ -25,6 +27,8 @@ function toBarCounts(v: Record<Verdict, number>): { pass: number; warn: number; 
 
 export default async function HomePage() {
   const supabase = await createClient();
+  // 진입 헤더의 계정 메뉴 라벨(스펙 §4.3). proxy 가 실어 준 헤더만 읽는다(Auth 왕복 0회).
+  const email = (await getRequestUser())?.email ?? null;
   const [sitesRes, locationsRes, scansRes, analysesRes, inProgressRes] = await Promise.all([
     supabase.from('sites').select('*').order('name'),
     supabase.from('locations').select('id, site_id'),
@@ -41,7 +45,7 @@ export default async function HomePage() {
   ]);
   const firstError = sitesRes.error ?? locationsRes.error ?? scansRes.error ?? analysesRes.error ?? inProgressRes.error;
   if (firstError) {
-    return <main className={PAGE_MAIN}><SupabaseErrorNotice message={firstError.message} /></main>;
+    return <><EntryHeader email={email} /><main className={PAGE_MAIN}><SupabaseErrorNotice message={firstError.message} /></main></>;
   }
   // 처리 중 행 하나로 개요 지표(countInProgress)와 현장별 건수(buildSiteSummaries)를 모두 만든다.
   const inProgressRows = (inProgressRes.data ?? []) as { status: AnalysisStatus; scan_id: string }[];
@@ -76,7 +80,7 @@ export default async function HomePage() {
     lastScannedAt: s.lastScannedAt, counts: toBarCounts(s.verdictCounts), na: s.naCount, inProgress: s.inProgressCount,
   }));
 
-  return (
+  const content = (
     <main className={PAGE_MAIN}>
       {/* 홈에는 브레드크럼 없음(스펙 §7-2). 이 뷰의 primary는 '새 현장' 하나 - 여기는 normal(기본) */}
       <PageHeader title="현장" actions={
@@ -116,5 +120,12 @@ export default async function HomePage() {
         </Container>
       )}
     </main>
+  );
+  // 셸(스펙 §4.2): 진입 페이지는 진입 헤더(상표 + 계정 메뉴). 본문 틀(MAIN_BG)까지 Task 3 이 다시 그린다.
+  return (
+    <>
+      <EntryHeader email={email} />
+      {content}
+    </>
   );
 }

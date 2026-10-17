@@ -10,9 +10,19 @@
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/lib/supabase/server', () => ({ createClient: vi.fn() }));
+// Task 2: 진입 헤더(계정 메뉴)가 요청 사용자 이메일을 쓴다 - proxy 가 실어 주는 헤더 형태로 공급한다.
+vi.mock('next/headers', () => ({
+  headers: async () => new Headers({
+    'x-flatness-user-id': 'u1', 'x-flatness-user-email': encodeURIComponent('u1@example.com'),
+  }),
+}));
+// 셸 헤더 내부는 components/shell 테스트가 맡는다 - 여기서는 페이지가 넘긴 props 만 본다.
+vi.mock('@/components/shell/entry-header', () => ({ EntryHeader: () => null }));
 
 import { createClient } from '@/lib/supabase/server';
 import HomePage from '../page';
+import { EntryHeader } from '@/components/shell/entry-header';
+import { SupabaseErrorNotice } from '@/components/supabase-error';
 import { SiteTable, type SiteTableRow } from '@/components/site-table';
 import { PageHeader } from '@/components/ui/page-header';
 import { Container } from '@/components/ui/container';
@@ -244,5 +254,29 @@ describe('HomePage 렌더 (PageHeader + 개요 KeyValuePairs + 현장 테이블)
     expect(findAll(kvValue(el, '현장'), StatValue)[0]?.props.value).toBe(0);
     // 이 분기의 primary는 EmptyState 안(트리 밖) 하나뿐 - 헤더의 '스캔 업로드'는 normal
     expect(findAll(el, LinkButton).filter((b) => b.props.variant === 'primary')).toHaveLength(0);
+  });
+});
+
+// Task 2 셸(스펙 §4.2): 진입 페이지는 진입 헤더(상표 + 계정 메뉴)를 본문 앞에 그린다. 본문은 Task 3 몫.
+describe('HomePage 셸 헤더 (Task 2)', () => {
+  it('진입 헤더에 요청 사용자 이메일을 넘긴다', async () => {
+    vi.mocked(createClient).mockResolvedValue(stubSupabase({}) as never);
+
+    const el = await HomePage();
+
+    expect(findAll(el, EntryHeader).map((h) => h.props.email)).toEqual(['u1@example.com']);
+  });
+
+  it('조회에 실패한 화면에도 진입 헤더가 있다(현장 목록·계정 메뉴로 가는 길을 잃지 않는다)', async () => {
+    const failing: Record<string, unknown> = {
+      select: () => failing, order: () => failing, is: () => failing, eq: () => failing, in: () => failing,
+      then: (resolve: (v: unknown) => void) => resolve({ data: null, error: { message: 'paused' } }),
+    };
+    vi.mocked(createClient).mockResolvedValue({ from: () => failing } as never);
+
+    const el = await HomePage();
+
+    expect(findAll(el, EntryHeader)).toHaveLength(1);
+    expect(findAll(el, SupabaseErrorNotice).map((n) => n.props.message)).toEqual(['paused']);
   });
 });

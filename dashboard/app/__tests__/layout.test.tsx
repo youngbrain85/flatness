@@ -65,3 +65,14 @@ describe('RootLayout (다크 C안 글꼴·바탕)', () => {
     expect(JSON.stringify(metadata)).not.toContain('\u2014'); // em dash(U+2014)
   });
 });
+
+// Task 2: 전역 셸(상단 바·사이드 내비)을 지웠다 - 셸은 화면이 고른다(스펙 §4.3).
+describe('RootLayout 셸 (Task 2)', () => {
+  it('body 의 자식은 받은 children 그대로다(전역 헤더·사이드 내비를 끼우지 않는다)', () => {
+    const page = <p>본문</p>;
+    const html = RootLayout({ children: page }) as ReactElement<{
+      children: ReactElement<{ children: unknown }>;
+    }>;
+    expect(html.props.children.props.children).toBe(page);
+  });
+});
