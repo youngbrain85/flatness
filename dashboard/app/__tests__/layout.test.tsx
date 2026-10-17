@@ -34,6 +34,14 @@ describe('RootLayout (다크 C안 글꼴·바탕)', () => {
     for (const opts of Object.values(fontCalls)) expect(CSS).toContain(`var(${opts.variable})`);
   });
 
+  it('globals.css 글꼴 스택이 부르는 var(--font-…) 는 모두 layout 이 만든 변수다(오타 난 변수는 조용히 대체 글꼴로 떨어진다)', () => {
+    const made = Object.values(fontCalls).map((o) => o.variable);
+    // 주석을 걷어 낸 코드에서만 센다(설명 주석의 글자로 통과하지 않게)
+    const used = [...CSS.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/var\((--font-[\w-]+)\)/g)].map((m) => m[1]);
+    expect(used.length).toBeGreaterThan(0);
+    for (const v of used) expect(made, `${v} 를 만드는 next/font 가 없다`).toContain(v);
+  });
+
   it('IBM Plex Mono·Anton 은 가변 글꼴이 아니라 weight 를 준다(아트보드: Plex Mono 400·500, Anton 400)', () => {
     expect(fontCalls.IBM_Plex_Mono.weight).toEqual(['400', '500']);
     expect(fontCalls.Anton.weight).toBe('400');
