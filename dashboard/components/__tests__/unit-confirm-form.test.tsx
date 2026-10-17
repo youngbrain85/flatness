@@ -384,4 +384,46 @@ describe('UnitConfirmForm 다크 C안 (T7)', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent('전송 오류로 등록 실패');
   });
+
+  // ---- 변이 실험으로 드러난 빈틈 보강(T7) ----
+  it('높이 그림 스테이지는 안쪽 여백 16px(p-4)을 둔다(아트보드 ScanUnitConfirm)', () => {
+    render(<UnitConfirmForm scan={scanWithView} userId="u1" />);
+
+    expect(screen.getByRole('img', { name: /높이 뷰/ }).closest('[data-stage]')).toHaveClass('p-4');
+  });
+
+  it('고른 단위로 확정하고, 실패하면 단위 배율까지 비워 단위 미확정 상태로 되돌린다', async () => {
+    const scansUpdateSpy = vi.fn();
+    vi.mocked(createClient).mockReturnValue(
+      stubSupabase({ enqueueError: { message: '전송 오류로 등록 실패' }, scansUpdateSpy }) as never);
+    render(<UnitConfirmForm scan={scan} userId="u1" />);
+    fireEvent.click(screen.getByLabelText(/mm/));
+    fireEvent.click(screen.getByRole('button', { name: '단위 확정 후 분석 시작' }));
+
+    await screen.findByRole('alert');
+    expect(scansUpdateSpy).toHaveBeenNthCalledWith(1, { unit_scale: 0.001, status: 'ready' });
+    expect(scansUpdateSpy).toHaveBeenNthCalledWith(2, { unit_scale: null, status: 'awaiting_unit_confirm' });
+  });
+
+  it('제출하는 동안 확정 버튼은 비활성이다(이중 제출 방지)', async () => {
+    // scans 갱신이 끝나지 않는 상태를 흉내낸다
+    vi.mocked(createClient).mockReturnValue({
+      from: () => ({ update: () => ({ eq: () => new Promise(() => {}) }) }),
+    } as never);
+    render(<UnitConfirmForm scan={scan} userId="u1" />);
+    fireEvent.click(screen.getByRole('button', { name: '단위 확정 후 분석 시작' }));
+
+    await vi.waitFor(() =>
+      expect(screen.getByRole('button', { name: '단위 확정 후 분석 시작' })).toBeDisabled());
+  });
+
+  it('적용 기준이 지정되지 않은 스캔은 확정하지 않고 안내한다', async () => {
+    const scansUpdateSpy = vi.fn();
+    vi.mocked(createClient).mockReturnValue(stubSupabase({ scansUpdateSpy }) as never);
+    render(<UnitConfirmForm scan={{ ...scan, selected_criteria_id: null } as ScanRow} userId="u1" />);
+    fireEvent.click(screen.getByRole('button', { name: '단위 확정 후 분석 시작' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('적용 기준이 지정되지 않은 스캔입니다');
+    expect(scansUpdateSpy).not.toHaveBeenCalled();
+  });
 });

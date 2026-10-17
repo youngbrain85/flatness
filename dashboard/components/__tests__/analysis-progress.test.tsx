@@ -61,3 +61,16 @@ describe('AnalysisProgress 다크 C안 (T7)', () => {
     expect(link.querySelector('[data-icon="check-circle"]')).toHaveClass('text-ok');
   });
 });
+
+// 변이 실험으로 드러난 빈틈 보강(T7): 완료로 바뀌면 서버 데이터(판정 배지 등)를 새로 읽고, 그 밖의 상태에서는 읽지 않는다.
+describe('AnalysisProgress 완료 갱신 (T7 보강)', () => {
+  it.each([
+    ['done', 1], ['processing', 0], ['failed', 0],
+  ] as const)('상태 %s: 서버 데이터 갱신(router.refresh) %i회', (status, calls) => {
+    refreshMock.mockClear();
+    useRowStatusMock.mockReturnValue(status);
+    render(<AnalysisProgress analysisId="a1" initialStatus={status} scanId="s1" />);
+
+    expect(refreshMock).toHaveBeenCalledTimes(calls);
+  });
+});

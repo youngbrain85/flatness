@@ -316,3 +316,45 @@ describe('ReanalyzeButton 다크 C안 (T7)', () => {
     expect(radios[0].closest('label')).toHaveClass('border-line-3');
   });
 });
+
+// 변이 실험으로 드러난 빈틈 보강(T7)
+describe('ReanalyzeButton 변이 실험 보강 (T7)', () => {
+  it('재분석 영역은 왼쪽 정렬이다(아트보드 ScanProcessing)', () => {
+    const { container } = render(<ReanalyzeButton scanId="s1" userId="u1" surface="floor" kind="flatness"
+      criteriaId="cr1" latestStatus="done" isImport={false} />);
+    expect(container.firstElementChild).toHaveClass('items-start');
+  });
+
+  it.each(['queued', 'processing'] as const)('직전 분석이 %s면 비활성이고 안내와 툴팁이 붙는다', (latestStatus) => {
+    render(<ReanalyzeButton scanId="s1" userId="u1" surface="floor" kind="flatness"
+      criteriaId="cr1" latestStatus={latestStatus} isImport={false} />);
+    const btn = screen.getByRole('button', { name: '평활도 분석' });
+    expect(btn).toBeDisabled();
+    expect(btn).toHaveAttribute('title', '이미 진행 중인 분석이 끝난 뒤 다시 시도하세요.');
+    expect(screen.getByText(/진행 중인 분석이 끝난 뒤/)).toBeInTheDocument();
+  });
+
+  it('요청 오류 문구는 role=alert 로 남는다', async () => {
+    vi.mocked(createClient).mockReturnValue(stubSupabase({ code: '23505', message: 'dup' }) as never);
+    render(<ReanalyzeButton scanId="s1" userId="u1" surface="floor" kind="flatness" criteriaId="cr1"
+      latestStatus="done" isImport={false} />);
+    fireEvent.click(screen.getByRole('button', { name: '평활도 분석' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(DUPLICATE_JOB_MESSAGE);
+  });
+
+  it('구배 기준 후보를 못 찾으면 안내가 role=alert 로 남는다', async () => {
+    vi.mocked(createClient).mockReturnValue(stubSupabaseSlope([]) as never);
+    renderSlope();
+    expect(await screen.findByRole('alert')).toHaveTextContent('구배 판정 기준을 찾을 수 없습니다');
+  });
+
+  it('기본 기준 칸에만 "(기본)"이 붙는다', async () => {
+    vi.mocked(createClient).mockReturnValue(stubSupabaseSlope(slopeCriteriaRows) as never);
+    renderSlope();
+    await waitFor(() => expect(screen.getByText('실내 평바닥')).toBeInTheDocument());
+
+    const labels = within(screen.getByRole('group', { name: '적용 기준' })).getAllByRole('radio')
+      .map((r) => r.closest('label'));
+    expect(labels.map((l) => l?.textContent?.includes('(기본)'))).toEqual([false, false, true]);
+  });
+});

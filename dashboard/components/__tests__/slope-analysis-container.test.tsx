@@ -139,3 +139,43 @@ describe('구배 분석 3조각 배치 (아트보드 ScanDone)', () => {
     expect(container).toBeEmptyDOMElement();
   });
 });
+
+// 변이 실험으로 드러난 빈틈 보강(T7)
+describe('구배 분석 3조각 변이 실험 보강 (T7)', () => {
+  it('진행 중인 구배 분석이 있으면 제목 줄 버튼도 카드의 기준 라디오도 잠기고 안내가 버튼에 이어진다', async () => {
+    vi.mocked(createClient).mockReturnValue(stubSupabase() as never);
+    render(
+      <SlopeAnalysisScope scanId="s1" userId="u1" siteId="site1" latestStatus="processing" showButton>
+        <div data-testid="title-row"><SlopeAnalysisAction /></div>
+        <div data-testid="cards"><SlopeAnalysisCard /></div>
+      </SlopeAnalysisScope>);
+    await waitFor(() => expect(screen.getByText('실내 평바닥')).toBeInTheDocument());
+
+    const btn = within(screen.getByTestId('title-row')).getByRole('button', { name: '구배 분석' });
+    expect(btn).toBeDisabled();
+    expect(screen.getByText(/진행 중인 분석이 끝난 뒤/)).toHaveAttribute('id', btn.getAttribute('aria-describedby')!);
+    for (const radio of within(screen.getByTestId('cards')).getAllByRole('radio')) expect(radio).toBeDisabled();
+  });
+
+  it('구배 분석은 항상 analyze 잡을 건다(import 잡 아님 - C1)', async () => {
+    const rpcSpy = vi.fn();
+    vi.mocked(createClient).mockReturnValue(stubSupabase(rpcSpy) as never);
+    renderPage({ userId: 'u1', showButton: true });
+    await waitFor(() => expect(screen.getByText('실내 평바닥')).toBeInTheDocument());
+
+    fireEvent.click(within(screen.getByTestId('title-row')).getByRole('button', { name: '구배 분석' }));
+
+    await waitFor(() => expect(refreshMock).toHaveBeenCalled());
+    expect(rpcSpy).toHaveBeenCalledWith('fn_enqueue_job', { p_type: 'analyze', p_payload: { analysis_id: 'a9' } });
+  });
+
+  it('카드는 받은 className 을 카드 겉(Container)에 그대로 단다', () => {
+    vi.mocked(createClient).mockReturnValue(stubSupabase() as never);
+    const { container } = render(
+      <SlopeAnalysisScope scanId="s1" siteId="site1" showButton={false}>
+        <SlopeAnalysisCard className="flex-[1_1_420px]" />
+      </SlopeAnalysisScope>);
+
+    expect(container.querySelector('section')).toHaveClass('flex-[1_1_420px]');
+  });
+});

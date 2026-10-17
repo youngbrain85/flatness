@@ -110,4 +110,26 @@ describe('ScanStepStrip', () => {
     expect(step('사전 검사')).toHaveAttribute('aria-current', 'step');
     expect(step('사전 검사')).toHaveClass('text-err');
   });
+
+  // ---- 변이 실험으로 드러난 빈틈 보강(T7) ----
+  it('종결 단계 완료가 현재이면 글자는 ink 600이고, 현재 단계의 고리는 ink 테두리다', () => {
+    const { rerender } = render(<ScanStepStrip status="ready" hasDoneAnalysis />);
+    expect(step('완료')).toHaveClass('font-semibold', 'text-ink');
+
+    rerender(<ScanStepStrip status="ready" hasDoneAnalysis={false} />);
+    expect(step('분석').querySelector('[data-mark="ring"] > span')).toHaveClass('border-ink');
+  });
+
+  it('카드형 단계 항목은 최소 높이 24px(min-h-6)이고 페이지형은 아니다', () => {
+    const { container, rerender } = render(<ScanStepStrip status="ready" hasDoneAnalysis={false} />);
+    expect(container.querySelector('li')).not.toHaveClass('min-h-6');
+
+    rerender(<ScanStepStrip status="ready" hasDoneAnalysis={false} placement="card" />);
+    expect(container.querySelector('li')).toHaveClass('min-h-6');
+  });
+
+  it('단계 목록은 "스캔 진행 단계"라는 이름을 가진다(스크린리더 탐색용)', () => {
+    render(<ScanStepStrip status="ready" hasDoneAnalysis={false} />);
+    expect(screen.getByRole('list', { name: '스캔 진행 단계' })).toBeInTheDocument();
+  });
 });

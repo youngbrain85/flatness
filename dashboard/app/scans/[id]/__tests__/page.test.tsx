@@ -35,6 +35,7 @@ import { AnalysisProgress } from '@/components/analysis-progress';
 import { ReanalyzeButton } from '@/components/reanalyze-button';
 import { SlopeAnalysisAction, SlopeAnalysisCard, SlopeAnalysisScope } from '@/components/slope-analysis-container';
 import { ScanStepStrip } from '@/components/scan-step-strip';
+import { ScanStatusWatcher } from '@/components/scan-status-watcher';
 import { UnitConfirmForm } from '@/components/unit-confirm-form';
 import { AnalysisResult } from '@/components/analysis/analysis-result';
 import { SlopeResult } from '@/components/analysis/slope-result';
@@ -42,6 +43,7 @@ import { PageHeader } from '@/components/ui/page-header';
 import { Alert } from '@/components/ui/alert';
 import { LinkButton } from '@/components/ui/button';
 import { Container } from '@/components/ui/container';
+import { Icon } from '@/components/ui/icons';
 import { KeyValuePairs } from '@/components/ui/key-value';
 import { StatusIndicator } from '@/components/ui/status-indicator';
 import { MAIN_BG, PAGE_MAIN } from '@/components/ui/page';
@@ -1378,5 +1380,196 @@ describe('ScanPage 다크 C안 골격 (T7)', () => {
     expect(row?.props.className).toBe('flex flex-wrap gap-3 empty:hidden');
     expect(String(flatCard.props.className)).toContain('flex-[1_1_420px]');
     expect(String(slopeCard.props.className)).toContain('flex-[1_1_420px]');
+  });
+});
+
+// ---- T7 변이 실험으로 드러난 빈틈 보강 ----
+// 위 T7 골격 테스트를 한 줄씩 바꿔 가며 돌린 변이 실험(가드 분기·배선·브레드크럼·주 버튼·상태 글자)에서
+// 살아남은 변이를 잡는 단언이다. 가드·T8 몫 단언은 한 줄도 건드리지 않고 새 it 로만 더했다.
+describe('ScanPage 다크 C안 골격 보강 (T7 변이 실험)', () => {
+  // showSlopeButton 의 `!!loc`: 측정위치가 없으면 현장 id 가 없어 구배 후보 기준(fn_resolve_criteria)을
+  // 해석할 수 없다 - 완료된 LiDAR 평활도 분석이 있어도 이 게이트는 닫혀 있어야 한다.
+  // 같은 분석에서 측정위치만 빼 열림 → 닫힘을 한 테스트 안에서 대조한다.
+  it('측정위치가 지워진 레거시 스캔은 완료된 LiDAR 평활도 분석이 있어도 구배 버튼 게이트가 닫힌다', async () => {
+    const flatness = mkAnalysis({ id: 'f1', kind: 'flatness', engine_version: 'p4-0.5.0', stats: FLAT_STATS });
+
+    vi.mocked(createClient).mockResolvedValue(stubSupabase(mkScan(), [flatness]) as never);
+    expect(findAll(await ScanPage(pageProps()), SlopeAnalysisScope)[0].props.showButton).toBe(true);
+
+    vi.mocked(createClient).mockResolvedValue(stubSupabase(mkScan(), [flatness], null) as never);
+    const legacy = await ScanPage(pageProps());
+    expect(findAll(legacy, SlopeAnalysisScope)[0].props.showButton).toBe(false);
+    expect(findAll(legacy, SlopeAnalysisCard)).toHaveLength(0);
+  });
+
+  it('구배 범위는 스캔 id·사용자 id·현장 id·최신 구배 상태를 그대로 받는다', async () => {
+    const flatness = mkAnalysis({ id: 'f1', kind: 'flatness', engine_version: 'p4-0.5.0', stats: FLAT_STATS });
+    const slope = mkAnalysis({ id: 's1', kind: 'slope', status: 'processing' });
+    vi.mocked(createClient).mockResolvedValue(stubSupabase(mkScan(), [flatness, slope]) as never);
+
+    const el = await ScanPage(pageProps());
+
+    expect(findAll(el, SlopeAnalysisScope)[0].props).toMatchObject({
+      scanId: 'sc1', userId: 'u1', siteId: 'site1', latestStatus: 'processing', showButton: true,
+    });
+  });
+
+  // 재분석 버튼이 제목 줄 액션으로 옮겨 갔다. 엉뚱한 스캔·사용자·표면으로 분석 잡을 걸면 안 되므로
+  // 배선을 통째로 못 박는다(표면은 wall 로도 확인해 floor 고정 구현을 잡는다).
+  it('최신 평활도 버튼은 이 스캔·이 사용자·이 표면·최신 분석 상태로 배선된다', async () => {
+    const flatness = mkAnalysis({ id: 'f1', kind: 'flatness', status: 'failed', engine_version: 'p4-0.5.0' });
+    vi.mocked(createClient).mockResolvedValue(stubSupabase(mkScan(), [flatness]) as never);
+    const floor = findAll(await ScanPage(pageProps()), ReanalyzeButton);
+
+    vi.mocked(createClient).mockResolvedValue(stubSupabase(mkScan({ surface: 'wall' }), [flatness]) as never);
+    const wall = findAll(await ScanPage(pageProps()), ReanalyzeButton);
+
+    expect(floor).toHaveLength(1);
+    expect(floor[0].props).toMatchObject({
+      scanId: 'sc1', userId: 'u1', surface: 'floor', kind: 'flatness',
+      criteriaId: 'cr1', latestStatus: 'failed', isImport: false,
+    });
+    expect(wall[0].props.surface).toBe('wall');
+  });
+
+  it('첫 평활도 버튼(분석 행 없음)도 같은 배선이고 latestStatus 는 비어 있다', async () => {
+    vi.mocked(createClient).mockResolvedValue(
+      stubSupabase(mkScan({ lineage: 'registered' }), [], location, { id: 'r1' }) as never);
+
+    const el = await ScanPage(pageProps());
+    const buttons = findAll(el, ReanalyzeButton);
+
+    expect(buttons).toHaveLength(1);
+    expect(buttons[0].props).toMatchObject({
+      scanId: 'sc1', userId: 'u1', surface: 'floor', kind: 'flatness', criteriaId: 'cr1', isImport: false,
+    });
+    expect(buttons[0].props.latestStatus).toBeUndefined();
+  });
+
+  it('분석 카드의 진행 표시는 각 종류의 최신 분석 id·상태와 이 스캔 id 로 배선된다', async () => {
+    const flatness = mkAnalysis({ id: 'f1', kind: 'flatness', status: 'processing' });
+    const slope = mkAnalysis({ id: 's1', kind: 'slope', status: 'queued' });
+    vi.mocked(createClient).mockResolvedValue(stubSupabase(mkScan(), [flatness, slope]) as never);
+
+    const el = await ScanPage(pageProps());
+
+    expect(findAll(el, AnalysisProgress).map((p) => p.props)).toEqual([
+      { analysisId: 'f1', initialStatus: 'processing', scanId: 'sc1' },
+      { analysisId: 's1', initialStatus: 'queued', scanId: 'sc1' },
+    ]);
+  });
+
+  // 사전 검사 대기·단위 확인 대기는 워커가 상태를 바꾸므로 Realtime 감시자를 붙이고, 그 밖의 상태에는 붙이지 않는다.
+  it.each([
+    ['uploaded', true], ['awaiting_unit_confirm', true],
+    ['ready', false], ['failed', false], ['archived', false],
+  ] as const)('상태 %s: 상태 감시자(ScanStatusWatcher) 부착은 %s', async (status, watched) => {
+    vi.mocked(createClient).mockResolvedValue(
+      stubSupabase(mkScan({ status, unit_scale: null }), []) as never);
+
+    const el = await ScanPage(pageProps());
+    const watchers = findAll(el, ScanStatusWatcher);
+
+    expect(watchers).toHaveLength(watched ? 1 : 0);
+    if (watched) expect(watchers[0].props).toEqual({ scanId: 'sc1', initialStatus: status });
+  });
+
+  // 한 화면 주 버튼 하나(Global Constraints): 페이지가 직접 그리는 주 버튼은 완료 분석이 있는 화면의
+  // '이 위치의 보고서 생성' 하나뿐이다. 실패·사전 검사·단위 확인·병합·분석 중 화면의 링크 버튼은 전부 보조다.
+  it.each([
+    ['사전 검사 실패', mkScan({ status: 'failed' }), []],
+    ['사전 검사 대기', mkScan({ status: 'uploaded' }), []],
+    ['단위 확인 대기', mkScan({ status: 'awaiting_unit_confirm', unit_scale: null }), []],
+    ['병합 스캔(분석 전)', mkScan({ lineage: 'registered' }), []],
+    ['분석 중', mkScan(), [mkAnalysis({ id: 'f1', kind: 'flatness', status: 'processing' })]],
+  ])('%s 화면에는 페이지가 그리는 주 버튼이 없다(링크 버튼은 전부 보조)', async (_l, scan, analyses) => {
+    vi.mocked(createClient).mockResolvedValue(
+      stubSupabase(scan, analyses, location, scan.lineage === 'registered' ? { id: 'r1' } : null) as never);
+
+    const el = await ScanPage(pageProps());
+
+    expect(findAll(el, LinkButton).filter((b) => b.props.variant === 'primary')).toHaveLength(0);
+  });
+
+  // 아트보드 ScanDone: 보고서 생성은 결과 구획 끝 오른쪽 줄에 문서(report) 아이콘과 함께 놓인다.
+  it('보고서 생성 링크는 report 아이콘과 함께 오른쪽 정렬 줄에 놓인다', async () => {
+    const flatness = mkAnalysis({ id: 'f1', kind: 'flatness', stats: FLAT_STATS });
+    vi.mocked(createClient).mockResolvedValue(stubSupabase(mkScan(), [flatness]) as never);
+
+    const el = await ScanPage(pageProps());
+    const [link] = findAll(el, LinkButton).filter((b) => b.props.variant === 'primary');
+    const row = findAll(el, 'div').find((d) => d.props.children === link);
+
+    expect(row?.props.className).toBe('flex flex-wrap justify-end gap-3');
+    expect(findAll(link, Icon).map((i) => i.props.name)).toEqual(['report']);
+  });
+
+  // 아트보드 모든 상태에서 제목의 날짜는 mono 다(시각·ID·파일명은 mono 라는 글꼴 규칙).
+  it('제목의 날짜와 스캔 정보의 점 개수·단위 배율은 mono 글자이고 단위 배율이 비면 "미확정"이다', async () => {
+    vi.mocked(createClient).mockResolvedValue(
+      stubSupabase(mkScan({ status: 'awaiting_unit_confirm', unit_scale: null, point_count: 1234567 }), []) as never);
+
+    const el = await ScanPage(pageProps());
+    const date = findAll(findAll(el, PageHeader)[0].props.title, 'span').find((sp) => textOf(sp) === '2026-07-20');
+    const info = findAll(el, Container).find((c) => c.props.title === '스캔 정보')!;
+    const items = findAll(info, KeyValuePairs)[0].props.items as { label: string; value: El }[];
+    const valueOf = (label: string) => items.find((i) => i.label === label)!.value;
+
+    expect(String(date?.props.className)).toContain('font-mono');
+    expect(textOf(valueOf('점 개수'))).toBe('1,234,567');
+    expect(String(valueOf('점 개수').props.className)).toContain('font-mono');
+    expect(textOf(valueOf('단위 배율'))).toBe('미확정');
+    expect(String(valueOf('단위 배율').props.className)).toContain('font-mono');
+  });
+
+  // '분석 완료' 글자는 ready 스캔의 것이다 - 다른 상태는 완료 분석이 있어도 상태 글자·점 색이 그대로다.
+  it.each([
+    ['archived', '보관됨', 'pending'],
+    ['failed', '실패', 'error'],
+  ] as const)('%s 스캔은 완료 분석이 있어도 상태 칸이 "%s"(%s)로 남는다', async (status, label, type) => {
+    const flatness = mkAnalysis({ id: 'f1', kind: 'flatness' });
+    vi.mocked(createClient).mockResolvedValue(stubSupabase(mkScan({ status }), [flatness]) as never);
+
+    const el = await ScanPage(pageProps());
+    const info = findAll(el, Container).find((c) => c.props.title === '스캔 정보')!;
+    const indicator = findAll(info, StatusIndicator)[0];
+
+    expect(textOf(indicator)).toBe(label);
+    expect(indicator.props.type).toBe(type);
+  });
+
+  it('첫 분석 안내 카드도 분석 카드 줄에서 같은 칸 폭(flex 1 1 420px)을 쓴다', async () => {
+    vi.mocked(createClient).mockResolvedValue(
+      stubSupabase(mkScan({ lineage: 'registered' }), [], location, { id: 'r1' }) as never);
+
+    const el = await ScanPage(pageProps());
+    const [first] = analysisSections(el);
+    const row = findAll(el, 'div').find((d) => ([] as unknown[]).concat(d.props.children as unknown[]).includes(first));
+
+    expect(String(first.props.className)).toContain('flex-[1_1_420px]');
+    expect(row?.props.className).toBe('flex flex-wrap gap-3 empty:hidden');
+  });
+
+  // 구배 카드의 제목은 SlopeAnalysisCard 안에서(slope-analysis-container.test.tsx) 확인하고, 평활도 카드는 여기서 본다.
+  it.each([
+    ['첫 분석 안내 카드', mkScan({ lineage: 'registered' }), []],
+    ['최신 분석 카드', mkScan(), [mkAnalysis({ id: 'f1', kind: 'flatness', status: 'processing' })]],
+  ])('평활도 %s의 제목은 "평활도 분석"이다', async (_l, scan, analyses) => {
+    vi.mocked(createClient).mockResolvedValue(
+      stubSupabase(scan, analyses, location, scan.lineage === 'registered' ? { id: 'r1' } : null) as never);
+
+    const el = await ScanPage(pageProps());
+
+    expect(analysisSections(el)[0].props.title).toBe('평활도 분석');
+  });
+
+  it('단위 확인 안내문은 15px ink-2 글자다(아트보드 ScanUnitConfirm)', async () => {
+    vi.mocked(createClient).mockResolvedValue(
+      stubSupabase(mkScan({ status: 'awaiting_unit_confirm', unit_scale: null }), []) as never);
+
+    const el = await ScanPage(pageProps());
+    const unit = findAll(el, Container).find((c) => c.props.title === '단위 확인')!;
+
+    expect(findAll(unit, 'p')[0].props.className).toBe('text-[15px] text-ink-2');
   });
 });
