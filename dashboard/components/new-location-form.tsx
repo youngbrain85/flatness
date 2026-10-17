@@ -7,6 +7,16 @@ import { Button } from '@/components/ui/button';
 import { FormField, inputClass } from '@/components/ui/form';
 import { Icon } from '@/components/ui/icons';
 
+// 아트보드(SiteDetail '새 측정위치'): 동·층·층 순서·공간은 flex 1 1 170px, 측정위치는 2 1 240px로
+// 한 줄에 놓이고 좁으면 접힌다. 아래 정렬(items-end) + 16px 간격.
+const FIELDS = [
+  ['building', '동', false, 'flex-[1_1_170px]'],
+  ['floor', '층', false, 'flex-[1_1_170px]'],
+  ['floorOrder', '층 순서(정수)', false, 'flex-[1_1_170px]'],
+  ['room', '공간', false, 'flex-[1_1_170px]'],
+  ['name', '측정위치', true, 'flex-[2_1_240px]'],
+] as const;
+
 export function NewLocationForm({ siteId }: { siteId: string }) {
   const router = useRouter();
   const [form, setForm] = useState({ building: '', floor: '', floorOrder: '0', room: '', name: '' });
@@ -35,27 +45,27 @@ export function NewLocationForm({ siteId }: { siteId: string }) {
     router.refresh();
   }
 
-  // 아트보드(SiteDetail '새 측정위치'): 필드 폭 동 120 · 층 120 · 층 순서 140 · 공간 140 · 측정위치 200,
-  // 하단 정렬 + gap 16px. '위치 추가'는 현장 상세 뷰의 유일한 primary(스펙 §6).
+  // '위치 추가'는 측정위치 탭 본문의 유일한 주 버튼이다(현장 헤더의 '스캔 업로드'는 셸 소속).
   return (
-    <form onSubmit={onSubmit} className="flex flex-wrap items-end gap-4 text-sm">
-      {([
-        ['building', '동', false, 'w-[120px]'], ['floor', '층', false, 'w-[120px]'],
-        ['floorOrder', '층 순서(정수)', false, 'w-[140px]'],
-        ['room', '공간', false, 'w-[140px]'], ['name', '측정위치', true, 'w-[200px]'],
-      ] as const).map(([key, label, required, width]) => (
-        <div key={key} className={width}>
-          <FormField label={label} htmlFor={`loc-${key}`}>
-            <input id={`loc-${key}`} required={required} value={form[key]} onChange={set(key)}
-              className={key === 'floorOrder' ? `${inputClass} tabular-nums` : inputClass} />
+    <form onSubmit={onSubmit} className="flex flex-wrap items-end gap-4">
+      {FIELDS.map(([key, label, required, basis]) => (
+        <div key={key} className={`min-w-0 ${basis}`}>
+          <FormField label={label} htmlFor={`new-loc-${key}`}>
+            {key === 'floorOrder' ? (
+              <input id={`new-loc-${key}`} type="number" step={1} inputMode="numeric" value={form[key]}
+                onChange={set(key)} className={`${inputClass} font-mono tabular-nums [color-scheme:dark]`} />
+            ) : (
+              <input id={`new-loc-${key}`} type="text" required={required} value={form[key]}
+                onChange={set(key)} className={inputClass} />
+            )}
           </FormField>
         </div>
       ))}
-      <Button type="submit" variant="primary">
+      <Button type="submit" variant="primary" className="shrink-0">
         <Icon name="plus" />
         위치 추가
       </Button>
-      {error && <p className="w-full text-cs-error">{error}</p>}
+      {error && <p role="alert" className="w-full text-sm text-err">{error}</p>}
     </form>
   );
 }

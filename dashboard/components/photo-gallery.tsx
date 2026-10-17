@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { photoUrl } from '@/lib/photos/upload';
 import type { PhotoRow } from '@/lib/domain/types';
+import { Icon } from '@/components/ui/icons';
 
 export function PhotoGallery({ photos }: { photos: PhotoRow[] }) {
   const [urls, setUrls] = useState<Record<string, string>>({});
@@ -21,21 +22,25 @@ export function PhotoGallery({ photos }: { photos: PhotoRow[] }) {
     return () => { cancelled = true; };
   }, [photos]);
 
-  if (photos.length === 0) return <p className="text-sm text-cs-text-secondary">등록된 사진이 없습니다.</p>;
-  // 아트보드(SiteDetail '현장 사진'): 4열 gap 12px, figure 카드(padding 4px · 1px cs-divider · 8px 라운드),
-  // 이미지 128px, 캡션 12px/16px nav-text. 모바일(<md)은 2열 유지(스펙 §5 최소 동작).
+  if (photos.length === 0) return <p className="text-sm text-muted">등록된 사진이 없습니다.</p>;
+  // 아트보드(SiteDetail '현장 사진'): 260px 이상 칸 자동 채움(gap 12px), figure 카드(ground 바탕 · line-2 ·
+  // 12px · overflow hidden), 사진 칸 128px 검정 바탕(사진을 아직 못 받았으면 사진 아이콘), 캡션 13px ink-2.
   return (
-    <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+    <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,260px),1fr))] gap-3">
       {photos.map((p) => (
-        <figure key={p.id} className="flex flex-col gap-1 rounded-lg border border-cs-divider bg-white p-1">
-          {urls[p.id] ? (
-            // signed URL은 외부 호스트라 next/image 대신 img 사용(데모)
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={urls[p.id]} alt={p.caption ?? '현장 사진'} className="h-32 w-full rounded object-cover" />
-          ) : (
-            <div className="h-32 w-full animate-pulse rounded bg-cs-divider" />
+        <figure key={p.id} className="m-0 flex min-w-0 flex-col overflow-hidden rounded-card border border-line-2 bg-ground">
+          <div className="flex h-32 items-center justify-center bg-stage">
+            {urls[p.id] ? (
+              // signed URL은 외부 호스트라 next/image 대신 img 사용(데모)
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={urls[p.id]} alt={p.caption ?? '현장 사진'} className="h-full w-full object-cover" />
+            ) : (
+              <Icon name="photo" size={28} className="text-dim" />
+            )}
+          </div>
+          {p.caption && (
+            <figcaption className="border-t border-line-2 px-3 py-2.5 text-[13px] text-ink-2">{p.caption}</figcaption>
           )}
-          {p.caption && <figcaption className="px-1 text-xs leading-4 text-cs-nav-text">{p.caption}</figcaption>}
         </figure>
       ))}
     </div>

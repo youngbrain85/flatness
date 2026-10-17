@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { LocationTree, type ScanWithCurrent } from '../location-tree';
+import { buttonClass } from '@/components/ui/button';
 import type { BuildingNode } from '@/lib/domain/tree';
 import type { LocationRow } from '@/lib/domain/types';
 
@@ -55,27 +56,26 @@ describe('LocationTree (리뷰 Important 3: 판정불가·분석실패를 미분
   });
 });
 
-// Cloudscape 재스킨(T4): 판정은 StatusIndicator(data-status)로, 측정위치는 카드로, 액션은
-// 텍스트 링크 2개 + normal LinkButton '스캔 업로드'. 위 describe의 문구 단언은 그대로 유지한다.
-describe('LocationTree (Cloudscape 재스킨: StatusIndicator + 카드 + 액션)', () => {
+// 다크 C안(T5, 아트보드 SiteDetail): 판정은 등급 색 점 + 글자(data-grade), 판정이 없을 때는
+// StatusIndicator(data-status). 상태는 클래스가 아니라 의미 속성으로 읽는다.
+describe('LocationTree 다크 C안 (T5)', () => {
   const loc = location('l1', '측정1');
 
-  const cases: [string, ScanWithCurrent['current'], string][] = [
-    ['적합', { id: 'a1', status: 'done', overall_verdict: 'pass' }, 'success'],
-    ['판정 불가', { id: 'a1', status: 'done', overall_verdict: null }, 'pending'],
-    ['분석 실패', { id: 'a1', status: 'failed', overall_verdict: null }, 'error'],
-    ['분석 준비됨', undefined, 'in-progress'],
+  const gradeCases: [string, string, NonNullable<ScanWithCurrent['current']>][] = [
+    ['적합', 'pass', { id: 'a1', status: 'done', overall_verdict: 'pass' }],
+    ['경계', 'borderline', { id: 'a1', status: 'done', overall_verdict: 'borderline' }],
+    ['보수', 'repair', { id: 'a1', status: 'done', overall_verdict: 'repair' }],
+    ['재시공', 'rework', { id: 'a1', status: 'done', overall_verdict: 'rework' }],
+    ['판정 불가', 'na', { id: 'a1', status: 'done', overall_verdict: null }],
   ];
-  it.each(cases)('"%s" 판정은 data-status=%s StatusIndicator로 그린다', (label, current, status) => {
-    const scansByLocation = new Map([['l1', [scan('c1', 'l1', current)]]]);
-    render(<LocationTree tree={tree(loc)} scansByLocation={scansByLocation} siteId="s1" />);
-    expect(screen.getByText(label).getAttribute('data-status')).toBe(status);
+  it.each(gradeCases)('"%s" 판정은 등급 점 + 글자(data-grade=%s)로 그린다', (label, grade, current) => {
+    render(<LocationTree tree={tree(loc)} scansByLocation={new Map([['l1', [scan('c1', 'l1', current)]]])} siteId="s1" />);
+    const mark = screen.getByText(label).closest('[data-grade]');
+    expect(mark?.getAttribute('data-grade')).toBe(grade);
   });
 
-  // 최종 리뷰 Important 2: 미분석 스캔의 상태 아이콘을 스캔 상세와 공유한다. 예전에는
-  // SCAN_STATUS_LABEL 전체를 in-progress(시계)에 태워 '실패'·'보관됨'에도 시계가 붙었고,
-  // 같은 스캔이 스캔 상세에서는 error/pending으로 보였다. 아트보드(SiteDetail 137·161행)가
-  // 시계로 그리는 '업로드됨'·'분석 준비됨'만 in-progress로 남는다.
+  // 최종 리뷰 Important 2: 미분석 스캔의 상태 표시를 스캔 상세와 공유한다. 아트보드가 진행 중(속 빈
+  // 고리)으로 그리는 '업로드됨'·'분석 준비됨'만 in-progress로 남는다.
   const statusCases: [ScanWithCurrent['status'], string, string][] = [
     ['ready', '분석 준비됨', 'in-progress'],
     ['uploaded', '업로드됨', 'in-progress'],
@@ -86,46 +86,67 @@ describe('LocationTree (Cloudscape 재스킨: StatusIndicator + 카드 + 액션)
   it.each(statusCases)('미분석 스캔 상태 %s("%s")는 data-status=%s로 그린다', (status, label, expected) => {
     const scansByLocation = new Map([['l1', [{ ...scan('c1', 'l1', undefined), status }]]]);
     render(<LocationTree tree={tree(loc)} scansByLocation={scansByLocation} siteId="s1" />);
-    expect(screen.getByText(label).getAttribute('data-status')).toBe(expected);
+    expect(screen.getByText(label).closest('[data-status]')?.getAttribute('data-status')).toBe(expected);
   });
 
-  it('동(700) › 층(nav-text 700) › 공간(보조색) 소제목 아래 측정위치 카드(1px cs-divider, 8px 라운드)', () => {
+  it('분석 실패는 data-status=error다', () => {
+    render(<LocationTree tree={tree(loc)}
+      scansByLocation={new Map([['l1', [scan('c1', 'l1', { id: 'a1', status: 'failed', overall_verdict: null })]]])}
+      siteId="s1" />);
+    expect(screen.getByText('분석 실패').closest('[data-status]')?.getAttribute('data-status')).toBe('error');
+  });
+
+  it('소제목 위계: 동 h2 › 층 h3 › 공간 h4(측정위치 탭의 h1 아래)', () => {
     render(<LocationTree tree={tree(loc)} scansByLocation={new Map()} siteId="s1" />);
-    expect(screen.getByText('A동').className).toContain('font-bold');
-    expect(screen.getByText('1층').className).toContain('text-cs-nav-text');
-    expect(screen.getByText('거실').className).toContain('text-cs-text-secondary');
-    const name = screen.getByText('측정1');
-    expect(name.className).toContain('font-bold');
-    const card = name.closest('li');
-    expect(card?.className).toContain('border-cs-divider');
-    expect(card?.className).toContain('rounded-lg');
+    expect(screen.getByRole('heading', { level: 2, name: 'A동' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 3, name: '1층' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 4, name: '거실' })).toBeInTheDocument();
   });
 
-  it('카드 액션: 스캔 정합·보고서는 텍스트 링크, 스캔 업로드는 normal LinkButton(upload 아이콘)', () => {
+  it('빈 동·층·공간 이름은 "(… 미지정)"으로 보인다', () => {
+    const bare = { ...location('l1', '측정1'), building: '', floor: '', room: '' };
+    render(<LocationTree
+      tree={[{ building: '', floors: [{ floor: '', floor_order: 0, rooms: [{ room: '', locations: [bare] }] }] }]}
+      scansByLocation={new Map()} siteId="s1" />);
+    expect(screen.getByText('(동 미지정)')).toBeInTheDocument();
+    expect(screen.getByText('(층 미지정)')).toBeInTheDocument();
+    expect(screen.getByText('(공간 미지정)')).toBeInTheDocument();
+  });
+
+  it('측정위치 카드는 id="loc-<위치 id>" 닻이고 ground 바탕 · line-2 · 12px 카드다', () => {
     const { container } = render(<LocationTree tree={tree(loc)} scansByLocation={new Map()} siteId="s1" />);
-    expect(screen.getByRole('link', { name: '스캔 정합' })).toHaveAttribute('href', '/registrations/new?location=l1');
-    expect(screen.getByRole('link', { name: '보고서' })).toHaveAttribute('href', '/reports?location=l1');
-    const upload = screen.getByRole('link', { name: '스캔 업로드' });
-    expect(upload).toHaveAttribute('href', '/upload?site=s1&location=l1');
-    expect(upload.className).toContain('border-line-3');
-    expect(upload.className).toContain('rounded-control');
-    expect(upload.className).not.toContain('bg-ink'); // normal(뷰의 primary는 '위치 추가')
-    expect(container.querySelector('[data-icon="upload"]')).toBeInTheDocument();
+    const card = container.querySelector('#loc-l1');
+    expect(card?.tagName).toBe('LI');
+    expect(card).toHaveTextContent('측정1');
+    expect(card?.className).toContain('bg-ground');
+    expect(card?.className).toContain('border-line-2');
+    expect(card?.className).toContain('rounded-card');
   });
 
-  it('스캔 행: 일시 mono(cs-link) · 표면(보조색) · 판정, 행 전체가 /scans/[id] 링크', () => {
+  it('카드 줄 동작: 스캔 정합·보고서는 글자 링크, 스캔 업로드는 현장 안 업로드로 가는 보조 버튼', () => {
+    const { container } = render(<LocationTree tree={tree(loc)} scansByLocation={new Map()} siteId="s1" />);
+    const card = within(container.querySelector('#loc-l1') as HTMLElement);
+    expect(card.getByRole('link', { name: '스캔 정합' })).toHaveAttribute('href', '/registrations/new?location=l1');
+    expect(card.getByRole('link', { name: '보고서' })).toHaveAttribute('href', '/sites/s1/reports?location=l1');
+    const upload = card.getByRole('link', { name: '스캔 업로드' });
+    expect(upload).toHaveAttribute('href', '/sites/s1/upload?location=l1');
+    expect(upload.className).toContain(buttonClass('normal'));
+    expect(upload.querySelector('[data-icon="upload"]')).not.toBeNull();
+  });
+
+  it('스캔 줄: 일시(mono) · 표면(muted) · 판정 · 꺾쇠, 줄 전체가 /scans/[id] 링크', () => {
     const scansByLocation = new Map([['l1', [scan('c1', 'l1', { id: 'a1', status: 'done', overall_verdict: 'borderline' })]]]);
     render(<LocationTree tree={tree(loc)} scansByLocation={scansByLocation} siteId="s1" />);
-    expect(screen.getByRole('link', { name: /2026-07-28/ })).toHaveAttribute('href', '/scans/c1');
-    const when = screen.getByText('2026-07-28');
-    expect(when.className).toContain('font-mono');
-    expect(when.className).toContain('text-cs-link');
-    expect(screen.getByText('· 바닥').className).toContain('text-cs-text-secondary');
-    expect(screen.getByText('경계').getAttribute('data-status')).toBe('warning');
+    const row = screen.getByRole('link', { name: /2026-07-28/ });
+    expect(row).toHaveAttribute('href', '/scans/c1');
+    expect(screen.getByText('2026-07-28').className).toContain('font-mono');
+    expect(screen.getByText('· 바닥').className).toContain('text-muted');
+    expect(row.querySelector('[data-icon="chevron-right"]')).not.toBeNull();
+    expect(row.closest('li')).toHaveClass('border-t', 'border-line');
   });
 
-  it('측정위치가 없으면 보조색 안내 문구를 그린다', () => {
+  it('측정위치가 없으면 안내 문구를 그린다', () => {
     render(<LocationTree tree={[]} scansByLocation={new Map()} siteId="s1" />);
-    expect(screen.getByText('측정위치가 없습니다. 아래에서 추가하세요.').className).toContain('text-cs-text-secondary');
+    expect(screen.getByText('측정위치가 없습니다. 아래에서 추가하세요.').className).toContain('text-muted');
   });
 });

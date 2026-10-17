@@ -1,9 +1,8 @@
-// 측정위치 탭(임시, Task 2): 옛 /sites/[id] 현장 상세 본문을 그대로 옮겼다. 현장 헤더와 문서의 <main> 은
-// app/sites/[id]/layout.tsx 가 그리므로 본문은 div 로 연다. Task 5 가 이 자리에서 C안으로 다시 그린다.
-// 현장 상세 (스펙 §7.3: 트리 + 측정 이력 + 현장 사진)
-// Cloudscape 구조(아트보드 SiteDetail): PageHeader(현장 › 현장명, 설명=주소) → Container '측정위치 (n)'
-// → Container '새 측정위치' → Container '현장 사진 (n)'. 쿼리·가드는 그대로다.
-import { notFound } from 'next/navigation';
+// 측정위치 탭(스펙 §5 행 04, 아트보드 SiteDetail): h1 '측정위치 (n)' → 동 › 층 › 공간 트리 카드
+// → '새 측정위치' 카드 → '현장 사진 (n)' 카드. 현장 이름은 현장 헤더가, 현장 존재 확인(notFound)은
+// app/sites/[id]/layout.tsx가 맡는다. 탭 첫 화면이라 브레드크럼이 없다(스펙 §4.3).
+// 조회와 에러 가드는 옛 현장 상세(app/sites/[id]/page.tsx)에서 문장 그대로 옮겼다.
+import type { Metadata } from 'next';
 import { createClient } from '@/lib/supabase/server';
 import { buildLocationTree } from '@/lib/domain/tree';
 import { LocationTree, type ScanWithCurrent } from '@/components/location-tree';
@@ -14,20 +13,15 @@ import { SupabaseErrorNotice } from '@/components/supabase-error';
 import { Container } from '@/components/ui/container';
 import { PAGE_MAIN } from '@/components/ui/page';
 import { PageHeader } from '@/components/ui/page-header';
-import type { AnalysisStatus, LocationRow, PhotoRow, ScanRow, SiteRow, Verdict } from '@/lib/domain/types';
+import type { AnalysisStatus, LocationRow, PhotoRow, ScanRow, Verdict } from '@/lib/domain/types';
 
 export const dynamic = 'force-dynamic';
+// <title>은 'Flatness · 측정위치'(스펙 §9). 앞부분은 app/layout.tsx 의 title.template 이 붙인다.
+export const metadata: Metadata = { title: '측정위치' };
 
-export default async function SitePage({ params }: { params: Promise<{ id: string }> }) {
+export default async function LocationsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = await createClient();
-  const { data: site, error: siteError } = await supabase.from('sites').select('*').eq('id', id).maybeSingle();
-  // 저비용 개선(현장 상세 무음 에러): siteError를 확인하지 않으면 연결 실패도
-  // "현장 없음"(notFound)으로 오인된다 - 홈(app/page.tsx)의 SupabaseErrorNotice 패턴을 적용
-  if (siteError) {
-    return <div className={PAGE_MAIN}><SupabaseErrorNotice message={siteError.message} /></div>;
-  }
-  if (!site) notFound();
   const [locationsRes, photosRes] = await Promise.all([
     supabase.from('locations').select('*').eq('site_id', id),
     supabase.from('photos').select('*').eq('site_id', id).order('created_at', { ascending: false }),
@@ -74,34 +68,19 @@ export default async function SitePage({ params }: { params: Promise<{ id: strin
   }
   return (
     <div className={PAGE_MAIN}>
-      <PageHeader
-        crumbs={[{ href: '/', label: '현장' }, { label: (site as SiteRow).name }]}
-        title={(site as SiteRow).name}
-        description={(site as SiteRow).address}
-      />
-      <Container title="측정위치" counter={locations.length}>
+      {/* 스펙 §5 행 04: 제목 '측정위치 (개수)'. 개수는 PageHeader 의 counter(아트보드처럼 h1 옆 mono 13px muted). */}
+      <PageHeader title="측정위치" counter={locations.length} />
+      {/* 아트보드: 트리 카드는 제목 없이 h1 바로 아래에 온다(제목은 h1이 대신한다). */}
+      <Container>
         <LocationTree tree={buildLocationTree(locations)} scansByLocation={scansByLocation} siteId={id} />
       </Container>
       <Container title="새 측정위치">
         <NewLocationForm siteId={id} />
       </Container>
-      {/* 코드리뷰(Important): 아트보드(SiteDetail.dc.html:333-349)의 '현장 사진' 컨테이너는
-          구분선이 하나(업로더 줄과 그리드 사이)뿐이고, 헤더 아래에는 구분선이 없다
-          ('측정위치'/'새 측정위치'와 달리). title을 Container에 넘기면 공용 프리미티브가
-          헤더 아래에 border-b를 무조건 그려 구분선이 두 개가 되므로, 여기서는 title을
-          넘기지 않고 padded={false}로 제목·업로더 줄·구분선+그리드를 직접 배치한다.
-          h2/카운터 클래스는 container.tsx 헤더의 것을 그대로 옮겨 시각적으로 동일하게 한다. */}
-      <Container padded={false}>
-        <div className="px-5 py-3">
-          <h2 className="text-lg font-bold leading-[22px]">
-            현장 사진
-            <span className="ml-1.5 font-normal text-cs-text-secondary">({photos.length})</span>
-          </h2>
-        </div>
-        <div className="px-5 pb-3">
+      {/* 아트보드: 카드 제목 '현장 사진 (n)' 아래 업로더 줄, 그 아래 사진 격자(구분선 없음). */}
+      <Container title="현장 사진" counter={photos.length}>
+        <div className="flex flex-col gap-4">
           <RefreshOnUpload target={{ site_id: id }} />
-        </div>
-        <div className="border-t border-cs-divider p-5">
           <PhotoGallery photos={photos} />
         </div>
       </Container>
