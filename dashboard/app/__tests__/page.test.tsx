@@ -189,7 +189,7 @@ describe('HomePage 렌더 (진입 헤더 + SiteFinder, 아트보드 EntrySearch)
 
   it('줄은 최근 측정일 내림차순이고, 측정일이 없는 현장은 뒤로, 같은 날이면 이름 순이다', async () => {
     // 조회는 이름 순(.order('name'))으로 온다 - 정렬은 페이지가 다시 한다
-    const sites = [site('a', '가현장'), site('b', '나현장'), site('c', '다현장'), site('d', '라현장')];
+    const sites = [site('c', '다현장'), site('b', '나현장'), site('d', '라현장'), site('a', '가현장')];
     const locations = [{ id: 'lb', site_id: 'b' }, { id: 'lc', site_id: 'c' }, { id: 'ld', site_id: 'd' }];
     const scans = [
       { id: 'x1', scanned_at: '2026-07-10', location_id: 'lc' },
