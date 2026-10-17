@@ -13,9 +13,13 @@
 //
 // 판정 이중화 아님: 여기에는 임계값이 하나도 없다. 좌표 환산은 전량
 // lib/domain/height-view.ts(단일 정본)에 있고 이 파일은 그것을 호출만 한다.
+//
+// 다크 리스킨(Task 9, 아트보드 docs/design/dark/RegistrationDetail.dc.html 대응점 화면): 그림은 검정 스테이지
+// (padding 16) 안, 제목 뒤에 mono 파일명·시각(detail), 마커는 ink 채움 22px 원 + 2px 검정 테두리.
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { Alert } from '@/components/ui/alert';
+import { Stage } from '@/components/ui/stage';
 import { imageSize, pixelToWorld, plainPngUrl } from '@/lib/domain/height-view';
 import type { HeightViewMeta, PickedPoint } from '@/lib/domain/height-view';
 
@@ -30,9 +34,11 @@ export interface PickMarker {
 export type PickedPixel = PickedPoint & { px: number; py: number };
 
 export function PointPicker({
-  title, heightViewPath, meta, metaError, markers, onPick, disabled,
+  title, detail, heightViewPath, meta, metaError, markers, onPick, disabled,
 }: {
   title: string;
+  /** 제목 뒤에 mono로 붙는 파일명·시각. 대체 텍스트에도 들어간다. 없으면 제목만 쓴다. */
+  detail?: string;
   heightViewPath: string;
   meta: HeightViewMeta | null;
   metaError?: string | null;
@@ -40,6 +46,7 @@ export function PointPicker({
   onPick: (p: PickedPixel) => void;
   disabled?: boolean;
 }) {
+  const headingId = useId();
   const imgRef = useRef<HTMLImageElement>(null);
   const [viewFailed, setViewFailed] = useState(false);
   const [cellError, setCellError] = useState<string | null>(null);
@@ -75,41 +82,55 @@ export function PointPicker({
   }
 
   const size = meta ? imageSize(meta) : null;
+  const fullTitle = detail ? `${title} · ${detail}` : title;
 
   return (
-    <section className="flex flex-col gap-2">
-      <h3 className="text-sm font-bold">{title}</h3>
+    // 아트보드: 두 그림이 `flex: 1 1 420px; min-width: 0`으로 나란히, 좁은 폭에서는 쌓인다
+    <section aria-labelledby={headingId} className="flex min-w-0 flex-[1_1_420px] flex-col gap-2.5">
+      <h3 id={headingId} className="text-[15px] font-semibold [overflow-wrap:anywhere]">
+        {title}
+        {detail && (
+          <>
+            {' · '}
+            <span className="font-mono text-[13px] font-medium text-ink-2">{detail}</span>
+          </>
+        )}
+      </h3>
       {viewFailed ? (
         <Alert type="warning">
           높이 뷰를 불러오지 못했습니다. 이 스캔의 산출물이 지워졌거나 아직 사전 검사가
           끝나지 않았을 수 있습니다. 스캔 상세에서 상태를 확인하세요.
         </Alert>
       ) : (
-        <div className="relative inline-block w-full">
-          {/* 로컬 route 서빙 이미지 - 데모에서 next/image 최적화 불필요
-              (components/unit-confirm-form.tsx와 같은 판단) */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img ref={imgRef} src={plainPngUrl(heightViewPath)}
-            alt={`${title} 높이 뷰(무장식) - 클릭해 대응점을 찍습니다`}
-            onError={() => setViewFailed(true)}
-            onClick={onClick}
-            // image-rendering: pixelated - 격자 1칸이 1픽셀이라 확대하면 뭉개진다.
-            // 셀 경계가 보여야 사용자가 "어느 칸을 찍는지" 알 수 있다.
-            style={{ imageRendering: 'pixelated' }}
-            className={`block w-full rounded-lg border border-cs-divider bg-white ${clickable ? 'cursor-crosshair' : 'cursor-not-allowed opacity-90'}`} />
-          {/* 마커: 확정 쌍은 cs-link, 반대쪽을 기다리는 점은 cs-warning. img 바로 다음 span이어야
-              한다 - 작업대 테스트가 img.parentElement의 첫 span을 마커로 읽는다. */}
-          {size && markers.map((m) => (
-            <span key={`${m.label}-${m.px}-${m.py}`}
-              style={{
-                left: `${((m.px + 0.5) / size.width) * 100}%`,
-                top: `${((m.py + 0.5) / size.height) * 100}%`,
-              }}
-              className={`pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white px-1.5 text-[10px] font-bold leading-4 text-white ${m.pending ? 'bg-cs-warning' : 'bg-cs-link'}`}>
-              {m.label}
-            </span>
-          ))}
-        </div>
+        <Stage className="p-4">
+          <div className="relative">
+            {/* 로컬 route 서빙 이미지 - 데모에서 next/image 최적화 불필요
+                (components/unit-confirm-form.tsx와 같은 판단) */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img ref={imgRef} src={plainPngUrl(heightViewPath)}
+              alt={`${fullTitle} 높이 뷰(무장식) - 클릭해 대응점을 찍습니다`}
+              onError={() => setViewFailed(true)}
+              onClick={onClick}
+              // image-rendering: pixelated - 격자 1칸이 1픽셀이라 확대하면 뭉개진다.
+              // 셀 경계가 보여야 사용자가 "어느 칸을 찍는지" 알 수 있다.
+              style={{ imageRendering: 'pixelated' }}
+              className={`block h-auto w-full ${clickable ? 'cursor-crosshair' : 'cursor-not-allowed opacity-90'}`} />
+            {/* 마커: 확정 쌍은 ink 채움, 반대쪽을 기다리는 점은 warn 채움(data-pending). img 바로 다음 span이어야
+                한다 - 작업대 테스트가 img.parentElement의 첫 span을 마커로 읽는다. 순번 글자로 뜻을 전하므로
+                장식(aria-hidden)이다. */}
+            {size && markers.map((m) => (
+              <span key={`${m.label}-${m.px}-${m.py}`} aria-hidden="true"
+                data-pending={m.pending ? 'true' : undefined}
+                style={{
+                  left: `${((m.px + 0.5) / size.width) * 100}%`,
+                  top: `${((m.py + 0.5) / size.height) * 100}%`,
+                }}
+                className={`pointer-events-none absolute inline-flex h-[22px] min-w-[22px] -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-stage px-1.5 font-mono text-[11px] font-medium leading-none text-ground ${m.pending ? 'bg-warn' : 'bg-ink'}`}>
+                {m.label}
+              </span>
+            ))}
+          </div>
+        </Stage>
       )}
       {metaError && <Alert type="warning">{metaError}</Alert>}
       {cellError && <Alert type="error">{cellError}</Alert>}

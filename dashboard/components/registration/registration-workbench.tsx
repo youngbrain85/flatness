@@ -8,6 +8,10 @@
 //
 // ★ 판정 이중화 아님: 성공 임계(RMSE 2mm)도 중첩 하한(10%)도 이 파일에 없다.
 //   그 판단은 엔진이 하고 화면은 결과와 error_text를 그대로 옮긴다.
+//
+// 다크 리스킨(Task 9, 아트보드 docs/design/dark/RegistrationDetail.dc.html): 완료 = 카드 '정합 결과'(수치 3칸 →
+// 경고 → 안내) + 카드 '겹쳐보기'(검정 스테이지 + 1px 선 위 확인 줄), 대응점 지정 = 안내 → 두 그림(검정 스테이지)
+// → 카드 '대응점 N쌍' → 오른쪽 주 버튼 '정합 실행'. 화면마다 주 버튼(ink 채움)은 하나다.
 'use client';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
@@ -15,7 +19,6 @@ import { Alert } from '@/components/ui/alert';
 import { Button, LinkButton } from '@/components/ui/button';
 import { Container } from '@/components/ui/container';
 import { checkClass } from '@/components/ui/form';
-import { KeyValuePairs } from '@/components/ui/key-value';
 import { StatusIndicator } from '@/components/ui/status-indicator';
 import { createClient } from '@/lib/supabase/client';
 import { fetchHeightViewMeta, worldToPixel } from '@/lib/domain/height-view';
@@ -47,6 +50,19 @@ function markersFor(
   }));
   if (pending) out.push({ px: pending.px, py: pending.py, label: String(pairs.length + 1), pending: true });
   return out;
+}
+
+/** 정합 결과 수치 한 칸: 눈썹 라벨(mono 11px dim) + Anton 큰 숫자 + mono 단위(아트보드 RegistrationDetail). */
+function Metric({ label, value, unit }: { label: string; value: string; unit?: string }) {
+  return (
+    <div className="flex min-w-0 flex-col gap-1.5">
+      <dt className="font-mono text-[11px] tracking-[0.08em] text-dim">{label}</dt>
+      <dd className="flex items-baseline gap-1.5">
+        <span className="font-display text-[34px] leading-none tabular-nums">{value}</span>
+        {unit && <span className="font-mono text-[13px] text-muted">{unit}</span>}
+      </dd>
+    </div>
+  );
 }
 
 export function RegistrationWorkbench({ registration, scanA, scanB }: {
@@ -221,7 +237,7 @@ export function RegistrationWorkbench({ registration, scanA, scanB }: {
         <Alert type="error" title="정합에 실패했습니다.">
           {registration.error_text ?? '사유가 기록되지 않았습니다. 잠시 후 다시 시도하세요.'}
         </Alert>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-3">
           <Button variant="primary" onClick={repick} disabled={busy}>대응점 다시 찍기</Button>
         </div>
         {error && <Alert type="error">{error}</Alert>}
@@ -244,30 +260,21 @@ export function RegistrationWorkbench({ registration, scanA, scanB }: {
         : null;
     return (
       <div className="flex flex-col gap-5">
-        {/* 아트보드 RegistrationDetail: 컨테이너 '정합 결과' = KeyValuePairs 3열 → warning Alert → info Alert */}
         <Container title="정합 결과">
           <div className="flex flex-col gap-4">
-            <KeyValuePairs columns={3} items={[
-              {
-                label: '정합 잔차 RMSE',
-                value: (
-                  <span className="font-mono tabular-nums">
-                    {registration.rmse_mm === null ? '-' : `${registration.rmse_mm.toFixed(2)} mm`}
-                  </span>
-                ),
-              },
-              {
-                label: 'ICP 반복',
-                value: <span className="font-mono tabular-nums">{registration.iterations ?? '-'}</span>,
-              },
-              // ★ overlap_ratio 원값을 그대로 쓰지 않는다(스펙 §9.3.4). trimmed ICP가
-              //   항상 하위 80%만 쓰므로 100% 겹쳐도 원값은 0.8이 최대다 - 그대로
-              //   보여주면 "80%밖에 안 겹쳤네"로 오해한다.
-              {
-                label: '겹친 영역(추정)',
-                value: <span className="font-mono tabular-nums">{overlap === null ? '-' : `${overlap.toFixed(0)}%`}</span>,
-              },
-            ]} />
+            <dl className="grid grid-cols-[repeat(auto-fit,minmax(130px,1fr))] gap-x-6 gap-y-[18px]">
+              <Metric label="정합 잔차 RMSE"
+                value={registration.rmse_mm === null ? '-' : registration.rmse_mm.toFixed(2)}
+                unit={registration.rmse_mm === null ? undefined : 'mm'} />
+              <Metric label="ICP 반복"
+                value={registration.iterations === null ? '-' : String(registration.iterations)} />
+              {/* ★ overlap_ratio 원값을 그대로 쓰지 않는다(스펙 §9.3.4). trimmed ICP가
+                  항상 하위 80%만 쓰므로 100% 겹쳐도 원값은 0.8이 최대다 - 그대로
+                  보여주면 "80%밖에 안 겹쳤네"로 오해한다. */}
+              <Metric label="겹친 영역(추정)"
+                value={overlap === null ? '-' : overlap.toFixed(0)}
+                unit={overlap === null ? undefined : '%'} />
+            </dl>
             {/* ★ RMSE 하나만 크게 띄우지 않는다(스펙 §9.3.2 남는 위험). 리뷰 I4·I5:
                 두 지표가 **서로 다른 축**을 본다는 사실을 먼저 말한다 - 그러지 않으면
                 겹쳐보기가 RMSE의 상위 심급처럼 읽힌다. */}
@@ -289,7 +296,7 @@ export function RegistrationWorkbench({ registration, scanA, scanB }: {
                 경고로 만들면 늑대소년이 되어 사용자가 곧 무시한다. 그래서 "오류·이상·실패"
                 라는 말을 쓰지 않고 정보로 제시하며, 전달할 것은 **왜**와 **그래서 뭘
                 해야 하나** 둘뿐이다. 값이 없으면(구 데이터·012 미적용 DB) 아무것도 안 띄운다.
-                리디자인: 회색 박스 → info Alert(스펙 §7-8 승인). warning/error가 아니다. */}
+                안내(info) 상자다. warning/error가 아니다. */}
             {horizontal === 'weak' && (
               <Alert type="info"
                 title={`수평 검증 가능성: 낮음 (수평 감도 ${sensitivityText}, 기준 ${HORIZONTAL_SENSITIVITY_MIN})`}>
@@ -298,7 +305,7 @@ export function RegistrationWorkbench({ registration, scanA, scanB }: {
                   같아서, 두 스캔의 수평 위치를 데이터만으로 판별할 정보가 원래 없기 때문입니다.
                   이 용역의 대상인 ±5mm 평탄 바닥에서는 낮게 나오는 것이 정상이고 흔합니다.
                 </p>
-                <p className="mt-1">
+                <p className="mt-1.5">
                   같은 이유로 아래 겹쳐보기도 이 바닥에서는 신호가 약합니다. 즉 수치로도
                   그림으로도 수평 방향을 확실히 보장할 수는 없습니다. 대응점을 서로 멀리
                   떨어뜨려 넓게 분산해 찍은 것이 이 방향의 유일한 보장이므로, 찍은 자리가 두
@@ -316,62 +323,61 @@ export function RegistrationWorkbench({ registration, scanA, scanB }: {
             )}
           </div>
         </Container>
-        {/* 컨테이너 '겹쳐보기': 본문(캔버스 + 우측 설명)은 RegistrationOverlay가 그리고, 하단
-            확인 줄(체크박스·버튼·안내)은 1px 구분선 위 footer(padding 12px 20px) - padded={false}로
-            본문/footer를 직접 나눈다. */}
-        <Container title="겹쳐보기 (정합 결과 육안 확인)" padded={false}>
-          <div className="p-5">
+        {/* 카드 '겹쳐보기': 본문(검정 스테이지 + 오른쪽 설명)은 RegistrationOverlay가 그리고, 아래 확인 줄은
+            1px line 위 padding-top 16(아트보드). */}
+        <Container title="겹쳐보기 (정합 결과 육안 확인)">
+          <div className="flex flex-col gap-4">
             <RegistrationOverlay pathA={pathA} pathB={pathB} metaA={metaA} metaB={metaB}
               unitScaleA={scanA.unit_scale ?? 1} unitScaleB={scanB.unit_scale ?? 1}
               transform={registration.transform} />
-          </div>
-          <div className="flex flex-col gap-3 border-t border-cs-divider px-5 py-3">
-            {/* ★ 리뷰 C1: 겹쳐보기를 못 그렸으면 "확인했습니다"를 체크할 수 없어야 한다.
-                그러지 않으면 사용자가 빈 상자를 보고 체크해 방어가 조용히 0이 된다. */}
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={confirmedVisually && !overlayBlocked} className={checkClass}
-                disabled={!!overlayBlocked}
-                onChange={(e) => setConfirmedVisually(e.target.checked)} />
-              <span className={overlayBlocked ? 'text-cs-disabled' : undefined}>
-                겹쳐보기에서 두 스캔이 실제로 포개지는 것을 확인했습니다.
-              </span>
-            </label>
-            {overlayBlocked && (
-              <Alert type="error">
-                {overlayBlocked} 겹쳐보기를 볼 수 없는 상태에서는 이 확인을 체크할 수 없습니다.
-              </Alert>
-            )}
-            <div className="flex flex-wrap items-center gap-2">
-              {/* '병합 스캔 열기' 슬롯이 이 뷰의 primary - 확인 전에는 disabled(버튼), 확인 후 링크 */}
-              {confirmedVisually && !overlayBlocked && registration.result_scan_id ? (
-                <LinkButton href={`/scans/${registration.result_scan_id}`} variant="primary">병합 스캔 열기</LinkButton>
-              ) : (
-                <Button variant="primary" disabled>병합 스캔 열기</Button>
-              )}
-              {askRepick ? (
-                <span className="flex flex-wrap items-center gap-2 text-sm">
-                  <span className="text-cs-error">
-                    이 정합으로 만들어진 병합 스캔이 삭제됩니다. 계속할까요?
-                  </span>
-                  <Button onClick={repick} disabled={busy}>삭제하고 다시 찍기</Button>
-                  <Button onClick={() => setAskRepick(false)}>취소</Button>
+            <div className="flex flex-col gap-3.5 border-t border-line pt-4">
+              {/* ★ 리뷰 C1: 겹쳐보기를 못 그렸으면 "확인했습니다"를 체크할 수 없어야 한다.
+                  그러지 않으면 사용자가 빈 상자를 보고 체크해 방어가 조용히 0이 된다. */}
+              <label className="flex min-h-11 items-center gap-3 text-[15px]">
+                <input type="checkbox" checked={confirmedVisually && !overlayBlocked} className={checkClass}
+                  disabled={!!overlayBlocked}
+                  onChange={(e) => setConfirmedVisually(e.target.checked)} />
+                <span className={overlayBlocked ? 'text-dim' : undefined}>
+                  겹쳐보기에서 두 스캔이 실제로 포개지는 것을 확인했습니다.
                 </span>
-              ) : (
-                <Button onClick={() => setAskRepick(true)}>대응점 다시 찍기</Button>
+              </label>
+              {overlayBlocked && (
+                <Alert type="error">
+                  {overlayBlocked} 겹쳐보기를 볼 수 없는 상태에서는 이 확인을 체크할 수 없습니다.
+                </Alert>
               )}
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-2.5">
+                {/* '병합 스캔 열기' 자리가 이 화면의 주 버튼 - 확인 전에는 비활성 버튼, 확인 후 링크 */}
+                {confirmedVisually && !overlayBlocked && registration.result_scan_id ? (
+                  <LinkButton href={`/scans/${registration.result_scan_id}`} variant="primary">병합 스캔 열기</LinkButton>
+                ) : (
+                  <Button variant="primary" disabled>병합 스캔 열기</Button>
+                )}
+                {askRepick ? (
+                  <span className="flex flex-wrap items-center gap-x-3 gap-y-2.5">
+                    <span className="text-sm text-err">
+                      이 정합으로 만들어진 병합 스캔이 삭제됩니다. 계속할까요?
+                    </span>
+                    <Button variant="danger" onClick={repick} disabled={busy}>삭제하고 다시 찍기</Button>
+                    <Button onClick={() => setAskRepick(false)}>취소</Button>
+                  </span>
+                ) : (
+                  <Button onClick={() => setAskRepick(true)}>대응점 다시 찍기</Button>
+                )}
+              </div>
+              {/* ★ 리뷰 I1: 이 체크는 승인 게이트가 아니라 권고다. 정직하게 밝힌다 -
+                  "체크해야만 쓸 수 있다"고 읽히면, 다른 경로로 들어온 사용자가 검증을
+                  건너뛰었다는 사실 자체가 감춰진다. */}
+              <p className="text-[13px] leading-relaxed text-muted">
+                병합 스캔은 정합이 성공한 시점에 이미 만들어져 있습니다(데이터 계보 &quot;정합 병합&quot;).
+                위 확인은 이 화면의 안내 장치일 뿐 시스템 차원의 승인 절차가 아닙니다.
+                체크하지 않아도 병합 스캔은 측정위치 목록과 스캔 상세에 이미 나타나 있고,
+                스캔 상세의 &quot;평활도 분석&quot; 버튼을 누르면 이 겹쳐보기를 한 번도 보지 않은
+                채로 분석이 시작됩니다. 그러니 이 정합을 쓰지 않기로 했다면
+                아래 &quot;대응점 다시 찍기&quot;로 병합 스캔을 정리하세요.
+              </p>
+              {error && <Alert type="error">{error}</Alert>}
             </div>
-            {/* ★ 리뷰 I1: 이 체크는 승인 게이트가 아니라 권고다. 정직하게 밝힌다 -
-                "체크해야만 쓸 수 있다"고 읽히면, 다른 경로로 들어온 사용자가 검증을
-                건너뛰었다는 사실 자체가 감춰진다. */}
-            <p className="text-xs leading-4 text-cs-text-secondary">
-              병합 스캔은 정합이 성공한 시점에 이미 만들어져 있습니다(데이터 계보 &quot;정합 병합&quot;).
-              위 확인은 이 화면의 안내 장치일 뿐 시스템 차원의 승인 절차가 아닙니다.
-              체크하지 않아도 병합 스캔은 측정위치 목록과 스캔 상세에 이미 나타나 있고,
-              스캔 상세의 &quot;평활도 분석&quot; 버튼을 누르면 이 겹쳐보기를 한 번도 보지 않은
-              채로 분석이 시작됩니다. 그러니 이 정합을 쓰지 않기로 했다면
-              아래 &quot;대응점 다시 찍기&quot;로 병합 스캔을 정리하세요.
-            </p>
-            {error && <Alert type="error">{error}</Alert>}
           </div>
         </Container>
       </div>
@@ -383,49 +389,51 @@ export function RegistrationWorkbench({ registration, scanA, scanB }: {
   const canRun = pairs.length >= MIN_CORRESPONDENCES && !busy && !!metaA && !!metaB;
 
   return (
-    // 아트보드 없음(스펙 §4 해부로 구성): info Alert 안내 → PointPicker 2열 → 컨테이너 '대응점 N쌍'
-    // → 우측 primary '정합 실행'. 문구·MIN_CORRESPONDENCES·canRun 판단은 그대로.
+    // 아트보드 RegistrationDetail 대응점 화면: 안내 → 두 그림(검정 스테이지) → 카드 '대응점 N쌍' → 오른쪽 주 버튼.
+    // 문구·MIN_CORRESPONDENCES·canRun 판단은 그대로.
     <div className="flex flex-col gap-5">
       <Alert type="info">
-        두 그림에서 <span className="font-bold">같은 지점</span>을 번갈아 클릭해 쌍을 만드세요.
+        두 그림에서 <span className="font-semibold text-ink">같은 지점</span>을 번갈아 클릭해 쌍을 만드세요.
         최소 {MIN_CORRESPONDENCES}쌍이 필요하고 4쌍 이상을 권장합니다. 쌍은 서로 1m 넘게
         떨어뜨리고 한 직선 위에 놓이지 않게 넓게 흩어 고르세요. 한곳에 몰리거나 일직선이면
         정합이 거부됩니다. 색이 없는(비어 있는) 칸은 높이 값이 없어 쓸 수 없습니다.
       </Alert>
-      <div className="grid gap-5 lg:grid-cols-2">
-        <PointPicker title={`A 스캔 (기준) · ${scanLabel(scanA)}`} heightViewPath={pathA}
+      <div className="flex flex-wrap gap-5">
+        <PointPicker title="A 스캔 (기준)" detail={scanLabel(scanA)} heightViewPath={pathA}
           meta={metaA} metaError={metaErrA} markers={markersA} onPick={onPickA} disabled={busy} />
-        <PointPicker title={`B 스캔 (맞출 대상) · ${scanLabel(scanB)}`} heightViewPath={pathB}
+        <PointPicker title="B 스캔 (맞출 대상)" detail={scanLabel(scanB)} heightViewPath={pathB}
           meta={metaB} metaError={metaErrB} markers={markersB} onPick={onPickB} disabled={busy} />
       </div>
       <Container title={`대응점 ${pairs.length}쌍`}>
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-3">
           {pairs.length === 0 ? (
-            <p className="text-sm text-cs-text-secondary">아직 찍은 쌍이 없습니다.</p>
+            <p className="text-sm text-muted">아직 찍은 쌍이 없습니다.</p>
           ) : (
-            <ul className="flex flex-col gap-1 text-xs">
+            <ul className="flex flex-col gap-2">
               {pairs.map((p, i) => (
                 <li key={i}
-                  className="flex items-center gap-2 rounded-lg border border-cs-divider bg-white px-2 py-1">
-                  <span className="font-bold">{i + 1}</span>
-                  <span className="font-mono tabular-nums text-cs-text-secondary">
+                  className="flex min-h-11 flex-wrap items-center gap-x-3.5 gap-y-1 rounded-control border border-line-2 bg-ground pl-3.5 pr-1">
+                  <span className="font-mono text-[13px] font-medium">{i + 1}</span>
+                  <span className="min-w-0 font-mono text-xs tabular-nums text-muted [overflow-wrap:anywhere]">
                     A({p.a.x.toFixed(2)}, {p.a.y.toFixed(2)}, {p.a.z?.toFixed(2)})
                     {' / '}
                     B({p.b.x.toFixed(2)}, {p.b.y.toFixed(2)}, {p.b.z?.toFixed(2)})
                   </span>
-                  <button type="button" onClick={() => removePair(i)}
-                    className="ml-auto font-bold text-cs-link hover:text-cs-link-hover hover:underline">지우기</button>
+                  <button type="button" onClick={() => removePair(i)} aria-label={`${i + 1}번 쌍 지우기`}
+                    className="ml-auto min-h-11 px-3 text-sm font-medium text-ink underline underline-offset-[3px]">
+                    지우기
+                  </button>
                 </li>
               ))}
             </ul>
           )}
           {(pendingA || pendingB) && (
-            <p className="text-xs leading-4 text-cs-warning">
+            <p className="text-[13px] leading-relaxed text-warn">
               {pendingA ? 'A' : 'B'} 쪽 점을 찍었습니다. 반대쪽 그림에서 같은 지점을 클릭하면
               한 쌍이 완성됩니다.
             </p>
           )}
-          <p className="text-xs leading-4 text-cs-text-secondary">
+          <p className="text-[13px] text-muted">
             좌표는 각 스캔 파일의 단위 그대로입니다(미터로 환산하지 않습니다).
           </p>
         </div>
@@ -433,7 +441,7 @@ export function RegistrationWorkbench({ registration, scanA, scanB }: {
       {metaLoading ? (
         <StatusIndicator type="in-progress">높이 뷰 좌표 정보를 불러오는 중입니다...</StatusIndicator>
       ) : (
-        <div className="flex items-center justify-end gap-2">
+        <div className="flex justify-end">
           <Button variant="primary" onClick={runRegistration} disabled={!canRun}>정합 실행</Button>
         </div>
       )}

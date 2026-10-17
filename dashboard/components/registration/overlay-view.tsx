@@ -9,15 +9,36 @@
 //
 //   두 무장식 PNG를 변환행렬로 겹쳐 그리면 그 어긋남이 눈에 보인다. 불투명도
 //   슬라이더로 B를 켰다 껐다 하며 비교하는 것이 표준적인 육안 대조 방법이다.
+//
+// 다크 테마(Task 9, 아트보드 docs/design/dark/RegistrationDetail.dc.html '겹쳐보기'): 캔버스는 검정
+// 스테이지 안에 놓이고, 그림 밑에 스테이지 바탕(STAGE_BG)과 40px 격자(STAGE_GRID)를 먼저 깐다.
+// 색은 lib/domain/palette.ts 상수만 쓴다(스펙 §6 캔버스 그림). 그리기 배선(어느 그림·변환·alpha)은 그대로다.
 'use client';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Alert } from '@/components/ui/alert';
+import { Stage } from '@/components/ui/stage';
 import { plainPngUrl } from '@/lib/domain/height-view';
 import type { HeightViewMeta } from '@/lib/domain/height-view';
+import { STAGE_BG, STAGE_GRID } from '@/lib/domain/palette';
 import { imageCornersM, overlayAffine, overlayView } from '@/lib/domain/registration';
 
 const MAX_W = 560;
 const MAX_H = 420;
+/** 격자 간격(px). 아트보드 겹쳐보기 SVG(560x420)의 40단위 격자와 같다. */
+const GRID_STEP = 40;
+
+/** 캔버스 전체를 스테이지 바탕으로 채우고 GRID_STEP마다 1px 격자선을 긋는다(경로 하나, stroke 한 번). */
+function drawStageGrid(ctx: CanvasRenderingContext2D, w: number, h: number) {
+  ctx.fillStyle = STAGE_BG;
+  ctx.fillRect(0, 0, w, h);
+  ctx.strokeStyle = STAGE_GRID;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  // +0.5: 1px 선이 두 픽셀에 번지지 않게 픽셀 가운데에 긋는다
+  for (let x = GRID_STEP; x < w; x += GRID_STEP) { ctx.moveTo(x + 0.5, 0); ctx.lineTo(x + 0.5, h); }
+  for (let y = GRID_STEP; y < h; y += GRID_STEP) { ctx.moveTo(0, y + 0.5); ctx.lineTo(w, y + 0.5); }
+  ctx.stroke();
+}
 
 export function RegistrationOverlay({
   pathA, pathB, metaA, metaB, unitScaleA, unitScaleB, transform,
@@ -33,12 +54,13 @@ export function RegistrationOverlay({
   transform: number[][] | null;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const sliderId = useId();
   const [opacity, setOpacity] = useState(0.55);
   const [failed, setFailed] = useState(false);
 
   // ★ 리뷰 C1: 그릴 수 없는 이유가 있으면 **빈 캔버스를 내놓지 않는다.** 사이드카가
   //   404면 metaA/metaB가 null이라 아래 useEffect가 조기 return하고, 캔버스는 크기조차
-  //   설정되지 않은 채(기본 300x150) 흰 상자로 남는다. 사용자는 "겹쳐보기" 제목 아래
+  //   설정되지 않은 채(기본 300x150) 빈 상자로 남는다. 사용자는 "겹쳐보기" 제목 아래
   //   빈 상자를 보고 아무 오류 안내 없이 "포개지는 것을 확인했습니다"를 체크할 수 있다 -
   //   방어가 조용히 0이 된다.
   //   transform이 null인 채 done인 경우는 더 나쁘다: B가 자기 좌표로 그려져 **정합된
@@ -76,6 +98,8 @@ export function RegistrationOverlay({
         if (cancelled) return;
         ctx.setTransform(1, 0, 0, 1, 0, 0);
         ctx.clearRect(0, 0, canvas.width, canvas.height);
+        // 스테이지 바탕 + 격자를 그림보다 먼저 깐다 - 나중에 그리면 격자가 두 그림을 덮어 대조를 흐린다
+        drawStageGrid(ctx, canvas.width, canvas.height);
         // 격자 1칸 = 1픽셀이라 보간을 끈다 - 켜 두면 셀 경계가 뭉개져 어긋남이 흐려진다.
         ctx.imageSmoothingEnabled = false;
         ctx.globalAlpha = 1;
@@ -101,30 +125,37 @@ export function RegistrationOverlay({
     );
   }
 
+  const percent = Math.round(opacity * 100);
   return (
-    // 아트보드 RegistrationDetail '겹쳐보기' 본문: 좌 562px 캔버스 틀(1px 구분선, radius 8px) /
-    // 우 flex-1 설명(슬라이더 줄 → 안내 → 한계 Alert). 좁은 화면(<lg)은 세로 스택.
-    <div className="flex flex-col items-start gap-5 lg:flex-row">
-      <div className="flex w-full shrink-0 flex-col gap-1 lg:w-[562px]">
+    // 아트보드: 왼쪽 `flex: 1 1 560px; max-width: 640px` 검정 스테이지 / 오른쪽 `flex: 1 1 300px` 설명.
+    // flex-wrap이라 좁은 폭(휴대폰)에서는 위아래로 쌓인다(스펙 §7).
+    <div className="flex flex-wrap items-start gap-6">
+      <div className="flex min-w-0 max-w-[640px] flex-[1_1_560px] flex-col gap-3">
         {failed && (
           <Alert type="error">
             겹쳐보기 그림을 불러오지 못했습니다. 두 스캔의 높이 뷰 산출물을 확인하세요.
             그림 없이 RMSE만으로 승인하지 마세요.
           </Alert>
         )}
-        <div className="flex overflow-hidden rounded-lg border border-cs-divider bg-white">
-          <canvas ref={canvasRef} className="max-w-full" />
-        </div>
+        <Stage className="p-4">
+          <canvas ref={canvasRef} role="img" aria-label="두 스캔 겹쳐보기"
+            className="mx-auto block h-auto max-w-full" />
+        </Stage>
       </div>
-      <div className="flex min-w-0 flex-1 flex-col gap-3">
-        <label className="flex items-center gap-2 text-xs leading-4 text-cs-text-secondary">
-          <span className="whitespace-nowrap">맞춘 스캔(B) 진하기</span>
-          <input type="range" min={0} max={100} value={Math.round(opacity * 100)}
-            onChange={(e) => setOpacity(Number(e.target.value) / 100)}
-            className="w-40 accent-cs-link" />
-          <span className="tabular-nums">{Math.round(opacity * 100)}%</span>
-        </label>
-        <p className="text-xs leading-4 text-cs-text-secondary">
+      <div className="flex min-w-0 flex-[1_1_300px] flex-col gap-3.5">
+        <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1">
+          <label htmlFor={sliderId}
+            className="whitespace-nowrap font-mono text-[11px] tracking-[0.08em] text-dim">
+            맞춘 스캔(B) 진하기
+          </label>
+          <div className="flex items-center gap-3">
+            <input id={sliderId} type="range" min={0} max={100} step={1} value={percent}
+              onChange={(e) => setOpacity(Number(e.target.value) / 100)}
+              className="m-0 min-h-11 w-[180px] accent-ink" />
+            <span className="min-w-11 font-mono text-[13px] tabular-nums">{percent}%</span>
+          </div>
+        </div>
+        <p className="text-[13px] leading-relaxed text-muted">
           슬라이더를 좌우로 움직이며 두 그림의 벽·기둥·모서리 같은 특징이 같은 자리에
           오는지 보세요. 겹쳐지지 않고 나란히 밀려 있으면 수평으로 어긋난 정합입니다.
         </p>
@@ -136,7 +167,7 @@ export function RegistrationOverlay({
             ★ 위쪽 "수평 검증 가능성" 안내와 **같은 현상의 두 얼굴**이다 - 감도가 낮게
             나오는 평탄한 바닥이 정확히 이 그림도 안 통하는 바닥이다. 두 안내가 같은
             이야기를 하도록 문구를 맞춰 둔다.
-            리디자인: 회색 박스 → info Alert(스펙 §7-8). 경고(warning)가 아니다 - 늑대소년 방지. */}
+            안내(info) 상자다. 경고(warning)가 아니다 - 늑대소년 방지. */}
         <Alert type="info">
           겹쳐보기의 한계: 미터급 어긋남은 확실히 드러나지만 수십 cm급은 정합된 것과
           구별하기 어렵습니다(실측 30cm 오정합의 무늬 상관 0.840 대 정합 0.896).

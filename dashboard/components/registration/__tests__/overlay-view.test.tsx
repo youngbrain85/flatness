@@ -8,7 +8,7 @@
 //
 // jsdom에는 캔버스가 없으므로 두 가지를 스텁으로 준다:
 //   1. getContext('2d') -> 호출을 기록하는 가짜 컨텍스트(drawImage 시점의 변환·alpha·
-//      이미지 src를 함께 기록한다)
+//      이미지 src와 바탕·격자 호출을 함께 기록한다)
 //   2. 전역 Image -> src를 넣으면 onload가 발화하는 가짜(실제 jsdom Image는 영원히
 //      로드되지 않아 그리기 경로 자체가 실행되지 않는다)
 // 프로덕션 코드에 테스트 전용 주입 지점을 두지 않으려고 전역 스텁을 골랐다.
@@ -17,6 +17,7 @@ import { render, screen } from '@testing-library/react';
 import { RegistrationOverlay } from '../overlay-view';
 import { plainPngUrl } from '@/lib/domain/height-view';
 import type { HeightViewMeta } from '@/lib/domain/height-view';
+import { STAGE_BG, STAGE_GRID } from '@/lib/domain/palette';
 import { imageCornersM, overlayAffine, overlayView } from '@/lib/domain/registration';
 import { FakeImage, recordingCtx } from './canvas-stub';
 
@@ -49,15 +50,22 @@ const MAX_W = 560;
 const MAX_H = 420;
 
 function mount(over: Partial<Parameters<typeof RegistrationOverlay>[0]> = {}) {
-  const { ctx, calls } = recordingCtx();
+  const rec = recordingCtx();
   vi.spyOn(HTMLCanvasElement.prototype, 'getContext')
-    .mockReturnValue(ctx as unknown as RenderingContext);
+    .mockReturnValue(rec.ctx as unknown as RenderingContext);
   vi.stubGlobal('Image', FakeImage);
   const utils = render(
     <RegistrationOverlay pathA={PATH_A} pathB={PATH_B} metaA={META_A} metaB={META_B}
       unitScaleA={SCALE_A} unitScaleB={SCALE_B} transform={T} {...over} />,
   );
-  return { calls, ...utils };
+  return { ...rec, ...utils };
+}
+
+function expectedView() {
+  return overlayView([
+    imageCornersM(META_A, SCALE_A, null),
+    imageCornersM(META_B, SCALE_B, T),
+  ], MAX_W, MAX_H);
 }
 
 afterEach(() => {
@@ -71,10 +79,7 @@ describe('RegistrationOverlay 그리기 배선', () => {
     const { calls } = mount();
     await vi.waitFor(() => expect(calls).toHaveLength(2));
 
-    const view = overlayView([
-      imageCornersM(META_A, SCALE_A, null),
-      imageCornersM(META_B, SCALE_B, T),
-    ], MAX_W, MAX_H);
+    const view = expectedView();
 
     // (1) 어느 이미지를 그렸나 - "B 대신 A를 두 번" 변이를 잡는다.
     expect(calls[0].src).toBe(plainPngUrl(PATH_A));
@@ -91,12 +96,31 @@ describe('RegistrationOverlay 그리기 배선', () => {
     expect(calls[1].alpha).toBeLessThan(1);
   });
 
-  // 아트보드 RegistrationDetail: 캔버스는 1px 구분선 틀(radius 8px) 안, 슬라이더는 accent 색.
-  it('캔버스는 cs-divider 틀 안에, 슬라이더는 accent-cs-link로 그린다', async () => {
+  // 다크 테마(Task 9, 스펙 §6 캔버스 그림): 그림 밑에 스테이지 바탕과 격자를 먼저 깐다.
+  // 격자가 그림 뒤에 그려지면 두 그림 위를 덮어 대조를 흐린다 - 순서까지 잠근다.
+  it('캔버스 전체를 STAGE_BG로 채우고 STAGE_GRID 1px 격자를 그린 뒤 두 그림을 얹는다', async () => {
+    const { calls, fills, strokes, ops } = mount();
+    await vi.waitFor(() => expect(calls).toHaveLength(2));
+
+    const view = expectedView();
+    expect(fills[0]).toEqual({ style: STAGE_BG, rect: [0, 0, view.width, view.height] });
+    expect(strokes).toHaveLength(1);
+    expect(strokes[0].style).toBe(STAGE_GRID);
+    expect(strokes[0].width).toBe(1);
+    expect(strokes[0].segments).toBeGreaterThan(0);
+    expect(ops.indexOf('fillRect')).toBeLessThan(ops.indexOf('stroke'));
+    expect(ops.indexOf('stroke')).toBeLessThan(ops.indexOf('drawImage'));
+  });
+
+  // 아트보드 RegistrationDetail '겹쳐보기': 캔버스는 검정 스테이지 안, 슬라이더는 눈썹 라벨로 이름이 붙고 accent는 ink.
+  it('캔버스는 검정 스테이지 안에 있고, 슬라이더는 "맞춘 스캔(B) 진하기"라는 이름과 accent-ink를 쓴다', async () => {
     const { container, calls } = mount();
     await vi.waitFor(() => expect(calls).toHaveLength(2));
-    expect(container.querySelector('canvas')?.parentElement?.className).toContain('border-cs-divider');
-    expect(screen.getByRole('slider').className).toContain('accent-cs-link');
+    expect(container.querySelector('canvas')?.closest('[data-stage]')).not.toBeNull();
+    const slider = screen.getByRole('slider', { name: '맞춘 스캔(B) 진하기' });
+    expect(slider.className).toContain('accent-ink');
+    expect(slider).toHaveValue('55');
+    expect(screen.getByText('55%').className).toContain('font-mono');
   });
 
   // 위 (2)의 기대값을 같은 함수로 계산하므로, 인자 오전달과 별개로 "회전이 실제로
@@ -116,12 +140,7 @@ describe('RegistrationOverlay 그리기 배선', () => {
   it('B의 배율을 A의 것으로 바꾸면 나오는 행렬과 다르다(unit_scale 오전달 차단)', async () => {
     const { calls } = mount();
     await vi.waitFor(() => expect(calls).toHaveLength(2));
-
-    const view = overlayView([
-      imageCornersM(META_A, SCALE_A, null),
-      imageCornersM(META_B, SCALE_B, T),
-    ], MAX_W, MAX_H);
-    expect(calls[1].transform).not.toEqual(overlayAffine(META_B, SCALE_A, T, view));
+    expect(calls[1].transform).not.toEqual(overlayAffine(META_B, SCALE_A, T, expectedView()));
   });
 
   // ★ 리뷰 C1: 사이드카가 404면 metaA/metaB가 null이 되고, 예전 구현은 캔버스 크기조차
@@ -165,7 +184,7 @@ describe('RegistrationOverlay 그리기 배선', () => {
     mount();
     const limit = screen.getByText(/수십 cm급은 정합된 것과/);
     expect(limit).toBeInTheDocument();
-    // 리디자인 결정: 회색 박스였던 한계 안내를 info Alert로 올린다(스펙 §7-8). 경고가 아니다.
+    // 회색 박스였던 한계 안내는 info Alert(아트보드: line-3 안내 상자). 경고가 아니다.
     expect(limit.closest('[data-alert]')).toHaveAttribute('data-alert', 'info');
     expect(limit).toHaveTextContent('수평 감도가 낮게 나오는 바닥이 정확히 이 경우');
     expect(limit).toHaveTextContent('대응점을 넓게 분산해 찍었는가');

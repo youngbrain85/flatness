@@ -1,4 +1,5 @@
-// 정합 시작 폼 (단계 F Task 5, 스펙 §6.2 2단계)
+// 정합 시작 폼 (단계 F Task 5, 스펙 §6.2 2단계) + 다크 리스킨(Task 9, 아트보드 RegistrationNew):
+// 카드 '스캔 선택' 안 FormField 둘 + 카드 밖 오른쪽 주 버튼. 검증·제출 로직은 앞의 세 테스트가 잠근다.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 
@@ -8,6 +9,7 @@ vi.mock('@/lib/supabase/client', () => ({ createClient: vi.fn() }));
 
 import { createClient } from '@/lib/supabase/client';
 import { RegistrationCreateForm } from '../registration-create-form';
+import { selectClass } from '@/components/ui/form';
 import type { ScanRow } from '@/lib/domain/types';
 
 function scan(id: string, name: string): ScanRow {
@@ -87,23 +89,28 @@ describe('RegistrationCreateForm', () => {
     expect(screen.getByRole('button', { name: /대응점 찍기 시작/ })).toBeEnabled();
   });
 
-  // Cloudscape 리스킨(아트보드 RegistrationNew): 컨테이너 '스캔 선택' 안 FormField 두 개
-  // (라벨/설명 분리), 컨테이너 밖 우측 primary. 검증·제출 로직은 위 세 테스트가 그대로 잠근다.
-  it('컨테이너 "스캔 선택" 안에 A/B 셀렉트를 FormField로, 밖에 primary 제출 버튼을 그린다', () => {
+  it('카드 "스캔 선택" 안에 A/B 셀렉트와 도움말을, 카드 밖에 주 버튼 하나를 그린다', () => {
     vi.mocked(createClient).mockReturnValue(stubSupabase() as never);
     render(<RegistrationCreateForm scans={SCANS} userId="u1" />);
 
-    expect(screen.getByRole('heading', { level: 2, name: '스캔 선택' })).toBeInTheDocument();
+    const heading = screen.getByRole('heading', { level: 2, name: '스캔 선택' });
+    const card = heading.closest('[class*="rounded-card"]') as HTMLElement;
+    expect(card).not.toBeNull();
     const a = screen.getByLabelText('기준 스캔 (A)');
     const b = screen.getByLabelText('맞출 스캔 (B)');
-    expect(a.className).toContain('border-line-3');
-    expect(b.className).toContain('appearance-none');
-    expect(screen.getByText('이 스캔의 좌표계를 유지합니다').className).toContain('text-muted');
+    expect(a.className).toBe(selectClass);
+    expect(b.className).toBe(selectClass);
+    expect(card.contains(a)).toBe(true);
+    expect(screen.getByText('이 스캔의 좌표계를 유지합니다')).toBeInTheDocument();
     expect(screen.getByText('A에 맞춰 회전·이동합니다')).toBeInTheDocument();
     // 셀렉트 옵션 문구(optionLabel, ISO 원문)는 그대로 - 두 셀렉트에 하나씩
     expect(screen.getAllByRole('option', { name: '동쪽.ply · 2026-08-01' })).toHaveLength(2);
-    const submit = screen.getByRole('button', { name: /대응점 찍기 시작/ });
+
+    const submit = screen.getByRole('button', { name: '대응점 찍기 시작' });
+    expect(submit).toHaveAttribute('type', 'submit');
     expect(submit.className).toContain('bg-ink');
-    expect(submit.className).toContain('rounded-control');
+    expect(card.contains(submit)).toBe(false);
+    // 주 버튼(ink 채움)은 이 화면에 하나뿐이다
+    expect(screen.getAllByRole('button').filter((el) => el.className.includes('bg-ink'))).toHaveLength(1);
   });
 });

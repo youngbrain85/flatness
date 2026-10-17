@@ -1,16 +1,19 @@
-// 정합 화면 (단계 F Task 5, 스펙 §7.4)
+// 정합 화면 (단계 F Task 5, 스펙 §7.4). 아트보드: docs/design/dark/RegistrationDetail.dc.html
+// 현장 밖 경로라 현장 헤더를 이 페이지가 직접 그린다 - 현장은 원본 스캔 → 측정위치 → 현장으로 찾는다.
+import type { Metadata } from 'next';
 import { notFound, redirect } from 'next/navigation';
 import { getRequestUser } from '@/lib/auth/request-user';
 import { createClient } from '@/lib/supabase/server';
+import { RegistrationWorkbench } from '@/components/registration/registration-workbench';
 import { EntryHeader } from '@/components/shell/entry-header';
 import { SiteHeader } from '@/components/shell/site-header';
-import { RegistrationWorkbench } from '@/components/registration/registration-workbench';
 import { Alert } from '@/components/ui/alert';
 import { LinkButton } from '@/components/ui/button';
 import { MAIN_BG, PAGE_MAIN } from '@/components/ui/page';
 import { PageHeader } from '@/components/ui/page-header';
 import { StatusIndicator, TONE_STATUS } from '@/components/ui/status-indicator';
 import { REGISTRATION_STATUS_LABEL } from '@/lib/domain/labels';
+import { locationCrumb } from '@/lib/domain/location-label';
 import type { LocationRow, RegistrationRow, RegistrationStatus, ScanRow, SiteRow } from '@/lib/domain/types';
 
 // 진행 상태 배지는 판정이 아니라 "진행이 어디까지 왔나"를 보여준다 - 완료만 pass,
@@ -25,6 +28,7 @@ export function statusTone(status: RegistrationStatus): 'pass' | 'fail' | 'unkno
 }
 
 export const dynamic = 'force-dynamic';
+export const metadata: Metadata = { title: '스캔 정합' };
 
 export default async function RegistrationPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -49,72 +53,67 @@ export default async function RegistrationPage({ params }: { params: Promise<{ i
   const scanA = byId.get(registration.source_scan_ids[0]);
   const scanB = byId.get(registration.source_scan_ids[1]);
 
-  // D8 브리프 Step 2: scans/[id]·reports/[id]와 같은 3단계 브레드크럼(현장 › 현장명 ›
-  // 측정위치)을 이 화면에도 맞춘다. registrations 행 자체에는 위치 정보가 없어
-  // 원본 스캔의 location_id를 거쳐 조회한다 - 원본 스캔이 둘 다 지워졌으면(위 "원본
-  // 스캔을 찾을 수 없습니다" 분기) 위치를 알 수 없으니 현장 홈 링크만 남긴다.
+  // 현장 헤더와 브레드크럼을 위해 원본 스캔의 location_id로 측정위치·현장을 찾는다(registrations 행 자체에는
+  // 위치 정보가 없다). 원본 스캔이 둘 다 지워졌으면(아래 "원본 스캔을 찾을 수 없습니다" 분기) 위치·현장을
+  // 알 수 없으니 진입 헤더 + '현장 목록' 크럼으로 돌아갈 길만 남긴다.
   const scanForLocation = scanA ?? scanB;
-  let crumbs: { href?: string; label: string }[] = [{ href: '/', label: '현장' }];
-  // 셸 헤더(Task 2)가 쓸 현장. 원본 스캔·측정위치·현장 중 하나라도 없으면 null 로 남아 진입 헤더가 대신한다.
+  let loc: LocationRow | null = null;
   let site: SiteRow | null = null;
   if (scanForLocation) {
     const { data: locRow } = await supabase.from('locations').select('*')
       .eq('id', scanForLocation.location_id).maybeSingle();
     if (locRow) {
-      const loc = locRow as LocationRow;
+      loc = locRow as LocationRow;
       const { data: siteRow } = await supabase.from('sites').select('*')
         .eq('id', loc.site_id).maybeSingle();
       site = (siteRow as SiteRow | null) ?? null;
-      const locationLabel = [loc.building, loc.floor, loc.room, loc.name].filter(Boolean).join(' / ');
-      crumbs = [
-        { href: '/', label: '현장' },
-        { href: `/sites/${loc.site_id}`, label: siteRow ? (siteRow as SiteRow).name : '현장 상세' },
-        { label: locationLabel },
-      ];
     }
   }
+  // 브레드크럼(스펙 §4.3): 탭 이름(측정위치)부터, 측정위치 표기는 ' · '.
+  const crumbs = loc
+    ? [
+        { href: `/sites/${loc.site_id}/locations`, label: '측정위치' },
+        { href: `/sites/${loc.site_id}/locations#loc-${loc.id}`, label: locationCrumb(loc) },
+        { label: '스캔 정합' },
+      ]
+    : [{ href: '/', label: '현장 목록' }, { label: '스캔 정합' }];
 
-  const content = (
-    <div className={PAGE_MAIN}>
-      {/* 아트보드 RegistrationDetail(63-69행): h1 '스캔 정합'과 진행 상태 StatusIndicator가
-          flex + gap 한 줄에 나란히 놓인다 - PageHeader의 description은 h1 아래 별도 줄로
-          떨어지므로 쓸 수 없다. title 자리에 h1 + StatusIndicator를 함께 넣어 한 줄로
-          만든다. StatusIndicator는 자체 text-sm을 쓰므로, h1에서 물려받는 font-bold/
-          leading-[30px]만 font-normal/leading-5로 되짚어 아트보드의 400 굵기를 맞춘다. */}
-      <PageHeader crumbs={crumbs} title={
-        <span className="flex flex-wrap items-center gap-3">
-          스캔 정합
-          <StatusIndicator type={TONE_STATUS[statusTone(registration.status)]} className="font-normal leading-5">
-            {REGISTRATION_STATUS_LABEL[registration.status]}
-          </StatusIndicator>
-        </span>
-      } />
-      {scanA && scanB ? (
-        <RegistrationWorkbench registration={registration} scanA={scanA} scanB={scanB} />
-      ) : (
-        // registrations.source_scan_ids는 배열이라 FK가 없다 - 원본 스캔이 지워지면
-        // 죽은 id가 남는 것을 007이 이력 테이블로서 의도적으로 허용했다. 화면이 견딘다.
-        <Alert type="warning" title="원본 스캔을 찾을 수 없습니다.">
-          <p>
-            정합에 쓰인 스캔이 삭제된 것 같습니다. 이 정합 이력은 남지만 대응점을 다시
-            찍을 수는 없습니다. 새 정합을 시작하세요.
-          </p>
-          {registration.result_scan_id && (
-            <div className="mt-3">
-              <LinkButton href={`/scans/${registration.result_scan_id}`}>이 정합이 만든 병합 스캔 열기</LinkButton>
-            </div>
-          )}
-        </Alert>
-      )}
-    </div>
-  );
-  // 셸(스펙 §4.2): 정합 화면은 URL 을 그대로 두고 현장 헤더(측정위치) + 도면 격자 본문 안에서 그린다.
   return (
     <>
-      {site
-        ? <SiteHeader site={{ id: site.id, name: site.name }} email={user.email} />
-        : <EntryHeader email={user.email} />}
-      <main className={MAIN_BG}>{content}</main>
+      {site ? <SiteHeader site={{ id: site.id, name: site.name }} email={user.email} /> : <EntryHeader email={user.email} />}
+      <main className={MAIN_BG}>
+        <div className={PAGE_MAIN}>
+          {/* 아트보드 RegistrationDetail: h1 '스캔 정합'과 진행 상태(8px 점 + 14px 글자)가 한 줄(gap 8px 16px).
+              PageHeader의 description은 h1 아래 별도 줄이라 쓸 수 없다 - title 자리에 글자 + StatusIndicator를
+              함께 넣는다. 상태 글자는 h1의 제목 글꼴·굵기·줄높이를 물려받지 않게 되짚는다. */}
+          <PageHeader crumbs={crumbs} title={
+            <span className="flex flex-wrap items-center gap-x-4 gap-y-2">
+              스캔 정합
+              <StatusIndicator type={TONE_STATUS[statusTone(registration.status)]}
+                className="font-sans text-sm font-normal leading-normal">
+                {REGISTRATION_STATUS_LABEL[registration.status]}
+              </StatusIndicator>
+            </span>
+          } />
+          {scanA && scanB ? (
+            <RegistrationWorkbench registration={registration} scanA={scanA} scanB={scanB} />
+          ) : (
+            // registrations.source_scan_ids는 배열이라 FK가 없다 - 원본 스캔이 지워지면
+            // 죽은 id가 남는 것을 007이 이력 테이블로서 의도적으로 허용했다. 화면이 견딘다.
+            <Alert type="warning" title="원본 스캔을 찾을 수 없습니다.">
+              <p>
+                정합에 쓰인 스캔이 삭제된 것 같습니다. 이 정합 이력은 남지만 대응점을 다시
+                찍을 수는 없습니다. 새 정합을 시작하세요.
+              </p>
+              {registration.result_scan_id && (
+                <div className="mt-3">
+                  <LinkButton href={`/scans/${registration.result_scan_id}`}>이 정합이 만든 병합 스캔 열기</LinkButton>
+                </div>
+              )}
+            </Alert>
+          )}
+        </div>
+      </main>
     </>
   );
 }

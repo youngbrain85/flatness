@@ -1,4 +1,4 @@
-// 무장식 PNG 위 대응점 클릭 (단계 F Task 5, 설계 결정 F6/F7)
+// 무장식 PNG 위 대응점 클릭 (단계 F Task 5, 설계 결정 F6/F7) + 다크 리스킨(Task 9: 검정 스테이지·마커)
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { PointPicker } from '../point-picker';
@@ -51,12 +51,14 @@ function renderPicker(over: Partial<Parameters<typeof PointPicker>[0]> = {}) {
 
 describe('PointPicker 클릭 -> 월드 좌표 (설계 결정 F7)', () => {
   // 장식 PNG는 matplotlib 여백 때문에 픽셀 -> 월드 역산이 불가능하다.
-  it('클릭 대상은 무장식 PNG다', () => {
+  it('클릭 대상은 무장식 PNG이고, 검정 스테이지 안에 놓인다', () => {
     renderPicker();
     const img = screen.getByRole('img', { name: /A 스캔/ });
     expect(img).toHaveAttribute('src', PLAIN_URL);
     expect(img).not.toHaveAttribute('src', DECORATED_URL);
-    expect(img.className).toContain('border-cs-divider');
+    // 다크 리스킨: 흰 틀이 아니라 검정 스테이지(아트보드 RegistrationDetail 대응점 화면)
+    expect(img.closest('[data-stage]')).not.toBeNull();
+    expect(img.className).toContain('cursor-crosshair');
   });
 
   it('클릭 픽셀을 사이드카 좌표 계약으로 환산해 넘긴다', () => {
@@ -100,18 +102,36 @@ describe('PointPicker 클릭 -> 월드 좌표 (설계 결정 F7)', () => {
     const { onPick } = renderPicker({ disabled: true });
     fireEvent.click(screen.getByRole('img', { name: /A 스캔/ }), { clientX: 50, clientY: 250 });
     expect(onPick).not.toHaveBeenCalled();
+    expect(screen.getByRole('img', { name: /A 스캔/ }).className).toContain('cursor-not-allowed');
   });
 
-  it('찍은 점을 순번 마커로 표시한다', () => {
+  it('찍은 점을 순번 마커로 표시한다(장식이라 aria-hidden)', () => {
     renderPicker({ markers: [{ px: 0, py: 2, label: '1' }, { px: 4, py: 0, label: '2' }] });
-    expect(screen.getByText('1')).toBeInTheDocument();
+    expect(screen.getByText('1')).toHaveAttribute('aria-hidden', 'true');
     expect(screen.getByText('2')).toBeInTheDocument();
   });
 
-  it('확정 마커는 cs-link, 짝을 기다리는 마커는 cs-warning으로 구분한다', () => {
+  // 아트보드 마커: ink 채움 22px 원 + 2px 검정 테두리 + mono 11px ground 글자. 짝을 기다리는 점은 warn 채움.
+  it('확정 마커는 ink 채움, 짝을 기다리는 마커는 data-pending + warn 채움으로 구분한다', () => {
     renderPicker({ markers: [{ px: 0, py: 2, label: '1' }, { px: 4, py: 0, label: '2', pending: true }] });
-    expect(screen.getByText('1').className).toContain('bg-cs-link');
-    expect(screen.getByText('2').className).toContain('bg-cs-warning');
+    const done = screen.getByText('1');
+    const pending = screen.getByText('2');
+    expect(done.className).toContain('bg-ink');
+    expect(done.className).toContain('border-stage');
+    expect(done.className).toContain('font-mono');
+    expect(done).not.toHaveAttribute('data-pending');
+    expect(pending).toHaveAttribute('data-pending', 'true');
+    expect(pending.className).toContain('bg-warn');
+    expect(pending.className).not.toContain('bg-ink');
+  });
+
+  it('detail을 주면 제목 뒤에 mono로 붙이고 대체 텍스트에도 넣는다', () => {
+    renderPicker({ title: 'A 스캔 (기준)', detail: 'a.ply · 2026-08-01' });
+    expect(screen.getByRole('heading', { level: 3, name: 'A 스캔 (기준) · a.ply · 2026-08-01' })).toBeInTheDocument();
+    expect(screen.getByText('a.ply · 2026-08-01').className).toContain('font-mono');
+    expect(screen.getByRole('img', { name: /A 스캔 \(기준\) · a\.ply · 2026-08-01 높이 뷰\(무장식\)/ })).toBeInTheDocument();
+    // 그림 묶음은 제목으로 이름 붙은 영역이다
+    expect(screen.getByRole('region', { name: 'A 스캔 (기준) · a.ply · 2026-08-01' })).toBeInTheDocument();
   });
 
   it('사이드카가 없으면 클릭을 받지 않고 이유를 밝힌다', () => {

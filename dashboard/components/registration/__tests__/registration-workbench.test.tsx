@@ -1,4 +1,4 @@
-// 정합 작업대 (단계 F Task 5, 스펙 §7.4)
+// 정합 작업대 (단계 F Task 5, 스펙 §7.4) + 다크 리스킨(Task 9, 아트보드 RegistrationDetail)
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 
@@ -9,6 +9,7 @@ vi.mock('@/lib/supabase/client', () => ({ createClient: vi.fn() }));
 import { createClient } from '@/lib/supabase/client';
 import { RegistrationWorkbench } from '../registration-workbench';
 import { FakeImage, recordingCtx } from './canvas-stub';
+import { checkClass } from '@/components/ui/form';
 import { plainPngUrl } from '@/lib/domain/height-view';
 import type { HeightViewMeta } from '@/lib/domain/height-view';
 import { imageCornersM, overlayAffine, overlayView } from '@/lib/domain/registration';
@@ -131,6 +132,11 @@ function pickPair(clientX: number, clientY: number) {
   fireEvent.click(screen.getByRole('img', { name: /B 스캔/ }), { clientX, clientY });
 }
 
+/** 정합 결과 수치 칸: 라벨(dt) 바로 다음의 값(dd). 숫자와 단위가 서로 다른 글꼴의 두 span이다. */
+function metric(label: string): HTMLElement {
+  return screen.getByText(label).nextElementSibling as HTMLElement;
+}
+
 afterEach(() => {
   vi.clearAllMocks();
   vi.unstubAllGlobals();
@@ -155,7 +161,7 @@ describe('RegistrationWorkbench 대응점 수집 (스펙 §7.4)', () => {
     expect(screen.getByRole('button', { name: /정합 실행/ })).toBeDisabled();
   });
 
-  it('3쌍이 되면 활성화된다', async () => {
+  it('3쌍이 되면 활성화된다(대응점 지정 화면의 유일한 주 버튼)', async () => {
     mount();
     await waitReady();
     pickPair(50, 250);
@@ -164,9 +170,29 @@ describe('RegistrationWorkbench 대응점 수집 (스펙 §7.4)', () => {
 
     const run = screen.getByRole('button', { name: /정합 실행/ });
     expect(run).toBeEnabled();
-    // 대응점 지정 뷰의 유일한 primary. 안내문은 info Alert.
     expect(run.className).toContain('bg-ink');
     expect(screen.getByText(/번갈아 클릭해 쌍을 만드세요/).closest('[data-alert]')).toHaveAttribute('data-alert', 'info');
+  });
+
+  // 아트보드 RegistrationDetail 대응점 화면: 두 그림은 검정 스테이지 안, 제목 뒤 mono 파일명·시각
+  it('두 그림은 검정 스테이지 안에 있고 제목 뒤에 파일명·시각을 붙인다', async () => {
+    mount();
+    await waitReady();
+    expect(screen.getByRole('heading', { level: 3, name: 'A 스캔 (기준) · a.ply · 2026-08-01' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 3, name: 'B 스캔 (맞출 대상) · b.ply · 2026-08-01' })).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: /A 스캔/ }).closest('[data-stage]')).not.toBeNull();
+  });
+
+  it('대응점 목록 줄의 지우기 버튼은 번호로 이름이 붙고, 지우면 쌍이 줄어든다', async () => {
+    mount();
+    await waitReady();
+    pickPair(50, 250);
+    pickPair(250, 150);
+    expect(screen.getByRole('heading', { level: 2, name: '대응점 2쌍' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '1번 쌍 지우기' }));
+    expect(screen.getByRole('heading', { level: 2, name: '대응점 1쌍' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '2번 쌍 지우기' })).toBeNull();
   });
 
   // Task 4 계약: a = source_scan_ids[0], b = [1], 값은 각 파일 단위 월드 좌표.
@@ -240,9 +266,8 @@ describe('RegistrationWorkbench 진행·실패 표시 (설계 결정 F10)', () =
   it.each(['queued', 'processing'] as const)('%s면 진행 중임을 알린다', async (status) => {
     mount(reg({ status }));
     const indicator = await screen.findByText(/정합 중|정합 대기 중/);
-    expect(indicator).toBeInTheDocument();
     // 진행 상태는 StatusIndicator in-progress - 스타일이 아니라 의미 속성으로 읽는다
-    expect(indicator).toHaveAttribute('data-status', 'in-progress');
+    expect(indicator.closest('[data-status]')).toHaveAttribute('data-status', 'in-progress');
     expect(screen.queryByRole('button', { name: /정합 실행/ })).toBeNull();
   });
 
@@ -253,7 +278,7 @@ describe('RegistrationWorkbench 진행·실패 표시 (설계 결정 F10)', () =
       error_text: '중첩이 부족합니다(약 6%). 두 스캔이 실제로 겹치는지 확인하세요.',
     }));
     expect(await screen.findByText(/중첩이 부족합니다\(약 6%\)/)).toBeInTheDocument();
-    // 실패는 error Alert, 다음 행동(대응점 다시 찍기)이 이 뷰의 primary
+    // 실패는 error Alert, 다음 행동(대응점 다시 찍기)이 이 화면의 주 버튼
     expect(screen.getByText(/정합에 실패했습니다/).closest('[data-alert]')).toHaveAttribute('data-alert', 'error');
     expect(screen.getByRole('button', { name: /대응점 다시 찍기/ }).className).toContain('bg-ink');
   });
@@ -279,8 +304,8 @@ describe('RegistrationWorkbench 결과 표시 (스펙 §9.3.2·§9.3.4)', () => 
   it('overlap_ratio 원값을 중첩률로 그대로 보여주지 않는다', async () => {
     mount(done);
     await screen.findByText(/1\.01/);
-    expect(screen.getByText('100%')).toBeInTheDocument();
-    expect(screen.queryByText('80%')).toBeNull();
+    expect(metric('겹친 영역(추정)')).toHaveTextContent('100%');
+    expect(metric('겹친 영역(추정)')).not.toHaveTextContent('80');
   });
 
   it('정합 후 두 뷰를 겹쳐 그린 그림을 함께 제시한다', async () => {
@@ -290,21 +315,26 @@ describe('RegistrationWorkbench 결과 표시 (스펙 §9.3.2·§9.3.4)', () => 
     expect(container.querySelector('canvas')).not.toBeNull();
   });
 
-  // 아트보드 RegistrationDetail: 컨테이너 '정합 결과'(KeyValuePairs 3열 + warning Alert) →
-  // 컨테이너 '겹쳐보기'(체크박스 checkClass, disabled 버튼, 보조색 안내문). 컨테이너는 정확히 둘.
-  it('정합 결과·겹쳐보기를 컨테이너와 Cloudscape 프리미티브로 그린다', async () => {
+  // 아트보드 RegistrationDetail 완료 화면: 카드 둘('정합 결과' · '겹쳐보기'), 수치는 눈썹 라벨 + Anton 숫자.
+  it('정합 결과·겹쳐보기 카드 둘과 다크 프리미티브로 그린다', async () => {
     const { container } = mount(done);
     await screen.findByText(/1\.01/);
 
-    expect(screen.getByRole('heading', { level: 2, name: '정합 결과' })).toBeInTheDocument();
-    expect(container.querySelectorAll('section.rounded-card')).toHaveLength(2);
-    expect(screen.getByText('정합 잔차 RMSE').className).toContain('text-dim'); // KeyValuePairs 라벨은 눈썹
-    expect(screen.getByText(/1\.01/).className).toContain('font-mono');
+    expect(screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent))
+      .toEqual(['정합 결과', '겹쳐보기 (정합 결과 육안 확인)']);
+    expect(screen.getByText('정합 잔차 RMSE').className).toContain('text-dim');
+    expect(screen.getByText('정합 잔차 RMSE').className).toContain('font-mono');
+    expect(screen.getByText('1.01').className).toContain('font-display');
+    expect(metric('정합 잔차 RMSE')).toHaveTextContent('1.01mm');
+    expect(metric('ICP 반복')).toHaveTextContent('12');
     expect(screen.getByText(/수직 방향 일치만 보증/).closest('[data-alert]')).toHaveAttribute('data-alert', 'warning');
-    expect(screen.getByRole('checkbox', { name: /포개지는/ }).className).toContain('accent-ink');
-    expect(screen.getByRole('button', { name: /병합 스캔/ }).className).toContain('text-dim');
-    expect(screen.getByRole('button', { name: /대응점 다시 찍기/ }).className).toContain('border-line-3');
-    expect(screen.getByText(/시스템 차원의 승인 절차가 아닙니다/).className).toContain('text-cs-text-secondary');
+    expect(screen.getByRole('checkbox', { name: /포개지는/ }).className).toBe(checkClass);
+    const openMerged = screen.getByRole('button', { name: /병합 스캔/ });
+    expect(openMerged).toBeDisabled();
+    expect(openMerged.className).not.toContain('bg-ink');
+    expect(screen.getByRole('button', { name: /대응점 다시 찍기/ }).className).not.toContain('bg-ink');
+    expect(screen.getByText(/시스템 차원의 승인 절차가 아닙니다/).className).toContain('text-muted');
+    expect(container.querySelector('canvas')?.closest('[data-stage]')).not.toBeNull();
   });
 
   // ★ 리뷰 C2: overlay-view.test.tsx는 컴포넌트를 직접 마운트해 그 안쪽 배선만 잠근다.
@@ -342,13 +372,15 @@ describe('RegistrationWorkbench 결과 표시 (스펙 §9.3.2·§9.3.4)', () => 
     expect(screen.getByRole('button', { name: /병합 스캔/ })).toBeDisabled();
   });
 
-  it('겹쳐보기를 확인하면 병합 스캔으로 가는 링크가 열린다', async () => {
+  it('겹쳐보기를 확인하면 병합 스캔으로 가는 링크(주 버튼)가 열린다', async () => {
     mount(done);
     await screen.findByText(/1\.01/);
 
     fireEvent.click(screen.getByRole('checkbox', { name: /포개지는/ }));
 
-    expect(screen.getByRole('link', { name: /병합 스캔/ })).toHaveAttribute('href', '/scans/merged-1');
+    const link = screen.getByRole('link', { name: /병합 스캔/ });
+    expect(link).toHaveAttribute('href', '/scans/merged-1');
+    expect(link.className).toContain('bg-ink');
   });
 
   // 다시 찍으면 방금 만들어진 병합 스캔은 쓰레기가 된다 - 목록에 남으면 안 된다.
@@ -369,6 +401,19 @@ describe('RegistrationWorkbench 결과 표시 (스펙 §9.3.2·§9.3.4)', () => 
     }));
   });
 
+  // 아트보드: 다시 찍기 확인 = err 14px 문장 + 위험 버튼 '삭제하고 다시 찍기' + 보조 버튼 '취소'
+  it('다시 찍기 확인 단계는 위험 버튼과 보조 버튼이다', async () => {
+    mount(done);
+    await screen.findByText(/1\.01/);
+    fireEvent.click(screen.getByRole('button', { name: /대응점 다시 찍기/ }));
+
+    const confirm = await screen.findByRole('button', { name: '삭제하고 다시 찍기' });
+    expect(confirm.className).toContain('text-err');
+    expect(confirm.className).not.toContain('bg-ink');
+    expect(screen.getByText(/병합 스캔이 삭제됩니다/).className).toContain('text-err');
+    expect(screen.getByRole('button', { name: '취소' }).className).not.toContain('bg-ink');
+  });
+
   // ★ 리뷰 I3: 다시 찍기 후 육안 확인 체크가 남아 있으면, 다음 정합 결과가 나왔을 때
   // 사용자가 그 그림을 한 번도 안 봤는데도 병합 스캔 링크가 이미 열려 있다.
   it('대응점을 다시 찍으면 육안 확인 체크가 풀린다', async () => {
@@ -386,7 +431,7 @@ describe('RegistrationWorkbench 결과 표시 (스펙 §9.3.2·§9.3.4)', () => 
   });
 
   // ★ 리뷰 C1 (실증 프로브: canvas=300x150 / 안내 없음 / 링크 열림). 사이드카가 404면
-  // metaA·metaB가 null이라 겹쳐보기가 빈 흰 상자로 남는데, 예전 구현은 아무 안내 없이
+  // metaA·metaB가 null이라 겹쳐보기가 빈 상자로 남는데, 예전 구현은 아무 안내 없이
   // 체크를 허용해 방어가 조용히 0이 됐다.
   it('사이드카를 못 받으면 육안 확인을 체크할 수 없고 사유를 그 자리에 띄운다', async () => {
     mount(done, {}, SCAN_B, true);
@@ -487,13 +532,12 @@ describe('RegistrationWorkbench 수평 검증 가능성 안내', () => {
     await screen.findByText(/수평 검증 가능성: 낮음/);
 
     expect(screen.getByText(/정상이고 흔합니다/)).toBeInTheDocument();
-    const box = screen.getByText(/수평 검증 가능성: 낮음/).parentElement!;
+    const box = screen.getByText(/수평 검증 가능성: 낮음/).closest('[data-alert]') as HTMLElement;
     for (const word of ['오류', '이상', '실패']) {
       expect(box.textContent).not.toContain(word);
     }
     // 정보 알림(info)으로 제시한다 - 실패 알림(error)과 같은 무게로 보이면 안 된다.
-    // 스타일 문자열 대신 Alert의 의미 속성(data-alert)으로 읽는다.
-    expect(box.closest('[data-alert]')).toHaveAttribute('data-alert', 'info');
+    expect(box).toHaveAttribute('data-alert', 'info');
     expect(container.querySelector('[data-alert="error"]')).toBeNull();
   });
 

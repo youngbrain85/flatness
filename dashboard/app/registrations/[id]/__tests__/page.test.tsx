@@ -1,4 +1,4 @@
-// 정합 화면 서버 배선 (단계 F Task 5)
+// 정합 화면 서버 배선 (단계 F Task 5) + 현장 작업 공간(Task 9)
 //
 // Next.js 16 + Vitest는 async 서버 컴포넌트 render()를 지원하지 않는다 - 관례대로
 // @/lib/supabase/server를 모킹하고 페이지 함수를 await 해 반환 트리와 쿼리 배선을 본다.
@@ -10,25 +10,22 @@ vi.mock('next/navigation', () => ({
   notFound: () => { throw new Error('NOT_FOUND'); },
   redirect: (to: string) => { throw new Error(`REDIRECT:${to}`); },
 }));
-// perf-auth-roundtrips: 페이지는 이제 supabase.auth.getUser() 대신 proxy가 검증해
-// 실은 x-flatness-user-* 요청 헤더를 읽는다(getRequestUser). next/headers의
-// headers()는 요청 스코프 밖(테스트)에서 던지므로 proxy가 실어 준 것과 같은 형태의
-// 헤더를 공급한다 - getRequestUser의 실제 코드가 그대로 돈다.
+// perf-auth-roundtrips: 페이지는 supabase.auth.getUser() 대신 proxy가 검증해 실은
+// x-flatness-user-* 요청 헤더를 읽는다(getRequestUser) - 실제 코드가 그대로 돈다.
 vi.mock('next/headers', () => ({
-  // Task 2: 셸 헤더(계정 메뉴)가 이메일도 쓴다 - proxy 처럼 인코딩해 싣는다.
   headers: async () => new Headers({
-    'x-flatness-user-id': 'u1', 'x-flatness-user-email': encodeURIComponent('u1@example.com'),
+    'x-flatness-user-id': 'u1',
+    'x-flatness-user-email': encodeURIComponent('u1@example.com'),
   }),
 }));
-// 셸 헤더 내부는 components/shell 테스트가 맡는다 - 여기서는 페이지가 넘긴 props 만 본다.
 vi.mock('@/components/shell/site-header', () => ({ SiteHeader: () => null }));
 vi.mock('@/components/shell/entry-header', () => ({ EntryHeader: () => null }));
 
 import { createClient } from '@/lib/supabase/server';
 import RegistrationPage, { statusTone } from '../page';
-import { SiteHeader } from '@/components/shell/site-header';
-import { EntryHeader } from '@/components/shell/entry-header';
 import { RegistrationWorkbench } from '@/components/registration/registration-workbench';
+import { EntryHeader } from '@/components/shell/entry-header';
+import { SiteHeader } from '@/components/shell/site-header';
 import { Alert } from '@/components/ui/alert';
 import { LinkButton } from '@/components/ui/button';
 import { MAIN_BG, PAGE_MAIN } from '@/components/ui/page';
@@ -47,9 +44,8 @@ function scan(id: string, over: Partial<ScanRow> = {}): ScanRow {
   } as ScanRow;
 }
 
-// D8 브리프 Step 2: 현장 › 현장명 › 측정위치 3단계 브레드크럼을 위해 원본 스캔의
-// location_id로 locations·sites를 추가 조회한다 - 스텁이 없는 테이블 접근은 throw로
-// 즉시 드러나므로 여기서도 채운다.
+// 원본 스캔의 location_id로 locations·sites를 추가 조회한다 - 스텁이 없는 테이블 접근은
+// throw로 즉시 드러나므로 여기서도 채운다.
 const LOCATION = {
   id: 'l1', site_id: 's1', building: '본관', floor: '1층', floor_order: 1, room: '로비',
   name: '로비', memo: null, created_at: '', updated_at: '',
@@ -93,8 +89,6 @@ function textOf(node: unknown): string {
   if (typeof node === 'string' || typeof node === 'number') return String(node);
   if (Array.isArray(node)) return node.map(textOf).join('');
   if (!node || typeof node !== 'object') return '';
-  // Cloudscape 프리미티브(Alert·PageHeader)는 문구를 title/description prop으로 받는다 -
-  // children만 걷으면 제목 문장('원본 스캔을 찾을 수 없습니다.')을 놓친다.
   const props = (node as ReactElement<{ title?: unknown; description?: unknown; children?: unknown }>).props;
   return [props?.title, props?.description, props?.children].map(textOf).join('');
 }
@@ -167,38 +161,39 @@ describe('RegistrationPage 배선', () => {
   });
 });
 
-// D8 브리프 Step 2: scans/[id]·reports/[id]와 같은 3단계 브레드크럼 규약
-// (현장 홈 › 현장명 › 측정위치 라벨)을 이 화면에도 맞춘다.
-describe('RegistrationPage 브레드크럼 (D8)', () => {
-  it('원본 스캔의 위치로 현장 홈 › 현장명 › 측정위치 라벨을 PageHeader에 넘긴다', async () => {
+describe('RegistrationPage 현장 헤더·브레드크럼·본문 (Task 9, 스펙 §4.3)', () => {
+  it('원본 스캔의 현장으로 현장 헤더를 그리고 계정 이메일을 넘긴다', async () => {
     const el = await mount();
-    const header = findByType(el, PageHeader);
+    expect(findByType(el, SiteHeader)!.props).toEqual({ site: { id: 's1', name: '본관 현장' }, email: 'u1@example.com' });
+    expect(findByType(el, EntryHeader)).toBeNull();
+  });
 
-    expect(header).not.toBeNull();
-    const props = header!.props as { crumbs: { href?: string; label: string }[]; title: unknown };
+  it('브레드크럼은 측정위치 / 측정위치 표기(" · ") / 스캔 정합', async () => {
+    const el = await mount();
+    const props = findByType(el, PageHeader)!.props as { crumbs: { href?: string; label: string }[]; title: unknown };
     expect(props.crumbs).toEqual([
-      { href: '/', label: '현장' },
-      { href: '/sites/s1', label: '본관 현장' },
-      { label: '본관 / 1층 / 로비 / 로비' },
+      { href: '/sites/s1/locations', label: '측정위치' },
+      { href: '/sites/s1/locations#loc-l1', label: '본관 · 1층 · 로비 · 로비' },
+      { label: '스캔 정합' },
     ]);
     expect(textOf(props.title)).toContain('스캔 정합');
   });
 
-  // 아트보드 RegistrationDetail(63-69행): h1 '스캔 정합'과 진행 상태 StatusIndicator가
-  // flex + gap 한 줄에 나란히 놓인다 - PageHeader의 description은 h1 아래 별도 줄로
-  // 떨어지므로 StatusIndicator는 description이 아니라 title 안에 들어간다. 색·아이콘은
-  // statusTone(F2) → TONE_STATUS 매핑으로 정해진다(done→success, failed→error, 나머지→pending).
+  it('본문은 MAIN_BG <main> 안 PAGE_MAIN이다', async () => {
+    const el = await mount();
+    const main = findByType(el, 'main')!;
+    expect((main.props as { className: string }).className).toBe(MAIN_BG);
+    const body = (main.props as { children: ReactElement }).children;
+    expect((body.props as { className: string }).className).toBe(PAGE_MAIN);
+  });
+
+  // 아트보드 RegistrationDetail: h1 '스캔 정합'과 진행 상태가 한 줄. 색·점은 statusTone(F2) → TONE_STATUS 매핑.
   it.each([
     ['awaiting_points', 'pending', '대응점 지정 대기'],
     ['done', 'success', '정합 완료'],
     ['failed', 'error', '정합 실패'],
   ] as const)('%s 상태를 PageHeader title 안 StatusIndicator(%s)로 그린다', async (status, type, label) => {
     const el = await mount({ registration: { ...REG, status } });
-    // Task 2: 셸 헤더 + 도면 격자 본문(main, MAIN_BG) 안에 본문 상자(div, PAGE_MAIN) - 현장 화면 공통 구조.
-    const main = findByType(el, 'main') as ReactElement<{ className: string; children: ReactElement<{ className: string }> }>;
-    expect(main.props.className).toBe(MAIN_BG);
-    expect(main.props.children.type).toBe('div');
-    expect(main.props.children.props.className).toBe(PAGE_MAIN);
     const header = findByType(el, PageHeader)!.props as { title: ReactElement; description?: unknown };
     expect(header.description).toBeUndefined();
     const status_ = findByType(header.title, StatusIndicator);
@@ -207,29 +202,12 @@ describe('RegistrationPage 브레드크럼 (D8)', () => {
     expect((status_!.props as { children: string }).children).toBe(label);
   });
 
-  it('원본 스캔이 둘 다 없으면 현장 홈 크럼만 남긴다', async () => {
+  it('원본 스캔이 둘 다 없으면 진입 헤더와 "현장 목록" 크럼으로 돌아갈 길만 남긴다', async () => {
     const el = await mount({ scans: [] });
-    const header = findByType(el, PageHeader);
-
-    expect((header!.props as { crumbs: { href?: string; label: string }[] }).crumbs)
-      .toEqual([{ href: '/', label: '현장' }]);
-  });
-});
-
-// Task 2 셸(스펙 §4.2): 정합 화면은 URL 을 그대로 두고 현장 헤더(측정위치) 안에서 그린다.
-describe('RegistrationPage 셸 헤더 (Task 2)', () => {
-  it('원본 스캔 → 측정위치 → 현장으로 찾은 현장과 요청 사용자 이메일을 SiteHeader 에 넘긴다', async () => {
-    const el = await mount();
-
-    expect(findByType(el, SiteHeader)?.props).toEqual({ site: { id: 's1', name: '본관 현장' }, email: 'u1@example.com' });
-    expect(findByType(el, EntryHeader)).toBeNull();
-  });
-
-  it('원본 스캔이 둘 다 지워져 현장을 모르면 진입 헤더로 대신한다', async () => {
-    const el = await mount({ scans: [] });
-
     expect(findByType(el, SiteHeader)).toBeNull();
-    expect((findByType(el, EntryHeader)?.props as { email: string | null }).email).toBe('u1@example.com');
+    expect(findByType(el, EntryHeader)!.props).toEqual({ email: 'u1@example.com' });
+    expect((findByType(el, PageHeader)!.props as { crumbs: { href?: string; label: string }[] }).crumbs)
+      .toEqual([{ href: '/', label: '현장 목록' }, { label: '스캔 정합' }]);
   });
 });
 

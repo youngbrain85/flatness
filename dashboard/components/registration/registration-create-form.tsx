@@ -51,12 +51,11 @@ export function RegistrationCreateForm({ scans, userId }: { scans: ScanRow[]; us
   }
 
   return (
-    // 아트보드 RegistrationNew: 컨테이너 '스캔 선택' 안에 A/B 셀렉트(필드 max-w 640px),
-    // 컨테이너 밖 우측 정렬 primary. 옛 라벨 "기준 스캔 (A) - 이 스캔의 좌표계를 유지합니다"는
-    // " - " 앞뒤를 라벨/설명으로 나눠 옮겼다(문구는 그대로).
+    // 아트보드 RegistrationNew: 카드 '스캔 선택'(라벨 → 셀렉트 → 도움말, 필드 간격 16) + 카드 밖 오른쪽 주 버튼.
+    // 같은 스캔 둘이면 카드 안 맨 아래에 오류 상자.
     <form onSubmit={onSubmit} className="flex flex-col gap-5">
       <Container title="스캔 선택">
-        <div className="flex max-w-[640px] flex-col gap-4">
+        <div className="flex flex-col gap-4">
           <FormField label="기준 스캔 (A)" htmlFor="scan-a" description="이 스캔의 좌표계를 유지합니다">
             <SelectWrap>
               <select id="scan-a" value={aId} onChange={(e) => setAId(e.target.value)} className={selectClass}>
@@ -74,7 +73,7 @@ export function RegistrationCreateForm({ scans, userId }: { scans: ScanRow[]; us
           {error && <Alert type="error">{error}</Alert>}
         </div>
       </Container>
-      <div className="flex items-center justify-end gap-2">
+      <div className="flex flex-wrap justify-end gap-3">
         <Button type="submit" variant="primary" disabled={busy}>대응점 찍기 시작</Button>
       </div>
     </form>
