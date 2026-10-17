@@ -57,3 +57,10 @@ export function buildSiteSummaries(
 export function countInProgress(analyses: { status: AnalysisStatus }[]): number {
   return analyses.filter((a) => a.status === 'queued' || a.status === 'processing').length;
 }
+
+// 4단계 판정(pass/borderline/repair/rework)을 분포 바의 3묶음 "적합 · 경계 · 보수·재시공"(스펙 §9)으로
+// 접는다 - 경계는 아직 적합 범위라 warn, 보수·재시공은 조치가 필요해 fail로 묶는다. 지난 홈(app/page.tsx)에
+// 있던 규칙을 그대로 옮겼다: 진입 페이지의 현장 줄과 현장 대시보드의 분석 완료 카드가 함께 쓴다.
+export function toBarCounts(v: Record<Verdict, number>): { pass: number; warn: number; fail: number } {
+  return { pass: v.pass, warn: v.borderline, fail: v.repair + v.rework };
+}

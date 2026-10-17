@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildSiteSummaries, countInProgress } from '../summary';
+import { buildSiteSummaries, countInProgress, toBarCounts } from '../summary';
 import type { SiteRow } from '../types';
 
 const site = (id: string, name: string): SiteRow =>
@@ -110,4 +110,13 @@ describe('countInProgress (홈 지표 스트립: 처리 중 건수)', () => {
     ])).toBe(2);
   });
   it('빈 배열은 0', () => { expect(countInProgress([])).toBe(0); });
+});
+
+describe('toBarCounts (분포 바 3묶음 "적합 · 경계 · 보수·재시공", 스펙 §9)', () => {
+  it('경계는 warn, 보수와 재시공은 합쳐 fail로 접는다', () => {
+    expect(toBarCounts({ pass: 3, borderline: 2, repair: 1, rework: 4 })).toEqual({ pass: 3, warn: 2, fail: 5 });
+  });
+  it('모두 0이면 세 묶음도 0이다', () => {
+    expect(toBarCounts({ pass: 0, borderline: 0, repair: 0, rework: 0 })).toEqual({ pass: 0, warn: 0, fail: 0 });
+  });
 });

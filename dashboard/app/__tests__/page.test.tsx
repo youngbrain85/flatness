@@ -6,36 +6,27 @@
 // 참고: Next.js 공식 문서(node_modules/next/dist/docs/01-app/02-guides/testing/vitest.md)는
 // "Vitest는 async 서버 컴포넌트 렌더링을 지원하지 않는다"고 명시한다. 이 테스트는
 // render()로 DOM에 그리지 않고, await로 얻은 React 엘리먼트 트리를 재귀 탐색한다
-// (app/scans/[id]/__tests__/page.test.tsx, app/sites/[id]/__tests__/page.test.tsx와 동일 패턴).
+// (app/scans/[id]/__tests__/page.test.tsx와 동일 패턴). 진입 페이지(T3)는 진입 헤더와
+// 클라이언트 섬(SiteFinder)에 넘기는 props까지 본다 - 목록·검색·새 현장 카드의 DOM은
+// components/entry/__tests__/가 본다.
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/lib/supabase/server', () => ({ createClient: vi.fn() }));
-// Task 2: 진입 헤더(계정 메뉴)가 요청 사용자 이메일을 쓴다 - proxy 가 실어 주는 헤더 형태로 공급한다.
-vi.mock('next/headers', () => ({
-  headers: async () => new Headers({
-    'x-flatness-user-id': 'u1', 'x-flatness-user-email': encodeURIComponent('u1@example.com'),
-  }),
-}));
-// 셸 헤더 내부는 components/shell 테스트가 맡는다 - 여기서는 페이지가 넘긴 props 만 본다.
-vi.mock('@/components/shell/entry-header', () => ({ EntryHeader: () => null }));
+// proxy가 실은 사용자 헤더를 읽는 헬퍼 - 요청 스코프 밖(테스트)에서는 흉내낸다
+vi.mock('@/lib/auth/request-user', () => ({ getRequestUser: vi.fn() }));
 
 import { createClient } from '@/lib/supabase/server';
-import HomePage from '../page';
+import { getRequestUser } from '@/lib/auth/request-user';
+import HomePage, { metadata } from '../page';
+import { SiteFinder, type EntryTotals } from '@/components/entry/site-finder';
+import type { EntrySiteRow } from '@/components/entry/site-list';
 import { EntryHeader } from '@/components/shell/entry-header';
 import { SupabaseErrorNotice } from '@/components/supabase-error';
-import { SiteTable, type SiteTableRow } from '@/components/site-table';
-import { PageHeader } from '@/components/ui/page-header';
-import { Container } from '@/components/ui/container';
-import { LinkButton } from '@/components/ui/button';
-import { KeyValuePairs, StatValue } from '@/components/ui/key-value';
-import { VerdictLegend } from '@/components/ui/verdict-bar';
-import { EmptyState } from '@/components/ui/empty-state';
+import { MAIN_BG, PAGE_MAIN } from '@/components/ui/page';
 
 // 엘리먼트 트리를 재귀 탐색해 특정 컴포넌트/태그 타입이 쓰인 곳을 모두 모은다.
-// Cloudscape 프리미티브는 슬롯을 children이 아니라 prop으로 받는다(PageHeader·Container의
-// actions, KeyValuePairs의 items[].value) - children만 따라가면 그 안의 엘리먼트를 놓치므로
-// 엘리먼트면 props 전부를, 평범한 객체(items 항목)면 그 값 전부를 따라간다.
-// 함수(onChange 등)·문자열은 typeof 'object'가 아니라 자연히 건너뛴다.
+// 슬롯을 children이 아니라 prop으로 받는 컴포넌트도 있으므로 엘리먼트면 props 전부를,
+// 평범한 객체면 그 값 전부를 따라간다. 함수·문자열은 typeof 'object'가 아니라 자연히 건너뛴다.
 type Found = { props: Record<string, unknown> };
 function findAll(node: unknown, type: unknown, acc: Found[] = []): Found[] {
   if (node == null || typeof node !== 'object') return acc;
@@ -47,28 +38,10 @@ function findAll(node: unknown, type: unknown, acc: Found[] = []): Found[] {
   return acc;
 }
 
-// KeyValuePairs는 값을 items prop으로 받는다 - 라벨로 항목을 찾아 그 value 노드를 돌려준다.
-function kvValue(el: unknown, label: string): unknown {
-  for (const kv of findAll(el, KeyValuePairs)) {
-    const hit = (kv.props.items as { label: unknown; value: unknown }[]).find((i) => i.label === label);
-    if (hit) return hit.value;
-  }
-  return undefined;
-}
-
-// 문자열 children을 모아 안내 문구·라벨 회귀를 잡는다.
-function collectText(node: unknown, acc: string[] = []): string[] {
-  if (typeof node === 'string' || typeof node === 'number') { acc.push(String(node)); return acc; }
-  if (node == null || typeof node !== 'object') return acc;
-  if (Array.isArray(node)) { node.forEach((n) => collectText(n, acc)); return acc; }
-  collectText((node as { props?: { children?: unknown } }).props?.children, acc);
-  return acc;
-}
-
 // Supabase 쿼리 빌더 흉내: 체이닝 메서드는 자기 자신을 반환하고, await 대상이 되면
-// (thenable) 미리 정해 둔 결과로 resolve한다. eq()/in()만 호출 인자를 스파이에 기록한다.
+// (thenable) 미리 정해 둔 결과로 resolve한다. eq()/in()/select()만 호출 인자를 스파이에 기록한다.
 function chain(
-  result: { data: unknown; error: null },
+  result: { data: unknown; error: { message: string } | null },
   spies?: {
     select?: (cols: string) => void;
     eq?: (col: string, val: unknown) => void; in?: (col: string, val: unknown) => void;
@@ -91,19 +64,23 @@ function stubSupabase(opts: {
   eqSpy?: (col: string, val: unknown) => void; inSpy?: (col: string, val: unknown) => void;
   // 처리 중(analyses 두 번째) 조회의 select 컬럼을 기록한다 - 'status, scan_id' 확장 배선용
   selectSpy?: (cols: string) => void;
+  // 이 테이블 조회가 오류를 돌려준다(Supabase 연결 실패 분기)
+  failTable?: string;
 }) {
   let analysesCall = 0;
+  const ok = (data: unknown[] | undefined) => ({ data: data ?? [], error: null });
   return {
     from: (table: string) => {
-      if (table === 'sites') return chain({ data: opts.sites ?? [], error: null });
-      if (table === 'locations') return chain({ data: opts.locations ?? [], error: null });
-      if (table === 'scans') return chain({ data: opts.scans ?? [], error: null });
+      if (table === opts.failTable) return chain({ data: null, error: { message: 'connection refused' } });
+      if (table === 'sites') return chain(ok(opts.sites));
+      if (table === 'locations') return chain(ok(opts.locations));
+      if (table === 'scans') return chain(ok(opts.scans));
       if (table === 'analyses') {
         analysesCall += 1;
         if (analysesCall === 1) {
-          return chain({ data: opts.currentAnalyses ?? [], error: null }, { eq: opts.eqSpy });
+          return chain(ok(opts.currentAnalyses), { eq: opts.eqSpy });
         }
-        return chain({ data: opts.inProgressAnalyses ?? [], error: null }, { in: opts.inSpy, select: opts.selectSpy });
+        return chain(ok(opts.inProgressAnalyses), { in: opts.inSpy, select: opts.selectSpy });
       }
       throw new Error(`예상치 못한 테이블: ${table}`);
     },
@@ -142,141 +119,116 @@ describe('HomePage 쿼리 배선 (단계 C 회귀 차단: I1)', () => {
   });
 });
 
-describe('HomePage 렌더 (PageHeader + 개요 KeyValuePairs + 현장 테이블)', () => {
-  const sites = [{ id: 's1', name: '현장A', address: null, memo: null, created_at: '', updated_at: '' }];
-  const locations = [{ id: 'l1', site_id: 's1' }];
-  const scans = [{ id: 'c1', scanned_at: '2026-07-20', location_id: 'l1' }];
+describe('HomePage 렌더 (진입 헤더 + SiteFinder, 아트보드 EntrySearch)', () => {
+  const site = (id: string, name: string) => ({ id, name, address: null, memo: null, created_at: '', updated_at: '' });
 
-  it('현장 행이 SiteTable rows로 실리고, 개요 "처리 중"과 행의 inProgress는 queued+processing만 센다', async () => {
-    const currentAnalyses = [{ scan_id: 'c1', status: 'done', overall_verdict: 'pass', kind: 'flatness' }];
+  it('진입 헤더에 요청 사용자의 이메일을 넘기고, 본문은 MAIN_BG <main> 안의 PAGE_MAIN 한 겹이다', async () => {
+    vi.mocked(getRequestUser).mockResolvedValue({ id: 'u1', email: 'qa@example.com' });
+    vi.mocked(createClient).mockResolvedValue(stubSupabase({ sites: [site('s1', '현장A')] }) as never);
+
+    const el = await HomePage();
+
+    expect(findAll(el, EntryHeader).map((h) => h.props.email)).toEqual(['qa@example.com']);
+    const mains = findAll(el, 'main');
+    expect(mains).toHaveLength(1);
+    expect(mains[0].props.className).toBe(MAIN_BG);
+    const inner = mains[0].props.children as { type: unknown; props: { className: string } };
+    expect(inner.type).toBe('div');
+    expect(inner.props.className).toBe(PAGE_MAIN);
+    expect(findAll(inner, SiteFinder)).toHaveLength(1);
+  });
+
+  it('사용자 헤더가 없으면 진입 헤더의 email은 null이다', async () => {
+    vi.mocked(getRequestUser).mockResolvedValue(null);
+    vi.mocked(createClient).mockResolvedValue(stubSupabase({}) as never);
+
+    const el = await HomePage();
+
+    expect(findAll(el, EntryHeader)[0].props.email).toBeNull();
+  });
+
+  it('현장 줄은 SiteSummary를 접은 평면 객체(3묶음·판정 불가·처리 중)이고 총계는 현장·측정위치·스캔·처리 중이다', async () => {
+    const sites = [site('s1', '현장A'), site('s2', '현장B')];
+    const locations = [{ id: 'l1', site_id: 's1' }, { id: 'l2', site_id: 's1' }, { id: 'l3', site_id: 's2' }];
+    const scans = [
+      { id: 'c1', scanned_at: '2026-07-20', location_id: 'l1' },
+      { id: 'c2', scanned_at: '2026-07-21', location_id: 'l2' },
+      { id: 'c3', scanned_at: '2026-07-01', location_id: 'l3' },
+    ];
+    const currentAnalyses = [
+      { scan_id: 'c1', status: 'done', overall_verdict: 'pass', kind: 'flatness' },
+      { scan_id: 'c2', status: 'done', overall_verdict: 'repair', kind: 'flatness' },
+      // done인데 판정이 없다(판정 불가) - 분포에 들지 않고 na로 간다(리뷰 픽스 유지)
+      { scan_id: 'c3', status: 'done', overall_verdict: null, kind: 'flatness' },
+    ];
     // 실제 처리 중 조회는 .in('status', [...])가 done을 돌려주지 않는다 - 스텁의 done 행은
-    // countInProgress 자체의 가드를 보는 용도라 scan_id를 붙이지 않는다(현장별 집계는 상태를
-    // 다시 거르지 않고 쿼리의 필터를 믿는다 - 배선 describe의 .in 스파이가 그 필터를 지킨다).
+    // countInProgress 자체의 가드를 보는 용도라 scan_id를 붙이지 않는다.
     const inProgressAnalyses = [
       { status: 'queued', scan_id: 'c1' }, { status: 'processing', scan_id: 'c1' }, { status: 'done' },
     ];
+    vi.mocked(getRequestUser).mockResolvedValue(null);
     vi.mocked(createClient).mockResolvedValue(
       stubSupabase({ sites, locations, scans, currentAnalyses, inProgressAnalyses }) as never,
     );
 
     const el = await HomePage();
 
-    // 현장 링크는 클라이언트 컴포넌트(SiteTable) 안에서 그려져 트리 탐색으로 닿지 않는다 -
-    // SiteTable에 전달된 rows로 검증한다(링크 렌더 자체는 components/__tests__/site-table.test.tsx가 본다).
-    const tables = findAll(el, SiteTable);
-    expect(tables).toHaveLength(1);
-    expect(tables[0].props.rows as SiteTableRow[]).toEqual([{
-      id: 's1', name: '현장A', locationCount: 1, scanCount: 1, lastScannedAt: '2026-07-20',
-      counts: { pass: 1, warn: 0, fail: 0 }, na: 0, inProgress: 2,
-    }]);
-
-    const [kv] = findAll(el, KeyValuePairs);
-    expect(kv.props.columns).toBe(4);
-    expect((kv.props.items as { label: string }[]).map((i) => i.label)).toEqual(['현장', '스캔', '처리 중', '판정 분포']);
-    expect(findAll(kvValue(el, '현장'), StatValue)[0]?.props.value).toBe(1);
-    expect(findAll(kvValue(el, '스캔'), StatValue)[0]?.props.value).toBe(1);
-    expect(findAll(kvValue(el, '처리 중'), StatValue)[0]?.props.value).toBe(2); // queued+processing만(done 제외)
-    expect(findAll(kvValue(el, '판정 분포'), StatValue)[0]?.props.value).toBe(1);
+    const [finder] = findAll(el, SiteFinder);
+    expect(finder.props.rows as EntrySiteRow[]).toEqual([
+      {
+        id: 's1', name: '현장A', locationCount: 2, scanCount: 2, lastScannedAt: '2026-07-21',
+        counts: { pass: 1, warn: 0, fail: 1 }, na: 0, inProgress: 2,
+      },
+      {
+        id: 's2', name: '현장B', locationCount: 1, scanCount: 1, lastScannedAt: '2026-07-01',
+        counts: { pass: 0, warn: 0, fail: 0 }, na: 1, inProgress: 0,
+      },
+    ]);
+    expect(finder.props.totals as EntryTotals).toEqual({ sites: 2, locations: 3, scans: 3, inProgress: 2 });
   });
 
-  it('헤더·컨테이너 배선: normal "스캔 업로드"(/upload), primary "새 현장"(/sites/new) - primary는 하나, 브레드크럼 없음', async () => {
-    vi.mocked(createClient).mockResolvedValue(
-      stubSupabase({ sites, locations, scans, currentAnalyses: [] }) as never,
-    );
+  it('줄은 최근 측정일 내림차순이고, 측정일이 없는 현장은 뒤로, 같은 날이면 이름 순이다', async () => {
+    // 조회는 이름 순(.order('name'))으로 온다 - 정렬은 페이지가 다시 한다
+    const sites = [site('a', '가현장'), site('b', '나현장'), site('c', '다현장'), site('d', '라현장')];
+    const locations = [{ id: 'lb', site_id: 'b' }, { id: 'lc', site_id: 'c' }, { id: 'ld', site_id: 'd' }];
+    const scans = [
+      { id: 'x1', scanned_at: '2026-07-10', location_id: 'lc' },
+      { id: 'x2', scanned_at: '2026-07-10', location_id: 'lb' },
+      { id: 'x3', scanned_at: '2026-07-20', location_id: 'ld' },
+    ];
+    vi.mocked(getRequestUser).mockResolvedValue(null);
+    vi.mocked(createClient).mockResolvedValue(stubSupabase({ sites, locations, scans }) as never);
 
     const el = await HomePage();
 
-    const [header] = findAll(el, PageHeader);
-    expect(header.props.title).toBe('현장');
-    expect(header.props.crumbs).toBeUndefined(); // 홈에는 브레드크럼 없음(스펙 §7-2)
-
-    const buttons = findAll(el, LinkButton);
-    const variantByHref = Object.fromEntries(buttons.map((b) => [b.props.href, b.props.variant]));
-    expect(variantByHref).toEqual({ '/upload': undefined, '/sites/new': 'primary' }); // undefined = normal(기본)
-    expect(buttons.filter((b) => b.props.variant === 'primary')).toHaveLength(1);
-    expect(collectText(buttons.find((b) => b.props.href === '/upload'))).toContain('스캔 업로드');
-    expect(collectText(buttons.find((b) => b.props.href === '/sites/new'))).toContain('새 현장');
-
-    expect(findAll(el, Container).map((c) => c.props.title)).toEqual(['개요', '현장']);
-    const table = findAll(el, Container).find((c) => c.props.title === '현장');
-    expect(table?.props.counter).toBe(1);
-    expect(table?.props.padded).toBe(false);
+    const rows = findAll(el, SiteFinder)[0].props.rows as EntrySiteRow[];
+    expect(rows.map((r) => r.name)).toEqual(['라현장', '나현장', '다현장', '가현장']);
   });
 
-  it('판정 불가(na) 건수를 개요 범례(불가 n)와 테이블 행(na)으로 넘긴다(리뷰 픽스 유지)', async () => {
-    // status=done인데 overall_verdict null -> "엔진은 돌았는데 판정이 안 나온" 케이스(naCount).
-    const currentAnalyses = [{ scan_id: 'c1', status: 'done', overall_verdict: null, kind: 'flatness' }];
-    vi.mocked(createClient).mockResolvedValue(
-      stubSupabase({ sites, locations, scans, currentAnalyses }) as never,
-    );
-
-    const el = await HomePage();
-
-    const legend = findAll(kvValue(el, '판정 분포'), VerdictLegend);
-    expect(legend).toHaveLength(1);
-    expect(legend[0].props.na).toBe(1);
-    expect(legend[0].props.counts).toEqual({ pass: 0, warn: 0, fail: 0 });
-    expect(findAll(kvValue(el, '판정 분포'), StatValue)[0]?.props.value).toBe(0); // na는 총계에 들지 않는다(기존 동작)
-
-    const rows = findAll(el, SiteTable)[0].props.rows as SiteTableRow[];
-    expect(rows[0].na).toBe(1);
-    expect(rows[0].counts).toEqual({ pass: 0, warn: 0, fail: 0 });
-  });
-
-  it('naCount가 0이면 범례에 불가 항목을 넘기지 않고 행의 na도 0이다(판정 불가 표시 없음)', async () => {
-    const currentAnalyses = [{ scan_id: 'c1', status: 'done', overall_verdict: 'pass', kind: 'flatness' }];
-    vi.mocked(createClient).mockResolvedValue(
-      stubSupabase({ sites, locations, scans, currentAnalyses }) as never,
-    );
-
-    const el = await HomePage();
-
-    const legend = findAll(kvValue(el, '판정 분포'), VerdictLegend);
-    expect(legend).toHaveLength(1);
-    expect(legend[0].props.na).toBeUndefined();
-    expect(legend[0].props.counts).toEqual({ pass: 1, warn: 0, fail: 0 });
-    expect((findAll(el, SiteTable)[0].props.rows as SiteTableRow[])[0].na).toBe(0);
-  });
-
-  it('현장이 없으면 개요는 그대로 두고 테이블 컨테이너 대신 업로드 안내 빈 상태를 렌더한다', async () => {
+  it('현장이 없으면 SiteFinder에 빈 줄과 0 총계를 넘긴다(빈 안내와 "새 현장"은 SiteFinder 몫)', async () => {
+    vi.mocked(getRequestUser).mockResolvedValue(null);
     vi.mocked(createClient).mockResolvedValue(stubSupabase({}) as never);
 
     const el = await HomePage();
 
-    // EmptyState는 컴포넌트 참조로만 트리에 실리고(실행되지 않는다), 내부에서 렌더하는
-    // LinkButton은 findAll로 닿지 않는다 - EmptyState 자신에게 전달된 props로 문구·이동 대상을 검증한다.
-    const emptyStates = findAll(el, EmptyState);
-    expect(emptyStates).toHaveLength(1);
-    expect(emptyStates[0].props.actionHref).toBe('/upload');
-    expect(emptyStates[0].props.message).toContain('아직 등록된 현장이 없습니다');
-    expect(findAll(el, SiteTable)).toHaveLength(0);
-    expect(findAll(el, Container).map((c) => c.props.title)).toEqual(['개요']);
-    expect(findAll(kvValue(el, '현장'), StatValue)[0]?.props.value).toBe(0);
-    // 이 분기의 primary는 EmptyState 안(트리 밖) 하나뿐 - 헤더의 '스캔 업로드'는 normal
-    expect(findAll(el, LinkButton).filter((b) => b.props.variant === 'primary')).toHaveLength(0);
-  });
-});
-
-// Task 2 셸(스펙 §4.2): 진입 페이지는 진입 헤더(상표 + 계정 메뉴)를 본문 앞에 그린다. 본문은 Task 3 몫.
-describe('HomePage 셸 헤더 (Task 2)', () => {
-  it('진입 헤더에 요청 사용자 이메일을 넘긴다', async () => {
-    vi.mocked(createClient).mockResolvedValue(stubSupabase({}) as never);
-
-    const el = await HomePage();
-
-    expect(findAll(el, EntryHeader).map((h) => h.props.email)).toEqual(['u1@example.com']);
+    const [finder] = findAll(el, SiteFinder);
+    expect(finder.props.rows).toEqual([]);
+    expect(finder.props.totals).toEqual({ sites: 0, locations: 0, scans: 0, inProgress: 0 });
   });
 
-  it('조회에 실패한 화면에도 진입 헤더가 있다(현장 목록·계정 메뉴로 가는 길을 잃지 않는다)', async () => {
-    const failing: Record<string, unknown> = {
-      select: () => failing, order: () => failing, is: () => failing, eq: () => failing, in: () => failing,
-      then: (resolve: (v: unknown) => void) => resolve({ data: null, error: { message: 'paused' } }),
-    };
-    vi.mocked(createClient).mockResolvedValue({ from: () => failing } as never);
+  it('조회가 실패하면 진입 헤더는 그대로 두고 본문에 SupabaseErrorNotice만 그린다', async () => {
+    vi.mocked(getRequestUser).mockResolvedValue({ id: 'u1', email: 'qa@example.com' });
+    vi.mocked(createClient).mockResolvedValue(stubSupabase({ failTable: 'scans' }) as never);
 
     const el = await HomePage();
 
     expect(findAll(el, EntryHeader)).toHaveLength(1);
-    expect(findAll(el, SupabaseErrorNotice).map((n) => n.props.message)).toEqual(['paused']);
+    expect(findAll(el, SupabaseErrorNotice).map((n) => n.props.message)).toEqual(['connection refused']);
+    expect(findAll(el, SiteFinder)).toHaveLength(0);
+    expect(findAll(el, 'main')[0].props.className).toBe(MAIN_BG);
+  });
+
+  it('문서 제목은 전체 "Flatness · 현장 목록"이다(루트 레이아웃과 같은 세그먼트라 템플릿이 붙지 않는다, 스펙 §9)', () => {
+    expect(metadata.title).toBe('Flatness · 현장 목록');
   });
 });

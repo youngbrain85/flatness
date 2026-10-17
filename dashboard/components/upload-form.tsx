@@ -186,7 +186,7 @@ export function UploadForm({ sites, locations, userId, initialLocationId }: Prop
     }
   }
 
-  // 인라인 현장·측정위치 생성. insert 컬럼은 new-site-form.tsx·new-location-form.tsx와
+  // 인라인 현장·측정위치 생성. insert 컬럼은 entry/new-site-card.tsx·new-location-form.tsx와
   // 동일하게 맞춘다 - 트림 정규화 책임도 그대로(001 주석). 층 순서(floor_order)는
   // 이 미니 폼에는 없어 0으로 둔다(정렬용 보조값이라 나중에 현장 상세에서 조정 가능).
   async function handleCreateLocation() {
