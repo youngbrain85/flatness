@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 const { pushMock } = vi.hoisted(() => ({ pushMock: vi.fn() }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: pushMock, refresh: vi.fn() }) }));
@@ -10,6 +10,7 @@ import { UploadForm } from '../upload-form';
 import { DUPLICATE_JOB_MESSAGE } from '@/lib/domain/jobs';
 import { buttonClass } from '@/components/ui/button';
 import { inputClass, selectClass } from '@/components/ui/form';
+import { MAX_UPLOAD_BYTES, MAX_UPLOAD_MB } from '@/lib/upload/validate';
 import type { CriteriaRow, LocationRow } from '@/lib/domain/types';
 
 const location: LocationRow = {
@@ -21,6 +22,8 @@ const criteria: CriteriaRow = {
   thresholds: [], is_default: true, is_active: true, version: 1, supersedes_id: null, created_at: '',
   kind: 'flatness',
 };
+
+type StubResult = { data: unknown; error: { code?: string; message: string } | null };
 
 // scans/analyses insert·update와 fn_resolve_criteria/fn_enqueue_job rpc 체인을 흉내내는
 // 로컬 스텁 - 이 파일 하나만 이 모양을 쓰므로(리뷰 대상 파일 기준) 공유 헬퍼로 뽑지 않았다.
@@ -36,21 +39,45 @@ function stubSupabase(
     softDeleteError?: { message: string };
     storageUpload?: (key: string) => void;
     rpc?: (fn: string, params: unknown) => void;
-    criteriaResult?: { data: unknown; error: { message: string } | null };
+    /** 적용 기준 조회 응답. 함수면 호출마다(표면 같은 인자를 보고) 응답을 만들거나 늦춘다. */
+    criteriaResult?: StubResult | ((params: { p_site_id: string; p_surface: string }) => StubResult | Promise<StubResult>);
+    // 변이 실험 보강(T6): 저장 값·되돌림 대상·실패 경로·업로드 중 상태를 관찰하고 주입하는 자리
+    scansInsert?: (fields: unknown) => void;
+    scansInsertResult?: StubResult;
+    /** scans insert 응답을 이 약속이 풀릴 때까지 붙잡는다(업로드 중 상태를 보려고). */
+    scansInsertGate?: Promise<void>;
+    scansUpdateEq?: (col: string, val: unknown) => void;
+    /** 3)의 raw_file_path 반영 update 만 실패시킨다(soft delete 는 softDeleteError). */
+    rawPathError?: { message: string };
+    analysesInsertResult?: StubResult;
+    analysesUpdateEq?: (col: string, val: unknown) => void;
+    storageError?: Error;
+    storageThrows?: unknown;
   } = {},
 ) {
   return {
     from: (table: string) => {
       if (table === 'scans') {
         return {
-          insert: () => ({ select: () => ({ single: async () => ({ data: { id: 'scan1' }, error: null }) }) }),
+          insert: (fields: unknown) => {
+            spies.scansInsert?.(fields);
+            return {
+              select: () => ({
+                single: async () => {
+                  await spies.scansInsertGate;
+                  return spies.scansInsertResult ?? { data: { id: 'scan1' }, error: null };
+                },
+              }),
+            };
+          },
           update: (fields: unknown) => {
             spies.scansUpdate?.(fields);
             const isSoftDelete = !!(fields as { deleted_at?: string }).deleted_at;
             return {
-              eq: async () => ({
-                error: isSoftDelete ? spies.softDeleteError ?? null : null,
-              }),
+              eq: async (col: string, val: unknown) => {
+                spies.scansUpdateEq?.(col, val);
+                return { error: isSoftDelete ? spies.softDeleteError ?? null : spies.rawPathError ?? null };
+              },
             };
           },
         };
@@ -59,11 +86,15 @@ function stubSupabase(
         return {
           insert: (fields: unknown) => {
             spies.analysesInsert?.(fields);
-            return { select: () => ({ single: async () => ({ data: { id: 'analysis1' }, error: null }) }) };
+            return {
+              select: () => ({
+                single: async () => spies.analysesInsertResult ?? { data: { id: 'analysis1' }, error: null },
+              }),
+            };
           },
           update: (fields: unknown) => {
             spies.analysesUpdate?.(fields);
-            return { eq: async () => ({ error: null }) };
+            return { eq: async (col: string, val: unknown) => { spies.analysesUpdateEq?.(col, val); return { error: null }; } };
           },
         };
       }
@@ -72,12 +103,22 @@ function stubSupabase(
     storage: {
       from: (bucket: string) => {
         if (bucket !== 'raw-scans') throw new Error(`예상치 못한 버킷: ${bucket}`);
-        return { upload: async (key: string) => { spies.storageUpload?.(key); return { error: null }; } };
+        return {
+          upload: async (key: string) => {
+            spies.storageUpload?.(key);
+            if (spies.storageThrows !== undefined) throw spies.storageThrows;
+            return { error: spies.storageError ?? null };
+          },
+        };
       },
     },
     rpc: async (fn: string, params: unknown) => {
       spies.rpc?.(fn, params);
-      if (fn === 'fn_resolve_criteria') return spies.criteriaResult ?? { data: [criteria], error: null };
+      if (fn === 'fn_resolve_criteria') {
+        const r = spies.criteriaResult;
+        return (typeof r === 'function' ? await r(params as { p_site_id: string; p_surface: string }) : r)
+          ?? { data: [criteria], error: null };
+      }
       if (fn === 'fn_enqueue_job') return { error: enqueueError };
       throw new Error(`예상치 못한 rpc: ${fn}`);
     },
@@ -88,16 +129,19 @@ function stubSupabase(
 // 응답이 없으면 마운트 즉시 도는 기준 조회 이펙트가 unhandled rejection이 된다.
 function stubLocationInsert(
   insertSpy: (fields: unknown) => void,
-  result: { data: unknown; error: { code?: string; message: string } | null } = { data: { id: 'l2' }, error: null },
+  result: StubResult | ((call: number) => StubResult | Promise<StubResult>) = { data: { id: 'l2' }, error: null },
   scansInsert?: (fields: unknown) => void,
 ) {
+  let calls = 0;
   return {
     from: (table: string) => {
       if (table === 'locations') {
         return {
           insert: (fields: unknown) => {
             insertSpy(fields);
-            return { select: () => ({ single: async () => result }) };
+            calls += 1;
+            const call = calls;
+            return { select: () => ({ single: async () => (typeof result === 'function' ? result(call) : result) }) };
           },
         };
       }
@@ -541,5 +585,624 @@ describe('UploadForm 다크 C안 해부 (T6)', () => {
     // 임포트 모드에서는 데이터 계보 묶음 자체가 사라진다(기존 mode==='scan' 가드)
     expect(container.querySelector('[data-alert="warning"]')).toBeNull();
     await waitFor(() => expect(screen.getByText('floor-kcs')).toBeInTheDocument());
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// T6 변이 실험 보강. 브리프 테스트만으로는 살아남던 변이(scans·analyses 저장 값, 잡 종류·payload, 되돌림 대상 id,
+// 실패 경로, 업로드 중 잠금, 기준 선택, 새 측정위치의 잠금·초기화, Enter 기본 동작, 파일 입력 비우기 …)를 막는다.
+// 위쪽 브리프의 테스트는 고치지 않고 이 아래에 덧붙였다(스텁에는 관찰점·주입점만 더했다).
+// ---------------------------------------------------------------------------------------------
+
+// 마운트 때 도는 기준 조회가 끝날 때까지 기다린다(끝나기 전에 테스트가 끝나면 act 경고가 난다).
+const settle = () => waitFor(() => expect(screen.queryByText('적용 기준을 불러오는 중...')).toBeNull());
+
+// 기본은 이 현장의 측정위치 l1 이 미리 골라진 폼 - 기준 조회까지 끝낸 뒤 돌려준다.
+async function readyForm(props: Partial<React.ComponentProps<typeof UploadForm>> = { initialLocationId: 'l1' }) {
+  const view = renderForm(props);
+  await settle();
+  return view;
+}
+
+function pickFile(name: string, label: RegExp = /스캔 파일/) {
+  fireEvent.change(screen.getByLabelText(label), { target: { files: [new File(['x'], name)] } });
+}
+
+// fireEvent 는 기본 동작이 막혔으면 false 를 돌려준다.
+function submitForm(container: HTMLElement) {
+  return fireEvent.submit(container.querySelector('form')!);
+}
+
+describe('UploadForm 저장 값·잡 등록 (T6 변이 보강)', () => {
+  it('스캔 모드: scans 행에 위치·표면·기준·일자·장비·담당자·파일·계보를 담고, raw 경로를 반영한 뒤 precheck 잡을 건다', async () => {
+    const scansInsert = vi.fn();
+    const scansUpdate = vi.fn();
+    const scansUpdateEq = vi.fn();
+    const rpc = vi.fn();
+    vi.mocked(createClient).mockReturnValue(
+      stubSupabase(null, { scansInsert, scansUpdate, scansUpdateEq, rpc }) as never);
+    const { container } = await readyForm();
+    fireEvent.click(screen.getByLabelText('벽면'));
+    fireEvent.click(screen.getByLabelText('원시 점군'));
+    fireEvent.change(screen.getByLabelText('측정일자'), { target: { value: '2026-09-03' } });
+    fireEvent.change(screen.getByLabelText('장비'), { target: { value: ' iPhone 15 ' } });
+    fireEvent.change(screen.getByLabelText(/담당자 이름/), { target: { value: ' 홍길동 ' } });
+    pickFile('Scan A.PLY');
+    submitForm(container);
+
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith('/scans/scan1'));
+    expect(scansInsert).toHaveBeenCalledWith({
+      location_id: 'l1', surface: 'wall', scanned_at: '2026-09-03', device: 'iPhone 15', operator_id: 'u1',
+      operator_name_manual: '홍길동', selected_criteria_id: 'cr1', original_filename: 'Scan A.PLY',
+      file_format: 'ply', lineage: 'raw', status: 'uploaded',
+    });
+    expect(scansUpdate).toHaveBeenCalledWith({ raw_file_path: 'raw-scans/s1/scan1/raw.ply' });
+    expect(scansUpdateEq).toHaveBeenCalledWith('id', 'scan1');
+    expect(rpc).toHaveBeenCalledWith('fn_enqueue_job', { p_type: 'precheck', p_payload: { scan_id: 'scan1' } });
+  });
+
+  it('스캔 모드: 장비·담당자가 비거나 공백뿐이면 null 로 저장하고 측정일자 기본값은 날짜 형식이다', async () => {
+    const scansInsert = vi.fn();
+    vi.mocked(createClient).mockReturnValue(stubSupabase(null, { scansInsert }) as never);
+    const { container } = await readyForm();
+    fireEvent.change(screen.getByLabelText('장비'), { target: { value: '   ' } });
+    pickFile('scan.ply');
+    submitForm(container);
+
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith('/scans/scan1'));
+    expect(scansInsert).toHaveBeenCalledWith(expect.objectContaining({
+      device: null, operator_name_manual: null, surface: 'floor', lineage: 'unknown',
+      scanned_at: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+    }));
+  });
+
+  it('임포트 모드: 스캔 모드에서 고른 벽면·계보와 상관없이 floor·unknown 으로 저장하고 분석 행과 import 잡을 만든다', async () => {
+    const scansInsert = vi.fn();
+    const scansUpdate = vi.fn();
+    const analysesInsert = vi.fn();
+    const rpc = vi.fn();
+    vi.mocked(createClient).mockReturnValue(
+      stubSupabase(null, { scansInsert, scansUpdate, analysesInsert, rpc }) as never);
+    const { container } = await readyForm();
+    // 스캔 모드에서 고른 값이 임포트로 새면 안 된다
+    fireEvent.click(screen.getByLabelText('벽면'));
+    fireEvent.click(screen.getByLabelText('원시 점군'));
+    fireEvent.click(screen.getByLabelText('기존 결과 가져오기(CSV/JSON)'));
+    pickFile('result.json', /결과 파일 \(csv\/json\)/);
+    submitForm(container);
+
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith('/scans/scan1'));
+    // 기준은 표면(바닥 -> 벽면 -> 임포트라 다시 바닥)이 바뀔 때마다 현장 기준으로 다시 불러온다
+    const surfaces = rpc.mock.calls
+      .filter(([fn]) => fn === 'fn_resolve_criteria')
+      .map(([, params]) => (params as { p_surface: string }).p_surface);
+    expect(surfaces).toEqual(['floor', 'wall', 'floor']);
+    expect(scansInsert).toHaveBeenCalledWith(expect.objectContaining({
+      location_id: 'l1', surface: 'floor', lineage: 'unknown', unit_scale: 1, status: 'uploaded',
+      original_filename: 'result.json', file_format: 'json',
+    }));
+    expect(scansUpdate).toHaveBeenCalledWith({ raw_file_path: 'raw-scans/s1/scan1/raw.json', status: 'ready' });
+    expect(analysesInsert).toHaveBeenCalledWith({
+      scan_id: 'scan1', surface: 'floor', criteria_id: 'cr1', kind: 'flatness', status: 'queued', created_by: 'u1',
+    });
+    expect(rpc).toHaveBeenCalledWith('fn_enqueue_job', { p_type: 'import', p_payload: { analysis_id: 'analysis1' } });
+  });
+});
+
+describe('UploadForm 실패 경로·업로드 중 잠금 (T6 변이 보강)', () => {
+  it.each([
+    ['오류 객체가 있으면 그 메시지를', { data: null, error: { message: '삽입 거부' } }, '삽입 거부'],
+    ['오류도 행도 없으면 기본 문구를', { data: null, error: null }, '스캔 등록 실패'],
+  ] as const)('scans insert 가 실패하면 %s 보이고 저장소·잡·이동 없이 버튼을 다시 연다', async (_l, scansInsertResult, text) => {
+    const storageUpload = vi.fn();
+    const rpc = vi.fn();
+    vi.mocked(createClient).mockReturnValue(stubSupabase(null, { scansInsertResult, storageUpload, rpc }) as never);
+    const { container } = await readyForm();
+    pickFile('scan.ply');
+    submitForm(container);
+
+    expect(await screen.findByText(text)).toBeInTheDocument();
+    expect(storageUpload).not.toHaveBeenCalled();
+    expect(rpc).not.toHaveBeenCalledWith('fn_enqueue_job', expect.anything());
+    expect(pushMock).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: '업로드 후 사전 검사' })).toBeEnabled();
+  });
+
+  it.each([
+    ['Error 면 그 메시지를', { storageError: new Error('버킷 없음') }, '파일 업로드에 실패했습니다: 버킷 없음'],
+    ['Error 가 아닌 값이면 기본 문구를', { storageThrows: 'boom' }, '업로드에 실패했습니다'],
+  ] as const)('저장소 업로드가 실패하면 %s 보이고 raw 경로 반영·잡 등록·이동을 하지 않는다', async (_l, spies, text) => {
+    const scansUpdate = vi.fn();
+    const rpc = vi.fn();
+    vi.mocked(createClient).mockReturnValue(stubSupabase(null, { ...spies, scansUpdate, rpc }) as never);
+    const { container } = await readyForm();
+    pickFile('scan.ply');
+    submitForm(container);
+
+    expect(await screen.findByText(text)).toBeInTheDocument();
+    expect(scansUpdate).not.toHaveBeenCalled();
+    expect(rpc).not.toHaveBeenCalledWith('fn_enqueue_job', expect.anything());
+    expect(pushMock).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: '업로드 후 사전 검사' })).toBeEnabled();
+  });
+
+  it('raw_file_path 반영이 실패하면 그 오류를 보이고 잡을 걸지 않는다', async () => {
+    const rpc = vi.fn();
+    vi.mocked(createClient).mockReturnValue(
+      stubSupabase(null, { rawPathError: { message: '경로 반영 실패' }, rpc }) as never);
+    const { container } = await readyForm();
+    pickFile('scan.ply');
+    submitForm(container);
+
+    expect(await screen.findByText('경로 반영 실패')).toBeInTheDocument();
+    expect(rpc).not.toHaveBeenCalledWith('fn_enqueue_job', expect.anything());
+    expect(pushMock).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['오류 메시지가 있으면 그 메시지로', { data: null, error: { message: '분석 거부' } }, /분석 거부/],
+    ['오류도 행도 없으면 기본 문구로', { data: null, error: null }, /분석 등록 실패/],
+  ] as const)('임포트 모드: 분석 행 insert 가 실패하면 %s 알리고 스캔을 되돌리며 잡을 걸지 않는다', async (_l, analysesInsertResult, text) => {
+    const scansUpdate = vi.fn();
+    const scansUpdateEq = vi.fn();
+    const rpc = vi.fn();
+    vi.mocked(createClient).mockReturnValue(
+      stubSupabase(null, { analysesInsertResult, scansUpdate, scansUpdateEq, rpc }) as never);
+    const { container } = await readyForm();
+    fireEvent.click(screen.getByLabelText('기존 결과 가져오기(CSV/JSON)'));
+    pickFile('result.csv', /결과 파일 \(csv\/json\)/);
+    submitForm(container);
+
+    expect(await screen.findByText(text)).toBeInTheDocument();
+    expect(screen.getByText(/다시 시도하세요/)).toBeInTheDocument();
+    expect(scansUpdate).toHaveBeenLastCalledWith(expect.objectContaining({ deleted_at: expect.any(String) }));
+    expect(scansUpdateEq).toHaveBeenLastCalledWith('id', 'scan1');
+    expect(rpc).not.toHaveBeenCalledWith('fn_enqueue_job', expect.anything());
+    expect(pushMock).not.toHaveBeenCalled();
+  });
+
+  it('임포트 엔큐 실패: 되돌림은 방금 만든 분석 행과 스캔 행을 id 로 짚어 지운다', async () => {
+    const analysesUpdateEq = vi.fn();
+    const scansUpdateEq = vi.fn();
+    vi.mocked(createClient).mockReturnValue(
+      stubSupabase({ code: '23505', message: 'dup' }, { analysesUpdateEq, scansUpdateEq }) as never);
+    const { container } = await readyForm();
+    fireEvent.click(screen.getByLabelText('기존 결과 가져오기(CSV/JSON)'));
+    pickFile('result.csv', /결과 파일 \(csv\/json\)/);
+    submitForm(container);
+
+    await screen.findByText(new RegExp(DUPLICATE_JOB_MESSAGE));
+    expect(analysesUpdateEq).toHaveBeenCalledWith('id', 'analysis1');
+    expect(scansUpdateEq).toHaveBeenLastCalledWith('id', 'scan1');
+  });
+
+  it('스캔 엔큐 실패: 되돌린 스캔 행을 id 로 짚고, 제출 버튼은 다시 열려 재시도할 수 있다', async () => {
+    const scansUpdateEq = vi.fn();
+    vi.mocked(createClient).mockReturnValue(
+      stubSupabase({ code: '23505', message: 'dup' }, { scansUpdateEq }) as never);
+    const { container } = await readyForm();
+    pickFile('scan.ply');
+    submitForm(container);
+
+    await screen.findByText(new RegExp(DUPLICATE_JOB_MESSAGE));
+    expect(scansUpdateEq).toHaveBeenLastCalledWith('id', 'scan1');
+    expect(screen.getByRole('button', { name: '업로드 후 사전 검사' })).toBeEnabled();
+  });
+
+  it('업로드하는 동안 제출 버튼은 "업로드 중..."으로 잠기고, 끝나면 스캔 작업대로 간다', async () => {
+    let release!: () => void;
+    const scansInsertGate = new Promise<void>((resolve) => { release = resolve; });
+    vi.mocked(createClient).mockReturnValue(stubSupabase(null, { scansInsertGate }) as never);
+    const { container } = await readyForm();
+    pickFile('scan.ply');
+    submitForm(container);
+
+    const busyButton = await screen.findByRole('button', { name: '업로드 중...' });
+    expect(busyButton).toBeDisabled();
+    expect(pushMock).not.toHaveBeenCalled();
+    release();
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith('/scans/scan1'));
+  });
+});
+
+describe('UploadForm 적용 기준 (T6 변이 보강)', () => {
+  const crit = (id: string, name: string, over: Partial<CriteriaRow> = {}): CriteriaRow =>
+    ({ ...criteria, id, name, source_text: `${name} 근거`, is_default: false, ...over });
+  const rowOf = (name: string) => screen.getByText(name).closest('label')!;
+
+  it('기본 기준 줄이 미리 골라지고 (기본)·(현장 기준) 표시와 선택 강조는 해당 줄에만 붙는다', async () => {
+    const rows = [crit('crA', 'floor-a'), crit('crB', 'floor-b', { is_default: true }), crit('crC', 'floor-c', { site_id: 's1' })];
+    vi.mocked(createClient).mockReturnValue(stubSupabase(null, { criteriaResult: { data: rows, error: null } }) as never);
+    renderForm();
+    await screen.findByText('floor-b');
+
+    expect(within(rowOf('floor-b')).getByRole('radio')).toBeChecked();
+    expect(within(rowOf('floor-a')).getByRole('radio')).not.toBeChecked();
+    expect(within(rowOf('floor-b')).getByText('(기본)')).toBeInTheDocument();
+    expect(within(rowOf('floor-a')).queryByText('(기본)')).toBeNull();
+    expect(within(rowOf('floor-c')).getByText('(현장 기준)')).toBeInTheDocument();
+    expect(within(rowOf('floor-a')).queryByText('(현장 기준)')).toBeNull();
+    expect(rowOf('floor-b').className).toContain('bg-surface-2');
+    expect(rowOf('floor-a').className).not.toContain('bg-surface-2');
+    expect(rowOf('floor-c').className).not.toContain('bg-surface-2');
+  });
+
+  it('다른 줄을 누르면 선택 강조가 그 줄로 옮겨 가고 저장되는 기준도 바뀐다', async () => {
+    const scansInsert = vi.fn();
+    const rows = [crit('crA', 'floor-a', { is_default: true }), crit('crB', 'floor-b')];
+    vi.mocked(createClient).mockReturnValue(
+      stubSupabase(null, { criteriaResult: { data: rows, error: null }, scansInsert }) as never);
+    const { container } = renderForm({ initialLocationId: 'l1' });
+    await screen.findByText('floor-a');
+
+    fireEvent.click(within(rowOf('floor-b')).getByRole('radio'));
+    expect(within(rowOf('floor-b')).getByRole('radio')).toBeChecked();
+    expect(within(rowOf('floor-a')).getByRole('radio')).not.toBeChecked();
+    expect(rowOf('floor-b').className).toContain('border-l-ink');
+    expect(rowOf('floor-a').className).not.toContain('border-l-ink');
+
+    pickFile('scan.ply');
+    submitForm(container);
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith('/scans/scan1'));
+    expect(scansInsert).toHaveBeenCalledWith(expect.objectContaining({ selected_criteria_id: 'crB' }));
+  });
+
+  it('기본 기준이 없으면 첫 줄이 미리 골라진다', async () => {
+    const rows = [crit('crA', 'floor-a'), crit('crB', 'floor-b')];
+    vi.mocked(createClient).mockReturnValue(stubSupabase(null, { criteriaResult: { data: rows, error: null } }) as never);
+    renderForm();
+    await screen.findByText('floor-a');
+
+    expect(within(rowOf('floor-a')).getByRole('radio')).toBeChecked();
+    expect(within(rowOf('floor-b')).getByRole('radio')).not.toBeChecked();
+  });
+
+  it('data 도 error 도 없는 응답이면 불러오지 못했다고 적는다', async () => {
+    vi.mocked(createClient).mockReturnValue(
+      stubSupabase(null, { criteriaResult: { data: null, error: null } }) as never);
+    renderForm();
+    expect(await screen.findByText('적용 기준을 불러오지 못했습니다.')).toBeInTheDocument();
+  });
+
+  it('불러오는 동안 "적용 기준을 불러오는 중..."이 보이고 목록이 오면 사라진다', async () => {
+    renderForm();
+    expect(screen.getByText('적용 기준을 불러오는 중...')).toBeInTheDocument();
+    await screen.findByText('floor-kcs');
+    expect(screen.queryByText('적용 기준을 불러오는 중...')).toBeNull();
+  });
+
+  it('표면을 바꿔 다시 불러온 결과가 오류면 옛 목록과 선택을 치우고, 선택 없이는 제출하지 못한다', async () => {
+    const scansInsert = vi.fn();
+    const criteriaResult = (p: { p_surface: string }) => (p.p_surface === 'wall'
+      ? { data: null, error: { message: 'wall 거부' } }
+      : { data: [criteria], error: null });
+    vi.mocked(createClient).mockReturnValue(stubSupabase(null, { criteriaResult, scansInsert }) as never);
+    const { container } = renderForm({ initialLocationId: 'l1' });
+    await screen.findByText('floor-kcs');
+    fireEvent.click(screen.getByLabelText('벽면'));
+
+    expect(await screen.findByText('적용 기준을 불러오지 못했습니다: wall 거부')).toBeInTheDocument();
+    expect(screen.queryByText('floor-kcs')).toBeNull();
+    pickFile('scan.ply');
+    submitForm(container);
+    expect(screen.getByText('적용 기준을 선택하세요.')).toBeInTheDocument();
+    expect(scansInsert).not.toHaveBeenCalled();
+  });
+
+  it('늦게 도착한 옛 응답은 새 응답을 덮지 않는다', async () => {
+    const pending: Record<string, (r: StubResult) => void> = {};
+    const criteriaResult = (p: { p_surface: string }) =>
+      new Promise<StubResult>((resolve) => { pending[p.p_surface] = resolve; });
+    vi.mocked(createClient).mockReturnValue(stubSupabase(null, { criteriaResult }) as never);
+    renderForm({ initialLocationId: 'l1' });
+    // 바닥 응답이 오기 전에 벽면으로 바꾼다
+    fireEvent.click(screen.getByLabelText('벽면'));
+    await act(async () => { pending.wall({ data: [{ ...criteria, id: 'crW', name: 'wall-kcs' }], error: null }); });
+    expect(await screen.findByText('wall-kcs')).toBeInTheDocument();
+
+    // 바닥 응답이 뒤늦게 도착해도 화면은 벽면 기준 그대로다
+    await act(async () => { pending.floor({ data: [criteria], error: null }); });
+    expect(screen.queryByText('floor-kcs')).toBeNull();
+    expect(screen.getByText('wall-kcs')).toBeInTheDocument();
+  });
+});
+
+describe('UploadForm 제출 가드·형식·칩 (T6 변이 보강)', () => {
+  it('스캔 모드에서 지원하지 않는 확장자는 스캔용 안내로 바로 거부한다', async () => {
+    const scansInsert = vi.fn();
+    vi.mocked(createClient).mockReturnValue(stubSupabase(null, { scansInsert }) as never);
+    const { container } = await readyForm();
+    pickFile('scan.exe');
+    submitForm(container);
+
+    expect(screen.getByText('지원 포맷: ply, las, laz, xyz, txt, csv, pts')).toBeInTheDocument();
+    expect(scansInsert).not.toHaveBeenCalled();
+  });
+
+  it('용량 상한을 넘는 파일은 저장소에 닿기 전에 거부하고, 상한과 같은 파일은 올린다', async () => {
+    const scansInsert = vi.fn();
+    vi.mocked(createClient).mockReturnValue(stubSupabase(null, { scansInsert }) as never);
+    const { container } = await readyForm();
+    const sized = (bytes: number) => {
+      const f = new File(['x'], 'scan.ply');
+      Object.defineProperty(f, 'size', { value: bytes });
+      return f;
+    };
+
+    fireEvent.change(screen.getByLabelText(/스캔 파일/), { target: { files: [sized(MAX_UPLOAD_BYTES + 1)] } });
+    submitForm(container);
+    expect(screen.getByText(`파일이 너무 큽니다(최대 ${MAX_UPLOAD_MB}MB). 스캔 범위를 나눠 다시 시도하세요.`))
+      .toBeInTheDocument();
+    expect(scansInsert).not.toHaveBeenCalled();
+
+    fireEvent.change(screen.getByLabelText(/스캔 파일/), { target: { files: [sized(MAX_UPLOAD_BYTES)] } });
+    submitForm(container);
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith('/scans/scan1'));
+    expect(scansInsert).toHaveBeenCalledTimes(1);
+  });
+
+  it('측정위치를 고르지 않으면 제출하지 않고 안내한다', async () => {
+    const scansInsert = vi.fn();
+    vi.mocked(createClient).mockReturnValue(stubSupabase(null, { scansInsert }) as never);
+    const { container } = await readyForm({});
+    pickFile('scan.ply');
+    submitForm(container);
+
+    expect(screen.getByText('측정위치를 선택하세요.')).toBeInTheDocument();
+    expect(scansInsert).not.toHaveBeenCalled();
+  });
+
+  it('쓸 수 있는 적용 기준이 없으면 제출하지 않고 안내한다', async () => {
+    const scansInsert = vi.fn();
+    vi.mocked(createClient).mockReturnValue(
+      stubSupabase(null, { scansInsert, criteriaResult: { data: [], error: null } }) as never);
+    const { container } = await readyForm();
+    expect(screen.getByText('이 현장에 쓸 수 있는 적용 기준이 없습니다.')).toBeInTheDocument();
+    pickFile('scan.ply');
+    submitForm(container);
+
+    expect(screen.getByText('적용 기준을 선택하세요.')).toBeInTheDocument();
+    expect(scansInsert).not.toHaveBeenCalled();
+  });
+
+  it('제출 이벤트의 기본 동작(페이지 이동)을 막는다', async () => {
+    const { container } = await readyForm();
+    expect(submitForm(container)).toBe(false);
+  });
+
+  it('임포트 모드의 제출 버튼은 "가져오기 시작"이다', async () => {
+    renderForm();
+    fireEvent.click(screen.getByLabelText('기존 결과 가져오기(CSV/JSON)'));
+    expect(screen.getByRole('button', { name: '가져오기 시작' })).toHaveAttribute('type', 'submit');
+    await settle();
+  });
+
+  it('표면 유형·데이터 계보 칩은 고른 칩만 강조되고, 눌러서 선택이 옮겨 간다', async () => {
+    renderForm();
+    const lit = (label: string) => screen.getByLabelText(label).closest('label')!.className.includes('bg-surface-2');
+    expect(lit('바닥')).toBe(true);
+    expect(lit('벽면')).toBe(false);
+    expect(lit('모름')).toBe(true);
+    expect(lit('원시 점군')).toBe(false);
+
+    fireEvent.click(screen.getByLabelText('벽면'));
+    expect(screen.getByLabelText('벽면')).toBeChecked();
+    expect(screen.getByLabelText('바닥')).not.toBeChecked();
+    expect(lit('벽면')).toBe(true);
+    expect(lit('바닥')).toBe(false);
+
+    fireEvent.click(screen.getByLabelText('원시 점군'));
+    expect(screen.getByLabelText('원시 점군')).toBeChecked();
+    expect(lit('원시 점군')).toBe(true);
+    expect(lit('모름')).toBe(false);
+    await settle();
+  });
+
+  it('라디오는 모두 네이티브 + accent(accent-ink)다: 업로드 방식·표면 유형·데이터 계보·적용 기준', async () => {
+    renderForm();
+    for (const label of ['스캔 분석', '기존 결과 가져오기(CSV/JSON)', '바닥', '벽면', '원시 점군', '융합 메시', '모름']) {
+      expect(screen.getByLabelText(label).className).toContain('accent-ink');
+    }
+    const criteriaRadio = within((await screen.findByText('floor-kcs')).closest('label')!).getByRole('radio');
+    expect(criteriaRadio.className).toContain('accent-ink');
+  });
+
+  it('아트보드의 작은 구성: 적용 기준 묶음 이름, 새 측정위치의 plus·파일 선택 모양의 upload 아이콘, 어두운 달력 색', async () => {
+    renderForm();
+    const code = await screen.findByText('floor-kcs');
+    expect(screen.getByRole('group', { name: '적용 기준' })).toContainElement(code);
+    expect(screen.getByRole('button', { name: '새 측정위치' }).querySelector('[data-icon="plus"]')).not.toBeNull();
+    expect(screen.getByText('파일 선택').querySelector('[data-icon="upload"]')).not.toBeNull();
+    // 날짜 선택창이 밝은 색으로 뜨지 않게 하는 color-scheme(아트보드 입력칸)
+    expect(screen.getByLabelText('측정일자').className).toContain('[color-scheme:dark]');
+  });
+
+  it('현장 고르기는 어떤 이름으로도 없다: select 는 필수 입력인 측정위치 하나뿐이다', async () => {
+    const { container } = renderForm();
+    fireEvent.click(screen.getByRole('button', { name: '새 측정위치' }));
+
+    const selects = container.querySelectorAll('select');
+    expect(selects).toHaveLength(1);
+    expect(selects[0].id).toBe('location');
+    expect(selects[0]).toBeRequired();
+    await settle();
+  });
+
+  it('입력칸: 측정일자는 필수이고 장비 칸에 예시 placeholder 가 있으며, 용량 안내는 저장 위치와 최대 용량을 말한다', async () => {
+    renderForm();
+    expect(screen.getByLabelText('측정일자')).toBeRequired();
+    expect(screen.getByLabelText('장비')).toHaveAttribute('placeholder', '예: iPhone 15 Pro + 3d Scanner App');
+    expect(screen.getByText(/파일은 Supabase Storage에 저장됩니다/))
+      .toHaveTextContent(`파일은 Supabase Storage에 저장됩니다. 파일당 최대 ${MAX_UPLOAD_MB}MB입니다.`);
+    await settle();
+  });
+});
+
+describe('UploadForm 새 측정위치 (T6 변이 보강)', () => {
+  it('미니폼의 Enter 는 기본 동작(상위 폼 암묵 제출)을 막고, 다른 키는 아무 일도 하지 않는다', async () => {
+    const locationsInsert = vi.fn();
+    vi.mocked(createClient).mockReturnValue(stubLocationInsert(locationsInsert) as never);
+    renderForm();
+    fireEvent.click(screen.getByRole('button', { name: '새 측정위치' }));
+    const name = screen.getByLabelText('이름');
+    fireEvent.change(name, { target: { value: '2층' } });
+
+    expect(fireEvent.keyDown(name, { key: 'a', code: 'KeyA' })).toBe(true);
+    expect(locationsInsert).not.toHaveBeenCalled();
+    expect(fireEvent.keyDown(name, { key: 'Enter', code: 'Enter' })).toBe(false);
+    await waitFor(() => expect(locationsInsert).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect((screen.getByLabelText('측정위치') as HTMLSelectElement).value).toBe('l2'));
+  });
+
+  it('저장하는 동안 저장 버튼은 "저장 중..."으로 잠기고 Enter 를 또 눌러도 한 번만 저장한다', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const locationsInsert = vi.fn();
+    vi.mocked(createClient).mockReturnValue(
+      stubLocationInsert(locationsInsert, () => gate.then(() => ({ data: { id: 'l2' }, error: null }))) as never);
+    renderForm();
+    fireEvent.click(screen.getByRole('button', { name: '새 측정위치' }));
+    const name = screen.getByLabelText('이름');
+    fireEvent.change(name, { target: { value: '2층' } });
+    fireEvent.keyDown(name, { key: 'Enter' });
+
+    const saving = await screen.findByRole('button', { name: '저장 중...' });
+    expect(saving).toBeDisabled();
+    fireEvent.keyDown(name, { key: 'Enter' });
+    fireEvent.click(saving);
+    expect(locationsInsert).toHaveBeenCalledTimes(1);
+
+    release();
+    await waitFor(() => expect((screen.getByLabelText('측정위치') as HTMLSelectElement).value).toBe('l2'));
+  });
+
+  it('저장이 실패해도 잠금이 풀리고, 다음에 성공하면 패널이 닫히며 다시 열면 앞의 오류와 입력이 남아 있지 않다', async () => {
+    const locationsInsert = vi.fn();
+    vi.mocked(createClient).mockReturnValue(stubLocationInsert(locationsInsert, (call) => (call === 1
+      ? { data: null, error: { code: '23505', message: 'dup' } }
+      : { data: { id: 'l2' }, error: null })) as never);
+    renderForm();
+    const toggle = screen.getByRole('button', { name: '새 측정위치' });
+    fireEvent.click(toggle);
+    fireEvent.change(screen.getByLabelText('이름'), { target: { value: '1층' } });
+    fireEvent.click(screen.getByRole('button', { name: '저장' }));
+
+    expect(await screen.findByText('같은 동/층/공간에 동일한 측정위치가 이미 있습니다.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '저장' })).toBeEnabled();
+
+    fireEvent.change(screen.getByLabelText('이름'), { target: { value: '2층' } });
+    fireEvent.click(screen.getByRole('button', { name: '저장' }));
+    await waitFor(() => expect((screen.getByLabelText('측정위치') as HTMLSelectElement).value).toBe('l2'));
+    expect(locationsInsert).toHaveBeenCalledTimes(2);
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+
+    fireEvent.click(toggle);
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.getByLabelText('이름')).toHaveValue('');
+  });
+
+  it.each([
+    ['오류 메시지가 있으면 그 메시지를', { data: null, error: { message: '권한 없음' } }, '권한 없음'],
+    ['오류 정보도 없으면 기본 문구를', { data: null, error: null }, '측정위치 저장 실패'],
+  ] as const)('저장이 실패하면 %s 알린다', async (_l, result, text) => {
+    vi.mocked(createClient).mockReturnValue(stubLocationInsert(vi.fn(), result) as never);
+    renderForm();
+    fireEvent.click(screen.getByRole('button', { name: '새 측정위치' }));
+    fireEvent.change(screen.getByLabelText('이름'), { target: { value: '1층' } });
+    fireEvent.click(screen.getByRole('button', { name: '저장' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(text);
+    await settle();
+  });
+
+  it('동·층·공간·이름 네 칸 모두 앞뒤 공백을 지워 저장하고, 새 위치는 "동 / 층 / 공간 / 이름" 글자로 목록에 들어간다', async () => {
+    const locationsInsert = vi.fn();
+    vi.mocked(createClient).mockReturnValue(stubLocationInsert(locationsInsert) as never);
+    renderForm();
+    fireEvent.click(screen.getByRole('button', { name: '새 측정위치' }));
+    fireEvent.change(screen.getByLabelText('동'), { target: { value: ' 101동 ' } });
+    fireEvent.change(screen.getByLabelText('층'), { target: { value: ' 3층 ' } });
+    fireEvent.change(screen.getByLabelText('공간'), { target: { value: ' 301호 ' } });
+    fireEvent.change(screen.getByLabelText('이름'), { target: { value: ' 거실 ' } });
+    fireEvent.click(screen.getByRole('button', { name: '저장' }));
+
+    await waitFor(() => expect(locationsInsert).toHaveBeenCalledWith({
+      site_id: 's1', building: '101동', floor: '3층', floor_order: 0, room: '301호', name: '거실',
+    }));
+    const select = screen.getByLabelText('측정위치') as HTMLSelectElement;
+    await waitFor(() => expect(select.value).toBe('l2'));
+    expect(Array.from(select.options).map((o) => o.textContent)).toContain('101동 / 3층 / 301호 / 거실');
+  });
+
+  it('이름이 공백뿐이면 저장하지 않고 안내한다', async () => {
+    const locationsInsert = vi.fn();
+    vi.mocked(createClient).mockReturnValue(stubLocationInsert(locationsInsert) as never);
+    renderForm();
+    fireEvent.click(screen.getByRole('button', { name: '새 측정위치' }));
+    fireEvent.change(screen.getByLabelText('이름'), { target: { value: '   ' } });
+    fireEvent.click(screen.getByRole('button', { name: '저장' }));
+
+    expect(screen.getByRole('alert')).toHaveTextContent('측정위치명을 입력하세요.');
+    expect(locationsInsert).not.toHaveBeenCalled();
+    await settle();
+  });
+
+  it('취소는 패널을 닫고, 토글을 다시 누르면 패널이 닫힌다', async () => {
+    renderForm();
+    const toggle = screen.getByRole('button', { name: '새 측정위치' });
+    fireEvent.click(toggle);
+    expect(screen.getByLabelText('이름')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '취소' }));
+    expect(screen.queryByLabelText('이름')).toBeNull();
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    fireEvent.click(toggle);
+    expect(screen.queryByLabelText('이름')).toBeNull();
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    await settle();
+  });
+
+  it('폼 안의 보조 버튼(새 측정위치·저장·취소·선택한 파일 빼기)은 모두 type=button 이라 업로드 제출을 일으키지 않는다', async () => {
+    const { container } = renderForm();
+    pickFile('scan.ply');
+    fireEvent.click(screen.getByRole('button', { name: '새 측정위치' }));
+
+    for (const name of ['새 측정위치', '저장', '취소', '선택한 파일 빼기']) {
+      expect(screen.getByRole('button', { name })).toHaveAttribute('type', 'button');
+    }
+    expect(container.querySelectorAll('button[type="submit"]')).toHaveLength(1);
+    await settle();
+  });
+});
+
+describe('UploadForm 파일 상자 (T6 변이 보강)', () => {
+  it('고른 파일 줄은 문서 아이콘 + 이름이고, 빼기 버튼은 X 아이콘이며 눌러 파일 입력값까지 비운다', async () => {
+    renderForm();
+    const input = screen.getByLabelText(/스캔 파일/) as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [new File(['x'], 'scan_101_301.ply')] } });
+    // 브라우저의 파일 입력은 파일을 고르면 value 가 가짜 경로가 된다. jsdom 은 그걸 흉내내지 않으니 직접 심어 둔다.
+    Object.defineProperty(input, 'value', { configurable: true, writable: true, value: 'C:\\fakepath\\scan_101_301.ply' });
+
+    const row = screen.getByText('scan_101_301.ply').closest('div')!;
+    expect(row.querySelector('[data-icon="file"]')).not.toBeNull();
+    const remove = screen.getByRole('button', { name: '선택한 파일 빼기' });
+    expect(remove.querySelector('[data-icon="x"]')).not.toBeNull();
+
+    fireEvent.click(remove);
+    expect(screen.queryByText('scan_101_301.ply')).toBeNull();
+    expect(input.value).toBe('');
+    await settle();
+  });
+
+  it('투명 파일 입력이 키보드 포커스를 받으면 점선 상자에 외곽선이 보인다(has-[:focus-visible])', async () => {
+    renderForm();
+    // 보이지 않는 입력이 포커스를 받으므로 전역 :focus-visible 이 아니라 감싼 상자가 외곽선을 그린다
+    const box = screen.getByLabelText(/스캔 파일/).parentElement!;
+    expect(box.className).toContain('has-[:focus-visible]:outline-2');
+    expect(box.className).toContain('has-[:focus-visible]:outline-offset-2');
+    expect(box.className).toContain('has-[:focus-visible]:outline-ink');
+    await settle();
   });
 });

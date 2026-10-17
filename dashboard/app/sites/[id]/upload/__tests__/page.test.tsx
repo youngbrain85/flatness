@@ -34,9 +34,13 @@ const L_101_3F = { ...L_102_1F, id: 'l1', building: '101동', floor: '3층', flo
 const L_101_5F = { ...L_102_1F, id: 'l2', building: '101동', floor: '5층', floor_order: 5, room: '501호' };
 
 // Supabase 쿼리 빌더 흉내: 체이닝은 자기 자신, await 되면(thenable) 정해 둔 결과로 resolve.
-function chain(result: { data: unknown; error: { message: string } | null }, eqSpy?: (col: string, val: unknown) => void) {
+function chain(
+  result: { data: unknown; error: { message: string } | null },
+  eqSpy?: (col: string, val: unknown) => void,
+  selectSpy?: (cols: unknown) => void,
+) {
   const obj: Record<string, unknown> = {
-    select: () => obj, order: () => obj,
+    select: (cols?: unknown) => { selectSpy?.(cols); return obj; }, order: () => obj,
     eq: (col: string, val: unknown) => { eqSpy?.(col, val); return obj; },
     then: (resolve: (v: unknown) => void) => resolve(result),
   };
@@ -54,18 +58,21 @@ function findByType(node: unknown, type: unknown): ReactElement | null {
   return findByType(el.props?.children, type);
 }
 
-function mount(location?: string, opts: { error?: { message: string }; eqSpy?: (col: string, val: unknown) => void } = {}) {
+function mount(location?: string, opts: {
+  error?: { message: string }; eqSpy?: (col: string, val: unknown) => void;
+  selectSpy?: (cols: unknown) => void; id?: string;
+} = {}) {
   headerStore.id = 'u1';
   vi.mocked(createClient).mockResolvedValue({
     from: (table: string) => {
       if (table === 'locations') {
-        return chain({ data: opts.error ? null : [L_102_1F, L_101_3F, L_101_5F], error: opts.error ?? null }, opts.eqSpy);
+        return chain({ data: opts.error ? null : [L_102_1F, L_101_3F, L_101_5F], error: opts.error ?? null }, opts.eqSpy, opts.selectSpy);
       }
       // 현장은 경로가 정하고 레이아웃이 확인한다 - 이 페이지가 현장 목록을 읽으면 안 된다.
       throw new Error(`예상치 못한 테이블: ${table}`);
     },
   } as never);
-  return SiteUploadPage({ params: Promise.resolve({ id: 's1' }), searchParams: Promise.resolve({ location }) });
+  return SiteUploadPage({ params: Promise.resolve({ id: opts.id ?? 's1' }), searchParams: Promise.resolve({ location }) });
 }
 
 describe('SiteUploadPage (T6: 현장 고정)', () => {
@@ -121,5 +128,30 @@ describe('SiteUploadPage (T6: 현장 고정)', () => {
     } as never);
     await expect(SiteUploadPage({ params: Promise.resolve({ id: 's1' }), searchParams: Promise.resolve({}) }))
       .rejects.toThrow('REDIRECT:/login');
+  });
+
+  // --- T6 변이 실험 보강: 브리프 테스트의 픽스처(경로 id 가 늘 s1, 조회 인자 무시)로는 못 가르던 것 ---
+  it('경로의 현장 id 를 조회 필터·폼·브레드크럼에 그대로 쓴다', async () => {
+    const eqSpy = vi.fn();
+    const el = await mount(undefined, { eqSpy, id: 's9' });
+
+    expect(eqSpy).toHaveBeenCalledWith('site_id', 's9');
+    expect((findByType(el, UploadForm)!.props as { siteId: string }).siteId).toBe('s9');
+    const crumbs = (findByType(el, PageHeader)!.props as { crumbs: { href?: string }[] }).crumbs;
+    expect(crumbs[0].href).toBe('/sites/s9/locations');
+  });
+
+  it('측정위치는 모든 컬럼(select("*"))으로 읽는다 - 폼이 동·층·공간·이름을 쓴다', async () => {
+    const selectSpy = vi.fn();
+    await mount(undefined, { selectSpy });
+
+    expect(selectSpy).toHaveBeenCalledWith('*');
+  });
+
+  it('조회 실패 화면도 본문 틀(PAGE_MAIN div) 안에 그린다', async () => {
+    const el = (await mount(undefined, { error: { message: '연결 실패' } })) as ReactElement<{ className: string }>;
+
+    expect(el.type).toBe('div');
+    expect(el.props.className).toBe(PAGE_MAIN);
   });
 });
