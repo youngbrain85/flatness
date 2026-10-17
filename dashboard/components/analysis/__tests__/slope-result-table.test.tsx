@@ -126,6 +126,35 @@ describe('SlopeResultTable (스펙 §7.2·§5.3: 구배 %, 설계 대비 편차,
   });
 });
 
+// ---- 변이 실험이 드러낸 빈틈 ----
+describe('SlopeResultTable 보강', () => {
+  // jsonb 의 등급 문자열이 객체 기본 속성 이름(toString 등)이어도 등급표 조회가 함수를 돌려주지 않아야 한다
+  it('객체 기본 속성 이름의 등급 문자열도 모르는 등급으로 보고 판정 불가 점 + 원문을 보인다', () => {
+    const rows = [result({ grade: 'toString' as unknown as SlopeCellResult['grade'] })];
+    render(<SlopeResultTable results={rows} designPct={2.0} dirPassDeg={30} />);
+    expect(screen.getByText('toString').querySelector('[data-grade]')).toHaveAttribute('data-grade', 'na');
+  });
+
+  it('역구배는 fail(오류 색) 태그, 방향 편차는 warn(경고 색) 태그다', () => {
+    const rows = [
+      result({ cell: cell({ cx: 0 }), dir_err_deg: 45.3 }),
+      result({ cell: cell({ cx: 1 }), grade: '재시공', reason: '역구배(물이 배수구 반대로 흐름)', reverse: true }),
+    ];
+    render(<SlopeResultTable results={rows} designPct={2.0} dirPassDeg={30} />);
+    expect(screen.getByText('역구배')).toHaveAttribute('data-tone', 'fail');
+    expect(screen.getByText('45.3도(허용 30도 초과)')).toHaveAttribute('data-tone', 'warn');
+  });
+
+  it('방향 편차가 허용치와 같으면 표시하지 않고, 넘으면 표시한다(경계)', () => {
+    const { rerender } = render(
+      <SlopeResultTable results={[result({ dir_err_deg: 30 })]} designPct={2.0} dirPassDeg={30} />,
+    );
+    expect(screen.queryByText(/허용 30도 초과/)).not.toBeInTheDocument();
+    rerender(<SlopeResultTable results={[result({ dir_err_deg: 30.1 })]} designPct={2.0} dirPassDeg={30} />);
+    expect(screen.getByText('30.1도(허용 30도 초과)')).toBeInTheDocument();
+  });
+});
+
 // 다크 T8(아트보드 ScanSlope 127~265행): TableBox 안의 표, 등급은 등급 색 점 + 이름, 수치 열 tdNum, 사유 muted
 describe('SlopeResultTable C안 해부', () => {
   it('등급은 점 + 이름(data-grade), 역구배·방향 편차는 Badge, 수치 열은 tdNum, 사유는 muted, 머리는 scope=col', () => {

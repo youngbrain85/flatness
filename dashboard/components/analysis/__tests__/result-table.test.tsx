@@ -54,6 +54,31 @@ describe('ResultTable (하단 구간별 결과표 - 스펙 §5.1.7 필드와 동
   });
 });
 
+// ---- 변이 실험이 드러낸 빈틈 ----
+describe('ResultTable 보강', () => {
+  it('벽 수직도 판정은 엔진 plumb_grade 를 따른다: 보수면 보수 색 점 + 이름 (적합으로 고정하지 않는다)', () => {
+    const stats: Stats = { ...wallStats, walls: [{ ...wallStats.walls![0], plumb_grade: 'repair' }] };
+    render(<ResultTable stats={stats} cells={[cell(1, 3, 'pass')]} />);
+    expect(screen.queryByText('적합')).toBeNull();
+    expect(screen.getByText('보수').querySelector('[data-grade]')).toHaveAttribute('data-grade', 'repair');
+  });
+
+  it('구역이 없는 셀(zone_id null)의 행 이름은 "전체"다', () => {
+    render(<ResultTable stats={floorStats} cells={[cell(null, 2, 'pass')]} />);
+    expect(screen.getByText('전체')).toBeInTheDocument();
+  });
+
+  it('구역 상태는 엔진 status 의 한글 이름이다(정상 고정이 아니다)', () => {
+    const stats: Stats = {
+      ...floorStats,
+      zones: [{ zone_id: 1, level_m: 0.002, area_m2: 12.5, status: 'ghost', plane_abc: [0, 0, 0] }],
+    };
+    render(<ResultTable stats={stats} cells={[cell(1, 4, 'pass')]} />);
+    expect(screen.getByText('유령층(제외)')).toBeInTheDocument();
+    expect(screen.queryByText('정상')).toBeNull();
+  });
+});
+
 // 다크 T8: TableBox(표 상자 안에서만 가로 스크롤) + tableClass + scope=col
 describe('ResultTable C안 해부 (아트보드 ScanDone 160~192행)', () => {
   it('TableBox 안의 표: 열 머리 scope=col, 수치 열은 thNum/tdNum, 첫 열은 600', () => {

@@ -1,13 +1,16 @@
 import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }));
-const { eqMock } = vi.hoisted(() => ({
+const { eqMock, updateMock, fromMock } = vi.hoisted(() => {
   // 함수 타입을 제네릭으로 준다(인자 이름만 적은 구현은 쓰지 않는 인자 경고가 난다)
-  eqMock: vi.fn<(col: string, val: string) => Promise<{ error: { message: string } | null }>>(async () => ({ error: null })),
-}));
+  const eqMock = vi.fn<(col: string, val: string) => Promise<{ error: { message: string } | null }>>(async () => ({ error: null }));
+  const updateMock = vi.fn<(payload: unknown) => { eq: typeof eqMock }>(() => ({ eq: eqMock }));
+  const fromMock = vi.fn<(table: string) => { update: typeof updateMock }>(() => ({ update: updateMock }));
+  return { eqMock, updateMock, fromMock };
+});
 vi.mock('@/lib/supabase/client', () => ({
-  createClient: () => ({ from: () => ({ update: () => ({ eq: eqMock }) }) }),
+  createClient: () => ({ from: fromMock }),
 }));
 
 import { VerdictPanel } from '../verdict-panel';
@@ -159,5 +162,71 @@ describe('VerdictPanel 종합의견 카드', () => {
     const { container } = render(<VerdictPanel analysis={analysis} stats={stats} />);
     expect(container.innerHTML).not.toMatch(/zinc-|amber-|purple-|red-|green-/);
     expect(container.innerHTML).not.toMatch(/\bcs-/);
+  });
+});
+
+// ---- 변이 실험이 드러낸 빈틈 ----
+describe('VerdictPanel 보강', () => {
+  it('저장은 analyses 의 이 분석 행에 user_summary 를 쓰고, 입력을 비우면 null 로 쓴다', async () => {
+    fromMock.mockClear(); updateMock.mockClear(); eqMock.mockClear();
+    render(<VerdictPanel analysis={analysis} stats={stats} />);
+    fireEvent.change(screen.getByLabelText('종합의견(사용자 수정)'), { target: { value: '보수 계획 수립' } });
+    fireEvent.click(screen.getByRole('button', { name: '저장' }));
+    await screen.findByText('저장되었습니다');
+    expect(fromMock).toHaveBeenLastCalledWith('analyses');
+    expect(updateMock).toHaveBeenLastCalledWith({ user_summary: '보수 계획 수립' });
+    expect(eqMock).toHaveBeenLastCalledWith('id', 'a1');
+
+    fireEvent.change(screen.getByLabelText('종합의견(사용자 수정)'), { target: { value: '' } });
+    fireEvent.click(screen.getByRole('button', { name: '저장' }));
+    await waitFor(() => expect(updateMock).toHaveBeenCalledTimes(2));
+    expect(updateMock).toHaveBeenLastCalledWith({ user_summary: null });
+  });
+
+  it('이미 저장된 사용자 의견이 있으면 입력칸에 채워서 시작한다', () => {
+    render(<VerdictPanel analysis={{ ...analysis, user_summary: '기존 사용자 의견' } as AnalysisRow} stats={stats} />);
+    expect(screen.getByLabelText('종합의견(사용자 수정)')).toHaveValue('기존 사용자 의견');
+  });
+
+  it('자동 종합의견은 분석 행(auto_summary)이 우선이고, 없으면 stats.auto_summary 로 떨어진다', () => {
+    const { rerender } = render(
+      <VerdictPanel analysis={{ ...analysis, auto_summary: '분석 행의 의견' } as AnalysisRow} stats={stats} />,
+    );
+    expect(screen.getByText('분석 행의 의견')).toBeInTheDocument();
+    expect(screen.queryByText(/자동 종합의견 본문입니다/)).toBeNull();
+    rerender(<VerdictPanel analysis={{ ...analysis, auto_summary: null } as AnalysisRow} stats={stats} />);
+    expect(screen.getByText(/자동 종합의견 본문입니다/)).toBeInTheDocument();
+  });
+
+  it('인식률 KPI 이름은 바닥이면 "바닥 인식률", 벽면이면 "셀 유효율"이다', () => {
+    const wall = { ...stats, meta: { ...stats.meta, surface: 'wall' as const } };
+    render(<VerdictPanel analysis={analysis} stats={wall} />);
+    expect(kpi('셀 유효율')).toContain('88.5%');
+    expect(screen.queryByText('바닥 인식률')).toBeNull();
+  });
+
+  it('셀이 하나도 없으면(0칸) 등급 분포 막대 폭은 0% 다(NaN% 로 깨지지 않는다)', () => {
+    const empty = {
+      ...stats, n_cells: 0, n_valid: 0,
+      grade_counts: { pass: 0, borderline: 0, repair: 0, rework: 0, na: 0 },
+    };
+    render(<VerdictPanel analysis={analysis} stats={empty} />);
+    const bar = screen.getByRole('img', { name: '적합 0, 경계 0, 보수 0, 재시공 0, 판정 불가 0' });
+    for (const seg of Array.from(bar.querySelectorAll('[data-grade]'))) {
+      expect((seg as HTMLElement).style.width).toBe('0%');
+    }
+  });
+
+  it('축소 스팬을 쓴 셀이 0개면 축소 스팬 안내를 그리지 않는다', () => {
+    render(<VerdictPanel analysis={analysis} stats={{ ...stats, reduced_span_cells: 0 }} />);
+    expect(screen.queryByText(/축소 스팬 적용 셀/)).toBeNull();
+  });
+
+  it('경고 상자와 스크리닝 고지는 같은 카드(오른쪽)에 있고, 등급 분포 카드와는 다른 카드다', () => {
+    const { container } = render(<VerdictPanel analysis={analysis} stats={stats} />);
+    const alert = container.querySelector('[data-alert="warning"]') as HTMLElement;
+    const notice = screen.getByText(/모바일 LiDAR 기반 스크리닝이며/);
+    expect(notice.parentElement).toBe(alert.parentElement);
+    expect(alert.parentElement).not.toContainElement(screen.getByText('등급 분포'));
   });
 });

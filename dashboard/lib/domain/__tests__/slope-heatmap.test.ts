@@ -77,6 +77,11 @@ describe('slopeCellFillColor (화면 등급 색, ok=false는 등급 무관하게
     const invalid = cell({ ok: false, slope_pct: null, downhill_rad: null, rmse_m: null, se_pct: null });
     expect(slopeCellFillColor(invalid, '적합')).toBe(SCREEN_SLOPE_GRADE_COLOR.판정불가);
   });
+
+  // jsonb 는 무결성을 보장하지 않는다: 모르는 등급 문자열이 칠할 색이 없어 칸이 배경에 묻히면 안 된다
+  it('모르는 등급 문자열(ok=true)도 판정불가 화면 색으로 칠한다', () => {
+    expect(slopeCellFillColor(cell({ ok: true }), '알수없음' as never)).toBe(SCREEN_SLOPE_GRADE_COLOR.판정불가);
+  });
 });
 
 describe('slopeCellRectPx (셀 사각형 픽셀 좌표, y축 반전 포함)', () => {
@@ -144,6 +149,15 @@ describe('drawSlopeHeatmap (배경색 + 화살표 오버레이)', () => {
     drawSlopeHeatmap(ctx, [g], t, 2.0);
     expect(calls.find((c) => c.fn === 'lineTo')).toBeUndefined();
     expect(calls.find((c) => c.fn === 'fillRect')).toBeDefined(); // 배경은 여전히 그린다(회색)
+  });
+
+  it('ok=false 셀은 방향 값(downhill_rad)이 남아 있어도 화살표를 그리지 않는다', () => {
+    const t: SlopeTransform = { scale: 10, xMin: 0, yMax: 8 };
+    const g: GradedSlopeCell = { cell: cell({ ok: false, slope_pct: null, rmse_m: null, se_pct: null }), grade: '판정불가' };
+    expect(g.cell.downhill_rad).not.toBeNull();   // 픽스처 확인: 방향 값은 남아 있다
+    const { ctx, calls } = fakeCtx();
+    drawSlopeHeatmap(ctx, [g], t, 2.0);
+    expect(calls.find((c) => c.fn === 'lineTo')).toBeUndefined();
   });
 
   it('reverse=true면 화살표 선 굵기를 굵게(2.2) 그린다 - 역구배는 색이 아니라 굵기로 드러남(§7.2)', () => {

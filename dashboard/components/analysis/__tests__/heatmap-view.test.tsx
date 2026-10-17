@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { HeatmapView } from '../heatmap-view';
 import { GRADE_CLASS } from '@/components/ui/grade';
 import { SCREEN_GRADE_COLOR, STAGE_BG } from '@/lib/domain/palette';
@@ -22,10 +22,11 @@ function stubStage(w: number, h: number) {
   vi.spyOn(Element.prototype, 'clientWidth', 'get').mockReturnValue(w);
   vi.spyOn(Element.prototype, 'clientHeight', 'get').mockReturnValue(h);
 }
-// 캔버스의 화면 위치(왼쪽 위 0,0). 클릭 좌표를 캔버스 기준 CSS px 로 쓴다
-function stubRect(canvas: HTMLCanvasElement, w: number, h: number) {
+// 캔버스의 화면 위치(기본은 왼쪽 위 0,0). 클릭 좌표를 캔버스 기준 CSS px 로 쓴다.
+// left·top 은 캔버스가 화면 한가운데 있는 경우를 보는 테스트가 준다(기본 0 이면 처음 그대로다)
+function stubRect(canvas: HTMLCanvasElement, w: number, h: number, left = 0, top = 0) {
   Object.defineProperty(canvas, 'getBoundingClientRect', {
-    value: () => ({ left: 0, top: 0, right: w, bottom: h, width: w, height: h, x: 0, y: 0, toJSON() {} }),
+    value: () => ({ left, top, right: left + w, bottom: top + h, width: w, height: h, x: left, y: top, toJSON() {} }),
   });
 }
 
@@ -36,6 +37,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  delete (document as unknown as { fonts?: unknown }).fonts;   // 글꼴 테스트가 단 스텁(jsdom 에는 document.fonts 가 없다)
 });
 
 describe('HeatmapView 칸 선택(그린 배치와 같은 함수로 누른 칸을 찾는다)', () => {
@@ -147,5 +149,141 @@ describe('HeatmapView 스테이지(아트보드 ScanDone 74~89행)', () => {
     const { container } = render(<HeatmapView surface="floor" cells={[]} zones={[]} />);
     expect(screen.getByText('표시할 셀 데이터가 없습니다.')).toBeInTheDocument();
     expect(container.querySelector('canvas')).toBeNull();
+  });
+});
+
+// ---- 변이 실험이 드러낸 빈틈. 아래 클릭 좌표·기대값은 800x400 스테이지의 배치(칸 311px, x0 44, y0 27 등)에서 손으로 구했다 ----
+describe('HeatmapView 보강: 좌표·배율·상세·벽·겹침·다시 그리기', () => {
+  const twoCells = () => [cell(0, 0, 1), cell(1, 0, 99)];
+
+  it('캔버스가 화면 한가운데 있어도(왼쪽 위가 0,0 이 아니어도) 누른 자리를 캔버스 기준으로 환산한다', () => {
+    stubStage(800, 400);
+    const { container } = render(<HeatmapView surface="floor" cells={twoCells()} zones={[]} cellM={1} />);
+    const canvas = container.querySelector('canvas')!;
+    stubRect(canvas, 800, 400, 200, 100);   // 화면에서 (200,100) 에 놓인 캔버스
+    fireEvent.click(canvas, { clientX: 200 + 510, clientY: 100 + 182 });
+    expect(within(screen.getByTestId('heatmap-cell-detail')).getByText('99.00 mm')).toBeInTheDocument();
+  });
+
+  it('화면 배율이 3 이어도 버퍼는 2 배까지만 키우고, 좌표계는 그 배율로 맞추며, 누른 자리는 버퍼가 아닌 CSS 크기 배치로 찾는다', () => {
+    stubStage(800, 400);
+    vi.stubGlobal('devicePixelRatio', 3);
+    const { ctx } = recording2d();
+    const setTransform = vi.fn();
+    (ctx as unknown as { setTransform: typeof setTransform }).setTransform = setTransform;
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(ctx as unknown as RenderingContext);
+    const { container } = render(<HeatmapView surface="floor" cells={twoCells()} zones={[]} cellM={1} />);
+    const canvas = container.querySelector('canvas')!;
+    expect([canvas.width, canvas.height]).toEqual([1600, 800]);
+    expect(setTransform).toHaveBeenCalledWith(2, 0, 0, 2, 0, 0);
+    // 버퍼 크기(1600x800)로 배치를 구하면 왼쪽 칸(x 44~755)이 잡힌다. CSS 크기(800x400)면 오른쪽 칸(x 355~666)이다
+    stubRect(canvas, 800, 400);
+    fireEvent.click(canvas, { clientX: 510, clientY: 182 });
+    expect(within(screen.getByTestId('heatmap-cell-detail')).getByText('99.00 mm')).toBeInTheDocument();
+  });
+
+  it('상세의 나머지 칸: 사용 스팬(m)·점유율(%, 반올림), 최악 지점이 없으면 -, 구역 번호', () => {
+    stubStage(800, 400);
+    const { container } = render(
+      <HeatmapView surface="floor" zones={[]} cellM={1}
+        cells={[cell(0, 0, 4.5, { occupancy: 0.874, span_used_m: 2.5 })]} />,
+    );
+    const canvas = container.querySelector('canvas')!;
+    stubRect(canvas, 800, 400);
+    fireEvent.click(canvas, { clientX: 400, clientY: 180 });
+    const detail = screen.getByTestId('heatmap-cell-detail');
+    const field = (label: string) => within(detail).getByText(label).parentElement!.textContent;
+    expect(field('사용 스팬')).toBe('사용 스팬2.5 m');
+    expect(field('셀 점유율')).toBe('셀 점유율87%');
+    expect(field('최악 지점')).toBe('최악 지점-');
+    expect(field('구역')).toBe('구역1');
+  });
+
+  it('벽면: 벽마다 그 벽의 칸만 그리고(HUD·캔버스 이름), 벽을 바꾸면 열린 상세가 닫힌다. 상세 이름은 "벽"', () => {
+    stubStage(800, 400);
+    const cells = [cell(0, 0, 1, { zone_id: 1 }), cell(0, 0, 7, { zone_id: 2 }), cell(1, 0, 2, { zone_id: 2 })];
+    const { container } = render(
+      <HeatmapView surface="wall" cells={cells} walls={[wall(1), wall(2)]} zones={[]} cellM={1} />,
+    );
+    // 처음 벽 1: 칸 하나 (1열 1행)
+    expect(screen.getByTestId('heatmap-hud').textContent).toBe('1m 셀 · 1칸(유효 1) · 최댓값 1.00 mm');
+    expect(screen.getByRole('img', { name: /^판정 히트맵 평면도/ }).getAttribute('aria-label'))
+      .toBe('판정 히트맵 평면도. 1m 셀 1열 1행 1칸, 적합 1칸, 최댓값 1.00 mm');
+    const canvas = container.querySelector('canvas')!;
+    stubRect(canvas, 800, 400);
+    fireEvent.click(canvas, { clientX: 400, clientY: 180 });   // 1x1 in 800x400: 칸 316px, x0 242, y0 24
+    expect(within(screen.getByTestId('heatmap-cell-detail')).getByText('벽')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('tab', { name: '벽 2 (5.1m x 2.4m)' }));
+    expect(screen.queryByTestId('heatmap-cell-detail')).toBeNull();
+    expect(screen.getByTestId('heatmap-hud').textContent).toBe('1m 셀 · 2칸(유효 2) · 최댓값 7.00 mm');
+    expect(screen.getByRole('img', { name: /^판정 히트맵 평면도/ }).getAttribute('aria-label'))
+      .toBe('판정 히트맵 평면도. 1m 셀 2열 1행 2칸, 적합 2칸, 최댓값 7.00 mm');
+  });
+
+  it('벽 선택 탭은 벽면에 벽 정보가 있을 때만 나온다(벽 정보가 없거나 바닥이면 없다)', () => {
+    const one = [cell(0, 0, 1)];
+    const first = render(<HeatmapView surface="wall" cells={one} zones={[]} cellM={1} />);
+    expect(screen.queryByRole('tablist')).toBeNull();   // 벽면인데 벽 정보가 없다: 칸을 전부 그린다
+    expect(screen.getByTestId('heatmap-hud').textContent).toBe('1m 셀 · 1칸(유효 1) · 최댓값 1.00 mm');
+    first.unmount();
+    const second = render(<HeatmapView surface="wall" cells={one} walls={[]} zones={[]} cellM={1} />);
+    expect(screen.queryByRole('tablist')).toBeNull();
+    second.unmount();
+    render(<HeatmapView surface="floor" cells={one} walls={[wall(1)]} zones={[]} cellM={1} />);
+    expect(screen.queryByRole('tablist')).toBeNull();
+  });
+
+  it('캔버스는 십자 커서이고, 범례와 HUD 는 캔버스 클릭을 가로채지 않는다(pointer-events-none)', () => {
+    const { container } = render(<HeatmapView surface="floor" cells={[cell(0, 0, 1)]} zones={[]} cellM={1} />);
+    expect(container.querySelector('canvas')!.className.split(/\s+/)).toContain('cursor-crosshair');
+    expect(container.querySelector('[data-stage] ul')!.className.split(/\s+/)).toContain('pointer-events-none');
+    expect(screen.getByTestId('heatmap-hud').className.split(/\s+/)).toContain('pointer-events-none');
+  });
+
+  // 배경 칠하기(전체 크기 fillRect)가 곧 "한 번 그렸다"는 표시다. CELL_GAP_COLOR 가 STAGE_BG 와 같은 검정이라 좌표로 가린다
+  const backgroundPaints = (ops: ReturnType<typeof recording2d>['ops']) =>
+    ops.filter((o) => o.op === 'fillRect' && o.args.join() === '0,0,800,400').length;
+
+  it('글꼴이 늦게 도착하면(document.fonts.ready) 칸 숫자를 한 번 더 그린다', async () => {
+    stubStage(800, 400);
+    let ready!: () => void;
+    Object.defineProperty(document, 'fonts', {
+      configurable: true,
+      value: { ready: new Promise<void>((resolve) => { ready = resolve; }) },
+    });
+    const { ctx, ops } = recording2d();
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(ctx as unknown as RenderingContext);
+    render(<HeatmapView surface="floor" zones={[]} cellM={1} cells={[cell(0, 0, 1)]} />);
+    expect(backgroundPaints(ops)).toBe(1);
+    await act(async () => { ready(); });
+    expect(backgroundPaints(ops)).toBe(2);
+  });
+
+  it('스테이지 크기가 바뀌면(ResizeObserver) 다시 그린다', () => {
+    stubStage(800, 400);
+    let notify: () => void = () => {};
+    let observed: Element | null = null;
+    class FakeResizeObserver {
+      constructor(callback: () => void) { notify = callback; }
+      observe(el: Element) { observed = el; }
+      disconnect() {}
+    }
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+    const { ctx, ops } = recording2d();
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(ctx as unknown as RenderingContext);
+    const { container } = render(<HeatmapView surface="floor" zones={[]} cellM={1} cells={[cell(0, 0, 1)]} />);
+    expect(observed).toBe(container.querySelector('canvas'));
+    expect(backgroundPaints(ops)).toBe(1);
+    notify();
+    expect(backgroundPaints(ops)).toBe(2);
+  });
+
+  it('캔버스 크기를 아직 모르면(0x0, 숨은 탭 등) 아무것도 그리지 않는다', () => {
+    // stubStage 를 부르지 않는다: jsdom 의 clientWidth·clientHeight 는 0 이다
+    const { ctx, ops } = recording2d();
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(ctx as unknown as RenderingContext);
+    render(<HeatmapView surface="floor" zones={[]} cellM={1} cells={[cell(0, 0, 1)]} />);
+    expect(ops).toEqual([]);
   });
 });

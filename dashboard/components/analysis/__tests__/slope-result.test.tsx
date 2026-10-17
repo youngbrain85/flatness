@@ -39,6 +39,7 @@ vi.mock('@/lib/supabase/client', () => ({ createClient: () => supabaseStub }));
 
 import { SlopeResult } from '../slope-result';
 import { EYEBROW } from '../result-parts';
+import { recording2d } from '@/lib/viz/__tests__/ctx2d-stub';
 import type { AnalysisRow, SlopeCellRow, SlopeStats } from '@/lib/domain/types';
 
 // slope-placeholder.test.tsx에서 계승한 기본 픽스처 - cells_json이 없어(D7)
@@ -89,7 +90,7 @@ describe('SlopeResult - cells_json 없는 분석(D7): slope-placeholder.tsx 방�
     expect(screen.getByText(/방향\(역구배\)을 판정하지 않았습니다/).closest('[data-alert]')).toHaveAttribute('data-alert', 'warning');
     expect(screen.getByText('경고').className).toBe(EYEBROW);
     expect(img.parentElement).toHaveAttribute('data-stage');
-    expect(img.parentElement!.className).toContain('p-4');
+    expect(img.parentElement!.className.split(/\s+/)).toContain('p-4');   // 토큰 단위(gap-4 의 끝 글자가 걸리지 않게)
     expect(document.body.innerHTML).not.toMatch(/zinc-|amber-|red-/);
     expect(document.body.innerHTML).not.toMatch(/\bcs-/);
   });
@@ -622,5 +623,64 @@ describe('SlopeResult - fetch 실패/형식 불량/조인 누락 경로 (코드�
     expect(document.querySelector('canvas')).not.toBeNull();
 
     useJudgeStatusMock.mockReturnValue(null);
+  });
+});
+
+// ---- 변이 실험이 드러낸 빈틈: 결과 구획 머리·카드 줄·하위 부품 배선 ----
+describe('SlopeResult 결과 구획 보강', () => {
+  it('결과 머리에 일시 · 엔진을 보인다(created_at 앞 16자, T 를 공백으로)', () => {
+    render(<SlopeResult analysis={{ ...analysisWith(stats), created_at: '2026-10-04T15:49:12.345+00:00' }} />);
+    expect(screen.getByText('2026-10-04 15:49 · 엔진 p4-0.5.0')).toBeInTheDocument();
+  });
+
+  it('재판정 불가 분기의 카드 줄: 경고가 있으면 요약 카드와 경고 카드 둘, 없으면 요약 카드 하나뿐이다(빈 카드 없음)', () => {
+    const { rerender } = render(<SlopeResult analysis={analysisWith(stats)} />);
+    const row = () => screen.getByText('판정 요약').closest('[class*="flex-[1_1_420px]"]')!.parentElement!;
+    expect(row().children).toHaveLength(2);
+    rerender(<SlopeResult analysis={analysisWith({ ...stats, warnings: [] })} />);
+    expect(row().children).toHaveLength(1);
+  });
+
+  it('재판정 가능 분기: h2 와 section 이 이어지고, 판정 패널(현재 배수구)과 h3 "셀별 결과표"가 있다', async () => {
+    stubFetch();
+    render(<SlopeResult analysis={analysisWith(rejudgeableStats)} />);
+    const heading = screen.getByRole('heading', { level: 2, name: '구배 결과' });
+    expect(heading.closest('section')).toHaveAttribute('aria-labelledby', heading.id);
+    expect(screen.getByText('현재 배수구')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 3, name: '셀별 결과표' })).toBeInTheDocument();
+    await screen.findByText('(0, 0)');   // 셀 적재가 끝나기를 기다린다
+  });
+
+  it('캔버스 커서: 평소에는 십자, 재판정이 진행 중(processing)이면 not-allowed 다', async () => {
+    stubFetch();
+    const { unmount } = render(<SlopeResult analysis={analysisWith(rejudgeableStats)} />);
+    await waitFor(() => expect(document.querySelector('canvas')).not.toBeNull());
+    expect(document.querySelector('canvas')!.className).toContain('cursor-crosshair');
+    unmount();
+
+    useJudgeStatusMock.mockReturnValue({ state: 'processing', at: 't0' });
+    try {
+      render(<SlopeResult analysis={analysisWith(rejudgeableStats)} />);
+      await waitFor(() => expect(document.querySelector('canvas')).not.toBeNull());
+      expect(document.querySelector('canvas')!.className).toContain('cursor-not-allowed');
+    } finally {
+      useJudgeStatusMock.mockReturnValue(null);
+    }
+  });
+
+  it('화살표 길이는 stats.cell_m 에서 온다(2m 칸, 240px/m 이면 168px)', async () => {
+    stubFetch();
+    const { ctx } = recording2d();
+    const lines: [number, number][] = [];
+    (ctx as unknown as { lineTo: (x: number, y: number) => void }).lineTo = (x, y) => { lines.push([x, y]); };
+    const spy = vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(ctx as unknown as RenderingContext);
+    try {
+      render(<SlopeResult analysis={analysisWith(rejudgeableStats)} />);
+      await waitFor(() => expect(lines.length).toBeGreaterThan(0));
+      // 칸 중심 (1,1) -> 캔버스 (240,240), 방향 0 라디안(동쪽)이라 오른쪽으로 2 x 0.35 x 240 = 168px
+      expect(lines[0]).toEqual([408, 240]);
+    } finally {
+      spy.mockRestore();
+    }
   });
 });

@@ -186,6 +186,7 @@ function mkAnalysis(overrides: Partial<AnalysisRow> & { id: string; kind: Analys
 function stubSupabase(
   scan: ScanRow, analyses: AnalysisRow[], loc: LocationRow | null = location,
   registration: { id: string } | null = null,
+  photos: unknown[] = [],
 ) {
   return {
     from: (table: string) => {
@@ -198,7 +199,7 @@ function stubSupabase(
       if (table === 'registrations') return chain({ data: registration, error: null });
       // D5: 브레드크럼 현장명(sites)과 인라인 결과의 현장 사진(photos).
       if (table === 'sites') return chain({ data: loc ? site : null, error: null });
-      if (table === 'photos') return chain({ data: [], error: null });
+      if (table === 'photos') return chain({ data: photos, error: null });
       throw new Error(`예상치 못한 테이블: ${table}`);
     },
   };
@@ -1009,6 +1010,18 @@ describe('ScanPage 결과 인라인 (D5: analyses/[id] 렌더 이관)', () => {
     expect((results[0].props.scan as ScanRow).id).toBe('sc1');
     expect(Array.isArray(results[0].props.photos)).toBe(true);
     expect(findAll(el, SlopeResult)).toHaveLength(0);
+  });
+
+  // 변이 실험이 드러낸 빈틈: 조회한 현장 사진이 결과 구획의 '현장 사진' 탭까지 그대로 간다(위 단언은 배열인지만 본다)
+  it('이 스캔의 현장 사진 조회 결과를 AnalysisResult 의 photos 로 그대로 넘긴다', async () => {
+    const done = mkAnalysis({ id: 'f1', kind: 'flatness', stats: FLAT_STATS });
+    const photo = { id: 'p1', file_path: 'photos/p1.jpg', caption: '벽면 균열' };
+    vi.mocked(createClient).mockResolvedValue(
+      stubSupabase(mkScan(), [done], location, null, [photo]) as never);
+
+    const el = await ScanPage(pageProps());
+
+    expect(findAll(el, AnalysisResult)[0].props.photos).toEqual([photo]);
   });
 
   it('최신 done의 stats가 비었으면(레거시) stats가 있는 이전 done으로 내려간다', async () => {

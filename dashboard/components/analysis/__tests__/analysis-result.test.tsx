@@ -26,7 +26,7 @@ vi.mock('../preview3d-tab', async (importOriginal) => {
 });
 
 import { AnalysisResult } from '../analysis-result';
-import type { AnalysisRow, CellRow, ScanRow, Stats } from '@/lib/domain/types';
+import type { AnalysisRow, CellRow, ScanRow, Stats, WallInfo } from '@/lib/domain/types';
 import { probeWebgl2 } from '@/lib/viz/points3d/gl-renderer';
 import { recordingGl } from '@/lib/viz/points3d/__tests__/gl-stub';
 
@@ -156,6 +156,78 @@ describe('AnalysisResult C안 결과 구획', () => {
     const withCell: AnalysisRow = { ...analysis, stats: { ...stats, meta: { ...stats.meta, cell_m: 1 } } };
     render(<AnalysisResult analysis={withCell} scan={scan} photos={[]} />);
     expect(await screen.findByTestId('heatmap-hud')).toHaveTextContent('1m 셀 · 1칸(유효 1) · 최댓값 3.20 mm');
+  });
+});
+
+// ---- 변이 실험이 드러낸 빈틈: 결과 구획이 하위 부품에 넘기는 값(배선) ----
+describe('AnalysisResult 배선 보강', () => {
+  const oneCell = (): CellRow => ({
+    ix: 0, iy: 0, center_x: 0.5, center_y: 0.5, value_mm: 3.2, span_used_m: 3,
+    occupancy: 1, grade: 'pass', worst_x: null, worst_y: null, zone_id: 1,
+  });
+  const stubCells = (cells: CellRow[]) => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => cells } as unknown as Response)));
+  };
+
+  it('임포트가 아니면 "외부 결과" 배지가 없다', async () => {
+    stubCellsFetch();
+    render(<AnalysisResult analysis={analysis} scan={scan} photos={[]} />);
+    expect(screen.queryByText('외부 결과')).toBeNull();
+    await waitFor(() => expect(screen.getByText('표시할 셀 데이터가 없습니다.')).toBeInTheDocument());
+  });
+
+  it('셀이 도착하면 구간별 결과표가 그려진다(구역 행)', async () => {
+    stubCells([oneCell()]);
+    render(<AnalysisResult analysis={analysis} scan={scan} photos={[]} />);
+    const table = await screen.findByRole('table');
+    expect(within(table).getByText('구역 1')).toBeInTheDocument();
+  });
+
+  it('벽면 분석이면 히트맵에 stats.walls 를 넘겨 벽 선택 탭이 생긴다', async () => {
+    stubCells([oneCell()]);
+    const wall: WallInfo = {
+      wall_id: 1, n_cells: 1, height_m: 2.4, length_m: 5.1, plumbness_mm: 3, plumb_grade: 'pass',
+      plane_abc: [0, 0, 0],
+      frame: { p0: [0, 0], direction: [1, 0], normal: [0, 1], u_min: 0, u_max: 5.1, z_min: 0, z_max: 2.4 },
+    };
+    const wallAnalysis: AnalysisRow = {
+      ...analysis, surface: 'wall', stats: { ...stats, meta: { ...stats.meta, surface: 'wall' }, walls: [wall] },
+    };
+    render(<AnalysisResult analysis={wallAnalysis} scan={scan} photos={[]} />);
+    expect(await screen.findByRole('tablist', { name: '벽 선택' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '벽 1 (5.1m x 2.4m)' })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('구역 상태(stats.zones)가 히트맵 칸 상세로 넘어간다', async () => {
+    stubCells([oneCell()]);
+    const withZone: AnalysisRow = {
+      ...analysis,
+      stats: { ...stats, zones: [{ zone_id: 1, level_m: 0, area_m2: 1, status: 'ghost', plane_abc: null }] },
+    };
+    // jsdom 에는 레이아웃이 없다: 캔버스 크기와 화면 위치를 스텁해 칸 하나(800x400 에서 316px, x0 242, y0 24)를 누른다
+    const cw = vi.spyOn(Element.prototype, 'clientWidth', 'get').mockReturnValue(800);
+    const ch = vi.spyOn(Element.prototype, 'clientHeight', 'get').mockReturnValue(400);
+    const gc = vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(() => null);
+    try {
+      render(<AnalysisResult analysis={withZone} scan={scan} photos={[]} />);
+      const canvas = await screen.findByRole('img', { name: /^판정 히트맵 평면도/ });
+      Object.defineProperty(canvas, 'getBoundingClientRect', {
+        value: () => ({ left: 0, top: 0, right: 800, bottom: 400, width: 800, height: 400, x: 0, y: 0, toJSON() {} }),
+      });
+      fireEvent.click(canvas, { clientX: 400, clientY: 180 });
+      expect(within(screen.getByTestId('heatmap-cell-detail')).getByText('1 (유령층(제외))')).toBeInTheDocument();
+    } finally {
+      cw.mockRestore(); ch.mockRestore(); gc.mockRestore();
+    }
+  });
+
+  it('현장 사진 탭: 사진 올리기와 갤러리(사진이 없으면 안내)를 보인다', async () => {
+    stubCellsFetch();
+    render(<AnalysisResult analysis={analysis} scan={scan} photos={[]} />);
+    fireEvent.click(screen.getByRole('tab', { name: '현장 사진' }));
+    expect(screen.getByText('등록된 사진이 없습니다.')).toBeInTheDocument();
+    expect(screen.getByLabelText('사진 설명(선택)')).toBeInTheDocument();
+    await screen.findByRole('table');   // 셀 적재 effect 가 끝나기를 기다려 act 경고를 막는다
   });
 });
 

@@ -191,3 +191,57 @@ describe('SlopeVerdictPanel C안 해부', () => {
     expect(container.innerHTML).not.toMatch(/\bcs-/);
   });
 });
+
+// ---- 변이 실험이 드러낸 빈틈 ----
+describe('SlopeVerdictPanel 보강', () => {
+  it('셀 수가 모두 0이면 판정 요약 막대 폭은 0% 다(NaN% 로 깨지지 않는다)', () => {
+    const zero = {
+      ...stats,
+      summary: { ...stats.summary, counts: { 적합: 0, 경계: 0, 보수: 0, 재시공: 0, 판정불가: 0 } },
+    };
+    render(<SlopeVerdictPanel stats={zero} judge={null} drainPoints={[]} directionAware />);
+    const bar = screen.getByRole('img', { name: '적합 0, 경계 0, 보수 0, 재시공 0, 판정불가 0' });
+    for (const seg of Array.from(bar.querySelectorAll('[data-grade]'))) {
+      expect((seg as HTMLElement).style.width).toBe('0%');
+    }
+  });
+
+  it('경고가 없으면 경고 라벨도 경고 상자도 그리지 않는다', () => {
+    const { container } = render(<SlopeVerdictPanel stats={stats} judge={null} drainPoints={[]} directionAware />);
+    expect(screen.queryByText('경고')).toBeNull();
+    expect(container.querySelector('[data-alert="warning"]')).toBeNull();
+  });
+
+  it('배수구가 하나도 없으면 현재 배수구와 이 판정에 사용된 배수구가 모두 "없음"이다', () => {
+    render(
+      <SlopeVerdictPanel stats={{ ...stats, drain_points: [] }} judge={null} drainPoints={[]} directionAware />,
+    );
+    expect(screen.getByText('없음')).toBeInTheDocument();                 // 현재 배수구
+    expect(screen.getByText(/이 판정에 사용됨: 없음/)).toBeInTheDocument();
+  });
+
+  it('편차 통계 키가 아예 없어도(jsonb) null 과 같이 안내 문구로 처리한다', () => {
+    const { mean_dev_pct, std_dev_pct, max_dev_pct, ...rest } = stats.summary;
+    void mean_dev_pct; void std_dev_pct; void max_dev_pct;
+    render(
+      <SlopeVerdictPanel stats={{ ...stats, summary: rest as SlopeStats['summary'] }} judge={null}
+        drainPoints={[]} directionAware />,
+    );
+    expect(screen.getAllByText('판정 가능한 셀 없음')).toHaveLength(3);
+  });
+
+  it('적용 기준(threshold)이 없으면 적용 기준 줄을 그리지 않는다', () => {
+    const { threshold, ...rest } = stats;
+    void threshold;
+    render(<SlopeVerdictPanel stats={rest as SlopeStats} judge={null} drainPoints={[]} directionAware />);
+    expect(screen.queryByText('적용 기준')).toBeNull();
+  });
+
+  it('재판정 실패 배너: 사유(error)가 없으면 사유 줄을 그리지 않는다', () => {
+    render(
+      <SlopeVerdictPanel stats={stats} judge={{ state: 'failed', at: 't0' }} drainPoints={[]} directionAware />,
+    );
+    expect(screen.getByText(/재판정에 실패했습니다/)).toBeInTheDocument();
+    expect(screen.queryByText(/사유:/)).toBeNull();
+  });
+});

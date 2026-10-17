@@ -152,6 +152,28 @@ describe('SlopeHeatmapView C안 해부', () => {
     expect(container.innerHTML).not.toMatch(/\bcs-/);
   });
 
+  // ---- 변이 실험이 드러낸 빈틈 ----
+  it('캔버스 접근성 이름은 "구배 판정 지도"다', () => {
+    const { container } = render(
+      <SlopeHeatmapView results={[result()]} cellM={2.0} drainPoints={[]} clickable onDrainClick={vi.fn()} />,
+    );
+    expect(container.querySelector('canvas')).toHaveAttribute('aria-label', '구배 판정 지도');
+  });
+
+  it('클릭한 월드 좌표는 소수 셋째 자리로 반올림해 넘긴다', () => {
+    const onDrainClick = vi.fn();
+    const { container } = render(
+      <SlopeHeatmapView results={[result()]} cellM={2.0} drainPoints={[]} clickable onDrainClick={onDrainClick} />,
+    );
+    const canvas = container.querySelector('canvas')!;
+    Object.defineProperty(canvas, 'getBoundingClientRect', {
+      value: () => ({ left: 0, top: 0, right: 480, bottom: 480, width: 480, height: 480, x: 0, y: 0, toJSON() {} }),
+    });
+    // 위 첫 테스트와 같은 배치: scale 240, xMin 0, yMax 2. x = 100/240 = 0.41666.., y = 2 - 331/240 = 0.62083..
+    fireEvent.click(canvas, { clientX: 100, clientY: 331 });
+    expect(onDrainClick).toHaveBeenCalledWith({ x: 0.417, y: 0.621 });
+  });
+
   it('clickable=false 면 not-allowed 커서를 쓴다', () => {
     const { container } = render(
       <SlopeHeatmapView results={[result()]} cellM={2.0} drainPoints={[]} clickable={false} onDrainClick={vi.fn()} />,

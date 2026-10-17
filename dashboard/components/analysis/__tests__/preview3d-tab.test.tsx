@@ -157,6 +157,7 @@ function expectNoLegacy(container: HTMLElement) {
   expect(container.textContent).not.toContain(OLD_CAPTION);
   expect(container.textContent).not.toContain(OLD_EMPTY);
   expect(container.innerHTML).not.toMatch(/zinc-|amber-|red-|green-|purple-/);
+  expect(container.innerHTML).not.toMatch(/\bcs-/);   // 옛 cs- 토큰(text-cs-text-secondary 등)도 남지 않는다
 }
 
 beforeEach(() => {
@@ -202,7 +203,8 @@ describe('Preview3dTab 모드별 화면 (§7.11 분기표의 화면 열)', () =>
     // 엔진이 그린 밝은 PNG 는 검정 스테이지(Stage) 안 여백에 둔다(스펙 2026-10-17 §5 10: 3D 탭은 둘레만 C안)
     expect(img.className).toBe('block h-auto w-full max-w-[960px]');
     expect(img.parentElement).toHaveAttribute('data-stage');
-    expect(img.parentElement!.className).toContain('p-4');
+    // 토큰 단위로 본다: 문자열 포함이면 gap-4 의 끝 글자(p-4)가 걸려 p-4 가 없어져도 통과한다
+    expect(img.parentElement!.className.split(/\s+/)).toContain('p-4');
     expect(screen.getByText(M10)).toBeInTheDocument();
     const note = screen.getByText(M2);
     expect(note.tagName).toBe('P');
