@@ -40,6 +40,19 @@ export function reportStatusBadge(report: { status: ReportStatus; gen_status: Re
   return { tone: 'unknown', label: REPORT_GEN_STATUS_LABEL[report.gen_status] };
 }
 
+// 화면의 상태 표시(StatusIndicator 종류 + 문구). reportStatusBadge의 판단에 'PDF 생성 중'만 진행 중(고리)으로
+// 가르는 규칙(app/reports/page.tsx와 같다)을 더한다: 발행됨 success · 생성 실패 error · PDF 생성 중 in-progress ·
+// 작성 중과 PDF 생성 대기 중 pending. type 문자열은 components/ui/status-indicator.tsx의 StatusType과 같아
+// 그대로 넘긴다(도메인이 UI 파일을 import하지 않는다).
+export function reportIndicator(report: { status: ReportStatus; gen_status: ReportGenStatus }): {
+  type: 'success' | 'error' | 'in-progress' | 'pending'; label: string;
+} {
+  const badge = reportStatusBadge(report);
+  if (badge.tone === 'pass') return { type: 'success', label: badge.label };
+  if (badge.tone === 'fail') return { type: 'error', label: badge.label };
+  return { type: report.gen_status === 'processing' ? 'in-progress' : 'pending', label: badge.label };
+}
+
 // 종합의견 초안: 분석별 의견(user_summary ?? auto_summary)을 표면 라벨과 함께 결합
 export function buildDraftOpinion(
   items: { surfaceLabel: string; text: string | null }[],

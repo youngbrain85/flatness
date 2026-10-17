@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  buildDraftOpinion, canFinalize, canRegenerate, deleteConfirmText, reportPdfRelPath, reportStatusBadge,
+  buildDraftOpinion, canFinalize, canRegenerate, deleteConfirmText, reportIndicator, reportPdfRelPath,
+  reportStatusBadge,
 } from '../reports';
 
 describe('reportPdfRelPath', () => {
@@ -76,6 +77,22 @@ describe('reportStatusBadge', () => {
       .toEqual({ tone: 'unknown', label: 'PDF 생성 대기 중' });
     expect(reportStatusBadge({ status: 'draft', gen_status: 'processing' }))
       .toEqual({ tone: 'unknown', label: 'PDF 생성 중' });
+  });
+});
+
+// 현장 대시보드의 최근 보고서·할 일(T4)이 쓰는 상태 표시. 아트보드 DashStatus: 작성 중·PDF 생성 대기 중은
+// 회색 점(pending), PDF 생성 중은 고리(in-progress), 생성 실패는 오류 점(error).
+describe('reportIndicator', () => {
+  it.each([
+    [{ status: 'finalized', gen_status: 'done' }, { type: 'success', label: '발행됨' }],
+    // 발행본의 gen_status는 잔재 정보라 무시한다(reportStatusBadge와 같은 전제)
+    [{ status: 'finalized', gen_status: 'processing' }, { type: 'success', label: '발행됨' }],
+    [{ status: 'draft', gen_status: 'failed' }, { type: 'error', label: '생성 실패' }],
+    [{ status: 'draft', gen_status: 'processing' }, { type: 'in-progress', label: 'PDF 생성 중' }],
+    [{ status: 'draft', gen_status: 'queued' }, { type: 'pending', label: 'PDF 생성 대기 중' }],
+    [{ status: 'draft', gen_status: 'done' }, { type: 'pending', label: '작성 중' }],
+  ] as const)('%o -> %o', (report, expected) => {
+    expect(reportIndicator(report)).toEqual(expected);
   });
 });
 
