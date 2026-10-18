@@ -12,6 +12,7 @@ vi.mock('@/lib/supabase/client', () => ({
 vi.mock('@/lib/auth/ensure-profile', () => ({ ensureProfile: vi.fn().mockResolvedValue(undefined) }));
 
 import { LoginForm } from '../login-form';
+import { inputClass } from '@/components/ui/form';
 
 // jsdom의 window.location은 교체 불가 프로퍼티라 defineProperty로 통째로 갈아끼운다.
 const realLocation = window.location;
@@ -79,27 +80,31 @@ describe('LoginForm', () => {
   });
 });
 
-// Cloudscape 해부(스펙 §4·아트보드 Login): FormField + inputClass, 오류는 error Alert,
-// primary 전폭 버튼, 안내 12px 보조색. 동작 단언은 위 블록이 그대로 지킨다.
-describe('LoginForm 시각(Cloudscape 해부)', () => {
-  it('입력은 inputClass(1px line-3 테두리, 반지름 6px), 라벨은 600이다', () => {
+// 다크 리스킨(Task 11, 아트보드 Login): 진짜 type=email/password 입력(스펙 §5 01행), 전폭 주 버튼,
+// 13px muted 안내. 동작 단언은 위 블록이 그대로 지킨다.
+describe('LoginForm 화면 (아트보드 Login)', () => {
+  it('이메일·비밀번호는 진짜 type=email/password 입력(inputClass)이고 자동 완성 힌트를 단다', () => {
     render(<LoginForm />);
-    for (const name of ['이메일', '비밀번호']) {
-      const input = screen.getByLabelText(name);
-      expect(input.className).toContain('border-line-3');
-      expect(input.className).toContain('rounded-control');
-      expect(screen.getByText(name).className).toContain('font-semibold');
-    }
+    const email = screen.getByLabelText('이메일');
+    const password = screen.getByLabelText('비밀번호');
+    expect(email).toHaveAttribute('type', 'email');
+    expect(password).toHaveAttribute('type', 'password');
+    expect(email).toHaveAttribute('autocomplete', 'email');
+    expect(password).toHaveAttribute('autocomplete', 'current-password');
+    expect(email.className).toBe(inputClass);
+    expect(password.className).toBe(inputClass);
   });
 
-  it('로그인 버튼은 뷰의 유일한 primary이고 전폭이다', () => {
+  it('로그인 버튼은 이 화면의 유일한 주 버튼이고 전폭이다', () => {
     render(<LoginForm />);
     const button = screen.getByRole('button', { name: '로그인' });
-    for (const c of ['bg-ink', 'rounded-control', 'w-full']) expect(button.className).toContain(c);
+    expect(button.className).toContain('bg-ink');
+    expect(button.className).toContain('w-full');
     expect(button).toHaveAttribute('type', 'submit');
+    expect(screen.getAllByRole('button').filter((b) => b.className.includes('bg-ink'))).toHaveLength(1);
   });
 
-  it('제출 중에는 버튼이 disabled(dim 글자, 채움 없음)로 바뀐다', async () => {
+  it('제출 중에는 버튼이 비활성(주 채움 없음)으로 바뀐다', async () => {
     // 끝나지 않는 로그인 요청으로 busy 상태를 고정한다
     signInWithPassword.mockReturnValue(new Promise(() => {}));
     render(<LoginForm />);
@@ -109,7 +114,6 @@ describe('LoginForm 시각(Cloudscape 해부)', () => {
 
     const button = screen.getByRole('button', { name: '로그인' });
     await waitFor(() => expect(button).toBeDisabled());
-    expect(button.className).toContain('text-dim');
     expect(button.className).not.toContain('bg-ink');
   });
 
@@ -123,14 +127,12 @@ describe('LoginForm 시각(Cloudscape 해부)', () => {
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveAttribute('data-alert', 'error');
     expect(alert.textContent).toContain('로그인에 실패했습니다. 이메일과 비밀번호를 확인하세요.');
-    expect(alert.querySelector('[data-icon="alert-circle"]')).not.toBeNull();
   });
 
-  it('안내 문구는 12px 보조색이고 문장은 그대로다', () => {
+  it('안내 문구는 13px muted이고 문장은 그대로다', () => {
     render(<LoginForm />);
     const hint = screen.getByText('계정은 관리자가 Supabase 대시보드(Authentication)에서 생성합니다.');
-    expect(hint.className).toContain('text-xs');
-    expect(hint.className).toContain('text-cs-text-secondary');
-    expect(hint.className).not.toMatch(/zinc-/);
+    expect(hint.className).toContain('text-[13px]');
+    expect(hint.className).toContain('text-muted');
   });
 });

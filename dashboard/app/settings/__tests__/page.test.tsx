@@ -1,20 +1,19 @@
-// 설정 페이지 배선: PAGE_MAIN 본문 + PageHeader(현장 › 설정) + Container 3개(프로필 / 측정 불확도 U /
-// 판정 기준), app_settings 미설정 시 U 기본값 {floor: 5, wall: 8}, 사용자 없으면 /login 리다이렉트.
-// Vitest는 async 서버 컴포넌트 render()를 지원하지 않으므로(node_modules/next/dist/docs/
-// 01-app/02-guides/testing/vitest.md) app/__tests__/page.test.tsx와 같이 엘리먼트 트리를 재귀 탐색한다.
+// 설정 페이지 배선(스펙 §5 17행): 진입 헤더 + MAIN_BG <main> > PAGE_MAIN + PageHeader(현장 목록 / 설정)
+// + 카드 둘(프로필 / 측정 불확도 U, 각 flex 1 1 420px) + 판정 기준 구획(카드 아님), app_settings 미설정 시
+// U 기본값 {floor: 5, wall: 8}, 사용자 없으면 /login 리다이렉트. Vitest는 async 서버 컴포넌트 render()를
+// 지원하지 않으므로 엘리먼트 트리를 재귀 탐색한다.
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/lib/supabase/server', () => ({ createClient: vi.fn() }));
 vi.mock('@/lib/supabase/client', () => ({ createClient: () => ({}) }));
 vi.mock('@/lib/auth/request-user', () => ({ getRequestUser: vi.fn() }));
 vi.mock('@/lib/auth/ensure-profile', () => ({ ensureProfile: vi.fn() }));
-// Task 2: 셸 헤더 내부는 components/shell 테스트가 맡는다 - 여기서는 페이지가 넘긴 props 만 본다.
-vi.mock('@/components/shell/entry-header', () => ({ EntryHeader: () => null }));
 vi.mock('next/navigation', () => ({
   // 실제 redirect()는 throw로 렌더를 끊는다 - 같은 계약으로 흉내낸다.
   redirect: vi.fn((to: string) => { throw new Error(`NEXT_REDIRECT:${to}`); }),
   useRouter: () => ({ refresh: vi.fn() }),
 }));
+vi.mock('@/components/shell/entry-header', () => ({ EntryHeader: () => null }));
 
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
@@ -22,12 +21,12 @@ import { getRequestUser } from '@/lib/auth/request-user';
 import { ensureProfile } from '@/lib/auth/ensure-profile';
 import SettingsPage from '../page';
 import { EntryHeader } from '@/components/shell/entry-header';
+import { Container } from '@/components/ui/container';
 import { MAIN_BG, PAGE_MAIN } from '@/components/ui/page';
 import { PageHeader } from '@/components/ui/page-header';
-import { Container } from '@/components/ui/container';
+import { CriteriaList } from '@/components/settings/criteria-list';
 import { ProfileForm } from '@/components/settings/profile-form';
 import { UncertaintyForm } from '@/components/settings/uncertainty-form';
-import { CriteriaList } from '@/components/settings/criteria-list';
 
 // 엘리먼트 트리를 재귀 탐색해 특정 컴포넌트/태그 타입이 쓰인 곳을 모두 모은다.
 function findAll(node: unknown, type: unknown, acc: { props: Record<string, unknown> }[] = []) {
@@ -93,27 +92,36 @@ describe('SettingsPage 가드', () => {
   });
 });
 
-describe('SettingsPage 렌더 (Cloudscape 아트보드 Settings)', () => {
-  it('PAGE_MAIN 본문 + 브레드크럼 현장 › 설정 + Container 3개를 순서대로 그린다', async () => {
+describe('SettingsPage 렌더 (아트보드 Settings)', () => {
+  it('진입 헤더(계정 이메일) + MAIN_BG <main> > PAGE_MAIN + 브레드크럼 현장 목록 / 설정', async () => {
     loggedIn();
-    const el = (await SettingsPage()) as { type: unknown; props: Record<string, unknown> };
+    const el = await SettingsPage();
 
-    // Task 2: 진입 헤더(스펙 §4.2) + 도면 격자 본문(main, MAIN_BG) 안에 본문 상자(div, PAGE_MAIN) 하나.
-    expect(findAll(el, EntryHeader).map((h) => h.props.email)).toEqual(['u1@example.com']);
-    const mains = findAll(el, 'main');
-    expect(mains.map((m) => m.props.className)).toEqual([MAIN_BG]);
-    expect(findAll(el, 'div').filter((d) => d.props.className === PAGE_MAIN)).toHaveLength(1);
+    const [header] = findAll(el, EntryHeader);
+    expect(header.props).toEqual({ email: 'u1@example.com' });
+    const [main] = findAll(el, 'main');
+    expect(main.props.className).toBe(MAIN_BG);
+    const body = main.props.children as { props: Record<string, unknown> };
+    expect(body.props.className).toBe(PAGE_MAIN);
 
-    const [header] = findAll(el, PageHeader);
-    expect(header.props.title).toBe('설정');
-    expect(header.props.crumbs).toEqual([{ href: '/', label: '현장' }, { label: '설정' }]);
+    const [pageHeader] = findAll(el, PageHeader);
+    expect(pageHeader.props.title).toBe('설정');
+    expect(pageHeader.props.crumbs).toEqual([{ href: '/', label: '현장 목록' }, { label: '설정' }]);
+  });
+
+  it('카드 둘(프로필 / 측정 불확도 U)이 나란히(flex 1 1 420px), 판정 기준은 카드가 아닌 구획이다', async () => {
+    loggedIn();
+    const el = await SettingsPage();
 
     const containers = findAll(el, Container);
-    expect(containers.map((c) => c.props.title)).toEqual(['프로필', '측정 불확도 U', '판정 기준']);
-    expect(containers[2].props.padded).toBe(false); // 테이블 컨테이너는 본문 padding 없음
-
-    // U 설명문은 컨테이너 본문(폼 위)에 그대로 남는다(문구 무변경)
+    expect(containers.map((c) => c.props.title)).toEqual(['프로필', '측정 불확도 U']);
+    for (const c of containers) expect(c.props.className).toContain('flex-[1_1_420px]');
+    // U 설명문은 카드 본문(폼 위)에 그대로 남는다(문구 무변경)
     expect(collectText(containers[1]).join('')).toContain('판정식의 경계 구간 폭을 결정합니다');
+
+    const [section] = findAll(el, 'section');
+    expect(collectText(section).join('')).toContain('판정 기준');
+    expect(findAll(section, CriteriaList)).toHaveLength(1);
 
     const [profile] = findAll(el, ProfileForm);
     expect(profile.props).toMatchObject({ userId: 'u1', initialName: '홍길동' });

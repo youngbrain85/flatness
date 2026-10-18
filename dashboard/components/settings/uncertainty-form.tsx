@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { FormField, inputClass } from '@/components/ui/form';
 
-// 수치 입력은 mono + tabular(스펙 §3). 아트보드 폭 96px = w-24.
+// 수치 입력은 mono + tabular(스펙 §3 글꼴: 수치는 IBM Plex Mono).
 const numberInputClass = `${inputClass} font-mono tabular-nums`;
 
 export function UncertaintyForm({ initial }: { initial: { floor: number; wall: number } }) {
@@ -30,21 +30,21 @@ export function UncertaintyForm({ initial }: { initial: { floor: number; wall: n
       : '저장되었습니다 (이후 분석부터 적용)');
   }
 
-  // 저장은 이 뷰의 primary(스펙 §6 Settings: "바닥/벽면 입력 + primary 저장" - 뷰당 primary 1개).
+  // 아트보드 Settings U: 필드 둘(`flex: 0 1 120px; min-width: 96px`) + 이 화면의 주 버튼 저장 + 결과 문구.
   return (
     <form onSubmit={onSubmit} className="flex flex-wrap items-end gap-3">
-      <div className="w-24">
+      <div className="min-w-24 flex-[0_1_120px]">
         <FormField label="바닥 U(mm)" htmlFor="u-floor">
           <input id="u-floor" value={floor} onChange={(e) => setFloor(e.target.value)} className={numberInputClass} />
         </FormField>
       </div>
-      <div className="w-24">
+      <div className="min-w-24 flex-[0_1_120px]">
         <FormField label="벽면 U(mm)" htmlFor="u-wall">
           <input id="u-wall" value={wall} onChange={(e) => setWall(e.target.value)} className={numberInputClass} />
         </FormField>
       </div>
       <Button type="submit" variant="primary">저장</Button>
-      {msg && <span className="pb-1.5 text-xs text-cs-text-secondary">{msg}</span>}
+      {msg && <span role="status" className="inline-flex min-h-11 items-center text-[13px] text-muted">{msg}</span>}
     </form>
   );
 }

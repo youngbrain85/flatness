@@ -37,26 +37,26 @@ export function LoginForm() {
     window.location.assign('/');
   }
 
-  // 아트보드 Login 본문: 필드 사이 gap 16px, 라벨 700 + 32px 입력, 오류는 error Alert,
-  // primary 전폭 '로그인'(뷰의 유일한 primary), 안내 12px/16px 보조색.
+  // 아트보드 Login 본문: 필드 사이 16px, 진짜 type=email/password 입력(스펙 §5 01행) + 브라우저 자동 완성 힌트,
+  // 오류는 error 상자, 위 4px 띄운 전폭 주 버튼(화면의 유일한 주 버튼), 13px muted 안내.
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-4">
       <FormField label="이메일" htmlFor="email">
-        <input id="email" type="email" required value={email}
+        <input id="email" type="email" autoComplete="email" required value={email}
           onChange={(e) => setEmail(e.target.value)}
           className={inputClass} />
       </FormField>
       <FormField label="비밀번호" htmlFor="password">
-        <input id="password" type="password" required value={password}
+        <input id="password" type="password" autoComplete="current-password" required value={password}
           onChange={(e) => setPassword(e.target.value)}
           className={inputClass} />
       </FormField>
       {error && <Alert type="error">{error}</Alert>}
-      {/* busy면 Button이 cs-disabled 보더로 바꾼다(재시도는 실패 시 setBusy(false)로 다시 열린다) */}
-      <Button type="submit" variant="primary" disabled={busy} className="w-full">
+      {/* busy면 Button이 비활성 모양으로 바꾼다(재시도는 실패 시 setBusy(false)로 다시 열린다) */}
+      <Button type="submit" variant="primary" disabled={busy} className="mt-1 w-full">
         로그인
       </Button>
-      <p className="text-xs leading-4 text-cs-text-secondary">
+      <p className="text-[13px] leading-[1.55] text-muted">
         계정은 관리자가 Supabase 대시보드(Authentication)에서 생성합니다.
       </p>
     </form>

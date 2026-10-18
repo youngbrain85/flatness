@@ -1,29 +1,31 @@
-import { Container } from '@/components/ui/container';
+// 로그인 화면(스펙 §5 01행, 아트보드 docs/design/dark/Login.dc.html): 상표만 있는 헤더(LoginHeader) 아래
+// 도면 격자 본문이 남은 높이(100vh - 헤더 64px)를 채우고, 그 가운데 400px 카드. 카드 머리가 곧 페이지 h1이므로
+// Container(<h2> 제목)를 쓰지 않고 같은 모양(surface + line-2 + 12px)을 직접 그린다 - h2 안에 h1을 둘 수 없다.
+// 폭은 고정 400px 대신 max-w로 둔다(390px 휴대폰에서 카드가 화면을 넘지 않게, 스펙 §7).
+import type { Metadata } from 'next';
 import { LoginHeader } from '@/components/shell/login-header';
+import { MAIN_BG, PAGE_MAIN } from '@/components/ui/page';
 import { LoginForm } from './login-form';
 
-// 로그인 화면(아트보드 Login): 상표만 있는 헤더(최소 64px) 아래 남은 높이의 중앙에 400px 카드.
-// 셸은 전역이 아니라 이 페이지가 그린다(스펙 §4.2 "로그인 | 상표만" - LoginHeader).
-// 카드 헤더가 곧 페이지 h1이므로 Container의 title(h2 18px)을 쓰지 않고 같은 해부
-// (padding 12px 20px + 하단 1px 구분선)를 직접 그린다 - h2 안에 h1을 중첩할 수 없다.
-// 폭은 아트보드의 400px 고정 대신 max-w로 둔다(375px에서 카드가 화면을 넘지 않게, 스펙 §5).
+export const metadata: Metadata = { title: '로그인' };
+
 export default function LoginPage() {
-  const content = (
-    <main className="flex min-h-[calc(100vh-64px)] items-center justify-center px-4">
-      <Container padded={false} className="w-full max-w-[400px]">
-        <div className="border-b border-cs-divider px-5 py-3">
-          <h1 className="text-2xl font-bold leading-[30px]">평활도 분석 대시보드</h1>
-        </div>
-        <div className="p-5">
-          <LoginForm />
-        </div>
-      </Container>
-    </main>
-  );
   return (
     <>
       <LoginHeader />
-      {content}
+      <main className={`${MAIN_BG} flex min-h-[calc(100vh-64px)] flex-col`}>
+        <div className={`${PAGE_MAIN} flex-1 items-center justify-center`}>
+          <section aria-labelledby="login-title"
+            className="flex w-full max-w-[400px] flex-col rounded-card border border-line-2 bg-surface">
+            <div className="border-b border-line px-6 pb-[18px] pt-[22px]">
+              <h1 id="login-title" className="font-heading text-2xl font-bold leading-tight">평활도 분석 대시보드</h1>
+            </div>
+            <div className="px-6 pb-6 pt-[22px]">
+              <LoginForm />
+            </div>
+          </section>
+        </div>
+      </main>
     </>
   );
 }

@@ -1,18 +1,21 @@
-// 설정 화면 (스펙 §7.7) - Cloudscape 아트보드 docs/design/cloudscape/Settings.dc.html
+// 설정 화면 (스펙 §7.7, §5 17행). 아트보드: docs/design/dark/Settings.dc.html
+// 현장 밖 화면이라 진입 헤더(상표 + 계정 메뉴)를 이 페이지가 직접 그린다. 브레드크럼은 현장 목록 / 설정.
+import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
-import { EntryHeader } from '@/components/shell/entry-header';
 import { ensureProfile } from '@/lib/auth/ensure-profile';
 import { getRequestUser } from '@/lib/auth/request-user';
 import { CriteriaList } from '@/components/settings/criteria-list';
 import { ProfileForm } from '@/components/settings/profile-form';
 import { UncertaintyForm } from '@/components/settings/uncertainty-form';
+import { EntryHeader } from '@/components/shell/entry-header';
 import { Container } from '@/components/ui/container';
 import { MAIN_BG, PAGE_MAIN } from '@/components/ui/page';
 import { PageHeader } from '@/components/ui/page-header';
 import type { CriteriaRow } from '@/lib/domain/types';
 
 export const dynamic = 'force-dynamic';
+export const metadata: Metadata = { title: '설정' };
 
 export default async function SettingsPage() {
   const supabase = await createClient();
@@ -30,36 +33,36 @@ export default async function SettingsPage() {
   ]);
   const u = (settingRes.data?.value ?? { floor: 5.0, wall: 8.0 }) as { floor: number; wall: number };
   const siteNames = new Map((sitesRes.data ?? []).map((s) => [s.id as string, s.name as string]));
-  const content = (
-    <div className={PAGE_MAIN}>
-      {/* 최종 리뷰 M1: 타 상세 화면과 같은 루트 크럼 라벨('현장')로 통일한다
-          (스펙 §6.4는 "홈 ›"이라 적었지만, 실제로는 모든 화면이 '현장'을 쓴다 -
-          app/sites/[id]/page.tsx, app/scans/[id]/page.tsx 등). */}
-      <PageHeader crumbs={[{ href: '/', label: '현장' }, { label: '설정' }]} title="설정" />
-      <Container title="프로필">
-        <ProfileForm userId={user.id} initialName={profile.display_name} />
-      </Container>
-      <Container title="측정 불확도 U">
-        {/* 설명문은 아트보드대로 컨테이너 본문(폼 위)에 둔다 - Container description은 헤더 안이라 쓰지 않는다 */}
-        <div className="flex flex-col gap-4">
-          <p className="text-cs-text-secondary">
-            판정식의 경계 구간 폭을 결정합니다. 분석 시점 값이 결과에 스냅샷되므로 수정해도
-            과거 분석·보고서는 바뀌지 않습니다. P5 반복 스캔 재현성 시험 후 갱신 예정.
-          </p>
-          <UncertaintyForm initial={u} />
-        </div>
-      </Container>
-      {/* 테이블 컨테이너: 본문 padding 없음 + overflow-hidden(행 경계가 16px 라운드를 넘지 않게, 아트보드와 동일) */}
-      <Container title="판정 기준" padded={false} className="overflow-hidden">
-        <CriteriaList criteria={(criteriaRes.data ?? []) as CriteriaRow[]} siteNames={siteNames} />
-      </Container>
-    </div>
-  );
-  // 셸(스펙 §4.2): 설정은 진입 헤더 + 도면 격자 본문(MAIN_BG) 안의 본문 상자(PAGE_MAIN). 본문은 Task 11 몫.
   return (
     <>
       <EntryHeader email={user.email} />
-      <main className={MAIN_BG}>{content}</main>
+      <main className={MAIN_BG}>
+        <div className={PAGE_MAIN}>
+          {/* 스펙 §4.3: 설정은 현장 밖 화면이라 루트 크럼이 '현장 목록'(진입 페이지)이다 */}
+          <PageHeader crumbs={[{ href: '/', label: '현장 목록' }, { label: '설정' }]} title="설정" />
+          {/* 아트보드: 프로필·측정 불확도 U 두 카드가 `flex: 1 1 420px`로 나란히, 좁은 폭에서는 쌓인다 */}
+          <div className="flex flex-wrap gap-3">
+            <Container title="프로필" className="min-w-0 flex-[1_1_420px]">
+              <ProfileForm userId={user.id} initialName={profile.display_name} />
+            </Container>
+            <Container title="측정 불확도 U" className="min-w-0 flex-[1_1_420px]">
+              {/* 설명문은 카드 본문(폼 위)에 둔다 - 문구 그대로 */}
+              <div className="flex flex-col gap-4">
+                <p className="text-sm leading-relaxed text-muted">
+                  판정식의 경계 구간 폭을 결정합니다. 분석 시점 값이 결과에 스냅샷되므로 수정해도
+                  과거 분석·보고서는 바뀌지 않습니다. P5 반복 스캔 재현성 시험 후 갱신 예정.
+                </p>
+                <UncertaintyForm initial={u} />
+              </div>
+            </Container>
+          </div>
+          {/* 판정 기준은 카드가 아니라 제목 + 그룹 + 표 상자(아트보드) */}
+          <section aria-labelledby="settings-criteria-title" className="flex flex-col gap-3.5">
+            <h2 id="settings-criteria-title" className="font-heading text-[19px] font-semibold">판정 기준</h2>
+            <CriteriaList criteria={(criteriaRes.data ?? []) as CriteriaRow[]} siteNames={siteNames} />
+          </section>
+        </div>
+      </main>
     </>
   );
 }
