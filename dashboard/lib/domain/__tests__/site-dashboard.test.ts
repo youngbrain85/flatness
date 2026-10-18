@@ -212,13 +212,21 @@ describe('buildSiteDashboard: 판정 현황 타일', () => {
     expect(tileOf(d, 'l4').state).toEqual({ type: 'success', label: '분석 완료' });
   });
 
-  it.each<ScanStatus>(['uploaded', 'awaiting_unit_confirm', 'ready', 'archived'])(
+  it.each<ScanStatus>(['uploaded', 'awaiting_unit_confirm', 'archived'])(
     '분석이 없는 %s 스캔의 표시는 SCAN_STATUS_TYPE·SCAN_STATUS_LABEL과 같다(같은 스캔, 같은 점)',
     (status) => {
       const d = build({ locations: [loc('l1')], scans: [scan('c1', 'l1', '2026-09-03', { status })] });
       expect(tileOf(d, 'l1').state).toEqual({ type: SCAN_STATUS_TYPE[status], label: SCAN_STATUS_LABEL[status] });
     },
   );
+
+  // 아트보드가 이긴다(스펙 §2): DashStatus.dc.html 136~146행의 "분석 준비됨" 타일은 속 빈 고리이고(94~96행 범례
+  // "새 스캔 ○ 처리 중"), 측정위치 트리(location-tree.tsx treeScanStatusType)와 SiteDetail.dc.html 93행도 고리다.
+  // 그래서 ready 는 위 표(SCAN_STATUS_TYPE, 초록 점)와 다르다. 스캔 화면의 '상태' 칸만 초록 점 그대로다.
+  it("분석 없는 ready 스캔은 트리와 같이 고리(in-progress) '분석 준비됨'", () => {
+    const d = build({ locations: [loc('l1')], scans: [scan('c1', 'l1', '2026-09-03', { status: 'ready' })] });
+    expect(tileOf(d, 'l1').state).toEqual({ type: 'in-progress', label: '분석 준비됨' });
+  });
 
   it('실패한 스캔의 점 종류도 SCAN_STATUS_TYPE과 같다(문구만 "스캔 실패"로 풀어 쓴다)', () => {
     const d = build({ locations: [loc('l1')], scans: [scan('c1', 'l1', '2026-09-03', { status: 'failed' })] });

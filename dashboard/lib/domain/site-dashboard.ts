@@ -130,6 +130,7 @@ export interface SiteDashboard {
 
 // 스캔 상태 → 표시. components/ui/status-indicator.tsx의 SCAN_STATUS_TYPE과 같은 값이어야 한다 -
 // 같은 스캔이 화면마다 다른 점을 달지 않게(지난 최종 리뷰 Important 2). 테스트가 두 표를 대조한다.
+// 예외 하나: 타일 바닥 줄의 분석 없는 ready 는 이 표를 거치지 않고 stateOf 가 고리로 그린다(트리와 같은 점).
 const SCAN_TYPE: Record<ScanStatus, DashStatusType> = {
   uploaded: 'in-progress', awaiting_unit_confirm: 'pending', ready: 'success', archived: 'pending', failed: 'error',
 };
@@ -224,6 +225,10 @@ export function buildSiteDashboard(input: SiteDashboardInput): SiteDashboard {
     if (s.status === 'failed') return { type: 'error', label: '스캔 실패' };
     if (attemptFailed(s.id, 'flatness')) return { type: 'error', label: ANALYSIS_FAILED_LABEL.flatness };
     if (currentByScan.get(s.id)?.status === 'done') return { type: 'success', label: '분석 완료' };
+    // 분석이 없는 ready 스캔은 속 빈 고리다: 아트보드 DashStatus.dc.html 136~146행의 "분석 준비됨" 타일(94~96행 범례
+    // "새 스캔 ○ 처리 중")과 측정위치 트리(location-tree.tsx treeScanStatusType)가 그렇게 그린다 - 아트보드가 이긴다(스펙 §2).
+    // 스캔 화면의 '상태' 칸만 SCAN_STATUS_TYPE.ready(초록 점, ScanProcessing 아트보드)를 쓴다.
+    if (s.status === 'ready') return { type: 'in-progress', label: SCAN_STATUS_LABEL.ready };
     return { type: SCAN_TYPE[s.status], label: SCAN_STATUS_LABEL[s.status] };
   }
 
