@@ -188,7 +188,8 @@ describe('HomePage 렌더 (진입 헤더 + SiteFinder, 아트보드 EntrySearch)
   });
 
   it('줄은 최근 측정일 내림차순이고, 측정일이 없는 현장은 뒤로, 같은 날이면 이름 순이다', async () => {
-    // 조회는 이름 순(.order('name'))으로 온다 - 정렬은 페이지가 다시 한다
+    // 실제 조회는 이름 순(.order('name'))으로 오지만 이 픽스처는 일부러 섞어 둔다: 같은 날(07-10)인 다현장·나현장을
+    // 입력에서 다 → 나 순으로 줘야, 결과의 나 → 다가 입력 순서가 아니라 이름 동률 규칙(byRecent)에서 나왔음이 드러난다
     const sites = [site('c', '다현장'), site('b', '나현장'), site('d', '라현장'), site('a', '가현장')];
     const locations = [{ id: 'lb', site_id: 'b' }, { id: 'lc', site_id: 'c' }, { id: 'ld', site_id: 'd' }];
     const scans = [

@@ -31,7 +31,7 @@ export function NewLocationForm({ siteId }: { siteId: string }) {
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    // 저장 중에 다시 제출하면 같은 위치가 두 번 들어가고, 두 번째가 23505로 돌아와 성공 직후에 "중복" 안내가 뜬다
+    // 저장 중에 다시 제출하면 같은 위치를 한 번 더 insert 하고, 두 번째 insert 가 23505 로 돌아와 성공 직후에 "중복" 안내가 뜬다
     if (saving) return;
     setSaving(true);
     // 앞 제출의 안내는 이번 제출이 시작될 때 지운다 - 안 지우면 다음 제출이 성공해도 옛 안내가 그대로 남는다

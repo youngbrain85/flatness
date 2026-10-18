@@ -1,5 +1,6 @@
-// 옛 업로드 경로(스펙 §4.2): ?location=X 는 X 가 속한 현장의 업로드로 영구 이동(308), 위치가 없거나
-// 찾지 못하면 진입 페이지로(307). redirect 계열은 throw 로 렌더를 끊으므로 mock 이 그 throw 를 재현한다.
+// 옛 업로드 경로(스펙 §4.2): ?location=X 는 X 가 속한 현장의 업로드로 영구 이동(permanentRedirect), 위치가 없거나
+// 찾지 못하면 진입 페이지로(redirect). 실제 HTTP 응답은 308/307 이 아니라 200 + meta refresh 다(루트 loading.tsx 의
+// Suspense 로 스트리밍된다 - page.tsx 머리 주석). redirect 계열은 throw 로 렌더를 끊으므로 mock 이 그 throw 를 재현한다.
 // 옮긴 업로드 본문의 테스트는 app/sites/[id]/upload/__tests__/page.test.tsx 가 그대로 지킨다.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 

@@ -13,7 +13,7 @@ export function KpiGrid({ children }: { children: ReactNode }) {
 /**
  * label: 눈썹 라벨. value: 숫자(또는 판정 KPI 의 등급 이름). unit: 숫자 뒤 단위(판정 KPI 에는 쓰지 않는다).
  * tone: 판정 KPI 의 등급 - 주면 등급 점 + 등급 색 글자로 그린다.
- * className: 묶음 안 배치(예: DashStatus '분석 완료' 카드의 sm:col-span-2).
+ * className: 묶음 안 배치(예: DashStatus '분석 완료' 카드의 col-span-2).
  * children: 숫자 오른쪽에 함께 흐르는 내용(예: 판정 분포 바·범례). 좁으면 숫자 아래로 내려간다.
  */
 export function KpiCard({ label, value, unit, tone, className, children }: {
