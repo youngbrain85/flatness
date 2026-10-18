@@ -46,3 +46,43 @@ describe('ReportProgress (코드리뷰 Important I2: 발행본의 gen_status 잔
     expect(screen.getByText(/워커가 처리 중입니다/).closest('[data-status]')).toHaveAttribute('data-status', 'in-progress');
   });
 });
+
+// 변이 실험(Task 10 보강): 구독 대상(테이블·id·열), 끝난 상태에서 아무것도 안 그리는 규칙, 끝났을 때만 서버 데이터를
+// 다시 받는 규칙은 위 단언만으로는 조용히 바뀌어도 통과했다.
+describe('ReportProgress 보강 (변이 실험으로 드러난 빈틈)', () => {
+  beforeEach(() => {
+    refreshMock.mockClear();
+    useRowStatusMock.mockClear();
+  });
+
+  it('행 상태는 이 보고서(reports.id)의 gen_status 열을 구독한다', () => {
+    useRowStatusMock.mockReturnValue('processing');
+    render(<ReportProgress reportId="r1" initialStatus="processing" genError={null} reportStatus="draft" />);
+    expect(useRowStatusMock).toHaveBeenCalledWith('reports', 'r1', 'processing', 'gen_status');
+  });
+
+  it('draft이고 생성이 끝났으면(done) 아무것도 그리지 않는다', () => {
+    useRowStatusMock.mockReturnValue('done');
+    const { container } = render(
+      <ReportProgress reportId="r1" initialStatus="processing" genError={null} reportStatus="draft" />,
+    );
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it.each(['done', 'failed'] as const)('생성이 %s로 끝나 상태가 바뀌면 서버 데이터를 다시 받는다', (end) => {
+    useRowStatusMock.mockReturnValue(end);
+    render(<ReportProgress reportId="r1" initialStatus="processing" genError="사유" reportStatus="draft" />);
+    expect(refreshMock).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    { initial: 'done', now: 'done' },
+    { initial: 'failed', now: 'failed' },
+    { initial: 'processing', now: 'processing' },
+    { initial: 'queued', now: 'processing' },
+  ] as const)('상태가 $initial에서 $now라 끝으로 바뀐 것이 아니면 새로고침하지 않는다', ({ initial, now }) => {
+    useRowStatusMock.mockReturnValue(now);
+    render(<ReportProgress reportId="r1" initialStatus={initial} genError={null} reportStatus="draft" />);
+    expect(refreshMock).not.toHaveBeenCalled();
+  });
+});

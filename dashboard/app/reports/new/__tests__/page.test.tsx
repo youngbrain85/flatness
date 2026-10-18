@@ -33,7 +33,9 @@ vi.mock('next/headers', () => ({
 // 헤더는 무엇을 넘기는지만 본다(내부는 Task 2 몫). 후보가 폼까지 도달하는지 보려면 반환된 트리를
 // 렌더해야 한다(서버 컴포넌트 함수는 JSX를 돌려줄 뿐 자식을 실행하지 않는다).
 const { formProps, headerProps } = vi.hoisted(() => ({
-  formProps: { current: null as { candidates: Record<string, unknown>[] } | null },
+  formProps: {
+    current: null as { locationId: string; locationLabel: string; candidates: Record<string, unknown>[] } | null,
+  },
   headerProps: { site: [] as unknown[], entry: [] as unknown[] },
 }));
 vi.mock('@/components/shell/site-header', () => ({
@@ -43,20 +45,20 @@ vi.mock('@/components/shell/entry-header', () => ({
   EntryHeader: (p: unknown) => { headerProps.entry.push(p); return null; },
 }));
 vi.mock('@/components/report/report-create-form', () => ({
-  ReportCreateForm: (props: { candidates: Record<string, unknown>[] }) => {
+  ReportCreateForm: (props: { locationId: string; locationLabel: string; candidates: Record<string, unknown>[] }) => {
     formProps.current = props;
     return null;
   },
 }));
 
 import { createClient } from '@/lib/supabase/server';
-import NewReportPage from '../page';
+import NewReportPage, { metadata } from '../page';
 import { MAIN_BG, PAGE_MAIN } from '@/components/ui/page';
 
 type Row = Record<string, unknown>;
 type Call = [op: string, col: string, val: unknown];
 
-function table(rows: Row[], calls?: Call[]) {
+function table(rows: Row[], calls?: Call[], error: { message: string } | null = null) {
   let current = rows;
   let projection: string[] | null = null;
   const project = (r: Row): Row => (projection
@@ -84,8 +86,8 @@ function table(rows: Row[], calls?: Call[]) {
     },
     // 정렬 자체는 이 스텁의 관심사가 아니다 - 체인이 끊기지 않게 그대로 통과시킨다.
     order: () => obj,
-    maybeSingle: async () => ({ data: current.length ? project(current[0]) : null, error: null }),
-    then: (resolve: (v: unknown) => void) => resolve({ data: current.map(project), error: null }),
+    maybeSingle: async () => ({ data: !error && current.length ? project(current[0]) : null, error }),
+    then: (resolve: (v: unknown) => void) => resolve({ data: error ? null : current.map(project), error }),
   };
   return obj;
 }
@@ -117,13 +119,15 @@ function analysisRow(over: Row): Row {
 
 const FLATNESS = analysisRow({});
 
-async function renderPage(analyses: Row[], calls?: Call[], sites: Row[] = [SITE]) {
+async function renderPage(analyses: Row[], calls?: Call[], sites: Row[] = [SITE], o: {
+  scans?: Row[]; location?: Row; analysesError?: { message: string };
+} = {}) {
   vi.mocked(createClient).mockResolvedValue({
     from: (t: string) => {
-      if (t === 'locations') return table([location]);
+      if (t === 'locations') return table([o.location ?? location]);
       if (t === 'sites') return table(sites);
-      if (t === 'scans') return table([scanRow('sc1', 'floor', '2026-07-20'), scanRow('sc2', 'wall', '2026-07-21')]);
-      if (t === 'analyses') return table(analyses, calls);
+      if (t === 'scans') return table(o.scans ?? [scanRow('sc1', 'floor', '2026-07-20'), scanRow('sc2', 'wall', '2026-07-21')]);
+      if (t === 'analyses') return table(analyses, calls, o.analysesError ?? null);
       throw new Error(`예상치 못한 테이블: ${t}`);
     },
   } as never);
@@ -350,5 +354,193 @@ describe('NewReportPage 재판정 중 구배 분석 처리 (마이그레이션 0
     // 새 조건이 옛 경로를 잡아채면 평활도 보고서가 통째로 막힌다
     const props = await renderPage([FLATNESS, judging('processing')]);
     expect(candidateOf(props, 'an-flat')?.blocked_reason).toBeNull();
+  });
+});
+
+// 변이 실험(Task 10 보강): 아래는 위 단언만으로는 조용히 바뀌어도 통과했던 규칙을 지킨다 - 진입 규칙의 정확한 목적지와
+// 현장 id 조회, 후보 조회의 범위(현재 분석·지운 분석·다른 측정위치 스캔), 후보 정렬·의견 우선순위·필드 배선,
+// 재판정 차단 문구, 폼으로 넘기는 값, 조회 오류 화면, notFound, <title>.
+describe('NewReportPage 보강 - 진입 규칙 (변이 실험으로 드러난 빈틈)', () => {
+  beforeEach(reset);
+
+  it('<title>은 화면 이름 "보고서 생성"이다(앞의 "Flatness · "는 루트 title.template 이 붙인다)', () => {
+    expect(metadata.title).toBe('보고서 생성');
+  });
+
+  it('맨 주소의 목적지는 정확히 "/"다(toThrow 부분 문자열 일치가 "/sites" 같은 접두어를 통과시키지 않게)', async () => {
+    vi.mocked(createClient).mockResolvedValue({
+      from: () => { throw new Error('조회하면 안 된다'); },
+    } as never);
+    await expect(NewReportPage({ searchParams: Promise.resolve({}) })).rejects.toThrow(/^REDIRECT:\/$/);
+  });
+
+  it('?site=은 그 id의 현장 행을 읽는다(다른 현장이 앞에 있어도 섞이지 않는다)', async () => {
+    vi.mocked(createClient).mockResolvedValue({
+      from: (t: string) => {
+        if (t === 'sites') return table([SITE, { ...SITE, id: 's2', name: '다른 현장' }]);
+        if (t === 'locations') {
+          return table([location, { ...location, id: 'l9', site_id: 's2', name: '남의 위치' }]);
+        }
+        throw new Error(`예상치 못한 테이블: ${t}`);
+      },
+    } as never);
+    const el = await NewReportPage({ searchParams: Promise.resolve({ site: 's2' }) });
+    render(el as ReactElement);
+    expect(headerProps.site).toEqual([{ site: { id: 's2', name: '다른 현장' }, email: 'u1@example.com' }]);
+    const sel = screen.getByLabelText('측정위치') as HTMLSelectElement;
+    expect([...sel.options].map((o) => o.textContent)).toEqual(['선택...', '남의 위치']);
+  });
+
+  it('?site= 화면도 MAIN_BG <main> > PAGE_MAIN > 760px 열이다', async () => {
+    vi.mocked(createClient).mockResolvedValue({
+      from: (t: string) => {
+        if (t === 'sites') return table([SITE]);
+        if (t === 'locations') return table([location]);
+        throw new Error(`예상치 못한 테이블: ${t}`);
+      },
+    } as never);
+    const el = await NewReportPage({ searchParams: Promise.resolve({ site: 's1' }) });
+    render(el as ReactElement);
+    const main = screen.getByRole('main');
+    expect(main.className).toBe(MAIN_BG);
+    const body = main.firstElementChild as HTMLElement;
+    expect(body.className).toBe(PAGE_MAIN);
+    expect((body.firstElementChild as HTMLElement).className).toContain('max-w-[760px]');
+  });
+});
+
+describe('NewReportPage 보강 - 조회 오류와 없는 측정위치 (변이 실험으로 드러난 빈틈)', () => {
+  beforeEach(reset);
+
+  it('없는 측정위치 id는 notFound로 보낸다', async () => {
+    vi.mocked(createClient).mockResolvedValue({
+      from: (t: string) => {
+        if (t === 'locations') return table([]);
+        throw new Error(`예상치 못한 테이블: ${t}`);
+      },
+    } as never);
+    await expect(NewReportPage({ searchParams: Promise.resolve({ location: 'nope' }) }))
+      .rejects.toThrow('NEXT_HTTP_ERROR_FALLBACK;404');
+  });
+
+  it('측정위치 조회가 실패하면 현장을 모르므로 진입 헤더와 오류 안내를 그린다', async () => {
+    vi.mocked(createClient).mockResolvedValue({
+      from: (t: string) => {
+        if (t === 'locations') return table([], undefined, { message: '연결 끊김' });
+        throw new Error(`예상치 못한 테이블: ${t}`);
+      },
+    } as never);
+    const el = await NewReportPage({ searchParams: Promise.resolve({ location: 'l1' }) });
+    render(el as ReactElement);
+    expect(screen.getByText('상세: 연결 끊김')).toBeInTheDocument();
+    expect(headerProps.entry).toEqual([{ email: 'u1@example.com' }]);
+    expect(formProps.current).toBeNull();
+  });
+
+  it('?site= 측정위치 목록 조회가 실패하면 고르기 대신 오류 안내를 그린다', async () => {
+    vi.mocked(createClient).mockResolvedValue({
+      from: (t: string) => {
+        if (t === 'sites') return table([SITE]);
+        if (t === 'locations') return table([], undefined, { message: '권한 없음' });
+        throw new Error(`예상치 못한 테이블: ${t}`);
+      },
+    } as never);
+    const el = await NewReportPage({ searchParams: Promise.resolve({ site: 's1' }) });
+    render(el as ReactElement);
+    expect(screen.getByText('상세: 권한 없음')).toBeInTheDocument();
+    expect(screen.queryByLabelText('측정위치')).toBeNull();
+  });
+
+  it('후보 조회가 실패하면 폼 대신 오류 안내를 그린다', async () => {
+    await renderPage([], undefined, [SITE], { analysesError: { message: '시간 초과' } });
+    expect(screen.getByText('상세: 시간 초과')).toBeInTheDocument();
+    expect(formProps.current).toBeNull();
+  });
+});
+
+describe('NewReportPage 보강 - 후보 범위·정렬·필드 (변이 실험으로 드러난 빈틈)', () => {
+  beforeEach(reset);
+
+  it('후보는 현재(is_current) 분석만이고 지운 분석은 빠진다', async () => {
+    const props = await renderPage([
+      FLATNESS,
+      analysisRow({ id: 'an-old', is_current: false }),
+      analysisRow({ id: 'an-del', deleted_at: '2026-09-05T00:00:00Z' }),
+    ]);
+    expect(props?.candidates.map((c) => c.analysis_id)).toEqual(['an-flat']);
+  });
+
+  it('후보는 이 측정위치의 지워지지 않은 스캔에서 나온 분석만이다', async () => {
+    const props = await renderPage([
+      FLATNESS,
+      analysisRow({ id: 'an-other-loc', scan_id: 'sc-other' }),
+      analysisRow({ id: 'an-gone-scan', scan_id: 'sc-gone' }),
+    ], undefined, [SITE], {
+      scans: [
+        scanRow('sc1', 'floor', '2026-07-20'),
+        { ...scanRow('sc-other', 'floor', '2026-07-22'), location_id: 'l-other' },
+        { ...scanRow('sc-gone', 'floor', '2026-07-23'), deleted_at: '2026-09-05T00:00:00Z' },
+      ],
+    });
+    expect(props?.candidates.map((c) => c.analysis_id)).toEqual(['an-flat']);
+  });
+
+  it('후보는 종류 → 표면 순으로 정렬한다(입력 순서와 무관)', async () => {
+    const props = await renderPage([
+      analysisRow({ id: 'an-slope-floor', kind: 'slope', surface: 'floor', scan_id: 'sc1' }),
+      analysisRow({ id: 'an-flat-wall', kind: 'flatness', surface: 'wall', scan_id: 'sc2' }),
+      analysisRow({ id: 'an-flat-floor', kind: 'flatness', surface: 'floor', scan_id: 'sc1' }),
+    ]);
+    expect(props?.candidates.map((c) => c.analysis_id))
+      .toEqual(['an-flat-floor', 'an-flat-wall', 'an-slope-floor']);
+  });
+
+  it('후보에 표면과 측정 시각(스캔의 scanned_at)을 싣는다', async () => {
+    const props = await renderPage([
+      FLATNESS,
+      analysisRow({ id: 'an-wall', surface: 'wall', scan_id: 'sc2' }),
+    ]);
+    expect(candidateOf(props, 'an-flat')).toMatchObject({ surface: 'floor', scanned_at: '2026-07-20' });
+    expect(candidateOf(props, 'an-wall')).toMatchObject({ surface: 'wall', scanned_at: '2026-07-21' });
+  });
+
+  it('후보 의견은 사용자가 고친 의견(user_summary)이 자동 의견(auto_summary)보다 앞선다', async () => {
+    const props = await renderPage([
+      analysisRow({ id: 'an-edited', user_summary: '사용자 의견', auto_summary: '자동 의견' }),
+      analysisRow({ id: 'an-auto', kind: 'slope', auto_summary: '자동만' }),
+    ]);
+    expect(candidateOf(props, 'an-edited')).toMatchObject({ summary: '사용자 의견' });
+    expect(candidateOf(props, 'an-auto')).toMatchObject({ summary: '자동만' });
+  });
+
+  it.each([
+    { state: 'processing', phase: '재판정 중' },
+    { state: 'queued', phase: '재판정 대기 중' },
+  ])('차단 사유는 진행 단계($phase)를 말한다', async ({ state, phase }) => {
+    const props = await renderPage([
+      FLATNESS,
+      analysisRow({
+        id: 'an-slope', kind: 'slope',
+        params: { drain_points: [{ x: 1, y: 2 }], judge: { state, at: '2026-08-09T00:00:00Z' } },
+      }),
+    ]);
+    expect(candidateOf(props, 'an-slope')?.blocked_reason)
+      .toMatch(new RegExp(`^${phase}이라 지금은 보고서에 넣을 수 없습니다`));
+  });
+});
+
+describe('NewReportPage 보강 - 폼과 설명에 넘기는 값 (변이 실험으로 드러난 빈틈)', () => {
+  beforeEach(reset);
+
+  const full = { ...location, building: '101동', floor: '3층', room: '301호', name: '거실' };
+
+  it('측정위치 표기는 건물 / 층 / 호 / 이름을 " / "로 이어 h1 아래 설명에 보인다', async () => {
+    await renderPage([], undefined, [SITE], { location: full });
+    expect(screen.getByText('101동 / 3층 / 301호 / 거실')).toBeInTheDocument();
+  });
+
+  it('폼에는 이 측정위치의 id와 같은 표기를 넘긴다', async () => {
+    await renderPage([FLATNESS], undefined, [SITE], { location: full });
+    expect(formProps.current).toMatchObject({ locationId: 'l1', locationLabel: '101동 / 3층 / 301호 / 거실' });
   });
 });

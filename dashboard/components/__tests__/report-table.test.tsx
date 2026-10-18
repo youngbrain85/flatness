@@ -187,3 +187,37 @@ describe('ReportTable 측정위치 필터 표시 (?location= 은 서버가 이�
     expect(screen.queryByText(/^측정위치:/)).toBeNull();
   });
 });
+
+// 변이 실험(Task 10 보강): 검색의 공백·대소문자 규칙과 도구 줄·안내 줄의 모양은 위 단언만으로는 조용히 바뀌어도 통과했다.
+describe('ReportTable 보강 (변이 실험으로 드러난 빈틈)', () => {
+  const english: ReportTableRow[] = [
+    { id: 'e1', title: 'Floor A Report', locationLabel: '-', statusType: 'pending', statusLabel: '작성 중', genStatus: 'done', createdAt: '2026-09-04' },
+    { id: 'e2', title: 'Wall B', locationLabel: '-', statusType: 'pending', statusLabel: '작성 중', genStatus: 'done', createdAt: '2026-09-04' },
+  ];
+
+  it('검색어의 앞뒤 공백은 무시한다', () => {
+    render(<ReportTable rows={rows} />);
+    search('  구배  ');
+    expect(reportTitles()).toEqual(['안방 구배 보고서', '거실 구배 보고서']);
+  });
+
+  it('검색은 대소문자를 가리지 않는다(검색어와 제목 양쪽)', () => {
+    render(<ReportTable rows={english} />);
+    search('FLOOR');
+    expect(reportTitles()).toEqual(['Floor A Report']);
+    search('wall b');
+    expect(reportTitles()).toEqual(['Wall B']);
+  });
+
+  it('검색 입력은 왼쪽 돋보기 자리를 비우고(pl-[38px]), 같은 칸에 돋보기 아이콘이 있다', () => {
+    render(<ReportTable rows={rows} />);
+    const input = screen.getByRole('textbox', { name: '보고서 검색' });
+    expect(input.className).toContain('pl-[38px]');
+    expect(input.parentElement?.querySelector('[data-icon="search"]')).not.toBeNull();
+  });
+
+  it('빈 결과 안내 줄은 4열 전체를 가로지른다', () => {
+    render(<ReportTable rows={[]} />);
+    expect(screen.getByText('조건에 맞는 보고서가 없습니다').closest('td')).toHaveAttribute('colspan', '4');
+  });
+});

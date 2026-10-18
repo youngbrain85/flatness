@@ -1,7 +1,7 @@
 // 보고서 생성 폼(스펙 §7.6). 다크 리스킨(Task 10, 아트보드 ReportNew): 카드 하나(제목 · 포함할 분석 · 종합의견)
 // + 카드 밖 오른쪽 주 버튼. 후보 줄은 "종류 · 표면 · 측정 시각(mono) · 판정 등급 배지(data-grade)".
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 const { supabaseStub, state } = vi.hoisted(() => {
   const state = {
@@ -10,6 +10,7 @@ const { supabaseStub, state } = vi.hoisted(() => {
     linkError: null as { message: string } | null,
     rpcCalls: [] as { fn: string; params: unknown }[],
     rpcError: null as { code?: string; message: string } | null,
+    insertError: null as { message: string } | null,
   };
   const supabaseStub = {
     auth: { getUser: async () => ({ data: { user: { id: 'u1' } } }) },
@@ -18,7 +19,13 @@ const { supabaseStub, state } = vi.hoisted(() => {
         return {
           insert(row: Record<string, unknown>) {
             state.inserted = row;
-            return { select: () => ({ single: async () => ({ data: { id: 'r1' }, error: null }) }) };
+            return {
+              select: () => ({
+                single: async () => (state.insertError
+                  ? { data: null, error: state.insertError }
+                  : { data: { id: 'r1' }, error: null }),
+              }),
+            };
           },
         };
       }
@@ -65,6 +72,7 @@ function resetState() {
   state.linkError = null;
   state.rpcCalls = [];
   state.rpcError = null;
+  state.insertError = null;
   pushMock.mockClear();
 }
 
@@ -248,5 +256,91 @@ describe('ReportCreateForm 구배 편입 (단계 H)', () => {
     renderForm([slope({ blocked_reason: '재판정 중' })]);
     expect((screen.getByLabelText('보고서 제목') as HTMLInputElement).value)
       .toBe('101동 / 3층 / 거실 / P1 구배 분석 보고서');
+  });
+});
+
+// 변이 실험(Task 10 보강): 제출이 reports 행에 싣는 제목·종합의견, 삽입 실패 경로, 제출 중 잠금, 종합의견 칸 높이,
+// 종류가 둘일 때의 기본 제목은 위 단언만으로는 조용히 바뀌어도 통과했다.
+describe('ReportCreateForm 보강 (변이 실험으로 드러난 빈틈)', () => {
+  beforeEach(resetState);
+
+  async function submitAndWait() {
+    fireEvent.click(screen.getByRole('button', { name: '보고서 생성' }));
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith('/reports/r1'));
+  }
+
+  it('제출하면 기본 제목과 종합의견 초안이 그대로 reports 행에 실린다', async () => {
+    renderForm();
+    await submitAndWait();
+    expect(state.inserted).toEqual({
+      location_id: 'loc1',
+      title: '101동 / 3층 / 거실 / P1 평활도 분석 보고서',
+      opinion_text: '[평활도 바닥] 바닥 의견\n\n[평활도 벽면] 벽면 의견',
+      created_by: 'u1',
+    });
+  });
+
+  it('고친 제목과 종합의견은 앞뒤 공백을 지우고 보낸다', async () => {
+    renderForm();
+    fireEvent.change(screen.getByLabelText('보고서 제목'), { target: { value: '  직접 정한 제목  ' } });
+    fireEvent.change(screen.getByLabelText('종합의견'), { target: { value: '  직접 쓴 의견  ' } });
+    await submitAndWait();
+    expect(state.inserted).toMatchObject({ title: '직접 정한 제목', opinion_text: '직접 쓴 의견' });
+  });
+
+  it('종합의견을 비우면 opinion_text는 null이다(분석별 자동 의견이 그대로 실린다)', async () => {
+    renderForm();
+    fireEvent.change(screen.getByLabelText('종합의견'), { target: { value: '   ' } });
+    await submitAndWait();
+    expect(state.inserted).toMatchObject({ opinion_text: null });
+  });
+
+  it('제목을 비우면 종류를 밝힌 기본 제목으로 보낸다', async () => {
+    renderForm();
+    fireEvent.change(screen.getByLabelText('보고서 제목'), { target: { value: '   ' } });
+    await submitAndWait();
+    expect(state.inserted).toMatchObject({ title: '평활도 분석 보고서' });
+  });
+
+  it('보고서 삽입이 실패하면 사유를 보이고 포함 분석 저장·잡 등록·이동을 하지 않으며 버튼이 다시 풀린다', async () => {
+    state.insertError = { message: '권한 없음' };
+    renderForm();
+    fireEvent.click(screen.getByRole('button', { name: '보고서 생성' }));
+    const msg = await screen.findByText('보고서 생성에 실패했습니다: 권한 없음');
+    expect(msg.closest('[data-alert]')).toHaveAttribute('data-alert', 'error');
+    expect(state.links).toEqual([]);
+    expect(state.rpcCalls).toEqual([]);
+    expect(pushMock).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: '보고서 생성' })).toBeEnabled();
+  });
+
+  it('제출하는 동안 버튼이 "생성 요청 중..."으로 바뀌고 잠긴다(중복 제출 방지)', async () => {
+    renderForm();
+    fireEvent.click(screen.getByRole('button', { name: '보고서 생성' }));
+    expect(screen.getByRole('button', { name: '생성 요청 중...' })).toBeDisabled();
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith('/reports/r1'));
+  });
+
+  it('종합의견 칸 아래에 도움말(비우면 자동 의견, 스크리닝 한계 문구 자동 포함)을 둔다', () => {
+    renderForm();
+    const field = screen.getByLabelText('종합의견').parentElement as HTMLElement;
+    expect(within(field).getByText(/비워 두면 분석별 자동 의견이 그대로 보고서에 실립니다/)).toBeInTheDocument();
+    expect(within(field).getByText(/스크리닝 한계 문구는 항상 자동 포함됩니다/)).toBeInTheDocument();
+  });
+
+  it('종합의견 칸은 초안이 8줄을 넘으면 초안 줄 수 + 2줄이다', () => {
+    const ten = Array.from({ length: 10 }, (_, i) => `${i + 1}번째 줄`).join('\n');
+    renderForm([{ ...candidates[0], summary: ten }]);
+    expect(screen.getByLabelText('종합의견')).toHaveAttribute('rows', '12');
+  });
+
+  it('종류가 둘이면 기본 제목은 종류 이름순으로 "·"로 잇는다(입력 순서와 무관)', () => {
+    const slope: ReportCandidate = {
+      analysis_id: 'an-slope', kind: 'slope', surface: 'floor', scanned_at: '2026-07-22',
+      grade: 'repair', summary: '구배 의견', blocked_reason: null,
+    };
+    renderForm([slope, candidates[0]]);
+    expect((screen.getByLabelText('보고서 제목') as HTMLInputElement).value)
+      .toBe('101동 / 3층 / 거실 / P1 평활도·구배 분석 보고서');
   });
 });

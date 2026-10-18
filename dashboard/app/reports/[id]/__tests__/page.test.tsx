@@ -15,7 +15,10 @@ vi.mock('next/headers', () => ({
 }));
 
 const { captured } = vi.hoisted(() => ({
-  captured: { site: [] as unknown[], entry: [] as unknown[], del: [] as unknown[] },
+  captured: {
+    site: [] as unknown[], entry: [] as unknown[], del: [] as unknown[],
+    progress: [] as unknown[], actions: [] as unknown[],
+  },
 }));
 vi.mock('@/components/shell/site-header', () => ({
   SiteHeader: (p: unknown) => { captured.site.push(p); return null; },
@@ -25,19 +28,23 @@ vi.mock('@/components/shell/entry-header', () => ({
 }));
 // 하위 클라이언트 컴포넌트(ReportProgress·ReportActions·ReportDeleteButton)는 각자 useRouter/Realtime
 // 구독을 쓴다 - 이 페이지 테스트의 관심사가 아니므로 스텁으로 대체한다(삭제 버튼은 넘기는 값만 본다).
-vi.mock('@/components/report/report-progress', () => ({ ReportProgress: () => null }));
-vi.mock('@/components/report/report-actions', () => ({ ReportActions: () => null }));
+vi.mock('@/components/report/report-progress', () => ({
+  ReportProgress: (p: unknown) => { captured.progress.push(p); return null; },
+}));
+vi.mock('@/components/report/report-actions', () => ({
+  ReportActions: (p: unknown) => { captured.actions.push(p); return null; },
+}));
 vi.mock('@/components/report/report-delete-button', () => ({
   ReportDeleteButton: (p: unknown) => { captured.del.push(p); return null; },
 }));
 
 import { createClient } from '@/lib/supabase/server';
-import ReportPage from '../page';
+import ReportPage, { metadata } from '../page';
 import { MAIN_BG, PAGE_MAIN } from '@/components/ui/page';
 
 type Row = Record<string, unknown>;
 
-function table(rows: Row[]) {
+function table(rows: Row[], error: { message: string } | null = null) {
   let current = rows;
   let projection: string[] | null = null;
   const project = (r: Row): Row => (projection
@@ -52,8 +59,8 @@ function table(rows: Row[]) {
     is: (col: string, val: unknown) => { current = current.filter((r) => (r[col] ?? null) === val); return obj; },
     in: (col: string, vals: unknown[]) => { current = current.filter((r) => vals.includes(r[col])); return obj; },
     order: () => obj,
-    maybeSingle: async () => ({ data: current.length ? project(current[0]) : null, error: null }),
-    then: (resolve: (v: unknown) => void) => resolve({ data: current.map(project), error: null }),
+    maybeSingle: async () => ({ data: !error && current.length ? project(current[0]) : null, error }),
+    then: (resolve: (v: unknown) => void) => resolve({ data: error ? null : current.map(project), error }),
   };
   return obj;
 }
@@ -75,22 +82,25 @@ const link: Row = { report_id: 'r1', analysis_id: 'a1', sort_order: 0 };
 const analysis: Row = { id: 'a1', scan_id: 'sc1', surface: 'floor', overall_verdict: 'pass' };
 const scan: Row = { id: 'sc1', scanned_at: '2026-07-20' };
 
-function mockSupabase(report: Row, locations: Row[] = [location]) {
+// o: 포함 분석·측정 시각을 바꾸거나 보고서 조회를 실패시킨다(기본은 위 link·analysis·scan 한 건씩)
+type MockOptions = { links?: Row[]; analyses?: Row[]; scans?: Row[]; reportError?: { message: string } };
+
+function mockSupabase(report: Row, locations: Row[] = [location], o: MockOptions = {}) {
   vi.mocked(createClient).mockResolvedValue({
     from: (t: string) => {
-      if (t === 'reports') return table([report]);
+      if (t === 'reports') return table([report], o.reportError ?? null);
       if (t === 'locations') return table(locations);
       if (t === 'sites') return table([site]);
-      if (t === 'report_analyses') return table([link]);
-      if (t === 'analyses') return table([analysis]);
-      if (t === 'scans') return table([scan]);
+      if (t === 'report_analyses') return table(o.links ?? [link]);
+      if (t === 'analyses') return table(o.analyses ?? [analysis]);
+      if (t === 'scans') return table(o.scans ?? [scan]);
       throw new Error(`예상치 못한 테이블: ${t}`);
     },
   } as never);
 }
 
-async function renderPage(report: Row = reportRow(), locations: Row[] = [location]) {
-  mockSupabase(report, locations);
+async function renderPage(report: Row = reportRow(), locations: Row[] = [location], o: MockOptions = {}) {
+  mockSupabase(report, locations, o);
   const el = await ReportPage({ params: Promise.resolve({ id: 'r1' }) });
   return render(el as ReactElement);
 }
@@ -99,6 +109,8 @@ beforeEach(() => {
   captured.site.length = 0;
   captured.entry.length = 0;
   captured.del.length = 0;
+  captured.progress.length = 0;
+  captured.actions.length = 0;
 });
 
 describe('ReportPage 현장 헤더·브레드크럼·본문 (Task 10, 스펙 §4.3)', () => {
@@ -189,5 +201,80 @@ describe('ReportPage PDF 미리보기 (스펙 §5 16행: 검정 스테이지 위
     const notice = screen.getByText('PDF가 아직 생성되지 않았습니다.');
     expect(notice.closest('[data-stage]')).not.toBeNull();
     expect(screen.queryByTitle('보고서 PDF 미리보기')).toBeNull();
+  });
+});
+
+// 변이 실험(Task 10 보강): 아래는 위 단언만으로는 조용히 바뀌어도 통과했던 규칙을 지킨다 - PDF 미리보기의 두 조건,
+// 포함 분석 줄의 등급·표면·chevron, 하위 컴포넌트에 넘기는 값, 지운/없는 보고서, 조회 오류 화면, <title>.
+describe('ReportPage 보강 - PDF 미리보기 조건 (변이 실험으로 드러난 빈틈)', () => {
+  it('pdf_path가 있어도 생성이 끝나지(done) 않았으면(재생성 중) 미리보기를 그리지 않는다', async () => {
+    await renderPage(reportRow({ gen_status: 'processing' }));
+    expect(screen.queryByTitle('보고서 PDF 미리보기')).toBeNull();
+    expect(screen.getByText('PDF가 아직 생성되지 않았습니다.')).toBeInTheDocument();
+  });
+
+  it('생성이 끝나(done)도 pdf_path가 없으면 미리보기를 그리지 않는다', async () => {
+    await renderPage(reportRow({ pdf_path: null, gen_status: 'done' }));
+    expect(screen.queryByTitle('보고서 PDF 미리보기')).toBeNull();
+    expect(screen.getByText('PDF가 아직 생성되지 않았습니다.')).toBeInTheDocument();
+  });
+});
+
+describe('ReportPage 보강 - 포함 분석 줄 (변이 실험으로 드러난 빈틈)', () => {
+  it('줄마다 표면 이름·측정 시각·엔진 판정 등급을 그리고, 판정이 없으면 판정 불가(na)이며, 끝에 chevron이 있다', async () => {
+    await renderPage(reportRow(), [location], {
+      links: [
+        { report_id: 'r1', analysis_id: 'a1', sort_order: 0 },
+        { report_id: 'r1', analysis_id: 'a2', sort_order: 1 },
+      ],
+      analyses: [
+        { id: 'a1', scan_id: 'sc1', surface: 'floor', overall_verdict: 'rework' },
+        { id: 'a2', scan_id: 'sc2', surface: 'wall', overall_verdict: null },
+      ],
+      scans: [scan, { id: 'sc2', scanned_at: '2026-07-21' }],
+    });
+    const floor = screen.getByRole('link', { name: /바닥.*2026-07-20.*판정/ });
+    expect(floor.querySelector('[data-grade="rework"]')).not.toBeNull();
+    const wall = screen.getByRole('link', { name: /벽면.*2026-07-21.*판정/ });
+    expect(wall.querySelector('[data-grade="na"]')).not.toBeNull();
+    for (const row of [floor, wall]) expect(row.querySelector('[data-icon="chevron-right"]')).not.toBeNull();
+  });
+});
+
+describe('ReportPage 보강 - 하위 컴포넌트에 넘기는 값 (변이 실험으로 드러난 빈틈)', () => {
+  it('발행본·생성 실패 보고서의 상태 값을 ReportActions·ReportProgress·ReportDeleteButton에 그대로 넘긴다', async () => {
+    await renderPage(reportRow({ status: 'finalized', gen_status: 'failed', gen_error: '워커 오류' }));
+    expect(captured.actions).toEqual([{
+      report: { id: 'r1', status: 'finalized', gen_status: 'failed', pdf_path: 'reports/r1/report.pdf' },
+    }]);
+    expect(captured.progress).toEqual([{
+      reportId: 'r1', initialStatus: 'failed', genError: '워커 오류', reportStatus: 'finalized',
+    }]);
+    expect(captured.del).toEqual([{ report: { id: 'r1', status: 'finalized' }, redirectTo: '/sites/s1/reports' }]);
+  });
+});
+
+describe('ReportPage 보강 - 없는 보고서와 조회 오류 (변이 실험으로 드러난 빈틈)', () => {
+  it('<title>은 화면 이름 "보고서 상세"다(앞의 "Flatness · "는 루트 title.template 이 붙인다)', () => {
+    expect(metadata.title).toBe('보고서 상세');
+  });
+
+  it('지운 보고서(deleted_at)는 상세에서도 notFound다', async () => {
+    mockSupabase(reportRow({ deleted_at: '2026-09-05T00:00:00Z' }));
+    await expect(ReportPage({ params: Promise.resolve({ id: 'r1' }) }))
+      .rejects.toThrow('NEXT_HTTP_ERROR_FALLBACK;404');
+  });
+
+  it('없는 보고서 id는 notFound다', async () => {
+    mockSupabase(reportRow({ id: 'other' }));
+    await expect(ReportPage({ params: Promise.resolve({ id: 'r1' }) }))
+      .rejects.toThrow('NEXT_HTTP_ERROR_FALLBACK;404');
+  });
+
+  it('보고서 조회가 실패하면 진입 헤더와 오류 안내를 그린다', async () => {
+    await renderPage(reportRow(), [location], { reportError: { message: '연결 끊김' } });
+    expect(screen.getByText('상세: 연결 끊김')).toBeInTheDocument();
+    expect(captured.entry).toEqual([{ email: 'u1@example.com' }]);
+    expect(captured.site).toEqual([]);
   });
 });

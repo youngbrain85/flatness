@@ -15,6 +15,8 @@ function stubSupabase(
   updateError: { message: string } | null,
   spy: (f: unknown) => void = () => {},
   eqSpy: (col: string, val: unknown) => void = () => {},
+  // 주면 삭제 요청이 이 프라미스가 풀릴 때까지 끝나지 않는다(진행 중 상태 확인용)
+  gate: Promise<void> | null = null,
 ) {
   return {
     from: (table: string) => {
@@ -24,7 +26,13 @@ function stubSupabase(
           spy(fields);
           // eq의 인자를 기록한다. 이걸 안 하면 .eq('id', report.id)가 사라져도 테스트가
           // 통과하고, 그 코드는 WHERE 없는 UPDATE가 되어 전체 보고서를 지운다.
-          return { eq: async (col: string, val: unknown) => { eqSpy(col, val); return { error: updateError }; } };
+          return {
+            eq: async (col: string, val: unknown) => {
+              eqSpy(col, val);
+              if (gate) await gate;
+              return { error: updateError };
+            },
+          };
         },
       };
     },
@@ -137,5 +145,45 @@ describe('ReportDeleteButton', () => {
 
     expect(await screen.findByText(/권한이 없습니다/)).toBeInTheDocument();
     expect(pushMock).not.toHaveBeenCalled();
+  });
+});
+
+// 변이 실험(Task 10 보강): 실패한 삭제가 이동·새로고침으로 새지 않는 것(redirectTo가 있을 때), 실패 뒤 버튼이 다시 풀리는 것,
+// 진행 중 중복 클릭 잠금, 확인 문장·사유의 글자색은 위 단언만으로는 조용히 바뀌어도 통과했다.
+describe('ReportDeleteButton 보강 (변이 실험으로 드러난 빈틈)', () => {
+  it('삭제에 실패하면 redirectTo가 있어도 이동도 새로고침도 하지 않고 사유를 err 글자로 보이며 버튼을 다시 푼다', async () => {
+    vi.mocked(createClient).mockReturnValue(stubSupabase({ message: '권한이 없습니다' }) as never);
+    render(<ReportDeleteButton report={{ id: 'r1', status: 'draft' }} redirectTo="/sites/s1/reports" />);
+
+    fireEvent.click(screen.getByRole('button', { name: '삭제' }));
+    fireEvent.click(screen.getByRole('button', { name: '삭제 확인' }));
+
+    const reason = await screen.findByText('권한이 없습니다');
+    expect(reason.className).toContain('text-err');
+    expect(pushMock).not.toHaveBeenCalled();
+    expect(refreshMock).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: '삭제 확인' })).toBeEnabled();
+  });
+
+  it('삭제하는 동안 삭제 확인·취소 버튼이 잠긴다(중복 삭제 방지)', async () => {
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    vi.mocked(createClient).mockReturnValue(stubSupabase(null, () => {}, () => {}, gate) as never);
+    render(<ReportDeleteButton report={{ id: 'r1', status: 'draft' }} />);
+
+    fireEvent.click(screen.getByRole('button', { name: '삭제' }));
+    fireEvent.click(screen.getByRole('button', { name: '삭제 확인' }));
+    expect(screen.getByRole('button', { name: '삭제 확인' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '취소' })).toBeDisabled();
+
+    release();
+    await waitFor(() => expect(refreshMock).toHaveBeenCalled());
+  });
+
+  it('확인 문장은 ink 글자로 읽힌다', () => {
+    vi.mocked(createClient).mockReturnValue(stubSupabase(null) as never);
+    render(<ReportDeleteButton report={{ id: 'r1', status: 'draft' }} />);
+    fireEvent.click(screen.getByRole('button', { name: '삭제' }));
+    expect(screen.getByText(/삭제할까요/).className).toContain('text-ink');
   });
 });
