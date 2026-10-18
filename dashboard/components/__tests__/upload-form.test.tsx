@@ -773,6 +773,30 @@ describe('UploadForm 실패 경로·업로드 중 잠금 (T6 변이 보강)', ()
     expect(screen.getByRole('button', { name: '업로드 후 사전 검사' })).toBeEnabled();
   });
 
+  it('잡 등록 쪽 실패 문구도 마침표로 끝맺어 되돌림 안내와 한 문장씩 읽힌다', async () => {
+    vi.mocked(createClient).mockReturnValue(
+      stubSupabase(null, { analysesInsertResult: { data: null, error: null } }) as never);
+    const { container } = await readyForm();
+    fireEvent.click(screen.getByLabelText('기존 결과 가져오기(CSV/JSON)'));
+    pickFile('result.csv', /결과 파일 \(csv\/json\)/);
+    submitForm(container);
+
+    expect(await screen.findByText('분석 등록 실패. 업로드한 스캔은 등록되지 않았습니다. 다시 시도하세요.')).toBeInTheDocument();
+  });
+
+  it('잡까지 걸린 뒤 이동에서 예외가 나도 정상 스캔을 되돌리지 않는다', async () => {
+    const scansUpdate = vi.fn();
+    pushMock.mockImplementationOnce(() => { throw new Error('이동 실패'); });
+    vi.mocked(createClient).mockReturnValue(stubSupabase(null, { scansUpdate }) as never);
+    const { container } = await readyForm();
+    pickFile('scan.ply');
+    submitForm(container);
+
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith('/scans/scan1'));
+    expect(await screen.findByText('이동 실패')).toBeInTheDocument();
+    expect(scansUpdate).not.toHaveBeenCalledWith(expect.objectContaining({ deleted_at: expect.anything() }));
+  });
+
   it('저장소 실패 뒤 되돌림마저 실패하면 정리되지 않았다고 사실대로 알린다', async () => {
     vi.mocked(createClient).mockReturnValue(stubSupabase(null, {
       storageError: new Error('버킷 없음'), softDeleteError: { message: '연결 끊김' },

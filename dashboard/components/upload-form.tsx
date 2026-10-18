@@ -131,20 +131,22 @@ export function UploadForm({ siteId, locations, userId, initialLocationId }: Pro
 
     // 이번 제출로 만든 스캔 행을 되돌린다. 그대로 두면 잡이 없는데 status가
     // 'uploaded'(사전 검사 대기) 또는 'ready'(분석 준비됨)인 스캔이 남아, 화면상 정상처럼
-    // 보이면서 영원히 진행되지 않는다(대시보드 할 일·측정위치 트리에 "업로드됨"으로 계속 뜬다).
+    // 보이면서 영원히 진행되지 않는다(대시보드 할 일·측정위치 트리에 "업로드됨"·"분석 준비됨"으로 계속 뜬다).
     // 재시도 버튼은 분석 행이 있어야 뜨므로(scans/[id]의 latest 분기) 사용자가 UI로 복구할
     // 방법도 없다. 흔적을 지우고 재업로드를 안내하는 편이 정직하다. 잡 등록 실패뿐 아니라
     // 저장소 업로드·raw_file_path 반영 실패(catch)에도 쓴다(사용자 결정 2026-10-18).
     // 이미 올라간 Storage 객체는 남는다(티켓 58).
-    async function discardScan(scanId: string, message: string) {
+    async function discardScan(scanId: string, reason: string) {
       // ★ 재리뷰: 이 update의 오류를 검사하지 않은 채 "등록되지 않았습니다"라고
-      // 단언하면 안 된다. insert를 죽인 연결 장애는 이 삭제도 죽인다 - 그러면
-      // 스캔이 status='ready'(임포트 모드는 3)에서 이미 승격했다) + analyses 0행으로
-      // 남는데, 화면은 정리됐다고 말한다. 그 상태가 바로 스캔 상세의 "분석 시작"
-      // 진입점이 임포트인지 아닌지 판별해야 하는 대상이다(app/scans/[id]/page.tsx).
-      // 실패를 삼키지 않고 사실대로 알린다.
+      // 단언하면 안 된다. 앞 단계(저장소 업로드·경로 반영·분석 행 insert·잡 등록)를 죽인
+      // 연결 장애는 이 삭제도 죽인다 - 그러면 스캔이 status='uploaded' 또는 'ready'(임포트
+      // 모드는 3)에서 이미 승격했다) + analyses 0행으로 남는데, 화면은 정리됐다고 말한다.
+      // 그 상태가 바로 스캔 상세의 "분석 시작" 진입점이 임포트인지 아닌지 판별해야 하는
+      // 대상이다(app/scans/[id]/page.tsx). 실패를 삼키지 않고 사실대로 알린다.
       const { error: delErr } = await supabase.from('scans')
         .update({ deleted_at: new Date().toISOString() }).eq('id', scanId);
+      // 사유 문구가 마침표 없이 끝나면 붙여, 뒤의 안내와 한 문장씩 읽히게 한다.
+      const message = /[.!?]$/.test(reason) ? reason : `${reason}.`;
       setError(delErr
         ? `${message} 업로드한 스캔을 정리하지도 못했습니다(${delErr.message}). 이 스캔이 분석 없이 목록에 남아 있을 수 있으니 관리자에게 알리세요.`
         : `${message} 업로드한 스캔은 등록되지 않았습니다. 다시 시도하세요.`);
@@ -205,13 +207,15 @@ export function UploadForm({ siteId, locations, userId, initialLocationId }: Pro
         const r = await enqueueJob(supabase, 'precheck', { scan_id: scanId });
         if (!r.ok) { await discardScan(scanId, r.message); return; }
       }
+      // 잡까지 걸렸으니 이 스캔은 정상이다 - 이 뒤의 예외로 되돌리지 않는다.
+      createdScanId = null;
       router.push(`/scans/${scan.id}`);
     } catch (err) {
       const message = err instanceof Error ? err.message : '업로드에 실패했습니다';
       // 스캔 행을 만든 뒤(저장소 업로드·raw_file_path 반영)에 실패했으면 그 행을 되돌린다.
       // 행을 만들기 전 실패(insert 자체)면 되돌릴 것이 없다.
       if (createdScanId) {
-        await discardScan(createdScanId, /[.!?]$/.test(message) ? message : `${message}.`);
+        await discardScan(createdScanId, message);
         return;
       }
       setError(message);
