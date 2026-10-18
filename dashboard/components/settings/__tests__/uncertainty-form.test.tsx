@@ -82,12 +82,16 @@ describe('UncertaintyForm 보강 (변이 실험으로 드러난 빈틈)', () => 
     expect(fromMock).not.toHaveBeenCalled();
   });
 
-  it('상한 100은 허용하고 소수도 그대로, app_settings의 uncertainty_mm 한 행을 갱신한다', async () => {
+  // 상한 100은 허용(바닥·벽면 각각)하고 소수는 그대로 저장한다(다른 칸이 소수라 정수 변환도 잡힌다)
+  it.each<[string, string, string, { floor: number; wall: number }]>([
+    ['바닥이 상한 100이고 벽면이 소수', '100', '4.5', { floor: 100, wall: 4.5 }],
+    ['벽면이 상한 100이고 바닥이 소수', '4.5', '100', { floor: 4.5, wall: 100 }],
+  ])('%s이면 app_settings의 uncertainty_mm 한 행을 그 값으로 갱신한다', async (_label, floor, wall, value) => {
     const { update, eq, select } = mockSave({ data: [{ key: 'uncertainty_mm' }], error: null });
-    submit('100', '4.5');
+    submit(floor, wall);
     expect(await screen.findByText('저장되었습니다 (이후 분석부터 적용)')).toBeInTheDocument();
     expect(fromMock).toHaveBeenCalledWith('app_settings');
-    expect(update).toHaveBeenCalledWith({ value: { floor: 100, wall: 4.5 } });
+    expect(update).toHaveBeenCalledWith({ value });
     expect(eq).toHaveBeenCalledWith('key', 'uncertainty_mm');
     expect(select).toHaveBeenCalledWith('key'); // 갱신된 행을 돌려받아야 0행(RLS 거부)을 알아챈다
   });
