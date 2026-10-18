@@ -19,7 +19,7 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { getRequestUser } from '@/lib/auth/request-user';
 import { ensureProfile } from '@/lib/auth/ensure-profile';
-import SettingsPage from '../page';
+import SettingsPage, { metadata } from '../page';
 import { EntryHeader } from '@/components/shell/entry-header';
 import { Container } from '@/components/ui/container';
 import { MAIN_BG, PAGE_MAIN } from '@/components/ui/page';
@@ -142,5 +142,95 @@ describe('SettingsPage 렌더 (아트보드 Settings)', () => {
     const [list] = findAll(await SettingsPage(), CriteriaList);
     expect(list.props.criteria).toEqual([criteriaRow]);
     expect((list.props.siteNames as Map<string, string>).get('s1')).toBe('현장A');
+  });
+});
+
+// 변이 실험(Task 11 보강): 위 단언만으로는 <title>, ensureProfile 호출 인자, 조회 인자(테이블·select·정렬·조건),
+// 세 조회가 한꺼번에 나가는지(Promise.all), U 설명문 전문이 조용히 틀어져도 통과했다.
+// 위 stubSupabase 는 select·order·eq 의 인자를 무시하고 응답이 즉시 온다 - 아래 흉내는 인자를 적고,
+// 실제 Supabase 빌더처럼 await 될 때 요청이 나가며 응답은 한 박자 늦게 온다.
+function recordingSupabase() {
+  const calls: Record<string, string[]> = { criteria: [], app_settings: [], sites: [] };
+  const requested: string[] = []; // 요청이 나간 순서(테이블)
+  const requestedWhenAnswered: Record<string, string[]> = {}; // 응답이 도착한 시점에 이미 요청이 나간 테이블
+  function query(table: string) {
+    const q: Record<string, unknown> = {};
+    for (const method of ['select', 'order', 'eq']) {
+      q[method] = (...args: unknown[]) => {
+        calls[table].push(`${method}(${args.map((a) => JSON.stringify(a)).join(', ')})`);
+        return q;
+      };
+    }
+    const lazy = {
+      then: (resolve: (v: unknown) => void) => {
+        requested.push(table);
+        setTimeout(() => {
+          requestedWhenAnswered[table] = [...requested];
+          resolve({ data: table === 'app_settings' ? null : [], error: null });
+        }, 0);
+      },
+    };
+    q.maybeSingle = () => { calls[table].push('maybeSingle()'); return lazy; };
+    q.then = lazy.then;
+    return q;
+  }
+  const client = {
+    from: (table: string) => {
+      if (!(table in calls)) throw new Error(`예상치 못한 테이블: ${table}`);
+      return query(table);
+    },
+  };
+  return { client, calls, requestedWhenAnswered };
+}
+
+function loggedInRecording() {
+  const recording = recordingSupabase();
+  vi.mocked(createClient).mockResolvedValue(recording.client as never);
+  vi.mocked(getRequestUser).mockResolvedValue({ id: 'u1', email: 'u1@example.com' });
+  vi.mocked(ensureProfile).mockClear();
+  vi.mocked(ensureProfile).mockResolvedValue({ id: 'u1', display_name: '홍길동' });
+  return recording;
+}
+
+describe('SettingsPage 보강 (변이 실험으로 드러난 빈틈)', () => {
+  it('<title>은 화면 이름 "설정"이다(앞의 "Flatness · "는 루트 title.template 이 붙인다)', () => {
+    expect(metadata.title).toBe('설정');
+  });
+
+  it('로그인한 사용자와 같은 클라이언트로 프로필을 보장한다(로그인 직후 실패했어도 여기서 복구)', async () => {
+    const { client } = loggedInRecording();
+    await SettingsPage();
+    expect(ensureProfile).toHaveBeenCalledTimes(1);
+    expect(ensureProfile).toHaveBeenCalledWith(client, { id: 'u1', email: 'u1@example.com' });
+  });
+
+  it('조회는 criteria(전역 먼저 · 표면 · 이름 순) · app_settings(uncertainty_mm) · sites 세 건이다', async () => {
+    const { calls } = loggedInRecording();
+    await SettingsPage();
+    expect(calls.criteria).toEqual([
+      'select("*")',
+      'order("site_id", {"ascending":true,"nullsFirst":true})',
+      'order("surface")',
+      'order("name")',
+    ]);
+    expect(calls.app_settings).toEqual(['select("value")', 'eq("key", "uncertainty_mm")', 'maybeSingle()']);
+    expect(calls.sites).toEqual(['select("id, name")']);
+  });
+
+  it('세 조회는 한꺼번에 나간다 - 하나가 끝나길 기다렸다가 다음을 부르지 않는다(Promise.all)', async () => {
+    const { requestedWhenAnswered } = loggedInRecording();
+    await SettingsPage();
+    for (const table of ['criteria', 'app_settings', 'sites']) {
+      expect([...requestedWhenAnswered[table]].sort()).toEqual(['app_settings', 'criteria', 'sites']);
+    }
+  });
+
+  it('U 설명문은 문장 그대로 카드 본문(폼 위)에 남는다', async () => {
+    loggedIn();
+    const containers = findAll(await SettingsPage(), Container);
+    expect(collectText(containers[1]).join('')).toContain(
+      '판정식의 경계 구간 폭을 결정합니다. 분석 시점 값이 결과에 스냅샷되므로 수정해도 과거 분석·보고서는 바뀌지 않습니다. '
+      + 'P5 반복 스캔 재현성 시험 후 갱신 예정.',
+    );
   });
 });

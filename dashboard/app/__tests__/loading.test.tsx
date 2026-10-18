@@ -79,3 +79,18 @@ describe('모든 loading.tsx', () => {
     expect(offenders).toEqual([]);
   });
 });
+
+// 변이 실험(Task 11 보강): 위 검사는 LoadingScreen/LoadingBody 어느 쪽이든 통과시킨다. 현장 레이아웃 안에 새로
+// 생긴 loading.tsx 가 LoadingScreen(헤더 자리 + <main>)을 그리면 레이아웃이 그린 헤더·<main> 위에 또 하나가
+// 겹치고, 현장 밖 loading.tsx 가 LoadingBody 만 그리면 헤더 자리가 없어 헤더가 그려질 때 본문이 튄다.
+describe('모든 loading.tsx 보강 (변이 실험으로 드러난 빈틈)', () => {
+  it('현장 레이아웃 안(app/sites/[id]/ 아래)은 LoadingBody, 그 밖은 LoadingScreen이다', () => {
+    const wrong = loadingFiles(APP)
+      .map((f) => ({ rel: relative(APP, f).split(sep).join('/'), src: readFileSync(f, 'utf8') }))
+      .filter(({ rel, src }) => (rel.startsWith('sites/[id]/')
+        ? !src.includes('<LoadingBody />')
+        : !src.includes('<LoadingScreen />')))
+      .map(({ rel }) => rel);
+    expect(wrong).toEqual([]);
+  });
+});

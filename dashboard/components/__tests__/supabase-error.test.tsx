@@ -25,3 +25,20 @@ describe('SupabaseErrorNotice', () => {
     expect(container.innerHTML).not.toMatch(/cs-|amber-|zinc-/);
   });
 });
+
+// 변이 실험(Task 11 보강): 위 단언만으로는 경고 상자가 role=status 로 읽히는지(연결 실패를 스크린리더가 알리는지),
+// 안내 문장 전문(앞의 세 조각 사이 문구)이 조용히 틀어져도 통과했다.
+describe('SupabaseErrorNotice 보강 (변이 실험으로 드러난 빈틈)', () => {
+  it('경고 상자는 role=status 로 읽힌다', () => {
+    const { container } = render(<SupabaseErrorNotice message="x" />);
+    expect(container.querySelector('[data-alert="warning"]')).toHaveAttribute('role', 'status');
+  });
+
+  it('안내 문장은 글자 그대로다(Free 일시정지 안내, 스펙 §3.3)', () => {
+    render(<SupabaseErrorNotice message="x" />);
+    expect(screen.getByText(/Free 프로젝트는/).textContent).toBe(
+      'Free 프로젝트는 7일 미사용 시 일시정지됩니다. Supabase 대시보드에서 프로젝트를 Restore(재개)한 뒤 새로고침하세요. '
+      + '그 밖의 원인이면 .env.local의 URL·anon key를 확인하세요.',
+    );
+  });
+});

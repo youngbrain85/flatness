@@ -12,7 +12,7 @@ vi.mock('@/lib/auth/ensure-profile', () => ({ ensureProfile: vi.fn() }));
 const { loginHeader } = vi.hoisted(() => ({ loginHeader: vi.fn(() => null) }));
 vi.mock('@/components/shell/login-header', () => ({ LoginHeader: loginHeader }));
 
-import LoginPage from '../page';
+import LoginPage, { metadata } from '../page';
 import { MAIN_BG, PAGE_MAIN } from '@/components/ui/page';
 
 beforeEach(() => { loginHeader.mockClear(); });
@@ -46,5 +46,12 @@ describe('LoginPage', () => {
     expect(screen.getByLabelText('이메일')).toBeInTheDocument();
     expect(screen.getByLabelText('비밀번호')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '로그인' })).toBeInTheDocument();
+  });
+});
+
+// 변이 실험(Task 11 보강): 위 단언만으로는 <title> 이 조용히 틀어져도 통과했다.
+describe('LoginPage 보강 (변이 실험으로 드러난 빈틈)', () => {
+  it('<title>은 화면 이름 "로그인"이다(앞의 "Flatness · "는 루트 title.template 이 붙인다)', () => {
+    expect(metadata.title).toBe('로그인');
   });
 });
