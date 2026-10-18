@@ -343,6 +343,10 @@ export default async function ScanPage({ params, searchParams }: {
       )}
     </>
   );
+  // 제목 줄에 실제로 그려질 액션이 있을 때만 PageHeader 에 넘긴다. 위 세 조각은 모두 로그인 사용자에게만 그려진다
+  // (SlopeAnalysisAction 은 아래 SlopeAnalysisScope 의 showButton 게이트가 열려야 그린다). 하나도 없는데 프래그먼트를
+  // 넘기면 PageHeader 가 빈 액션 상자를 그려 390px 에서 제목 아래 틈이 생긴다(최종 리뷰, 업로드됨·실패 스캔).
+  const hasTitleActions = !!user && (showSlopeButton || showFirstFlatness || !!latestFlatness);
 
   const content = (
     <div className={PAGE_MAIN}>
@@ -361,7 +365,7 @@ export default async function ScanPage({ params, searchParams }: {
             {' · '}{LINEAGE_LABEL[s.lineage]}
           </>
         )}
-        actions={titleActions}
+        actions={hasTitleActions ? titleActions : undefined}
       />
       {confirmingUnit && (
         <>

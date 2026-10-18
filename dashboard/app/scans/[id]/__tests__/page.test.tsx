@@ -10,6 +10,8 @@
 // DOM까지 그리지 않고 await로 얻은 React 엘리먼트 트리를 재귀 탐색한다
 // (app/analyses/[id]/__tests__/page.test.tsx, app/sites/[id]/__tests__/page.test.tsx와 동일 패턴).
 import { describe, expect, it, vi } from 'vitest';
+import { render } from '@testing-library/react';
+import type { ComponentProps } from 'react';
 
 vi.mock('@/lib/supabase/server', () => ({ createClient: vi.fn() }));
 // perf-auth-roundtrips: 페이지는 이제 supabase.auth.getUser() 대신 proxy가 검증해
@@ -1581,5 +1583,38 @@ describe('ScanPage 다크 C안 골격 보강 (T7 변이 실험)', () => {
     const unit = findAll(el, Container).find((c) => c.props.title === '단위 확인')!;
 
     expect(findAll(unit, 'p')[0].props.className).toBe('text-[15px] text-ink-2');
+  });
+});
+
+// 최종 리뷰: 제목 줄 액션(구배 버튼 조각 · 평활도 첫 분석 · 재분석)이 하나도 그려지지 않는 화면(업로드됨·실패 스캔)에도
+// 빈 프래그먼트를 넘기면 PageHeader 가 빈 액션 상자를 그려 390px 에서 제목 아래 14px 틈이 생겼다(정적 캡처 07b).
+// 보일 액션이 없으면 actions 를 넘기지 않는다. PageHeader 는 actions 가 없으면 그 상자를 그리지 않는다.
+describe('ScanPage 제목 줄 액션 상자 (최종 리뷰)', () => {
+  it.each<[string, Partial<ScanRow>]>([
+    ['업로드됨(사전 검사 대기)', { status: 'uploaded', unit_scale: null }],
+    ['사전 검사 실패', { status: 'failed', unit_scale: null }],
+  ])('%s 스캔은 제목 줄에 그릴 액션이 없어 actions 를 넘기지 않고, 머리 줄에 빈 액션 상자가 없다', async (_l, over) => {
+    vi.mocked(createClient).mockResolvedValue(stubSupabase(mkScan(over), []) as never);
+
+    const el = await ScanPage(pageProps());
+    const [header] = findAll(el, PageHeader);
+
+    expect(header.props.actions).toBeUndefined();
+    // 페이지가 넘긴 그대로 진짜 PageHeader 를 그려 본다: 제목 줄(h1 의 머리 줄)에는 제목 덩어리 하나만 있다
+    const { container } = render(<PageHeader {...(header.props as ComponentProps<typeof PageHeader>)} />);
+    const titleRow = container.querySelector('h1')!.parentElement!.parentElement!.parentElement!;
+    expect(titleRow.children).toHaveLength(1);
+  });
+
+  it('완료된 분석이 있는 스캔은 actions 에 구배 버튼 조각과 평활도 재분석 버튼이 그대로 있다', async () => {
+    const flatness = mkAnalysis({ id: 'f1', kind: 'flatness', engine_version: 'p4-0.5.0' });
+    vi.mocked(createClient).mockResolvedValue(stubSupabase(mkScan(), [flatness]) as never);
+
+    const el = await ScanPage(pageProps());
+    const { actions } = findAll(el, PageHeader)[0].props;
+
+    expect(actions).toBeDefined();
+    expect(findAll(actions, SlopeAnalysisAction)).toHaveLength(1);
+    expect(findAll(actions, ReanalyzeButton).map((b) => b.props.kind)).toEqual(['flatness']);
   });
 });
