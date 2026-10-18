@@ -126,6 +126,8 @@ describe('ReportTable 상태 필터 (클라이언트 필터, 검색과 AND)', ()
       '전체', '작성 중', '발행됨', '생성 실패', 'PDF 생성 중·대기',
     ]);
     expect(screen.getByRole('combobox', { name: '상태 필터' }).className).toBe(selectClass);
+    // selectClass 는 appearance-none 이라 SelectWrap 의 chevron 이 유일한 드롭다운 표시다 - 셀렉트 바로 옆에 있어야 한다
+    expect(screen.getByRole('combobox', { name: '상태 필터' }).nextElementSibling).toHaveAttribute('data-icon', 'chevron-down');
     expect(reportTitles()).toHaveLength(5);
     expect(screen.getByText('총 5건')).toBeInTheDocument();
   });

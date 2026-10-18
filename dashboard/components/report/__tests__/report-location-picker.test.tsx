@@ -34,6 +34,8 @@ describe('ReportLocationPicker', () => {
       '선택...', '101동 / 3층 / 301호 / 거실', '101동 / 3층 / 302호 / 거실', '로비',
     ]);
     expect(sel.className).toBe(selectClass);
+    // selectClass 는 appearance-none 이라 SelectWrap 의 chevron 이 유일한 드롭다운 표시다 - 셀렉트 바로 옆에 있어야 한다
+    expect(sel.nextElementSibling).toHaveAttribute('data-icon', 'chevron-down');
   });
 
   it('선택하면 그 측정위치로 보고서 생성 화면을 다시 요청한다(서버 재조회로 후보 로드)', () => {
