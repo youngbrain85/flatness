@@ -130,7 +130,7 @@ describe('SlopeHeatmapView -> drawSlopeHeatmap 배선 (코드리뷰 R-19: revers
 
 // 다크 T8: 캔버스는 검정 스테이지 안 여백, 범례는 스테이지에 붙은 줄(Stage toolbar, 아트보드 ScanSlope 63~77행).
 // 범례 사각은 같은 이름의 평활도 등급 토큰(캔버스 화면 색과 같은 값, Task 1 palette.test.ts 가 잇는다).
-// data-grade 는 등급 키(SlopeGradeBadge 와 같은 규칙), 글자는 엔진 문자열 그대로. 배수구는 DRAIN_COLOR.
+// data-grade 는 SLOPE_GRADE_TO_GRADE 로 바꾼 평활도 등급 키, 글자는 엔진 문자열 그대로. 배수구는 DRAIN_COLOR.
 describe('SlopeHeatmapView C안 해부', () => {
   it('캔버스는 검정 스테이지(Stage) 안, 범례 줄은 스테이지 다음 형제: 등급 사각(GRADE_CLASS)·배수구(bg-drain)·화살표 안내(muted)', () => {
     const { container } = render(

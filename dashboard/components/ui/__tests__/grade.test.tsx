@@ -1,8 +1,8 @@
 // 판정 등급 표시: 등급 색 다섯(스펙 §3)을 data-grade 와 함께 그린다. 3묶음 톤(Badge)으로 접지 않는다.
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import type { Grade, SlopeGrade } from '@/lib/domain/types';
-import { GRADE_CLASS, GradeBadge, GradeDot, SlopeGradeBadge } from '../grade';
+import type { Grade } from '@/lib/domain/types';
+import { GRADE_CLASS, GradeBadge, GradeDot } from '../grade';
 
 const cls = (el: Element | null | undefined) => (el?.getAttribute('class') ?? '').split(/\s+/);
 
@@ -49,19 +49,25 @@ describe('GradeDot', () => {
   });
 });
 
-describe('SlopeGradeBadge', () => {
-  it.each([
-    ['적합', 'pass'], ['경계', 'borderline'], ['보수', 'repair'], ['재시공', 'rework'], ['판정불가', 'na'],
-  ] as [SlopeGrade, Grade][])('구배 "%s"는 엔진 문자열 그대로 + %s 등급 색', (slope, grade) => {
-    render(<SlopeGradeBadge grade={slope} />);
-    const el = screen.getByText(slope);
-    expect(el).toHaveAttribute('data-grade', grade);
-    expect(cls(el)).toContain(`text-grade-${grade}`);
-  });
-  it('모르는 문자열(jsonb 무결성 미보장)은 사라지지 않고 판정 불가 색으로 그린다', () => {
-    render(<SlopeGradeBadge grade={'알수없음' as SlopeGrade} />);
-    const el = screen.getByText('알수없음');
+// 최종 리뷰: jsonb(cells.json 의 grade, 벽 plumb_grade)는 무결성을 보장하지 않는다. 모르는 문자열이 와도 결과 구획이
+// 죽지 않게 판정 불가(na) 색으로 그리고, 배지 글자는 그 문자열 그대로 둔다(색만으로 말하지 않는다).
+// 'toString'·'constructor'·'__proto__'는 Object.prototype 에서 값을 집어 오는 키다 - 자기 속성만 봐야 na 로 떨어진다.
+const UNKNOWN_GRADES = ['알수없음', 'toString', 'constructor', '__proto__'];
+
+describe('모르는 등급 문자열(jsonb 무결성 미보장)', () => {
+  it.each(UNKNOWN_GRADES)('GradeBadge "%s": 던지지 않고 판정 불가 색 테두리·글자 + 그 문자열 그대로', (raw) => {
+    render(<GradeBadge grade={raw as Grade} />);
+    const el = screen.getByText(raw);
     expect(el).toHaveAttribute('data-grade', 'na');
-    expect(cls(el)).toContain('text-grade-na');
+    expect(cls(el)).toEqual(expect.arrayContaining(['border-grade-na', 'text-grade-na']));
+    expect(cls(el)).not.toContain('undefined');
+  });
+
+  it.each(UNKNOWN_GRADES)('GradeDot "%s": 던지지 않고 판정 불가 색 점', (raw) => {
+    const { container } = render(<GradeDot grade={raw as Grade} />);
+    const dot = container.firstElementChild;
+    expect(dot).toHaveAttribute('data-grade', 'na');
+    expect(cls(dot)).toContain('bg-grade-na');
+    expect(cls(dot)).not.toContain('undefined');
   });
 });
