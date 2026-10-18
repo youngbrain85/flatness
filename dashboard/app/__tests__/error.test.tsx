@@ -38,7 +38,7 @@ describe('루트 오류 화면 (app/error.tsx)', () => {
     const { container } = renderError();
     expect(screen.getByRole('heading', { level: 1, name: '화면을 불러오지 못했습니다' })).toBeInTheDocument();
     expect(screen.getByText('일시적인 문제일 수 있습니다. 다시 시도하거나 현장 목록으로 돌아가세요.')).toBeInTheDocument();
-    expect(container.textContent).not.toContain('—'); // em dash(U+2014)
+    expect(container.textContent).not.toContain('\u2014'); // em dash(U+2014)
   });
 
   it('"현장 목록으로"는 /로 가는 이 화면의 유일한 primary, "다시 시도"는 보조 버튼이다', () => {
