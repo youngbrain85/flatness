@@ -45,7 +45,8 @@ export function ReportDeleteButton({ report, redirectTo }: {
 
   return (
     <>
-      <Button variant="danger" aria-expanded={confirming}
+      {/* 삭제 요청이 도는 동안은 토글도 잠근다 - 그 사이 확인 상자를 닫으면 곧 나올 실패 사유가 닫힌 상자 안에 갇혀 보이지 않는다 */}
+      <Button variant="danger" aria-expanded={confirming} disabled={busy}
         onClick={() => { setConfirming((open) => !open); setError(null); }}>
         삭제
       </Button>

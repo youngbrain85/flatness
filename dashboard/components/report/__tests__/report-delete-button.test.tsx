@@ -186,4 +186,44 @@ describe('ReportDeleteButton 보강 (변이 실험으로 드러난 빈틈)', () 
     fireEvent.click(screen.getByRole('button', { name: '삭제' }));
     expect(screen.getByText(/삭제할까요/).className).toContain('text-ink');
   });
+
+  // 리뷰 Important 3: 삭제 요청이 도는 동안 '삭제' 토글이 잠기지 않아, 그 사이 다시 누르면 확인 상자가 닫히고 곧 나올
+  // 실패 사유가 닫힌 상자 안에 갇혀 보이지 않았다.
+  it('삭제하는 동안 삭제 토글도 잠겨, 다시 눌러도 확인 상자가 닫히지 않는다', async () => {
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    vi.mocked(createClient).mockReturnValue(stubSupabase(null, () => {}, () => {}, gate) as never);
+    render(<ReportDeleteButton report={{ id: 'r1', status: 'draft' }} />);
+
+    const toggle = screen.getByRole('button', { name: '삭제' });
+    fireEvent.click(toggle);
+    fireEvent.click(screen.getByRole('button', { name: '삭제 확인' }));
+    expect(toggle).toBeDisabled();
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByText(/삭제할까요/)).toBeInTheDocument();
+
+    release();
+    await waitFor(() => expect(refreshMock).toHaveBeenCalled());
+  });
+
+  it('삭제 요청 중에 토글을 눌러도 실패 사유는 사라지지 않고, 실패하면 토글이 다시 풀린다', async () => {
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    vi.mocked(createClient).mockReturnValue(
+      stubSupabase({ message: '권한이 없습니다' }, () => {}, () => {}, gate) as never,
+    );
+    render(<ReportDeleteButton report={{ id: 'r1', status: 'draft' }} redirectTo="/sites/s1/reports" />);
+
+    const toggle = screen.getByRole('button', { name: '삭제' });
+    fireEvent.click(toggle);
+    fireEvent.click(screen.getByRole('button', { name: '삭제 확인' }));
+    fireEvent.click(toggle); // 요청이 도는 중에 다시 누른 경우
+    release();
+
+    expect(await screen.findByText('권한이 없습니다')).toBeVisible();
+    expect(toggle).toBeEnabled();
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(pushMock).not.toHaveBeenCalled();
+  });
 });

@@ -47,11 +47,15 @@ function judgeBlockReason(state: JudgeState | null): string | null {
     + '이전 판정이 발행본에 그대로 박제됩니다. 재판정이 끝난 뒤 이 화면을 새로고침하세요.';
 }
 
-/** 조회 오류 화면: 현장을 아직 모르므로 진입 헤더 + 오류 안내(본문 클래스는 다른 화면과 같다). */
-function errorScreen(email: string | null, message: string) {
+/**
+ * 조회 오류 화면. 오류가 나기 전에 현장 행을 이미 읽었으면 그 현장의 헤더로, 현장을 알 수 없으면(측정위치부터 못 읽었거나
+ * 현장 행을 못 읽음) 진입 헤더로 그린다 - 현장 밖 경로의 현장 화면은 읽어 둔 현장으로 SiteHeader를 그린다(셸 계약).
+ * 본문 클래스는 다른 화면과 같다.
+ */
+function errorScreen(site: Pick<SiteRow, 'id' | 'name'> | null, email: string | null, message: string) {
   return (
     <>
-      <EntryHeader email={email} />
+      {site ? <SiteHeader site={{ id: site.id, name: site.name }} email={email} /> : <EntryHeader email={email} />}
       <main className={MAIN_BG}>
         <div className={PAGE_MAIN}><SupabaseErrorNotice message={message} /></div>
       </main>
@@ -81,7 +85,8 @@ export default async function NewReportPage({ searchParams }: {
         .order('building').order('floor_order').order('room').order('name'),
     ]);
     const listError = siteRes.error ?? locationsRes.error;
-    if (listError) return errorScreen(email, listError.message);
+    // 현장 행을 읽었으면(측정위치 목록만 실패) 그 현장 헤더로, 현장 조회 자체가 실패했으면 진입 헤더로 오류를 그린다
+    if (listError) return errorScreen(siteRes.data as SiteRow | null, email, listError.message);
     if (!siteRes.data) notFound();
     const site = siteRes.data as SiteRow;
     const locations = (locationsRes.data ?? []) as LocationRow[];
@@ -115,7 +120,8 @@ export default async function NewReportPage({ searchParams }: {
 
   const { data: location, error } = await supabase
     .from('locations').select('*').eq('id', locationId).maybeSingle();
-  if (error) return errorScreen(email, error.message);
+  // 측정위치를 못 읽었으니 어느 현장인지 알 수 없다 - 진입 헤더
+  if (error) return errorScreen(null, email, error.message);
   if (!location) notFound();
   const loc = location as LocationRow;
   const locationLabel = [loc.building, loc.floor, loc.room, loc.name].filter(Boolean).join(' / ');
@@ -147,7 +153,8 @@ export default async function NewReportPage({ searchParams }: {
         .eq('is_current', true).eq('status', 'done')
         .in('kind', ['flatness', 'slope']).is('deleted_at', null)
     : { data: [], error: null };
-  if (analysesRes.error) return errorScreen(email, analysesRes.error.message);
+  // 현장 행은 위에서 이미 읽었다(못 읽었으면 진입 헤더) - 후보 조회만 실패했다
+  if (analysesRes.error) return errorScreen(site as SiteRow | null, email, analysesRes.error.message);
 
   const candidates: ReportCandidate[] = (analysesRes.data ?? []).map((a): ReportCandidate => {
     const scan = scanById.get(a.scan_id as string);

@@ -434,10 +434,14 @@ describe('NewReportPage 보강 - 조회 오류와 없는 측정위치 (변이 �
     render(el as ReactElement);
     expect(screen.getByText('상세: 연결 끊김')).toBeInTheDocument();
     expect(headerProps.entry).toEqual([{ email: 'u1@example.com' }]);
+    expect(headerProps.site).toEqual([]);
     expect(formProps.current).toBeNull();
   });
 
-  it('?site= 측정위치 목록 조회가 실패하면 고르기 대신 오류 안내를 그린다', async () => {
+  // 리뷰 Important 2: 오류 화면은 "현장을 아직 모르므로" 진입 헤더를 그렸지만, 아래 두 경로는 오류가 나기 전에 현장 행을
+  // 이미 읽었다 - 현장 밖 경로의 현장 화면은 읽어 둔 현장으로 SiteHeader를 그린다(셸 계약). 현장을 정말 모르는 경로
+  // (측정위치부터 못 읽음, 현장 행을 못 읽음)만 진입 헤더다. 오류 문구는 그대로다.
+  it('?site= 측정위치 목록 조회가 실패해도 현장은 이미 읽었으므로 그 현장 헤더로 오류 안내를 그린다', async () => {
     vi.mocked(createClient).mockResolvedValue({
       from: (t: string) => {
         if (t === 'sites') return table([SITE]);
@@ -449,12 +453,38 @@ describe('NewReportPage 보강 - 조회 오류와 없는 측정위치 (변이 �
     render(el as ReactElement);
     expect(screen.getByText('상세: 권한 없음')).toBeInTheDocument();
     expect(screen.queryByLabelText('측정위치')).toBeNull();
+    expect(headerProps.site).toEqual([{ site: { id: 's1', name: '현장1' }, email: 'u1@example.com' }]);
+    expect(headerProps.entry).toEqual([]);
   });
 
-  it('후보 조회가 실패하면 폼 대신 오류 안내를 그린다', async () => {
+  it('?site= 현장 조회 자체가 실패하면 현장을 모르므로 진입 헤더로 오류 안내를 그린다', async () => {
+    vi.mocked(createClient).mockResolvedValue({
+      from: (t: string) => {
+        if (t === 'sites') return table([], undefined, { message: '연결 끊김' });
+        if (t === 'locations') return table([location]);
+        throw new Error(`예상치 못한 테이블: ${t}`);
+      },
+    } as never);
+    const el = await NewReportPage({ searchParams: Promise.resolve({ site: 's1' }) });
+    render(el as ReactElement);
+    expect(screen.getByText('상세: 연결 끊김')).toBeInTheDocument();
+    expect(headerProps.entry).toEqual([{ email: 'u1@example.com' }]);
+    expect(headerProps.site).toEqual([]);
+  });
+
+  it('후보 조회가 실패하면 폼 대신 오류 안내를 이미 읽은 현장의 헤더로 그린다', async () => {
     await renderPage([], undefined, [SITE], { analysesError: { message: '시간 초과' } });
     expect(screen.getByText('상세: 시간 초과')).toBeInTheDocument();
     expect(formProps.current).toBeNull();
+    expect(headerProps.site).toEqual([{ site: { id: 's1', name: '현장1' }, email: 'u1@example.com' }]);
+    expect(headerProps.entry).toEqual([]);
+  });
+
+  it('후보 조회가 실패했는데 현장 행을 읽지 못했으면(RLS 등) 진입 헤더로 오류 안내를 그린다', async () => {
+    await renderPage([], undefined, [], { analysesError: { message: '시간 초과' } });
+    expect(screen.getByText('상세: 시간 초과')).toBeInTheDocument();
+    expect(headerProps.entry).toEqual([{ email: 'u1@example.com' }]);
+    expect(headerProps.site).toEqual([]);
   });
 });
 

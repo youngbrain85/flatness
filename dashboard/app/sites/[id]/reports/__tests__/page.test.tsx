@@ -203,4 +203,13 @@ describe('SiteReportsPage 보강 (변이 실험으로 드러난 빈틈)', () => 
     expect(screen.getByText('상세: 권한 없음')).toBeInTheDocument();
     expect(screen.queryByRole('table')).toBeNull();
   });
+
+  // 리뷰 Important 1: 빈 안내 조건이 보고서 수(reports.length)가 아니라 측정위치 수(scopeIds.length)를 보게 바뀌어도
+  // 위 단언은 통과했다 - 측정위치가 없는 현장만 있었고, 측정위치는 있는데 보고서가 0건인 흔한 빈 현장이 없었다.
+  it('측정위치는 있는데 보고서가 0건인 현장은 보고서를 조회한 뒤 빈 안내를 보이고 표는 그리지 않는다', async () => {
+    const { calls } = await renderPage({ reports: [] });
+    expect(calls).toContainEqual(['reports', 'in', 'location_id', ['l1', 'l2']]);
+    expect(screen.getByText('이 현장에는 아직 보고서가 없습니다. 새 보고서 버튼으로 만드세요.')).toBeInTheDocument();
+    expect(screen.queryByRole('table')).toBeNull();
+  });
 });
