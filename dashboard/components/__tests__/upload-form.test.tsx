@@ -714,48 +714,76 @@ describe('UploadForm 실패 경로·업로드 중 잠금 (T6 변이 보강)', ()
     ['오류도 행도 없으면 기본 문구를', { data: null, error: null }, '스캔 등록 실패'],
   ] as const)('scans insert 가 실패하면 %s 보이고 저장소·잡·이동 없이 버튼을 다시 연다', async (_l, scansInsertResult, text) => {
     const storageUpload = vi.fn();
+    const scansUpdate = vi.fn();
     const rpc = vi.fn();
-    vi.mocked(createClient).mockReturnValue(stubSupabase(null, { scansInsertResult, storageUpload, rpc }) as never);
+    vi.mocked(createClient).mockReturnValue(stubSupabase(null, { scansInsertResult, storageUpload, scansUpdate, rpc }) as never);
     const { container } = await readyForm();
     pickFile('scan.ply');
     submitForm(container);
 
     expect(await screen.findByText(text)).toBeInTheDocument();
     expect(storageUpload).not.toHaveBeenCalled();
-    expect(rpc).not.toHaveBeenCalledWith('fn_enqueue_job', expect.anything());
-    expect(pushMock).not.toHaveBeenCalled();
-    expect(screen.getByRole('button', { name: '업로드 후 사전 검사' })).toBeEnabled();
-  });
-
-  it.each([
-    ['Error 면 그 메시지를', { storageError: new Error('버킷 없음') }, '파일 업로드에 실패했습니다: 버킷 없음'],
-    ['Error 가 아닌 값이면 기본 문구를', { storageThrows: 'boom' }, '업로드에 실패했습니다'],
-  ] as const)('저장소 업로드가 실패하면 %s 보이고 raw 경로 반영·잡 등록·이동을 하지 않는다', async (_l, spies, text) => {
-    const scansUpdate = vi.fn();
-    const rpc = vi.fn();
-    vi.mocked(createClient).mockReturnValue(stubSupabase(null, { ...spies, scansUpdate, rpc }) as never);
-    const { container } = await readyForm();
-    pickFile('scan.ply');
-    submitForm(container);
-
-    expect(await screen.findByText(text)).toBeInTheDocument();
+    // 스캔 행이 만들어지지 않았으니 되돌릴 것도 없다(soft delete 를 보내지 않는다)
     expect(scansUpdate).not.toHaveBeenCalled();
     expect(rpc).not.toHaveBeenCalledWith('fn_enqueue_job', expect.anything());
     expect(pushMock).not.toHaveBeenCalled();
     expect(screen.getByRole('button', { name: '업로드 후 사전 검사' })).toBeEnabled();
   });
 
-  it('raw_file_path 반영이 실패하면 그 오류를 보이고 잡을 걸지 않는다', async () => {
+  // 업로드 중간 실패(사용자 결정 2026-10-18): 이미 만든 scans 행을 그대로 두면 잡 없는
+  // 'uploaded' 스캔이 대시보드 할 일·측정위치 트리에 영원히 "업로드됨"으로 남고 화면에서
+  // 지울 길도 없다. 잡 등록 실패 경로와 같이 그 행을 soft delete 하고 다시 시도하라고 알린다.
+  it.each([
+    ['Error 면 그 메시지로', { storageError: new Error('버킷 없음') }, '파일 업로드에 실패했습니다: 버킷 없음.'],
+    ['Error 가 아닌 값이면 기본 문구로', { storageThrows: 'boom' }, '업로드에 실패했습니다.'],
+  ] as const)('저장소 업로드가 실패하면 %s 알리고, 만든 스캔 행을 되돌리며 raw 경로 반영·잡 등록·이동을 하지 않는다', async (_l, spies, text) => {
+    const scansUpdate = vi.fn();
+    const scansUpdateEq = vi.fn();
     const rpc = vi.fn();
-    vi.mocked(createClient).mockReturnValue(
-      stubSupabase(null, { rawPathError: { message: '경로 반영 실패' }, rpc }) as never);
+    vi.mocked(createClient).mockReturnValue(stubSupabase(null, { ...spies, scansUpdate, scansUpdateEq, rpc }) as never);
     const { container } = await readyForm();
     pickFile('scan.ply');
     submitForm(container);
 
-    expect(await screen.findByText('경로 반영 실패')).toBeInTheDocument();
+    expect(await screen.findByText(`${text} 업로드한 스캔은 등록되지 않았습니다. 다시 시도하세요.`)).toBeInTheDocument();
+    expect(scansUpdate).not.toHaveBeenCalledWith(expect.objectContaining({ raw_file_path: expect.anything() }));
+    expect(scansUpdate).toHaveBeenCalledTimes(1);
+    expect(scansUpdate).toHaveBeenLastCalledWith({ deleted_at: expect.any(String) });
+    expect(scansUpdateEq).toHaveBeenLastCalledWith('id', 'scan1');
     expect(rpc).not.toHaveBeenCalledWith('fn_enqueue_job', expect.anything());
     expect(pushMock).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: '업로드 후 사전 검사' })).toBeEnabled();
+  });
+
+  it('raw_file_path 반영이 실패하면 그 오류를 알리고, 만든 스캔 행을 되돌리며 잡을 걸지 않는다', async () => {
+    const scansUpdate = vi.fn();
+    const scansUpdateEq = vi.fn();
+    const rpc = vi.fn();
+    vi.mocked(createClient).mockReturnValue(
+      stubSupabase(null, { rawPathError: { message: '경로 반영 실패' }, scansUpdate, scansUpdateEq, rpc }) as never);
+    const { container } = await readyForm();
+    pickFile('scan.ply');
+    submitForm(container);
+
+    expect(await screen.findByText('경로 반영 실패. 업로드한 스캔은 등록되지 않았습니다. 다시 시도하세요.')).toBeInTheDocument();
+    expect(scansUpdate).toHaveBeenLastCalledWith({ deleted_at: expect.any(String) });
+    expect(scansUpdateEq).toHaveBeenLastCalledWith('id', 'scan1');
+    expect(rpc).not.toHaveBeenCalledWith('fn_enqueue_job', expect.anything());
+    expect(pushMock).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: '업로드 후 사전 검사' })).toBeEnabled();
+  });
+
+  it('저장소 실패 뒤 되돌림마저 실패하면 정리되지 않았다고 사실대로 알린다', async () => {
+    vi.mocked(createClient).mockReturnValue(stubSupabase(null, {
+      storageError: new Error('버킷 없음'), softDeleteError: { message: '연결 끊김' },
+    }) as never);
+    const { container } = await readyForm();
+    pickFile('scan.ply');
+    submitForm(container);
+
+    expect(await screen.findByText(/파일 업로드에 실패했습니다: 버킷 없음\. 업로드한 스캔을 정리하지도 못했습니다\(연결 끊김\)/)).toBeInTheDocument();
+    expect(screen.queryByText(/등록되지 않았습니다/)).toBeNull();
+    expect(screen.getByRole('button', { name: '업로드 후 사전 검사' })).toBeEnabled();
   });
 
   it.each([
