@@ -115,6 +115,26 @@ describe('NewSiteCard 입력 정리와 검증', () => {
     resolveInsert({ data: { id: 's9' }, error: null });
     await vi.waitFor(() => expect(pushMock).toHaveBeenCalledWith('/sites/s9'));
   });
+
+  // 최종 리뷰: 저장 중에 "취소"로 카드를 닫으면 insert 는 그대로 끝나 현장이 생기고 화면은 이동한다 - 저장 중에는 막는다.
+  it('저장 중에는 "취소"도 비활성이라 눌러도 onCancel 을 부르지 않는다', async () => {
+    let resolveInsert!: (r: InsertResult) => void;
+    const pending = new Promise<InsertResult>((r) => { resolveInsert = r; });
+    const onCancel = vi.fn();
+    vi.mocked(createClient).mockReturnValue(stubSupabase(pending) as never);
+    renderCard({ onCancel });
+    const cancel = screen.getByRole('button', { name: '취소' });
+    expect(cancel).not.toBeDisabled();
+
+    fireEvent.change(nameInput(), { target: { value: '한밭대 본관' } });
+    fireEvent.click(submit());
+
+    expect(cancel).toBeDisabled();
+    fireEvent.click(cancel);
+    expect(onCancel).not.toHaveBeenCalled();
+    resolveInsert({ data: { id: 's9' }, error: null });
+    await vi.waitFor(() => expect(pushMock).toHaveBeenCalledWith('/sites/s9'));
+  });
 });
 
 describe('NewSiteCard 해부 (아트보드 EntrySearch "새 현장 등록")', () => {

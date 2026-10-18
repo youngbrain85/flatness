@@ -73,7 +73,8 @@ export function NewSiteCard({ initialName, nameRef, onCancel }: {
         </FormField>
         {error && <p role="alert" className="text-sm text-err">{error}</p>}
         <div className="flex flex-wrap items-center justify-end gap-3">
-          <Button onClick={onCancel}>취소</Button>
+          {/* 저장 중에 카드를 닫아도 insert 는 끝나 현장이 생기고 이동한다 - 저장이 끝날 때까지 취소도 막는다 */}
+          <Button onClick={onCancel} disabled={saving}>취소</Button>
           <Button type="submit" variant="primary" disabled={saving}>
             <Icon name="plus" />
             현장 등록

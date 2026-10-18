@@ -95,6 +95,19 @@ describe('SiteFinder 새 현장 카드 (펼치기 · 접기 · 초점)', () => {
     expect(nameInput().value).toBe('');
   });
 
+  // 최종 리뷰: 닫힌 카드는 DOM 에 없으므로 aria-controls 가 없는 id 를 가리키면 안 된다(계정 메뉴·현장 바꾸기와 같은 규칙).
+  it('"새 현장" 토글은 카드가 닫혀 있으면 aria-controls 를 달지 않고, 열면 DOM 에 있는 카드 id(newSiteCard)를 가리킨다', () => {
+    render(<SiteFinder rows={ROWS} totals={TOTALS} />);
+    expect(toggleButton()).not.toHaveAttribute('aria-controls');
+    expect(document.getElementById('newSiteCard')).toBeNull();
+    fireEvent.click(toggleButton());
+    expect(toggleButton()).toHaveAttribute('aria-controls', 'newSiteCard');
+    expect(document.getElementById('newSiteCard')).not.toBeNull();
+    fireEvent.click(toggleButton());
+    expect(toggleButton()).not.toHaveAttribute('aria-controls');
+    expect(document.getElementById('newSiteCard')).toBeNull();
+  });
+
   it('다시 누르면 카드를 접는다', () => {
     render(<SiteFinder rows={ROWS} totals={TOTALS} />);
     fireEvent.click(toggleButton());

@@ -79,8 +79,8 @@ export function SiteFinder({ rows, totals }: { rows: EntrySiteRow[]; totals: Ent
               onChange={(e) => setQuery(e.target.value)}
               className="min-h-[52px] w-full rounded-control border border-line-3 bg-ground pl-[46px] pr-4 text-left text-[17px] text-ink placeholder:text-muted" />
           </div>
-          {/* 포커스 외곽선은 전역 :focus-visible(globals.css)이 그린다 */}
-          <button ref={toggleRef} type="button" aria-expanded={open} aria-controls="newSiteCard" onClick={toggle}
+          {/* 포커스 외곽선은 전역 :focus-visible(globals.css)이 그린다. 닫힌 카드는 DOM 에 없어 aria-controls 는 열렸을 때만 단다 */}
+          <button ref={toggleRef} type="button" aria-expanded={open} aria-controls={open ? 'newSiteCard' : undefined} onClick={toggle}
             className={`inline-flex min-h-[52px] items-center justify-center gap-2 rounded-control border px-5 text-[15px] font-medium text-ink ${open ? 'border-ink bg-surface-2' : 'border-line-3 bg-transparent'}`}>
             <Icon name="plus" />
             <span>새 현장</span>

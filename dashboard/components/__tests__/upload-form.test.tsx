@@ -530,6 +530,21 @@ describe('UploadForm 다크 C안 해부 (T6)', () => {
     await waitFor(() => expect(screen.getByText('floor-kcs')).toBeInTheDocument());
   });
 
+  // 최종 리뷰: 닫힌 패널은 DOM 에 없으므로 aria-controls 가 없는 id 를 가리키면 안 된다(계정 메뉴·현장 바꾸기와 같은 규칙).
+  it('"새 측정위치" 토글은 패널이 닫혀 있으면 aria-controls 를 달지 않고, 열면 DOM 에 있는 패널 id 를 가리킨다', async () => {
+    renderForm();
+    const toggle = screen.getByRole('button', { name: '새 측정위치' });
+    expect(toggle).not.toHaveAttribute('aria-controls');
+    fireEvent.click(toggle);
+    const panelId = toggle.getAttribute('aria-controls');
+    expect(panelId).toBeTruthy();
+    expect(document.getElementById(panelId!)).not.toBeNull();
+    fireEvent.click(toggle);
+    expect(toggle).not.toHaveAttribute('aria-controls');
+    expect(document.getElementById(panelId!)).toBeNull();
+    await settle();
+  });
+
   it('제출 버튼만 주 버튼이고, 미니폼을 열어도 주 버튼은 하나다(저장은 보조, 취소는 글자 버튼)', async () => {
     const { container } = renderForm();
     fireEvent.click(screen.getByRole('button', { name: '새 측정위치' }));
@@ -623,6 +638,8 @@ describe('UploadForm 저장 값·잡 등록 (T6 변이 보강)', () => {
       stubSupabase(null, { scansInsert, scansUpdate, scansUpdateEq, rpc }) as never);
     const { container } = await readyForm();
     fireEvent.click(screen.getByLabelText('벽면'));
+    // 표면을 바꾸면 기준을 다시 불러오고, 그동안은 목록·선택이 비어 제출이 막힌다(최종 리뷰 픽스) - 벽면 기준이 온 뒤에 낸다
+    await settle();
     fireEvent.click(screen.getByLabelText('원시 점군'));
     fireEvent.change(screen.getByLabelText('측정일자'), { target: { value: '2026-09-03' } });
     fireEvent.change(screen.getByLabelText('장비'), { target: { value: ' iPhone 15 ' } });
@@ -668,6 +685,8 @@ describe('UploadForm 저장 값·잡 등록 (T6 변이 보강)', () => {
     fireEvent.click(screen.getByLabelText('벽면'));
     fireEvent.click(screen.getByLabelText('원시 점군'));
     fireEvent.click(screen.getByLabelText('기존 결과 가져오기(CSV/JSON)'));
+    // 임포트로 바꾸면 바닥 기준을 다시 불러오고, 그동안은 목록·선택이 비어 제출이 막힌다(최종 리뷰 픽스) - 온 뒤에 낸다
+    await settle();
     pickFile('result.json', /결과 파일 \(csv\/json\)/);
     submitForm(container);
 
@@ -887,6 +906,26 @@ describe('UploadForm 적용 기준 (T6 변이 보강)', () => {
     submitForm(container);
     expect(screen.getByText('적용 기준을 선택하세요.')).toBeInTheDocument();
     expect(scansInsert).not.toHaveBeenCalled();
+  });
+
+  // 최종 리뷰: 다시 불러오는 동안 옛 목록과 선택이 남아 있으면, 그 사이 제출이 surface='wall' 에 바닥 기준(cr1)을 붙여 저장했다.
+  it('표면을 바꿔 다시 불러오는 동안에는 옛 목록·선택을 치우고 불러오는 중이라 적어, 그 사이 제출해도 저장하지 않는다', async () => {
+    const scansInsert = vi.fn();
+    // 바닥 기준은 바로 오고, 벽면 기준 응답은 끝내 오지 않는다(다시 불러오는 사이를 붙잡아 둔다)
+    const criteriaResult = (p: { p_surface: string }) => (p.p_surface === 'wall'
+      ? new Promise<StubResult>(() => {})
+      : { data: [criteria], error: null });
+    vi.mocked(createClient).mockReturnValue(stubSupabase(null, { criteriaResult, scansInsert }) as never);
+    const { container } = renderForm({ initialLocationId: 'l1' });
+    await screen.findByText('floor-kcs');
+    fireEvent.click(screen.getByLabelText('벽면'));
+    pickFile('scan.ply');
+    submitForm(container);
+
+    expect(scansInsert).not.toHaveBeenCalled();
+    expect(screen.getByText('적용 기준을 선택하세요.')).toBeInTheDocument();
+    expect(screen.getByText('적용 기준을 불러오는 중...')).toBeInTheDocument();
+    expect(screen.queryByText('floor-kcs')).toBeNull();
   });
 
   it('늦게 도착한 옛 응답은 새 응답을 덮지 않는다', async () => {

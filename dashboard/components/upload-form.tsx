@@ -77,6 +77,11 @@ export function UploadForm({ siteId, locations, userId, initialLocationId }: Pro
     (async () => {
       // 이펙트 본문 최상단 동기 setState는 린트 경고 대상이라 IIFE 내부로 통일한다
       if (!siteId) { setCriteria([]); setCriteriaId(''); return; }
+      // 표면(또는 업로드 방식)을 바꿔 다시 불러오는 동안 옛 목록·선택을 남기지 않는다. 남기면 그 사이의 제출이
+      // 새 표면에 옛 표면의 기준을 붙여 저장한다(최종 리뷰). 비워 두면 onSubmit 의 기준 선택 검사가 막는다.
+      setCriteria([]);
+      setCriteriaId('');
+      setCriteriaNote('적용 기준을 불러오는 중...');
       // p_kind 인자를 생략한다 - 기본값 'flatness'가 이 업로드 화면이 의도하는 값과
       // 정확히 일치한다(업로드 폼은 항상 평활도 첫 분석만 만든다. 구배는 스캔 상세의
       // 별도 버튼에서 시작한다 - reanalyze-button.tsx).
@@ -284,7 +289,8 @@ export function UploadForm({ siteId, locations, userId, initialLocationId }: Pro
                     </select>
                   </SelectWrap>
                 </FormField>
-                <button type="button" aria-expanded={showNewLocation} aria-controls={newLocPanelId}
+                {/* 닫힌 패널은 DOM 에 없어 aria-controls 는 열렸을 때만 단다(계정 메뉴·현장 바꾸기와 같은 규칙) */}
+                <button type="button" aria-expanded={showNewLocation} aria-controls={showNewLocation ? newLocPanelId : undefined}
                   onClick={() => setShowNewLocation((v) => !v)}
                   className="inline-flex min-h-11 items-center gap-1.5 self-start px-1 text-sm font-semibold text-ink">
                   <Icon name="plus" />
