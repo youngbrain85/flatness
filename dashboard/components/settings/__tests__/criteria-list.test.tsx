@@ -100,6 +100,10 @@ describe('CriteriaList', () => {
     render(<CriteriaList criteria={rows} siteNames={new Map()} />);
     expect(screen.getByText(/데모 범위 밖입니다/).closest('[data-alert]')).toHaveAttribute('data-alert', 'info');
     expect(screen.getByText('criteria').className).toContain('font-mono');
+    // 문장이 `에서{' '}` + <span>criteria</span> 로 쪼개져 그려지므로 띄어쓰기 하나만 빠져도 화면 문구가 달라진다 - 전문을 고정한다
+    expect(screen.getByText(/데모 범위 밖입니다/).closest('[data-alert]')?.textContent).toContain(
+      '기준 신설·버전 개정·현장별 재정의 추가는 데모 범위 밖입니다. Supabase SQL Editor에서 criteria 테이블에 직접 추가하세요(부분 유니크 제약: 활성 행 기준 (surface, name) 유일).',
+    );
   });
 });
 
