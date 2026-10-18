@@ -58,7 +58,8 @@ export function LocationTree({ tree, scansByLocation, siteId }: {
                   {f.rooms.map((r) => (
                     <div key={r.room} className="flex min-w-0 flex-col gap-2">
                       <h4 className="text-sm font-medium text-muted [overflow-wrap:anywhere]">{r.room || '(공간 미지정)'}</h4>
-                      <ul className="flex flex-auto flex-col gap-2">
+                      {/* role="list": Tailwind preflight 의 list-style: none 때문에 Safari VoiceOver 가 목록 의미를 버리지 않게 직접 단다 */}
+                      <ul role="list" className="flex flex-auto flex-col gap-2">
                         {r.locations.map((l) => (
                           <li key={l.id} id={`loc-${l.id}`}
                             className="flex flex-auto flex-col gap-1.5 rounded-card border border-line-2 bg-ground px-4 py-1.5">
@@ -82,7 +83,7 @@ export function LocationTree({ tree, scansByLocation, siteId }: {
                                 스캔 업로드
                               </LinkButton>
                             </div>
-                            <ul className="flex flex-col">
+                            <ul role="list" className="flex flex-col">
                               {(scansByLocation.get(l.id) ?? []).map((s) => (
                                 <li key={s.id} className="border-t border-line">
                                   <Link href={`/scans/${s.id}`}

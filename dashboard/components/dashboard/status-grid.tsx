@@ -43,13 +43,15 @@ export function StatusGrid({ siteId, buildings, locationCount, hiddenCount }: {
   );
 }
 
-// 범례: "최근 판정"(등급 색 막대 + 미분석 빈 막대)과 "새 스캔"(처리 중 고리)
+// 범례: "최근 판정"(등급 색 막대 + 미분석 빈 막대)과 "새 스캔"(처리 중 고리).
+// 이 파일의 ul 은 모두 role="list" 를 직접 단다 - Tailwind preflight 의 list-style: none 때문에 Safari VoiceOver 가
+// 목록 의미를 버리지 않게.
 function GridLegend() {
   return (
     <div className="flex flex-wrap items-center gap-x-7 gap-y-2">
       <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1.5">
         <span className="font-mono text-[11px] tracking-[0.08em] text-dim">최근 판정</span>
-        <ul aria-label="최근 판정 범례" className="flex flex-wrap items-center gap-x-3.5 gap-y-1.5 font-mono text-xs text-ink-2">
+        <ul role="list" aria-label="최근 판정 범례" className="flex flex-wrap items-center gap-x-3.5 gap-y-1.5 font-mono text-xs text-ink-2">
           {LEGEND_GRADES.map((g) => (
             <li key={g} className="inline-flex items-center gap-1.5 whitespace-nowrap">
               <span aria-hidden="true" className={`h-1.5 w-4 flex-none rounded-full ${GRADE_CLASS[g].bg}`} />
@@ -64,7 +66,7 @@ function GridLegend() {
       </div>
       <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1.5">
         <span className="font-mono text-[11px] tracking-[0.08em] text-dim">새 스캔</span>
-        <ul aria-label="스캔 상태 범례" className="flex flex-wrap items-center gap-x-3.5 gap-y-1.5 font-mono text-xs text-ink-2">
+        <ul role="list" aria-label="스캔 상태 범례" className="flex flex-wrap items-center gap-x-3.5 gap-y-1.5 font-mono text-xs text-ink-2">
           <li className="inline-flex items-center gap-1.5 whitespace-nowrap">
             <span aria-hidden="true" className="h-2 w-2 flex-none rounded-full border-2 border-ink" />
             처리 중
@@ -90,7 +92,7 @@ function FloorRow({ floor }: { floor: DashFloor }) {
   return (
     <div className="flex flex-wrap items-start gap-x-4 gap-y-2.5 border-t border-line py-3.5 last:pb-0">
       <h4 className="flex-[0_0_48px] pt-0.5 font-mono text-[13px] font-medium text-ink-2 [overflow-wrap:anywhere]">{floor.floor || '(층 미지정)'}</h4>
-      <ul className="grid min-w-0 flex-[1_1_280px] grid-cols-[repeat(auto-fill,minmax(min(100%,200px),1fr))] gap-2.5">
+      <ul role="list" className="grid min-w-0 flex-[1_1_280px] grid-cols-[repeat(auto-fill,minmax(min(100%,200px),1fr))] gap-2.5">
         {floor.tiles.map((t) => (
           <li key={t.locationId} className="flex min-w-0">
             <TileLink tile={t} />

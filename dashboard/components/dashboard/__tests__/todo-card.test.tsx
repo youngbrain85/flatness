@@ -73,3 +73,14 @@ describe('TodoCard 긴 이름', () => {
     expect(detail?.className.split(' ')).toContain('[overflow-wrap:anywhere]');
   });
 });
+
+// 최종 리뷰: Tailwind preflight 가 목록에 list-style: none 을 걸면 Safari VoiceOver 가 ul 을 목록으로 읽지 않는다.
+// 그래서 ul 에 role="list" 를 직접 단다(jsdom 은 암묵 역할로 list 를 주므로 getByRole 이 아니라 속성을 본다).
+describe('TodoCard 목록 의미 (Safari VoiceOver)', () => {
+  it('할 일 목록 ul 은 role="list" 를 직접 단다', () => {
+    const { container } = render(<TodoCard todos={TODOS} noScanAttention={false} />);
+    const lists = [...container.querySelectorAll('ul')];
+    expect(lists).toHaveLength(1);
+    for (const ul of lists) expect(ul).toHaveAttribute('role', 'list');
+  });
+});

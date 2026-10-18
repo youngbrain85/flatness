@@ -159,3 +159,15 @@ describe('StatusGrid 긴 이름 줄바꿈', () => {
       .toEqual(expect.arrayContaining(['min-w-0', '[overflow-wrap:anywhere]']));
   });
 });
+
+// 최종 리뷰: Tailwind preflight 가 목록에 list-style: none 을 걸면 Safari VoiceOver 가 ul 을 목록으로 읽지 않는다.
+// 그래서 ul 에 role="list" 를 직접 단다(jsdom 은 암묵 역할로 list 를 주므로 getByRole 이 아니라 속성을 본다).
+describe('StatusGrid 목록 의미 (Safari VoiceOver)', () => {
+  it('범례 둘과 층마다의 타일 목록 ul 은 모두 role="list" 를 직접 단다', () => {
+    const { container } = renderGrid();
+    const lists = [...container.querySelectorAll('ul')];
+    // 범례 2(최근 판정 · 스캔 상태) + 층 3(101동 5층 · 101동 3층 · 102동 3층)
+    expect(lists).toHaveLength(5);
+    for (const ul of lists) expect(ul).toHaveAttribute('role', 'list');
+  });
+});

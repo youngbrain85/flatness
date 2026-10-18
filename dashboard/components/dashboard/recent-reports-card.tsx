@@ -13,7 +13,8 @@ export function RecentReportsCard({ siteId, reports }: { siteId: string; reports
         {reports.length === 0 ? (
           <p className="text-sm text-muted">아직 보고서가 없습니다.</p>
         ) : (
-          <ul className="flex flex-col">
+          // role="list": Tailwind preflight 의 list-style: none 때문에 Safari VoiceOver 가 목록 의미를 버리지 않게 직접 단다
+          <ul role="list" className="flex flex-col">
             {reports.map((r) => (
               <li key={r.id} className="flex flex-col gap-0.5 border-t border-line pb-2.5 pt-1.5">
                 <Link href={r.href}

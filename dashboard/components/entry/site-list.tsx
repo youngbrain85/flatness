@@ -32,9 +32,10 @@ export function siteStatus(row: Pick<EntrySiteRow, 'counts' | 'na' | 'inProgress
 }
 
 export function SiteList({ rows }: { rows: EntrySiteRow[] }) {
-  // 줄 사이 1px 선은 목록 바탕(line)이 gap-px 틈으로 비쳐 보이는 것이다(아트보드 그대로)
+  // 줄 사이 1px 선은 목록 바탕(line)이 gap-px 틈으로 비쳐 보이는 것이다(아트보드 그대로).
+  // role="list": Tailwind preflight 의 list-style: none 때문에 Safari VoiceOver 가 목록 의미를 버리지 않게 직접 단다.
   return (
-    <ul className="flex flex-col gap-px overflow-hidden rounded-card border border-line-2 bg-line">
+    <ul role="list" className="flex flex-col gap-px overflow-hidden rounded-card border border-line-2 bg-line">
       {rows.map((row) => (
         <li key={row.id} className="flex">
           <SiteRowLink row={row} />

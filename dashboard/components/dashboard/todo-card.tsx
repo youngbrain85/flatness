@@ -9,8 +9,9 @@ export function TodoCard({ todos, noScanAttention }: { todos: DashTodo[]; noScan
   return (
     <Container title="할 일" counter={todos.length}>
       <div className="flex flex-col gap-3.5">
+        {/* role="list": Tailwind preflight 의 list-style: none 때문에 Safari VoiceOver 가 목록 의미를 버리지 않게 직접 단다 */}
         {todos.length > 0 && (
-          <ul className="flex flex-col">
+          <ul role="list" className="flex flex-col">
             {todos.map((t) => (
               <li key={t.key} data-todo={t.kind} className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-line py-2.5">
                 <div className="flex min-w-0 flex-[1_1_180px] flex-col gap-1">
