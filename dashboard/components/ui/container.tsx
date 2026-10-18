@@ -11,9 +11,9 @@ export function Container({ title, counter, description, actions, padded = true,
   const hasHeader = title !== undefined || actions !== undefined;
   const body = padded ? `px-[22px] pb-5 ${hasHeader ? 'pt-4' : 'pt-5'}` : '';
   return (
-    <section className={`flex flex-col rounded-card border border-line-2 bg-surface${padded ? '' : ' overflow-hidden'}${className ? ` ${className}` : ''}`}>
+    <section className={'flex flex-col rounded-card border border-line-2 bg-surface' + (padded ? '' : ' overflow-hidden') + (className ? ` ${className}` : '')}>
       {hasHeader && (
-        <header className={`flex flex-wrap items-start justify-between gap-x-4 gap-y-3 px-[22px] pt-5${padded ? '' : ' pb-4'}`}>
+        <header className={'flex flex-wrap items-start justify-between gap-x-4 gap-y-3 px-[22px] pt-5' + (padded ? '' : ' pb-4')}>
           <div className="flex min-w-0 flex-col gap-4">
             {title !== undefined && (
               <h2 className="font-heading text-[19px] font-semibold">

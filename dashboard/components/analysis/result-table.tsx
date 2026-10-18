@@ -34,10 +34,11 @@ export function ResultTable({ stats, cells }: { stats: Stats; cells: CellRow[] }
           const wall = stats.walls?.find((w) => w.wall_id === z.zone_id);
           return (
             <tr key={String(z.zone_id)} className={tableClass.row}>
-              <td className={`${tableClass.td} font-semibold`}>
+              {/* 아트보드 ScanDone 표는 모든 칸이 nowrap - 390 에서 '구역 1'·'정상'이 글자마다 꺾이지 않게(넘치면 상자 안 스크롤) */}
+              <td className={`${tableClass.td} whitespace-nowrap font-semibold`}>
                 {z.zone_id === null ? '전체' : isWall ? `벽 ${z.zone_id}` : `구역 ${z.zone_id}`}
               </td>
-              {!isWall && <td className={tableClass.td}>{zone ? ZONE_STATUS_LABEL[zone.status] : '-'}</td>}
+              {!isWall && <td className={`${tableClass.td} whitespace-nowrap`}>{zone ? ZONE_STATUS_LABEL[zone.status] : '-'}</td>}
               {!isWall && <td className={tableClass.tdNum}>{zone ? zone.level_m : '-'}</td>}
               {!isWall && <td className={tableClass.tdNum}>{zone ? zone.area_m2 : '-'}</td>}
               {isWall && <td className={tableClass.tdNum}>{wall ? `${wall.length_m} x ${wall.height_m}` : '-'}</td>}

@@ -9,7 +9,7 @@ vi.mock('@/lib/supabase/client', () => ({ createClient: vi.fn() }));
 import { createClient } from '@/lib/supabase/client';
 import { RegistrationWorkbench } from '../registration-workbench';
 import { FakeImage, recordingCtx } from './canvas-stub';
-import { checkClass } from '@/components/ui/form';
+import { checkLgClass } from '@/components/ui/form';
 import { plainPngUrl } from '@/lib/domain/height-view';
 import type { HeightViewMeta } from '@/lib/domain/height-view';
 import { imageCornersM, overlayAffine, overlayView } from '@/lib/domain/registration';
@@ -359,7 +359,8 @@ describe('RegistrationWorkbench 결과 표시 (스펙 §9.3.2·§9.3.4)', () => 
     expect(metric('정합 잔차 RMSE')).toHaveTextContent('1.01mm');
     expect(metric('ICP 반복')).toHaveTextContent('12');
     expect(screen.getByText(/수직 방향 일치만 보증/).closest('[data-alert]')).toHaveAttribute('data-alert', 'warning');
-    expect(screen.getByRole('checkbox', { name: /포개지는/ }).className).toBe(checkClass);
+    // 아트보드 RegistrationDetail 확인 체크박스는 18px(checkLgClass)
+    expect(screen.getByRole('checkbox', { name: /포개지는/ }).className).toBe(checkLgClass);
     const openMerged = screen.getByRole('button', { name: /병합 스캔/ });
     expect(openMerged).toBeDisabled();
     expect(openMerged.className).not.toContain('bg-ink');

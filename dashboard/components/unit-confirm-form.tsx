@@ -13,7 +13,7 @@ import type { ScanRow } from '@/lib/domain/types';
 import { UNIT_OPTIONS } from '@/lib/upload/validate';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { checkClass } from '@/components/ui/form';
+import { checkLgClass } from '@/components/ui/form';
 import { Icon } from '@/components/ui/icons';
 import { Stage } from '@/components/ui/stage';
 
@@ -121,7 +121,7 @@ export function UnitConfirmForm({ scan, userId }: { scan: ScanRow; userId: strin
             <label key={o.value}
               className={`flex min-h-11 cursor-pointer items-center gap-3 rounded-control border px-3.5 text-[15px] text-ink ${
                 on ? 'border-ink bg-surface-2 font-semibold' : 'border-line-3 bg-ground font-medium'}`}>
-              <input type="radio" name="unit-scale" className={checkClass}
+              <input type="radio" name="unit-scale" className={checkLgClass}
                 checked={on} onChange={() => setUnitScale(o.value)} />
               {o.label}
             </label>

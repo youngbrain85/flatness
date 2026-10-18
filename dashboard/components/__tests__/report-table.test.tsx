@@ -221,3 +221,14 @@ describe('ReportTable 보강 (변이 실험으로 드러난 빈틈)', () => {
     expect(screen.getByText('조건에 맞는 보고서가 없습니다').closest('td')).toHaveAttribute('colspan', '4');
   });
 });
+
+// Task 12 휴대폰 점검: 도구 줄의 '전체 보기'는 문장 속 링크가 아니라 단독 링크다 - 44px 터치 대상(캡처 20px).
+// 아트보드 DashStatus 의 '…전체 보기' 단독 링크도 inline-flex · min-height 44px 다.
+describe('ReportTable 측정위치 필터 링크 터치 대상', () => {
+  it('"전체 보기"는 44px 높이의 inline-flex 링크다', () => {
+    render(<ReportTable rows={[rows[0]]}
+      locationFilter={{ label: '101동 / 3층 / 거실', clearHref: '/sites/s1/reports' }} />);
+    const link = screen.getByRole('link', { name: '전체 보기' });
+    expect(link.className.split(' ')).toEqual(expect.arrayContaining(['inline-flex', 'min-h-11', 'items-center']));
+  });
+});

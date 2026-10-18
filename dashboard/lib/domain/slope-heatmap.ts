@@ -17,14 +17,6 @@ import { worldToPx } from './slope-cells';
 import type { SlopeTransform } from './slope-cells';
 import type { SlopeCellRow, SlopeGrade } from './types';
 
-// 엔진 engine/flatness/outputs/slope_map.py의 _COLOR와 같은 값(엔진 PNG 색의 기록).
-// 화면은 이 hex 를 쓰지 않는다 - 캔버스는 SCREEN_SLOPE_GRADE_COLOR(palette.ts), 범례·막대·표의 점은
-// 등급 토큰 클래스다. 이 표는 엔진이 내는 구배 등급 문자열의 전수 목록으로도 쓰인다
-// (lib/domain/__tests__/palette.test.ts 가 화면 색 표와 키 집합을 대조한다). 지우거나 값을 바꾸지 않는다.
-export const SLOPE_GRADE_COLOR: Record<SlopeGrade, string> = {
-  적합: '#3d8b3d', 경계: '#d6c11e', 보수: '#e07b1a', 재시공: '#c0392b', 판정불가: '#9e9e9e',
-};
-
 /** Canvas에 그릴 셀 하나 - 기하(slope_cells.json에서 온 SlopeCellRow) + 등급.
  *
  * grade가 어디서 왔는지는 이 파일의 관심사가 아니다(호출부가 이미 판정된 값을

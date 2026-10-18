@@ -78,7 +78,7 @@ function GridLegend() {
 function BuildingCard({ id, building }: { id: string; building: DashBuilding }) {
   return (
     <section aria-labelledby={id} className="flex flex-col gap-3.5 rounded-card border border-line-2 bg-surface px-[22px] py-5">
-      <h3 id={id} className="font-heading text-[17px] font-bold leading-[1.3]">{building.building || '(동 미지정)'}</h3>
+      <h3 id={id} className="font-heading text-[17px] font-bold leading-[1.3] [overflow-wrap:anywhere]">{building.building || '(동 미지정)'}</h3>
       <div className="flex flex-col">
         {building.floors.map((f) => <FloorRow key={f.floor} floor={f} />)}
       </div>
@@ -89,7 +89,7 @@ function BuildingCard({ id, building }: { id: string; building: DashBuilding }) 
 function FloorRow({ floor }: { floor: DashFloor }) {
   return (
     <div className="flex flex-wrap items-start gap-x-4 gap-y-2.5 border-t border-line py-3.5 last:pb-0">
-      <h4 className="flex-[0_0_48px] pt-0.5 font-mono text-[13px] font-medium text-ink-2">{floor.floor || '(층 미지정)'}</h4>
+      <h4 className="flex-[0_0_48px] pt-0.5 font-mono text-[13px] font-medium text-ink-2 [overflow-wrap:anywhere]">{floor.floor || '(층 미지정)'}</h4>
       <ul className="grid min-w-0 flex-[1_1_280px] grid-cols-[repeat(auto-fill,minmax(min(100%,200px),1fr))] gap-2.5">
         {floor.tiles.map((t) => (
           <li key={t.locationId} className="flex min-w-0">
@@ -109,7 +109,7 @@ function TileLink({ tile }: { tile: DashTile }) {
       className="flex min-w-0 flex-auto flex-col gap-2 rounded-card border border-line-2 bg-ground px-3.5 py-3 text-ink hover:border-line-3">
       <span aria-hidden="true" className={`block h-1.5 rounded-full ${g ? GRADE_CLASS[g].bg : 'border border-dim'}`} />
       <span className="flex flex-wrap items-baseline justify-between gap-x-2.5 gap-y-0.5">
-        <span className="text-[15px] font-semibold">{tile.label}</span>
+        <span className="min-w-0 text-[15px] font-semibold [overflow-wrap:anywhere]">{tile.label}</span>
         <span className="font-mono text-xs text-muted">{`스캔 ${tile.scanCount}`}</span>
       </span>
       <span className="flex flex-wrap items-baseline gap-x-2.5 gap-y-0.5">

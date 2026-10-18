@@ -13,7 +13,7 @@ export function PageHeader({ crumbs, title, counter, description, actions }: {
       <div className="flex flex-wrap items-end justify-between gap-x-10 gap-y-3.5">
         <div className="flex min-w-0 flex-col gap-2">
           <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-            <h1 className="font-heading text-[clamp(24px,2.6vw,30px)] font-bold leading-[1.2]">{title}</h1>
+            <h1 className="font-heading text-[clamp(24px,2.6vw,30px)] font-bold leading-[1.2] [overflow-wrap:anywhere]">{title}</h1>
             {counter !== undefined && <span className="font-mono text-[13px] text-muted">({counter})</span>}
           </div>
           {description && <p className="text-sm text-muted">{description}</p>}

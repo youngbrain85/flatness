@@ -32,7 +32,9 @@ export function KpiCard({ label, value, unit, tone, className, children }: {
     </p>
   );
   return (
-    <div className={`flex min-w-0 flex-col gap-1.5 rounded-card border border-line-2 bg-surface px-5 py-[18px]${className ? ` ${className}` : ''}`}>
+    // 정적 클래스는 따옴표로 끝낸다 - 템플릿 보간 바로 앞에 붙은 py-[18px] 는 Tailwind 가 못 봐 CSS 가 생성되지 않았다
+    // (KPI 카드 위아래 여백 0, Task 12 화면 대조). __tests__/tailwind-scan.test.ts 가 다시 붙지 않게 지킨다.
+    <div className={'flex min-w-0 flex-col gap-1.5 rounded-card border border-line-2 bg-surface px-5 py-[18px]' + (className ? ` ${className}` : '')}>
       <p className="font-mono text-[11px] tracking-[0.08em] text-dim">{label}</p>
       {children ? <div className="flex flex-wrap items-end gap-x-5 gap-y-2.5">{figure}{children}</div> : figure}
     </div>

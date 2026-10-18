@@ -35,7 +35,7 @@ export const SCAN_STATUS_TYPE: Record<ScanStatus, StatusType> = {
 
 export function StatusIndicator({ type, children, className }: { type: StatusType; children: ReactNode; className?: string }) {
   return (
-    <span data-status={type} className={`inline-flex items-center gap-2 text-sm text-ink${className ? ` ${className}` : ''}`}>
+    <span data-status={type} className={'inline-flex items-center gap-2 text-sm text-ink' + (className ? ` ${className}` : '')}>
       <span aria-hidden="true" data-dot="" className={`h-2 w-2 shrink-0 rounded-full ${DOT[type]}`} />
       {children}
     </span>

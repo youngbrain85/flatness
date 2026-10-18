@@ -18,7 +18,8 @@ describe('KpiGrid', () => {
 describe('KpiCard', () => {
   it('카드(surface · line-2 · 12px) + 눈썹 라벨 + Anton 40px 숫자 + mono 단위', () => {
     const { container } = render(<KpiCard label="최대 편차" value="15.53" unit="mm" />);
-    expect(cls(container.firstElementChild)).toEqual(expect.arrayContaining(['bg-surface', 'border-line-2', 'rounded-card', 'min-w-0']));
+    // 여백 18px 20px(아트보드 padding: 18px 20px). 클래스가 Tailwind 에 보이는지는 __tests__/tailwind-scan.test.ts 가 지킨다
+    expect(cls(container.firstElementChild)).toEqual(expect.arrayContaining(['bg-surface', 'border-line-2', 'rounded-card', 'min-w-0', 'px-5', 'py-[18px]']));
     expect(cls(screen.getByText('최대 편차'))).toEqual(expect.arrayContaining(['font-mono', 'text-[11px]', 'tracking-[0.08em]', 'text-dim']));
     expect(cls(screen.getByText('15.53'))).toEqual(expect.arrayContaining(['font-display', 'text-[40px]']));
     expect(cls(screen.getByText('mm'))).toEqual(expect.arrayContaining(['font-mono', 'text-[13px]', 'text-muted']));

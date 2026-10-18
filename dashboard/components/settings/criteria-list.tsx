@@ -10,7 +10,7 @@ import type { CriteriaRow } from '@/lib/domain/types';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { TableBox, tableClass } from '@/components/ui/data-table';
-import { checkClass } from '@/components/ui/form';
+import { checkLgClass } from '@/components/ui/form';
 
 function Row({ c, onError }: { c: CriteriaRow; onError: (m: string) => void }) {
   const router = useRouter();
@@ -57,7 +57,7 @@ function Row({ c, onError }: { c: CriteriaRow; onError: (m: string) => void }) {
         <div className="flex justify-center">
           <label className="inline-flex min-h-11 min-w-11 cursor-pointer items-center justify-center">
             <input type="checkbox" checked={active} onChange={toggle} aria-label={`${c.name} 활성`}
-              className={checkClass} />
+              className={checkLgClass} />
           </label>
         </div>
       </td>

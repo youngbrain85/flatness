@@ -89,7 +89,28 @@ describe('ResultTable C안 해부 (아트보드 ScanDone 160~192행)', () => {
     expect(screen.getByRole('columnheader', { name: '상태' }).className).toBe(tableClass.th);
     // 셀이 하나뿐인 픽스처라 최대·최소·평균이 모두 10.00이다 - 첫 수치 td(최대)로 해부를 본다
     expect(screen.getAllByText('10.00')[0].className).toBe(tableClass.tdNum);
-    expect(screen.getByText('구역 1').className).toBe(`${tableClass.td} font-semibold`);
+    expect(screen.getByText('구역 1').className).toBe(`${tableClass.td} whitespace-nowrap font-semibold`);
     expect(container.innerHTML).not.toMatch(/\bcs-/);
+  });
+});
+
+// Task 12 휴대폰 점검: 390 에서 '구역 1'·'정상'이 글자마다 꺾였다(최소 폭 720 표 안에서 수치 열이 자리를 먼저 차지한다).
+// 아트보드 ScanDone 표는 모든 칸이 white-space: nowrap 이다(넘치면 표 상자 안에서 가로 스크롤).
+const nowrapCell = (td: HTMLElement) =>
+  td.className.split(' ').includes('whitespace-nowrap') || td.querySelector('.whitespace-nowrap') !== null;
+
+describe('ResultTable 줄바꿈 (아트보드 ScanDone 표: 모든 칸 nowrap)', () => {
+  it('바닥: 구역 이름·상태 칸도 줄바꿈하지 않는다(수치 칸은 tdNum 이 nowrap)', () => {
+    render(<ResultTable stats={floorStats} cells={[cell(1, 10, 'repair')]} />);
+    expect(screen.getByText('구역 1').className.split(' ')).toContain('whitespace-nowrap');
+    expect(screen.getByText('정상').className.split(' ')).toContain('whitespace-nowrap');
+    const cells = screen.getAllByRole('cell');
+    expect(cells.length).toBeGreaterThan(5);
+    expect(cells.filter((td) => !nowrapCell(td)).map((td) => td.textContent)).toEqual([]);
+  });
+  it('벽: 벽 이름 칸도 줄바꿈하지 않는다', () => {
+    render(<ResultTable stats={wallStats} cells={[cell(1, 3, 'pass')]} />);
+    expect(screen.getByText('벽 1').className.split(' ')).toContain('whitespace-nowrap');
+    expect(screen.getAllByRole('cell').filter((td) => !nowrapCell(td)).map((td) => td.textContent)).toEqual([]);
   });
 });

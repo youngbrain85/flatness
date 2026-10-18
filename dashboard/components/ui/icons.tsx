@@ -47,7 +47,7 @@ export function Icon({ name, size = 16, className, ...rest }:
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}
       strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" data-icon={name}
-      className={`shrink-0${className ? ` ${className}` : ''}`} {...rest}>
+      className={'shrink-0' + (className ? ` ${className}` : '')} {...rest}>
       {PATHS[name]}
     </svg>
   );

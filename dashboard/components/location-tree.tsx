@@ -49,21 +49,21 @@ export function LocationTree({ tree, scansByLocation, siteId }: {
     <div className="flex flex-col gap-[22px]">
       {tree.map((b, bi) => (
         <section key={b.building} aria-labelledby={`bld-${bi}`} className="flex flex-col gap-3">
-          <h2 id={`bld-${bi}`} className="text-base font-semibold">{b.building || '(동 미지정)'}</h2>
+          <h2 id={`bld-${bi}`} className="text-base font-semibold [overflow-wrap:anywhere]">{b.building || '(동 미지정)'}</h2>
           <div className={`flex flex-col gap-[18px] ${INDENT}`}>
             {b.floors.map((f) => (
               <div key={f.floor} className="flex flex-col gap-2.5">
-                <h3 className="text-sm font-semibold text-ink-2">{f.floor || '(층 미지정)'}</h3>
+                <h3 className="text-sm font-semibold text-ink-2 [overflow-wrap:anywhere]">{f.floor || '(층 미지정)'}</h3>
                 <div className={`grid grid-cols-[repeat(auto-fill,minmax(min(100%,340px),1fr))] gap-x-3 gap-y-4 ${INDENT}`}>
                   {f.rooms.map((r) => (
                     <div key={r.room} className="flex min-w-0 flex-col gap-2">
-                      <h4 className="text-sm font-medium text-muted">{r.room || '(공간 미지정)'}</h4>
+                      <h4 className="text-sm font-medium text-muted [overflow-wrap:anywhere]">{r.room || '(공간 미지정)'}</h4>
                       <ul className="flex flex-auto flex-col gap-2">
                         {r.locations.map((l) => (
                           <li key={l.id} id={`loc-${l.id}`}
                             className="flex flex-auto flex-col gap-1.5 rounded-card border border-line-2 bg-ground px-4 py-1.5">
                             <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-                              <span className="mr-auto text-[15px] font-semibold">{l.name}</span>
+                              <span className="mr-auto min-w-0 text-[15px] font-semibold [overflow-wrap:anywhere]">{l.name}</span>
                               {/* 단계 F: 같은 위치를 나눠 찍은 두 스캔을 하나로 합치는
                                   진입점. 후보 스캔이 2개 미만이면 그 화면이 이유를
                                   안내하므로 여기서는 조건 없이 보여준다(스캔 개수를

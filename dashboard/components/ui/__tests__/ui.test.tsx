@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { Button, LinkButton, buttonClass } from '../button';
 import { Container } from '../container';
-import { FormField, SelectWrap, checkClass, inputClass, selectClass, textareaClass } from '../form';
+import { FormField, SelectWrap, checkClass, checkLgClass, inputClass, selectClass, textareaClass } from '../form';
 import { SCAN_STATUS_TYPE, StatusIndicator, TONE_STATUS } from '../status-indicator';
 import { Badge, TONE } from '../badge';
 import { Breadcrumbs } from '../breadcrumbs';
@@ -111,6 +111,13 @@ describe('ui primitives (다크 C안)', () => {
     // 포커스 외곽선은 globals.css :focus-visible 이 그린다 - 프리셋이 외곽선을 끄면 안 된다
     for (const c of [inputClass, selectClass, textareaClass]) expect(c).not.toContain('outline-none');
   });
+  // Task 12 화면 대조: 아트보드는 라디오 16px(Upload·ScanDone 구배 기준)이고 체크박스는 18px(RegistrationDetail·ReportNew·
+  // Settings), 단위 확인 라디오도 18px(ScanUnitConfirm)이다 - 하나뿐이던 16px checkClass 를 둘로 나눴다.
+  it('선택 표시 크기: checkClass 는 16px(라디오), checkLgClass 는 18px(체크박스·단위 확인 라디오), 둘 다 accent ink', () => {
+    expect(checkClass.split(' ')).toEqual(expect.arrayContaining(['h-4', 'w-4', 'shrink-0', 'accent-ink']));
+    expect(checkLgClass.split(' ')).toEqual(expect.arrayContaining(['h-[18px]', 'w-[18px]', 'shrink-0', 'accent-ink']));
+    expect(checkLgClass.split(' ')).not.toContain('h-4');
+  });
   it('SelectWrap은 셀렉트 뒤에 chevron 아이콘을 얹는다', () => {
     const { container } = render(<SelectWrap><select className={selectClass}><option>a</option></select></SelectWrap>);
     expect(container.querySelector('[data-icon="chevron-down"]')).toBeInTheDocument();
@@ -204,6 +211,11 @@ describe('ui primitives (다크 C안)', () => {
     expect(screen.getByRole('navigation', { name: '위치' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '저장' })).toBeInTheDocument();
   });
+  // Task 12 휴대폰 점검: 띄어쓰기 없는 긴 현장 이름이 390 에서 h1 을 화면 밖으로 밀었다(가로 스크롤)
+  it('PageHeader: h1 은 띄어쓰기 없는 긴 제목도 칸 안에서 줄바꿈한다(overflow-wrap:anywhere)', () => {
+    render(<PageHeader title="GwangmyeongStationAreaRedevelopmentBlockC7" />);
+    expect(cls(screen.getByRole('heading', { level: 1 }))).toContain('[overflow-wrap:anywhere]');
+  });
   it('PageHeader: crumbs·counter가 없으면 그리지 않는다', () => {
     render(<PageHeader title="보고서" />);
     expect(screen.queryByRole('navigation')).toBeNull();
@@ -223,6 +235,11 @@ describe('ui primitives (다크 C안)', () => {
     expect(cls(screen.getByText('장비'))).toEqual(expect.arrayContaining(['font-mono', 'text-[11px]', 'tracking-[0.08em]', 'text-dim']));
     expect(cls(screen.getByText('iPhone'))).toEqual(expect.arrayContaining(['text-[15px]', 'text-ink']));
     expect(container.innerHTML).not.toMatch(/border-l/);
+  });
+  // Task 12 휴대폰 점검: 띄어쓰기 없는 긴 측정위치 이름이 '스캔 정보' 칸 밖으로 나갔다(390)
+  it('KeyValuePairs: 값은 띄어쓰기 없는 긴 글자도 칸 안에서 줄바꿈한다(overflow-wrap:anywhere)', () => {
+    render(<KeyValuePairs items={[{ label: '측정위치', value: 'LivingRoomNorthWestCornerPanelZoneA12' }]} />);
+    expect(cls(screen.getByText('LivingRoomNorthWestCornerPanelZoneA12'))).toContain('[overflow-wrap:anywhere]');
   });
   it('StatValue: Anton 40px 수치 + mono 13px muted 단위', () => {
     render(<StatValue value={130} unit="건" />);

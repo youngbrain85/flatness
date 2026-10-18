@@ -21,7 +21,8 @@ type SitesLoad =
   | { state: 'done'; sites: SiteOption[] };
 
 // 아트보드 단추: 최소 44px, 좌우 10px, 투명 테두리, Noto Sans KR 15px 700, 꺾쇠 14px
-const TRIGGER = 'inline-flex min-h-11 max-w-full items-center gap-2 rounded-control border border-transparent px-2.5 text-left font-heading text-[15px] font-bold text-ink hover:border-line-3 aria-expanded:border-line-3 aria-expanded:bg-surface-2';
+// min-w-0 + overflow-wrap:anywhere: 띄어쓰기 없는 긴 현장 이름이 390 헤더에서 단추를 화면 밖으로 밀지 않고 줄바꿈한다
+const TRIGGER = 'inline-flex min-h-11 min-w-0 max-w-full items-center gap-2 rounded-control [overflow-wrap:anywhere] border border-transparent px-2.5 text-left font-heading text-[15px] font-bold text-ink hover:border-line-3 aria-expanded:border-line-3 aria-expanded:bg-surface-2';
 // 펼친 모습은 아트보드에 없다(BRIEF-ia-addendum §1) - 카드(surface·line-2·12px) 안 44px 항목, 누름은 surface-2
 const ITEM = 'flex min-h-11 w-full items-center justify-between gap-3 rounded-control px-3 text-left text-sm text-ink-2 hover:bg-surface-2 hover:text-ink';
 

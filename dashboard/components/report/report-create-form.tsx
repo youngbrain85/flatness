@@ -8,7 +8,7 @@ import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Container } from '@/components/ui/container';
-import { FormField, checkClass, inputClass, textareaClass } from '@/components/ui/form';
+import { FormField, checkLgClass, inputClass, textareaClass } from '@/components/ui/form';
 import { GradeBadge } from '@/components/ui/grade';
 import { createClient } from '@/lib/supabase/client';
 import { enqueueJob } from '@/lib/domain/jobs';
@@ -157,16 +157,16 @@ export function ReportCreateForm({ locationId, locationLabel, candidates }: {
                 const whyId = `report-candidate-why-${c.analysis_id}`;
                 return (
                   <div key={c.analysis_id}
-                    className={`flex flex-col border-b border-line px-4 last:border-b-0${blocked ? ' gap-2 pb-4 pt-1.5' : ''}`}>
+                    className={'flex flex-col border-b border-line px-4 last:border-b-0' + (blocked ? ' gap-2 pb-4 pt-1.5' : '')}>
                     <label className={`flex items-center gap-3 text-sm ${blocked ? 'min-h-11 cursor-not-allowed text-dim' : 'min-h-12 cursor-pointer py-1.5'}`}>
-                      <input type="checkbox" className={checkClass} checked={selected.includes(c.analysis_id)}
+                      <input type="checkbox" className={checkLgClass} checked={selected.includes(c.analysis_id)}
                         disabled={blocked} aria-describedby={blocked ? whyId : undefined}
                         onChange={() => toggle(c.analysis_id)} />
                       {/* 종류는 **문구로** 앞세운다. 색만으로 구별하지 않는다(스펙 §7.2) - 등급 배지도 글자를 함께 쓴다.
                           막힌 줄은 등급 색 대신 중립 배지(지금 넣을 수 없는 판정이 눈에 띄지 않게). */}
                       <span className="min-w-0">
                         {ANALYSIS_KIND_LABEL[c.kind]} · {SURFACE_LABEL[c.surface]} ·{' '}
-                        <span className={`font-mono text-[13px]${blocked ? '' : ' text-ink-2'}`}>{c.scanned_at}</span>
+                        <span className={'font-mono text-[13px]' + (blocked ? '' : ' text-ink-2')}>{c.scanned_at}</span>
                         {' '}· 판정{' '}
                         {blocked ? <Badge tone="neutral">{GRADE_LABEL[c.grade]}</Badge> : <GradeBadge grade={c.grade} />}
                       </span>

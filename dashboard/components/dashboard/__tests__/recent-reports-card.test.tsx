@@ -37,3 +37,12 @@ describe('RecentReportsCard', () => {
     expect(screen.getByRole('link', { name: '보고서 전체 보기' })).toHaveAttribute('href', '/sites/s1/reports');
   });
 });
+
+// Task 12 휴대폰 점검: 띄어쓰기 없는 긴 보고서 제목이 카드와 화면 밖으로 나갔다(1440 가로 스크롤 1561/1440)
+describe('RecentReportsCard 긴 제목', () => {
+  it('제목 링크는 overflow-wrap:anywhere 다', () => {
+    const title = 'NorthEastWingBuilding101Extension/Floor03Mezzanine/Penthouse3301SouthTerrace 평활도 보고서';
+    render(<RecentReportsCard siteId="s1" reports={[{ ...REPORTS[0], title }]} />);
+    expect(screen.getByRole('link', { name: title }).className.split(' ')).toContain('[overflow-wrap:anywhere]');
+  });
+});

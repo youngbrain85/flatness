@@ -18,7 +18,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Alert } from '@/components/ui/alert';
 import { Button, LinkButton } from '@/components/ui/button';
 import { Container } from '@/components/ui/container';
-import { checkClass } from '@/components/ui/form';
+import { checkLgClass } from '@/components/ui/form';
 import { StatusIndicator } from '@/components/ui/status-indicator';
 import { createClient } from '@/lib/supabase/client';
 import { fetchHeightViewMeta, worldToPixel } from '@/lib/domain/height-view';
@@ -334,7 +334,7 @@ export function RegistrationWorkbench({ registration, scanA, scanB }: {
               {/* ★ 리뷰 C1: 겹쳐보기를 못 그렸으면 "확인했습니다"를 체크할 수 없어야 한다.
                   그러지 않으면 사용자가 빈 상자를 보고 체크해 방어가 조용히 0이 된다. */}
               <label className="flex min-h-11 items-center gap-3 text-[15px]">
-                <input type="checkbox" checked={confirmedVisually && !overlayBlocked} className={checkClass}
+                <input type="checkbox" checked={confirmedVisually && !overlayBlocked} className={checkLgClass}
                   disabled={!!overlayBlocked}
                   onChange={(e) => setConfirmedVisually(e.target.checked)} />
                 <span className={overlayBlocked ? 'text-dim' : undefined}>

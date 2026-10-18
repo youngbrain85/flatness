@@ -51,7 +51,7 @@ vi.mock('next/navigation', () => ({ useRouter: () => ({ push: pushMock, refresh:
 
 import { ReportCreateForm } from '../report-create-form';
 import type { ReportCandidate } from '../report-create-form';
-import { checkClass } from '@/components/ui/form';
+import { checkLgClass } from '@/components/ui/form';
 
 const candidates: ReportCandidate[] = [
   { analysis_id: 'an1', kind: 'flatness', surface: 'floor', scanned_at: '2026-07-20',
@@ -133,7 +133,7 @@ describe('ReportCreateForm', () => {
 describe('ReportCreateForm 화면 (아트보드 ReportNew)', () => {
   beforeEach(resetState);
 
-  it('보고서 생성 버튼은 이 화면의 유일한 주 버튼이고 카드 밖에 있으며, 체크박스는 checkClass다', () => {
+  it('보고서 생성 버튼은 이 화면의 유일한 주 버튼이고 카드 밖에 있으며, 체크박스는 checkLgClass(18px, 아트보드 ReportNew)다', () => {
     const { container } = renderForm();
     const submit = screen.getByRole('button', { name: '보고서 생성' });
     expect(submit).toHaveAttribute('type', 'submit');
@@ -142,7 +142,7 @@ describe('ReportCreateForm 화면 (아트보드 ReportNew)', () => {
     const card = container.querySelector('[class*="rounded-card"]') as HTMLElement;
     expect(card).not.toBeNull();
     expect(card.contains(submit)).toBe(false);
-    for (const box of screen.getAllByRole('checkbox')) expect(box.className).toBe(checkClass);
+    for (const box of screen.getAllByRole('checkbox')) expect(box.className).toBe(checkLgClass);
   });
 
   it('후보 목록은 "포함할 분석" 그룹(도움말 연결)이고 줄마다 측정 시각(mono)과 판정 등급 배지를 단다', () => {

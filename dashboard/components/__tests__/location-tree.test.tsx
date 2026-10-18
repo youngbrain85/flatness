@@ -174,3 +174,22 @@ describe('LocationTree 다크 C안 (T5)', () => {
     expect(screen.getByText('측정위치가 없습니다. 아래에서 추가하세요.').className).toContain('text-muted');
   });
 });
+
+// Task 12 휴대폰 점검: 띄어쓰기 없는 긴 측정위치 이름이 390 에서 카드를 뚫었다(가로 스크롤 434/390).
+// 동·층·공간 제목과 측정위치 이름은 칸 안에서 줄바꿈한다.
+describe('LocationTree 긴 이름 줄바꿈', () => {
+  it('동(h2)·층(h3)·공간(h4) 제목과 측정위치 이름은 overflow-wrap:anywhere 다', () => {
+    const loc: LocationRow = { ...location('lx', 'LivingRoomNorthWestCornerPanelZoneA12'),
+      building: 'NorthEastWingBuilding101Extension', floor: 'Floor03Mezzanine', room: 'Penthouse3301SouthTerrace' };
+    const longTree: BuildingNode[] = [{
+      building: loc.building,
+      floors: [{ floor: loc.floor, floor_order: 3, rooms: [{ room: loc.room, locations: [loc] }] }],
+    }];
+    render(<LocationTree tree={longTree} scansByLocation={new Map()} siteId="s1" />);
+    for (const level of [2, 3, 4] as const) {
+      expect(screen.getByRole('heading', { level }).className.split(' ')).toContain('[overflow-wrap:anywhere]');
+    }
+    expect(screen.getByText('LivingRoomNorthWestCornerPanelZoneA12').className.split(' '))
+      .toEqual(expect.arrayContaining(['min-w-0', '[overflow-wrap:anywhere]']));
+  });
+});

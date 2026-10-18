@@ -18,7 +18,7 @@ export function KeyValuePairs({ items, columns = 4 }: {
       {items.map((it, i) => (
         <div key={i} className="flex min-w-0 flex-col gap-1">
           <dt className="font-mono text-[11px] tracking-[0.08em] text-dim">{it.label}</dt>
-          <dd className="text-[15px] text-ink">{it.value}</dd>
+          <dd className="text-[15px] text-ink [overflow-wrap:anywhere]">{it.value}</dd>
         </div>
       ))}
     </dl>

@@ -144,3 +144,18 @@ describe('StatusGrid 아래 줄과 빈 격자', () => {
     expect(screen.getByRole('heading', { level: 2 }).textContent).toBe('측정위치별 판정 (0)');
   });
 });
+
+// Task 12 휴대폰 점검: 띄어쓰기 없는 긴 라틴 이름이 타일을 뚫고(390) 잘렸다(1440). 동·층·타일 이름은 칸 안에서 줄바꿈한다.
+describe('StatusGrid 긴 이름 줄바꿈', () => {
+  it('동 제목·층 이름·타일 이름은 overflow-wrap:anywhere 다', () => {
+    const long: DashBuilding[] = [{
+      building: 'NorthEastWingBuilding101Extension',
+      floors: [{ floor: 'Floor03Mezzanine', tiles: [tile('lx', { label: 'Penthouse3301SouthTerrace · LivingRoomNorthWestCornerPanelZoneA12' })] }],
+    }];
+    render(<StatusGrid siteId="s1" buildings={long} locationCount={1} hiddenCount={0} />);
+    expect(screen.getByRole('heading', { level: 3, name: 'NorthEastWingBuilding101Extension' }).className.split(' ')).toContain('[overflow-wrap:anywhere]');
+    expect(screen.getByText('Floor03Mezzanine').className.split(' ')).toContain('[overflow-wrap:anywhere]');
+    expect(screen.getByText('Penthouse3301SouthTerrace · LivingRoomNorthWestCornerPanelZoneA12').className.split(' '))
+      .toEqual(expect.arrayContaining(['min-w-0', '[overflow-wrap:anywhere]']));
+  });
+});

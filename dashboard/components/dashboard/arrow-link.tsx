@@ -13,7 +13,7 @@ export function ArrowLink({ href, label, className, children }: {
 }) {
   return (
     <Link href={href} aria-label={label}
-      className={`inline-flex min-h-11 items-center gap-1.5 text-sm font-medium text-ink underline decoration-dim underline-offset-4${className ? ` ${className}` : ''}`}>
+      className={'inline-flex min-h-11 items-center gap-1.5 text-sm font-medium text-ink underline decoration-dim underline-offset-4' + (className ? ` ${className}` : '')}>
       {children}
       <Icon name="chevron-right" size={14} className="text-dim" />
     </Link>

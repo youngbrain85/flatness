@@ -55,7 +55,7 @@ function SiteRowLink({ row }: { row: EntrySiteRow }) {
       className="relative flex min-h-[76px] min-w-0 flex-1 flex-wrap items-center gap-x-6 gap-y-2.5 bg-surface py-3.5 pl-[clamp(16px,2vw,22px)] pr-[52px] text-ink hover:bg-surface-2 focus-visible:-outline-offset-3"
     >
       <div className="flex min-w-0 flex-[1_1_240px] flex-col gap-0.5">
-        <span className="font-heading text-[17px] font-bold leading-[1.45]">{row.name}</span>
+        <span className="font-heading text-[17px] font-bold leading-[1.45] [overflow-wrap:anywhere]">{row.name}</span>
         <span className="font-mono text-xs text-muted">
           측정위치 <span className="text-ink">{row.locationCount}</span> · 스캔 <span className="text-ink">{row.scanCount}</span>
         </span>

@@ -8,7 +8,7 @@ const fromMock = vi.fn();
 vi.mock('@/lib/supabase/client', () => ({ createClient: () => ({ from: fromMock }) }));
 
 import { CriteriaList } from '../criteria-list';
-import { checkClass } from '@/components/ui/form';
+import { checkLgClass } from '@/components/ui/form';
 import type { CriteriaRow } from '@/lib/domain/types';
 
 const rows: CriteriaRow[] = [
@@ -65,10 +65,10 @@ describe('CriteriaList', () => {
     expect(screen.getByText('3m당 허용 7mm / 재시공 21mm').className).toContain('tabular-nums');
   });
 
-  it('활성 체크박스는 checkClass이고 44x44 라벨이 감싼다(터치 대상)', () => {
+  it('활성 체크박스는 checkLgClass(18px, 아트보드 Settings)이고 44x44 라벨이 감싼다(터치 대상)', () => {
     render(<CriteriaList criteria={rows} siteNames={new Map()} />);
     const box = screen.getByRole('checkbox', { name: 'floor-kcs-exposed 활성' });
-    expect(box.className).toBe(checkClass);
+    expect(box.className).toBe(checkLgClass);
     expect(box.parentElement?.tagName).toBe('LABEL');
     expect(box.parentElement?.className).toContain('min-h-11');
     expect(box.parentElement?.className).toContain('min-w-11');

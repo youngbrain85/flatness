@@ -279,3 +279,12 @@ describe('SiteSwitcher 포커스가 바깥으로 나가면', () => {
     expect(screen.getByRole('menu', { name: '계정 메뉴' })).toBeInTheDocument();
   });
 });
+
+// Task 12 휴대폰 점검: 띄어쓰기 없는 긴 현장 이름이 390 헤더에서 단추를 화면 밖으로 밀었다(가로 스크롤 434/390)
+describe('SiteSwitcher 긴 현장 이름', () => {
+  it('단추는 줄어들 수 있고(min-w-0) 이름은 아무 곳에서나 줄바꿈한다(overflow-wrap:anywhere)', () => {
+    render(<SiteSwitcher current={{ id: 'sl', name: 'GwangmyeongStationAreaRedevelopmentBlockC7' }} />);
+    const trigger = screen.getByRole('button', { name: 'GwangmyeongStationAreaRedevelopmentBlockC7' });
+    expect(trigger.className.split(' ')).toEqual(expect.arrayContaining(['min-w-0', 'max-w-full', '[overflow-wrap:anywhere]']));
+  });
+});

@@ -5,7 +5,6 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { GRADE_COLOR } from '../labels';
-import { SLOPE_GRADE_COLOR } from '../slope-heatmap';
 import { SLOPE_GRADE_TO_GRADE } from '../grade-tone';
 import {
   CELL_GAP_COLOR, CELL_INK, DRAIN_COLOR, SCREEN_GRADE_COLOR, SCREEN_SLOPE_GRADE_COLOR,
@@ -37,8 +36,8 @@ describe('palette: 캔버스 색 상수 = globals.css 토큰', () => {
     for (const [slope, grade] of Object.entries(SLOPE_GRADE_TO_GRADE) as [SlopeGrade, Grade][]) {
       expect(SCREEN_SLOPE_GRADE_COLOR[slope]).toBe(SCREEN_GRADE_COLOR[grade]);
     }
-    // 엔진 구배 색 표와 키 집합이 같다(엔진이 내는 등급 문자열을 하나도 빠뜨리지 않는다)
-    expect(Object.keys(SCREEN_SLOPE_GRADE_COLOR).sort()).toEqual(Object.keys(SLOPE_GRADE_COLOR).sort());
+    // 엔진이 내는 구배 등급 문자열 다섯(engine slope.py: 적합·경계·보수·재시공·판정불가)을 하나도 빠뜨리지 않는다
+    expect(Object.keys(SCREEN_SLOPE_GRADE_COLOR).sort()).toEqual(['적합', '경계', '보수', '재시공', '판정불가'].sort());
   });
 
   it('스테이지·칸·배수구 색은 토큰 값이다', () => {

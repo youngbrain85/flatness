@@ -88,7 +88,7 @@ export function ReportTable({ rows, locationFilter = null }: {
         <span className="inline-flex flex-wrap items-center gap-2 text-sm">
           <span className="text-muted">{`측정위치: ${locationFilter.label}`}</span>
           <Link href={locationFilter.clearHref}
-            className="text-ink underline decoration-line-3 underline-offset-4">전체 보기</Link>
+            className="inline-flex min-h-11 items-center text-ink underline decoration-line-3 underline-offset-4">전체 보기</Link>
         </span>
       )}
       {/* 검색·필터 결과 건수(지금 보이는 행 수) - 화면 읽기 프로그램에 바뀔 때마다 알린다 */}

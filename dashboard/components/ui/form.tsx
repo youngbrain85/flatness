@@ -8,7 +8,10 @@ import { Icon } from './icons';
 export const inputClass = 'min-h-11 w-full rounded-control border border-line-3 bg-ground px-3 text-[15px] text-ink placeholder:text-muted disabled:cursor-not-allowed disabled:text-dim';
 export const selectClass = `${inputClass} appearance-none pr-10`;
 export const textareaClass = 'min-h-28 w-full rounded-control border border-line-3 bg-ground px-3 py-2.5 text-[15px] leading-normal text-ink placeholder:text-muted';
+// 선택 표시 크기는 아트보드를 따른다: 라디오 16px(Upload·ScanDone 구배 기준) = checkClass,
+// 체크박스 18px(RegistrationDetail·ReportNew·Settings)와 단위 확인 라디오 18px(ScanUnitConfirm) = checkLgClass.
 export const checkClass = 'h-4 w-4 shrink-0 accent-ink';
+export const checkLgClass = 'h-[18px] w-[18px] shrink-0 accent-ink';
 
 export function FormField({ label, htmlFor, description, error, children }: {
   label: ReactNode; htmlFor?: string; description?: ReactNode; error?: ReactNode; children: ReactNode;
@@ -26,7 +29,7 @@ export function FormField({ label, htmlFor, description, error, children }: {
 // 네이티브 select의 화살표를 숨기고(selectClass의 appearance-none) chevron 아이콘을 얹는다.
 export function SelectWrap({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <div className={`relative${className ? ` ${className}` : ''}`}>
+    <div className={'relative' + (className ? ` ${className}` : '')}>
       {children}
       <Icon name="chevron-down" className="pointer-events-none absolute right-3.5 top-1/2 -mt-2 text-ink-2" />
     </div>

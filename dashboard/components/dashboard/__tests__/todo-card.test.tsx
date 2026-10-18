@@ -62,3 +62,14 @@ describe('TodoCard', () => {
     expect(screen.getByText('실패하거나 단위 확인을 기다리는 스캔은 없습니다.')).toBeInTheDocument();
   });
 });
+
+// Task 12 휴대폰 점검: 할 일 줄의 측정위치·보고서 제목도 띄어쓰기 없는 긴 이름이면 칸 안에서 줄바꿈한다
+describe('TodoCard 긴 이름', () => {
+  it('제목·상세 글자는 overflow-wrap:anywhere 다', () => {
+    const t = { ...TODOS[1], title: 'NorthEastWingBuilding101Extension/Floor03Mezzanine 평활도 보고서', detail: 'NorthEastWingBuilding101Extension · Floor03Mezzanine' };
+    const { container } = render(<TodoCard todos={[t]} noScanAttention={false} />);
+    expect(screen.getByText(t.title).className.split(' ')).toContain('[overflow-wrap:anywhere]');
+    const detail = [...container.querySelectorAll('span')].find((el) => (el.textContent ?? '').startsWith(t.detail));
+    expect(detail?.className.split(' ')).toContain('[overflow-wrap:anywhere]');
+  });
+});

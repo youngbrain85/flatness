@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  SLOPE_GRADE_COLOR, downhillArrowPx, drawSlopeHeatmap, slopeCellFillColor, slopeCellRectPx,
+  downhillArrowPx, drawSlopeHeatmap, slopeCellFillColor, slopeCellRectPx,
 } from '../slope-heatmap';
 import type { GradedSlopeCell } from '../slope-heatmap';
 import type { SlopeTransform } from '../slope-cells';
@@ -49,20 +49,14 @@ describe('downhillArrowPx (Canvas y축 반전 - 브리프 D3 핵심 함정) ★'
   });
 });
 
-describe('SLOPE_GRADE_COLOR (엔진 slope_map.py의 _COLOR와 일치해야 함)', () => {
-  it('5등급 색이 엔진 값과 정확히 일치한다', () => {
-    expect(SLOPE_GRADE_COLOR).toEqual({
-      적합: '#3d8b3d', 경계: '#d6c11e', 보수: '#e07b1a', 재시공: '#c0392b', 판정불가: '#9e9e9e',
-    });
-  });
-});
-
-// 스펙 2026-10-17 §3: 화면 캔버스는 화면 등급 색을 쓴다. 엔진 PNG·PDF 만 엔진 hex(위 SLOPE_GRADE_COLOR)를 쓴다(같은 계열, 사용자 확인).
+// 스펙 2026-10-17 §3: 화면 캔버스는 화면 등급 색을 쓴다. 엔진 PNG·PDF 만 엔진 hex 를 쓴다(같은 계열, 사용자 확인).
+// 엔진 engine/flatness/outputs/slope_map.py 의 _COLOR 값(판정불가는 기본값 #9e9e9e) - 대시보드는 이 표를 들고 있지 않다.
+const ENGINE_SLOPE_HEX = ['#3d8b3d', '#d6c11e', '#e07b1a', '#c0392b', '#9e9e9e'];
 describe('slopeCellFillColor (화면 등급 색, ok=false는 등급 무관하게 판정불가 색)', () => {
   it('ok=true 셀은 넘겨준 grade 의 화면 색(SCREEN_SLOPE_GRADE_COLOR)을 그대로 쓰고 엔진 hex 는 쓰지 않는다', () => {
     for (const g of ['적합', '경계', '보수', '재시공', '판정불가'] as const) {
       expect(slopeCellFillColor(cell({ ok: true }), g)).toBe(SCREEN_SLOPE_GRADE_COLOR[g]);
-      expect(slopeCellFillColor(cell({ ok: true }), g)).not.toBe(SLOPE_GRADE_COLOR[g]);
+      expect(ENGINE_SLOPE_HEX).not.toContain(slopeCellFillColor(cell({ ok: true }), g));
     }
     expect(slopeCellFillColor(cell({ ok: true }), '적합')).toBe('#38d454');
     expect(slopeCellFillColor(cell({ ok: true }), '재시공')).toBe('#ff332e');

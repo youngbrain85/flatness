@@ -82,3 +82,11 @@ describe('siteStatus (처리 중 > 판정 불가 > 완료 > 분석 없음)', () 
     expect(screen.getByText('분석 없음')).toHaveAttribute('data-status', 'pending');
   });
 });
+
+// Task 12 휴대폰 점검: 띄어쓰기 없는 긴 현장 이름이 목록(overflow-hidden)에 잘려 끝이 안 보였다(390)
+describe('SiteList 긴 현장 이름', () => {
+  it('현장 이름은 overflow-wrap:anywhere 다', () => {
+    render(<SiteList rows={[row({ id: 'sl', name: 'GwangmyeongStationAreaRedevelopmentBlockC7' })]} />);
+    expect(screen.getByText('GwangmyeongStationAreaRedevelopmentBlockC7').className.split(' ')).toContain('[overflow-wrap:anywhere]');
+  });
+});

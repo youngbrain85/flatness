@@ -15,8 +15,8 @@ export function TodoCard({ todos, noScanAttention }: { todos: DashTodo[]; noScan
               <li key={t.key} data-todo={t.kind} className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-line py-2.5">
                 <div className="flex min-w-0 flex-[1_1_180px] flex-col gap-1">
                   <StatusIndicator type={t.type}>{t.label}</StatusIndicator>
-                  <span className="text-sm text-ink">{t.title}</span>
-                  <span className="text-xs text-muted">
+                  <span className="text-sm text-ink [overflow-wrap:anywhere]">{t.title}</span>
+                  <span className="text-xs text-muted [overflow-wrap:anywhere]">
                     {t.detail} · <span className="font-mono">{t.date}</span>
                   </span>
                 </div>

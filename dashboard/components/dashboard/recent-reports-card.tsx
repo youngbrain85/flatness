@@ -17,7 +17,7 @@ export function RecentReportsCard({ siteId, reports }: { siteId: string; reports
             {reports.map((r) => (
               <li key={r.id} className="flex flex-col gap-0.5 border-t border-line pb-2.5 pt-1.5">
                 <Link href={r.href}
-                  className="inline-flex min-h-11 items-center text-sm font-semibold text-ink underline decoration-line-3 underline-offset-4">
+                  className="inline-flex min-h-11 items-center text-sm font-semibold text-ink underline decoration-line-3 underline-offset-4 [overflow-wrap:anywhere]">
                   {r.title}
                 </Link>
                 <span className="flex flex-wrap items-center gap-x-3.5 gap-y-1">

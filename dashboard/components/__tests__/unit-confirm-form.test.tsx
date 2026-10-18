@@ -9,6 +9,7 @@ vi.mock('@/lib/supabase/client', () => ({ createClient: vi.fn(() => ({})) }));
 import { createClient } from '@/lib/supabase/client';
 import { UnitConfirmForm } from '../unit-confirm-form';
 import { buttonClass } from '@/components/ui/button';
+import { checkLgClass } from '@/components/ui/form';
 import type { ScanRow } from '@/lib/domain/types';
 
 const scan = {
@@ -90,6 +91,14 @@ afterEach(() => {
 });
 
 describe('UnitConfirmForm', () => {
+  // Task 12 화면 대조: 아트보드 ScanUnitConfirm 의 단위 라디오는 18px 이다(업로드·구배 기준 라디오 16px 와 다르다)
+  it('단위 라디오 셋은 18px(checkLgClass)이다', () => {
+    render(<UnitConfirmForm scan={scan} userId="u1" />);
+    const radios = screen.getAllByRole('radio');
+    expect(radios).toHaveLength(3);
+    for (const r of radios) expect(r.className).toBe(checkLgClass);
+  });
+
   it('단위 3종 라디오와 확정 버튼, 원본 파일명을 렌더한다', () => {
     render(<UnitConfirmForm scan={scan} userId="u1" />);
     expect(screen.getByText(/room\.ply/)).toBeInTheDocument();
