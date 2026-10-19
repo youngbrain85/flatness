@@ -52,6 +52,10 @@ def test_handle_analyze_floor(tmp_path):
     # 코드리뷰 Important(I1): DB에는 버킷-상대 규약 문자열만 저장(워커 CWD 상대·OS
     # 종속 절대경로가 아님) — 실제 파일 위치는 소비자가 DATA_DIR에 결합해 얻는다.
     assert a["artifacts_dir"] == f"artifacts/{aid}"
+    # 판정 셀 0.5m(스펙 2·3 §1): 워커는 엔진 기본값을 그대로 쓰고, 비교 셀·잔차 격자도 폴더째 올라간다
+    assert a["stats"]["meta"]["cell_m"] == 0.5
+    assert (artifacts_dir(cfg.data_dir, aid) / a["stats"]["cells_alt_path"]).exists()
+    assert (artifacts_dir(cfg.data_dir, aid) / a["stats"]["residual_grid_path"]).exists()
 
 
 def _seed_scan_via_storage(db, storage):
