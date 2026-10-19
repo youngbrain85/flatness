@@ -396,6 +396,25 @@ describe('RegistrationWorkbench 결과 표시 (스펙 §9.3.2·§9.3.4)', () => 
     }
   });
 
+  // 후속(2026-10-18): 사이드카·변환은 있는데 그림(PNG) 자체를 못 불러오면 겹쳐보기 상자는
+  // 비어 있다. 이때도 "확인했습니다"를 체크할 수 없어야 한다(리뷰 C1 과 같은 방어).
+  it('겹쳐보기 그림을 불러오지 못하면 확인 체크박스를 잠근다', async () => {
+    const { ctx } = recordingCtx();
+    const spy = vi.spyOn(HTMLCanvasElement.prototype, 'getContext')
+      .mockReturnValue(ctx as unknown as RenderingContext);
+    vi.stubGlobal('Image', FakeImage);
+    FakeImage.fail = true;
+    try {
+      mount(done);
+      await screen.findByText(/겹쳐보기 그림을 불러오지 못했습니다/);
+      expect(screen.getByRole('checkbox')).toBeDisabled();
+      expect(screen.getByText(/체크할 수 없습니다/)).toBeInTheDocument();
+    } finally {
+      FakeImage.fail = false;
+      spy.mockRestore();
+    }
+  });
+
   // ★ RMSE만 보고 승인하게 두면 안 된다(스펙 §9.3.2 남는 위험).
   it('겹쳐보기 확인 전에는 병합 스캔으로 진행할 수 없다', async () => {
     mount(done);

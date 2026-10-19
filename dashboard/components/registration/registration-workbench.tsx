@@ -84,6 +84,8 @@ export function RegistrationWorkbench({ registration, scanA, scanB }: {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmedVisually, setConfirmedVisually] = useState(false);
+  // 겹쳐보기 그림(PNG)을 못 불러왔으면 확인 체크박스를 잠근다(사이드카 실패와 같은 방어)
+  const [overlayLoadFailed, setOverlayLoadFailed] = useState(false);
   const [askRepick, setAskRepick] = useState(false);
 
   const pathA = scanA.height_view_path;
@@ -257,7 +259,9 @@ export function RegistrationWorkbench({ registration, scanA, scanB }: {
       ? `높이 뷰 좌표 정보(사이드카)를 불러오지 못했습니다: ${metaErrA ?? metaErrB ?? '원인 불명'}`
       : !registration.transform
         ? '정합 변환이 저장되지 않아 두 스캔을 겹쳐 그릴 수 없습니다.'
-        : null;
+        : overlayLoadFailed
+          ? '겹쳐보기 그림(높이 뷰)을 불러오지 못했습니다.'
+          : null;
     return (
       <div className="flex flex-col gap-5">
         <Container title="정합 결과">
@@ -329,7 +333,7 @@ export function RegistrationWorkbench({ registration, scanA, scanB }: {
           <div className="flex flex-col gap-4">
             <RegistrationOverlay pathA={pathA} pathB={pathB} metaA={metaA} metaB={metaB}
               unitScaleA={scanA.unit_scale ?? 1} unitScaleB={scanB.unit_scale ?? 1}
-              transform={registration.transform} />
+              transform={registration.transform} onLoadFailed={() => setOverlayLoadFailed(true)} />
             <div className="flex flex-col gap-3.5 border-t border-line pt-4">
               {/* ★ 리뷰 C1: 겹쳐보기를 못 그렸으면 "확인했습니다"를 체크할 수 없어야 한다.
                   그러지 않으면 사용자가 빈 상자를 보고 체크해 방어가 조용히 0이 된다. */}

@@ -41,8 +41,10 @@ function drawStageGrid(ctx: CanvasRenderingContext2D, w: number, h: number) {
 }
 
 export function RegistrationOverlay({
-  pathA, pathB, metaA, metaB, unitScaleA, unitScaleB, transform,
+  pathA, pathB, metaA, metaB, unitScaleA, unitScaleB, transform, onLoadFailed,
 }: {
+  /** 두 그림 중 하나라도 못 불러왔을 때 한 번 부른다 - 작업대가 확인 체크박스를 잠근다(리뷰 C1). */
+  onLoadFailed?: () => void;
   pathA: string;
   pathB: string;
   metaA: HeightViewMeta | null;
@@ -111,8 +113,14 @@ export function RegistrationOverlay({
         ctx.setTransform(1, 0, 0, 1, 0, 0);
         ctx.globalAlpha = 1;
       })
-      .catch(() => { if (!cancelled) setFailed(true); });
+      .catch(() => {
+        if (cancelled) return;
+        setFailed(true);
+        onLoadFailed?.();
+      });
     return () => { cancelled = true; };
+    // onLoadFailed 는 일부러 뺀다 - 부모가 매 렌더 새 함수를 넘기면 그림을 다시 불러오게 된다
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view, metaA, metaB, pathA, pathB, unitScaleA, unitScaleB, transform, opacity]);
 
   if (unavailable) {
