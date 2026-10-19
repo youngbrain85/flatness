@@ -18,8 +18,13 @@ export interface FrameParams {
   theme: Points3dTheme;
 }
 
+/** 반투명 기준면 한 장(2026-10-20 바닥 기준면 개선). verts = 삼각형 정점(정점당 x, y, 기준 높이, 과장할 차이). */
+export interface SurfaceMesh { verts: Float32Array; color: string; alpha: number }
+
 export interface Renderer {
   setData(data: Points3dData, scaffold: { verts: Float32Array; gridVertCount: number; axisVertCount: number }): void;
+  setDev(dev: Int16Array): void;                    // 점 편차만 바꿔 올린다(기준면 전환). 좌표·카메라는 그대로
+  setSurfaces(meshes: SurfaceMesh[]): void;         // 반투명 기준면. 처음 받을 때 면 프로그램을 만든다
   resize(bufferW: number, bufferH: number): void;   // 드로잉 버퍼 px. canvas.width·height 와 viewport 를 맞춘다
   draw(frame: FrameParams): void;
   pointSizeLimit(): [number, number];               // ALIASED_POINT_SIZE_RANGE
@@ -94,6 +99,35 @@ out vec4 outColor;
 void main() {
   outColor = uColor;
 }`;
+
+// 반투명 기준면: 정점 높이 = 기준 높이 + 과장 x 차이(고른 기준면은 차이 0 이라 제자리, 다른 기준면은 과장된 간격).
+// 점의 표시 높이(기준 + 과장 x 편차)와 같은 규칙이라 과장 배율에서도 점·두 면의 관계가 맞는다
+const SURF_VS = `#version 300 es
+in vec4 aSurf;
+uniform mat4 uViewProj;
+uniform float uSurfExag;
+void main() {
+  gl_Position = uViewProj * vec4(aSurf.x, aSurf.y, aSurf.z + uSurfExag * aSurf.w, 1.0);
+}`;
+
+const SURF_FS = `#version 300 es
+precision mediump float;
+uniform vec4 uSurfColor;
+out vec4 outColor;
+void main() {
+  outColor = uSurfColor;
+}`;
+
+const SURF_UNIFORMS = ['uViewProj', 'uSurfExag', 'uSurfColor'] as const;
+
+// 면 프로그램 한 벌. 기준면을 처음 받을 때 만든다(기준면이 없는 옛 분석은 지금과 같은 GPU 자원만 쓴다)
+interface SurfGpu {
+  prog: WebGLProgram;
+  u: Locations<(typeof SURF_UNIFORMS)[number]>;
+  aSurf: number;
+  vao: WebGLVertexArrayObject;
+  buf: WebGLBuffer;
+}
 
 const POINT_UNIFORMS = [
   'uExtent', 'uViewProj', 'uExag', 'uThresholdQ', 'uPointWorldM', 'uPxPerUnit', 'uMinPx', 'uMaxPx',
@@ -223,6 +257,39 @@ function upload(gl: WebGL2RenderingContext, gpu: Gpu, data: Points3dData, scaffo
   gl.bindVertexArray(null);
 }
 
+function buildSurf(gl: WebGL2RenderingContext): SurfGpu | null {
+  const prog = link(gl, SURF_VS, SURF_FS);
+  const vao = gl.createVertexArray();
+  const buf = gl.createBuffer();
+  if (!prog || !vao || !buf) {
+    gl.deleteProgram(prog);
+    gl.deleteVertexArray(vao);
+    gl.deleteBuffer(buf);
+    return null;
+  }
+  return { prog, u: locate(gl, prog, SURF_UNIFORMS), aSurf: gl.getAttribLocation(prog, 'aSurf'), vao, buf };
+}
+
+function destroySurf(gl: WebGL2RenderingContext, surf: SurfGpu): void {
+  gl.deleteBuffer(surf.buf);
+  gl.deleteVertexArray(surf.vao);
+  gl.deleteProgram(surf.prog);
+}
+
+// 면 정점을 한 버퍼에 이어 올린다. 그릴 때 면마다 [시작, 개수] 구간으로 나눠 그린다
+function uploadSurf(gl: WebGL2RenderingContext, surf: SurfGpu, meshes: SurfaceMesh[]): void {
+  const total = meshes.reduce((n, m) => n + m.verts.length, 0);
+  const all = new Float32Array(total);
+  let at = 0;
+  for (const m of meshes) { all.set(m.verts, at); at += m.verts.length; }
+  gl.bindVertexArray(surf.vao);
+  gl.bindBuffer(gl.ARRAY_BUFFER, surf.buf);
+  gl.bufferData(gl.ARRAY_BUFFER, all, gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(surf.aSurf);
+  gl.vertexAttribPointer(surf.aSurf, 4, gl.FLOAT, false, 0, 0);
+  gl.bindVertexArray(null);
+}
+
 // 탐지용 컨텍스트를 하나 만들어 보고 곧바로 반납한다. canvas 는 문서에 붙이지 않고 버린다
 function canCreateContext(attributes?: WebGLContextAttributes): boolean {
   const canvas = document.createElement('canvas');
@@ -253,6 +320,8 @@ export function createRenderer(
   const sizeLimit: [number, number] = sizeRange ? [sizeRange[0], sizeRange[1]] : [1, 1];
 
   let held: { data: Points3dData; scaffold: Scaffold } | null = null;   // 복구 때 다시 올릴 배열 참조
+  let surf: SurfGpu | null = null;
+  let heldSurfaces: SurfaceMesh[] = [];
   let lost = false;
   let unrecoverable = false;
   let timer: ReturnType<typeof setTimeout> | null = null;
@@ -262,6 +331,7 @@ export function createRenderer(
     if (lost) return;
     lost = true;
     gpu = null;               // 끊긴 컨텍스트의 자원은 이미 무효다
+    surf = null;
     timer = setTimeout(() => {
       timer = null;
       unrecoverable = true;
@@ -285,6 +355,10 @@ export function createRenderer(
     lost = false;
     gl.viewport(0, 0, canvas.width, canvas.height);
     if (held) upload(gl, gpu, held.data, held.scaffold);
+    if (heldSurfaces.length) {
+      surf = buildSurf(gl);   // 면을 다시 만들지 못하면 면 없이 점만 그린다(점 뷰어 자체는 살아 있다)
+      if (surf) uploadSurf(gl, surf, heldSurfaces);
+    }
     on.restored();
   };
 
@@ -295,6 +369,21 @@ export function createRenderer(
     setData(data, scaffold) {
       held = { data, scaffold };
       if (gpu) upload(gl, gpu, data, scaffold);   // 손실 중이면 복구 때 올린다
+    },
+
+    setDev(dev) {
+      if (!held) return;
+      held = { ...held, data: { ...held.data, dev } };   // 복구 때도 새 편차를 올린다
+      if (!gpu) return;
+      gl.bindBuffer(gl.ARRAY_BUFFER, gpu.devBuf);
+      gl.bufferData(gl.ARRAY_BUFFER, dev, gl.STATIC_DRAW);
+    },
+
+    setSurfaces(meshes) {
+      heldSurfaces = meshes.filter((m) => m.verts.length > 0);
+      if (!heldSurfaces.length || !gpu) return;   // 손실 중이면 복구 때 만든다
+      if (!surf) surf = buildSurf(gl);
+      if (surf) uploadSurf(gl, surf, heldSurfaces);
     },
 
     resize(bufferW, bufferH) {
@@ -350,6 +439,27 @@ export function createRenderer(
       // 파일이 해시 순이라 앞 drawCount 개가 고른 표본이다. 버퍼 밖을 그리면 아무것도 나오지 않으므로 n 으로 막는다
       const n = held.data.dev.length;
       gl.drawArrays(gl.POINTS, 0, Math.max(0, Math.min(n, Math.floor(frame.drawCount))));
+
+      // (4) 반투명 기준면: 블렌딩 켬, 깊이 테스트는 그대로(점 뒤의 면은 가려진다), 깊이 쓰기 끔(면끼리 가리지 않게).
+      // 끝나면 깊이 쓰기를 다시 켠다. 다음 프레임 (1) 의 깊이 지우기는 깊이 쓰기가 켜져 있어야 된다
+      if (surf && heldSurfaces.length) {
+        gl.enable(gl.BLEND);
+        gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+        gl.depthMask(false);
+        gl.useProgram(surf.prog);
+        gl.bindVertexArray(surf.vao);
+        gl.uniformMatrix4fv(surf.u.uViewProj, false, frame.viewProj);
+        gl.uniform1f(surf.u.uSurfExag, frame.exaggeration);
+        let first = 0;
+        for (const m of heldSurfaces) {
+          const [r, g, b] = hexToRgb01(m.color);
+          gl.uniform4f(surf.u.uSurfColor, r, g, b, m.alpha);
+          const count = m.verts.length / 4;
+          gl.drawArrays(gl.TRIANGLES, first, count);
+          first += count;
+        }
+        gl.depthMask(true);
+      }
       gl.bindVertexArray(null);
     },
 
@@ -365,8 +475,11 @@ export function createRenderer(
         timer = null;
       }
       if (gpu) destroy(gl, gpu);
+      if (surf) destroySurf(gl, surf);
       gpu = null;
+      surf = null;
       held = null;
+      heldSurfaces = [];
       // WEBGL_lose_context.loseContext() 를 부르지 않는다. React 개발 모드의 effect 이중 실행이 같은 canvas 를
       // 다시 쓰는데, 한 번 끊은 canvas 는 다시 getContext 해도 끊긴 컨텍스트를 돌려준다.
     },

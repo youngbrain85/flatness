@@ -843,3 +843,92 @@ describe('createRenderer: 컨텍스트 손실과 복구', () => {
     expect(on.restored).not.toHaveBeenCalled();
   });
 });
+
+// ---- 기준면(2026-10-20 바닥 기준면 개선) ----
+describe('createRenderer: 점 편차 바꾸기·기준면', () => {
+  const mesh = (n: number, color = '#336699', alpha = 0.25) =>
+    ({ verts: new Float32Array(n * 4).map((_, i) => i * 0.1), color, alpha });
+  const surfaceSources = (rec: RecordingGl) =>
+    rec.callsOf('shaderSource').map((c) => c.args[1] as string).filter((s) => s.includes('aSurf') || s.includes('uSurfColor'));
+
+  // 죽이는 변이: setDev 가 xyz 까지 다시 올림, 다른 버퍼에 올림, 복구 때 옛 편차를 올림
+  it('setDev 는 dev 버퍼만 다시 올리고, 컨텍스트 복구 때도 새 편차를 올린다', () => {
+    vi.useFakeTimers();
+    const { rec, canvas, renderer } = mount();
+    const data = makeData();
+    renderer.setData(data, makeScaffold());
+    const devBuffer = boundAt(rec, indexOf(rec, rec.callsOf('bufferData').find((c) => c.args[1] === data.dev) as GlCall), 'bindBuffer');
+    const next = new Int16Array([5, 6, 7, 8, -32768]);
+    const before = rec.callsOf('bufferData').length;
+    renderer.setDev(next);
+    const uploads = rec.callsOf('bufferData').slice(before);
+    expect(uploads.map((c) => c.args[1])).toEqual([next]);
+    expect(boundAt(rec, indexOf(rec, uploads[0]), 'bindBuffer')).toBe(devBuffer);
+    fire(canvas, 'webglcontextlost');
+    const seen = rec.callsOf('bufferData').length;
+    fire(canvas, 'webglcontextrestored');
+    const after = rec.callsOf('bufferData').slice(seen).map((c) => c.args[1]);
+    expect(after).toContain(next);
+    expect(after).not.toContain(data.dev);
+  });
+
+  // 죽이는 변이: 기준면이 없는데도 면 프로그램을 만듦(셰이더 수가 늘어 옛 분석의 동작이 바뀐다)
+  it('기준면을 주기 전에는 면 프로그램·삼각형 그리기가 없다', () => {
+    const { rec, renderer } = mount();
+    renderer.setData(makeData(), makeScaffold());
+    renderer.setSurfaces([]);
+    renderer.draw(makeFrame());
+    expect(surfaceSources(rec)).toHaveLength(0);
+    expect(rec.callsOf('drawArrays').filter((c) => c.args[0] === rec.gl.TRIANGLES)).toHaveLength(0);
+  });
+
+  // 죽이는 변이: 면 셰이더에 비 ASCII·#version 앞 줄바꿈, 과장을 차이에 안 곱함, 면마다 색을 안 바꿈, 구간 어긋남,
+  // 반투명인데 블렌딩 없이 그림, 깊이 쓰기를 켠 채 그림(뒤 면이 가려짐), 다음 프레임 깊이 지우기를 위해 깊이 쓰기를 되돌리지 않음
+  it('setSurfaces 뒤에는 점 다음에 면마다 TRIANGLES 를 제 색·알파로, 블렌딩 켜고 깊이 쓰기 끈 채 그린다', () => {
+    const { rec, renderer } = mount();
+    renderer.setData(makeData(), makeScaffold());
+    const a = mesh(6, '#336699', 0.25);
+    const b = mesh(12, '#ffffff', 0.2);
+    renderer.setSurfaces([a, b]);
+    const sources = surfaceSources(rec);
+    expect(sources).toHaveLength(2);
+    for (const s of sources) {
+      expect(s.startsWith('#version 300 es\n')).toBe(true);
+      expect([...s].every((ch) => ch.charCodeAt(0) < 128)).toBe(true);
+    }
+    const vs = sources.find((s) => s.includes('aSurf'))!;
+    expect(vs).toMatch(/aSurf\.z\s*\+\s*uSurfExag\s*\*\s*aSurf\.w/);
+    const upload = rec.callsOf('bufferData').slice(-1)[0].args[1] as Float32Array;
+    expect(Array.from(upload)).toEqual([...Array.from(a.verts), ...Array.from(b.verts)]);
+
+    const start = rec.calls.length;
+    renderer.draw(makeFrame({ exaggeration: 50 }));
+    const calls = rec.calls.slice(start);
+    const tri = calls.filter((c) => c.name === 'drawArrays' && c.args[0] === rec.gl.TRIANGLES);
+    expect(tri.map((c) => c.args.slice(1))).toEqual([[0, 6], [6, 12]]);
+    const pointsAt = calls.findIndex((c) => c.name === 'drawArrays' && c.args[0] === rec.gl.POINTS);
+    expect(calls.indexOf(tri[0])).toBeGreaterThan(pointsAt);
+    const colors = rec.uniformCalls('uSurfColor').slice(-2).map(valuesOf);
+    expect(colors[0][3]).toBeCloseTo(0.25);
+    expect(colors[1]).toEqual([1, 1, 1, expect.closeTo(0.2, 6)]);
+    expect(valuesOf(rec.uniformCalls('uSurfExag').slice(-1)[0])).toEqual([50]);
+    const before = (name: string, i: number) => lastBefore(rec, start + calls.indexOf(tri[0]), (c) => c.name === name);
+    expect(before('enable', 0)?.args[0]).toBe(rec.gl.BLEND);
+    expect(before('depthMask', 0)?.args[0]).toBe(false);
+    expect(calls.filter((c) => c.name === 'depthMask').slice(-1)[0].args[0]).toBe(true);
+  });
+
+  // 죽이는 변이: dispose 가 면 프로그램·버퍼를 지우지 않음(누수)
+  it('dispose 는 면 프로그램·VAO·버퍼도 지운다', () => {
+    const { rec, renderer } = mount();
+    renderer.setData(makeData(), makeScaffold());
+    const programs = vi.spyOn(rec.gl, 'createProgram');
+    const buffers = vi.spyOn(rec.gl, 'createBuffer');
+    renderer.setSurfaces([mesh(3)]);
+    renderer.dispose();
+    const deleted = (name: string) => rec.callsOf(name).map((c) => c.args[0]);
+    for (const r of programs.mock.results) expect(deleted('deleteProgram')).toContain(r.value);
+    for (const r of buffers.mock.results) expect(deleted('deleteBuffer')).toContain(r.value);
+    expect(programs.mock.results).toHaveLength(1);
+  });
+});

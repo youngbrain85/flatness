@@ -45,7 +45,7 @@ const GL_CONSTANTS = {
   COMPILE_STATUS: 0x8b81, LINK_STATUS: 0x8b82,
 };
 
-const ATTRIB_LOCATION: Record<string, number> = { aPos: 0, aDev: 1 };
+const ATTRIB_LOCATION: Record<string, number> = { aPos: 0, aDev: 1, aSurf: 2 };
 
 // 반환값이 없는 메서드. 호출만 기록한다
 const VOID_METHODS = [
