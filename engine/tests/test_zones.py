@@ -93,3 +93,14 @@ def test_1cm_lip_stays_one_zone():
     # 1cm 턱은 단차가 아니라 결함이다: 한 면으로 이어져 판정·편차에 드러나야 한다
     zmap, _ = build_zones(_grid(_stepped(0.01)))
     assert len([z for z in zmap.zones if z.status == "ok"]) == 1
+
+
+def test_line_shaped_fragment_is_not_a_zone():
+    # 실제 시험판(2026-10-20): 가장자리 한 줄(7칸)이 판보다 2.5cm 낮아 따로 떨어졌고, 작은 시편 재시도(min_area 0)에서
+    # 그 한 줄이 구역이 되어 평면을 맞추다 "평면 피팅 실패" 로 분석이 죽었다. 폭이 없는(일직선·3칸 미만) 덩어리는 면이 아니다
+    board = flat_floor(size=(0.4, 0.33), spacing=0.005) + np.array([0.0, 0.07, 0.0])
+    strip = flat_floor(size=(0.4, 0.03), spacing=0.005) + np.array([0.0, 0.0, 0.03])
+    g = _grid(np.vstack([board, strip]))
+    zmap, _ = build_zones(g, min_area_m2=0.0)
+    assert [z.status for z in zmap.zones] == ["ok"]
+    assert (zmap.labels[0] == 0).all()          # 0번 줄(가장자리 띠)은 구역이 아니다

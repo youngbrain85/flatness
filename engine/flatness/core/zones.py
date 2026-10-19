@@ -47,6 +47,19 @@ def _continuity_components(mz, step_m):
     return comp
 
 
+def _has_width(m):
+    """덩어리가 평면을 받칠 수 있는가: 3칸 이상이고 칸 중심들이 한 직선 위에 있지 않다.
+
+    작은 시편 재시도(min_area 0)에서는 가장자리 한 줄 같은 폭 없는 덩어리가 남는데, 그런 덩어리에 평면을 맞추면
+    실패하거나(실제 시험판, 2026-10-20) 엉뚱한 평면이 나온다.
+    """
+    ys, xs = np.nonzero(m)
+    if len(xs) < 3:
+        return False
+    c = np.cov(np.vstack([xs, ys]).astype(np.float64))
+    return bool(c[0, 0] * c[1, 1] - c[0, 1] ** 2 > 1e-9)
+
+
 def build_zones(grid, min_area_m2=1.0, step_m=0.015,
                 furniture_gap_m=0.3, furniture_max_m2=3.0, ghost_frac=0.2):
     mz = grid.median_z
@@ -57,6 +70,7 @@ def build_zones(grid, min_area_m2=1.0, step_m=0.015,
     valid = comp >= 0
     sizes = np.bincount(comp[valid])
     keep = [k for k in np.flatnonzero(sizes) if sizes[k] * sub_area >= min_area_m2]   # 최소 면적 미달 파편 배제
+    keep = [k for k in keep if _has_width(comp == k)]   # 폭 없는(일직선·3칸 미만) 덩어리는 면이 아니다
     keep.sort(key=lambda k: (-sizes[k], k))   # 넓은 면부터 구역 번호(결정적)
     for zone_id, k in enumerate(keep, start=1):
         m = comp == k
