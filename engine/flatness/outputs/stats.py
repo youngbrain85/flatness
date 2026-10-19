@@ -63,6 +63,17 @@ def _cell_row(c, g):
 ALT_CELL_SIZES = (1.0, 2.0)
 CELLS_ALT_FILE = "cells_alt.json"
 RESIDUAL_GRID_FILE = "residual_grid.json"
+REFERENCE_SURFACES_FILE = "reference_surfaces.json"
+REFERENCE_NODE_CELLS = 5    # 기준면 마디 = 서브셀 5x5 묶음(5cm 서브셀이면 25cm)
+
+
+def _q01(arr):
+    """m 단위 배열 -> 0.1mm 정수 목록(값 없음 null). 원소별 isfinite 호출 없이 파이썬 int 객체로 바꾼다."""
+    q = np.round(np.asarray(arr, dtype=np.float64) * 10000.0).ravel()
+    finite = np.isfinite(q)
+    vals = np.where(finite, q, 0.0).astype(np.int64).astype(object)
+    vals[~finite] = None
+    return vals.tolist()
 
 
 def write_cells_alt(out_dir, by_size):
@@ -73,20 +84,51 @@ def write_cells_alt(out_dir, by_size):
     return CELLS_ALT_FILE
 
 
-def write_residual_grid(out_dir, residuals, subcell_m):
-    """판정에 쓴 서브셀 잔차(m) -> residual_grid.json (스펙 2·3 §2).
+def write_residual_grid(out_dir, local, global_, subcell_m):
+    """서브셀 편차(m) -> residual_grid.json schema_version 2 (바닥 기준면 개선 스펙 §3).
 
-    값은 0.1mm 정수, 값 없는 칸은 null, 행 우선이며 행 0 이 y 가 가장 작은 쪽이다(엔진 격자 그대로).
+    values = 국부(3m) 기준 편차, values_global = 전체 기준면 편차. 0.1mm 정수, 값 없는 칸은 null,
+    행 우선이며 행 0 이 y 가 가장 작은 쪽이다(엔진 격자 그대로). values_global 이 없는 옛 파일은 구역 평면 기준이다.
     """
-    q = np.round(np.asarray(residuals, dtype=np.float64) * 10000.0).ravel()
-    finite = np.isfinite(q)
-    vals = np.where(finite, q, 0.0).astype(np.int64).astype(object)   # 파이썬 int 객체(원소별 isfinite 호출 없이)
-    vals[~finite] = None
-    values = vals.tolist()
-    doc = {"subcell_m": subcell_m, "cols": int(residuals.shape[1]), "rows": int(residuals.shape[0]),
-           "values": values}
+    doc = {"schema_version": 2, "subcell_m": subcell_m, "cols": int(local.shape[1]), "rows": int(local.shape[0]),
+           "values": _q01(local), "values_global": _q01(global_)}
     (out_dir / RESIDUAL_GRID_FILE).write_text(json.dumps(doc, separators=(",", ":")), encoding="utf-8")
     return RESIDUAL_GRID_FILE
+
+
+def _reference_nodes(ref, labels, k):
+    """서브셀 기준 높이를 k x k 묶음 마디로 줄인다. 마디 값 = 묶음 가운데 칸 값, 가운데 칸이 비면(가장자리)
+    묶음 안에서 가장 많은 구역의 칸 평균(단차를 사이에 둔 두 면을 섞지 않는다). 바닥이 없는 묶음은 NaN."""
+    ny, nx = ref.shape
+    rows, cols = -(-ny // k), -(-nx // k)
+    cy = np.minimum(np.arange(rows) * k + k // 2, ny - 1)
+    cx = np.minimum(np.arange(cols) * k + k // 2, nx - 1)
+    out = ref[np.ix_(cy, cx)].astype(np.float64)
+    pad = np.full((rows * k, cols * k), np.nan)
+    pad[:ny, :nx] = ref
+    has = np.isfinite(pad).reshape(rows, k, cols, k).any(axis=(1, 3))
+    for j, i in zip(*np.nonzero(np.isnan(out) & has)):
+        blk = ref[j * k:(j + 1) * k, i * k:(i + 1) * k]
+        lab = labels[j * k:(j + 1) * k, i * k:(i + 1) * k]
+        ok = np.isfinite(blk)
+        ids, cnt = np.unique(lab[ok], return_counts=True)
+        out[j, i] = blk[ok & (lab == ids[np.argmax(cnt)])].mean()
+    return out
+
+
+def write_reference_surfaces(out_dir, ref_local, ref_global, labels, subcell_m):
+    """두 기준면 높이(m, 서브셀 격자) -> reference_surfaces.json (바닥 기준면 개선 스펙 §3).
+
+    마디 간격 step_m = 서브셀 x 5. 마디 (i, j) 위치 = ((i + 0.5) x step, (j + 0.5) x step), 좌표틀은 points3d 와 같은
+    파일-로컬(x·y 원점 = 서브셀 격자 원점, z 원점 = bbox 최저 z). 높이는 0.1mm 정수, 바닥이 아닌 마디는 null.
+    """
+    k = REFERENCE_NODE_CELLS
+    local = _reference_nodes(ref_local, labels, k)
+    glob = _reference_nodes(ref_global, labels, k)
+    doc = {"step_m": round(subcell_m * k, 6), "cols": int(local.shape[1]), "rows": int(local.shape[0]),
+           "local": _q01(local), "global": _q01(glob)}
+    (out_dir / REFERENCE_SURFACES_FILE).write_text(json.dumps(doc, separators=(",", ":")), encoding="utf-8")
+    return REFERENCE_SURFACES_FILE
 
 
 def write_outputs(out_dir, stats, cells, grades):

@@ -72,12 +72,14 @@ def test_render_html_has_no_em_dash_and_escapes_title(tmp_path):
     assert "&lt;script&gt;" in html
 
 
-def _snapshot_with_deviation(tmp_path, cell_m=None):
+def _snapshot_with_deviation(tmp_path, cell_m=None, local_reference=False):
     db, cfg = FakeDB(), _cfg(tmp_path)
     _seed(db, cfg)
     db.analyses["an1"]["stats"]["deviation_paths"] = ["deviation.png"]
     if cell_m is not None:
         db.analyses["an1"]["stats"]["meta"]["cell_m"] = cell_m
+    if local_reference:
+        db.analyses["an1"]["stats"]["reference_surfaces_path"] = "reference_surfaces.json"
     artifacts = cfg.data_dir / "artifacts" / "an1"
     for name in ("heatmap.png", "preview3d.png", "deviation.png"):
         (artifacts / name).write_bytes(b"\x89PNG-fake")
@@ -103,6 +105,13 @@ def test_deviation_caption_names_the_analysis_cell_size(tmp_path):
     html = render_html(_snapshot_with_deviation(tmp_path, cell_m=0.5))
     assert "0.5m 판정 셀 기준" in html
     assert "1m 판정 셀" not in html and "1.0m 판정 셀" not in html
+
+
+def test_deviation_caption_names_local_reference_only_for_new_analyses(tmp_path):
+    # 바닥 기준면 개선(2026-10-20~): 새 분석의 편차맵은 3m 국부 기준면 대비다. 옛 분석(기준면 파일 없음)은 구역 평면 대비라
+    # 같은 문구를 쓰면 거짓이 된다
+    assert "3m 국부 기준면 대비" in render_html(_snapshot_with_deviation(tmp_path / "new", local_reference=True))
+    assert "3m 국부 기준면 대비" not in render_html(_snapshot_with_deviation(tmp_path / "old"))
 
 
 def test_slope_analysis_is_not_rendered_as_a_flatness_section(tmp_path):

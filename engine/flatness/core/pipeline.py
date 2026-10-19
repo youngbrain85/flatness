@@ -6,6 +6,7 @@ from flatness import ENGINE_VERSION
 from flatness.io.reader import iter_chunks, read_info
 from flatness.core.subcell import build_subcell_grid
 from flatness.core.zones import build_zones
+from flatness.core.reference import global_plane, local_reference
 from flatness.core.cells import evaluate_cells
 from flatness.core.pointsample import sample_points
 from flatness.core.walls import (build_column_grid, detect_wall_lines,
@@ -13,7 +14,7 @@ from flatness.core.walls import (build_column_grid, detect_wall_lines,
 from flatness.core.plane import residual_grid
 from flatness.criteria import grade_cells
 from flatness.outputs.stats import (ALT_CELL_SIZES, build_stats, write_cells_alt,
-                                    write_outputs, write_residual_grid)
+                                    write_outputs, write_reference_surfaces, write_residual_grid)
 from flatness.outputs.heatmap import render_heatmap
 from flatness.outputs.deviation import render_deviation_map
 from flatness.outputs.preview3d import render_preview3d
@@ -64,6 +65,16 @@ def analyze_floor(path, scale_to_m, criterion, u_mm, out_dir,
         zmap.zones = [main]
         ok_zones = [main]
         small_specimen = True
+    # 표시용 기준면 두 개(바닥 기준면 개선 스펙 §2). 판정은 아래처럼 구역 평면 잔차 그대로다(직선자는 직선 성분과 무관)
+    ok_planes = {z.zone_id: z.plane_abc for z in ok_zones}
+    ref_local, sigma = local_reference(grid.median_z, zmap.labels, ok_planes, grid.size_m, fit_mask=~grid.bimodal)
+    floor = np.isfinite(residuals)                       # ok 구역·쌍봉 아님(구역 평면 잔차와 같은 칸)
+    ga, gb, gc = global_plane(grid.median_z, floor, grid.size_m, sigma)
+    gy, gx = np.mgrid[0:grid.median_z.shape[0], 0:grid.median_z.shape[1]]
+    ref_global = np.where(np.isin(zmap.labels, list(ok_planes)),
+                          ga * (gx + 0.5) * grid.size_m + gb * (gy + 0.5) * grid.size_m + gc, np.nan)
+    res_local = np.where(floor, grid.median_z - ref_local, np.nan).astype(np.float32)
+    res_global = np.where(floor, grid.median_z - ref_global, np.nan).astype(np.float32)
     span = criterion.span_m if criterion.span_m else 3.0
     cells = evaluate_cells(residuals, grid, span_m=span, cell_m=cell_m,
                            zone_labels=zmap.labels)
@@ -99,7 +110,8 @@ def analyze_floor(path, scale_to_m, criterion, u_mm, out_dir,
         alt_cells = evaluate_cells(residuals, grid, span_m=span, cell_m=size, zone_labels=zmap.labels)
         alt[size] = (alt_cells, grade_cells(alt_cells, criterion, u_mm)[0])
     stats["cells_alt_path"] = write_cells_alt(out_dir, alt)
-    stats["residual_grid_path"] = write_residual_grid(out_dir, residuals, subcell_m)
+    stats["residual_grid_path"] = write_residual_grid(out_dir, res_local, res_global, subcell_m)
+    stats["reference_surfaces_path"] = write_reference_surfaces(out_dir, ref_local, ref_global, zmap.labels, subcell_m)
     worst = stats.get("worst")
     # 렌더 산출물(프리뷰/편차맵/히트맵)은 판정 결과와 무관한 보조 시각화다. 렌더가
     # 디스크·폰트 등 인프라 사유로 실패해도 이미 완성된 판정(stats)은 반드시 저장돼야
@@ -107,14 +119,14 @@ def analyze_floor(path, scale_to_m, criterion, u_mm, out_dir,
     render_warns = set()
     try:
         stats["preview3d_paths"] = render_preview3d(
-            residuals, grid, out_dir,
+            res_local, grid, out_dir,
             worst_xy=None if worst is None else (worst["point_x"], worst["point_y"]))
     except Exception:
         stats["preview3d_paths"] = []
         render_warns.add("preview3d_render_failed")
     try:
-        # 정밀 편차맵(판정 무관 보조 시각화): 판정에 쓴 잔차를 10cm로 접어 다시 그린다
-        dev = render_deviation_map(residuals, grid, out_dir / "deviation.png")
+        # 정밀 편차맵(판정 무관 보조 시각화): 국부(3m) 기준 편차를 10cm로 접어 다시 그린다
+        dev = render_deviation_map(res_local, grid, out_dir / "deviation.png")
         stats["deviation_paths"] = [dev] if dev else []
     except Exception:
         stats["deviation_paths"] = []
@@ -127,7 +139,7 @@ def analyze_floor(path, scale_to_m, criterion, u_mm, out_dir,
     # 위 세 렌더 블록과 별개의 독립 try/except 다. 어느 한쪽의 실패가 다른 쪽을 막지 않는다.
     try:
         sample = sample_points(iter_chunks(path, chunk_size=chunk_size),
-                               info, scale_to_m, grid, zmap, residuals)
+                               info, scale_to_m, grid, zmap, res_local)   # 3D 점 편차도 국부 기준
         stats["points3d_paths"] = [write_points3d(sample, out_dir / POINTS3D_FILE)]
         stats["points3d_threshold_q"] = int(round(criterion.pass_mm * 10))
     except Exception:

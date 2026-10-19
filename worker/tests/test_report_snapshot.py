@@ -456,7 +456,10 @@ def test_flatness_snapshot_is_unchanged_by_slope_support(tmp_path):
                      "span_m": 3, "pass_mm": 7, "rework_mm": 21, "u_mm": 5.0},
         "overview": {"file": "raw.ply", "n_points": 120000, "scale_to_m": 1.0,
                      "subcell_m": 0.05, "cell_m": 1.0, "coverage_pct": 91.5,
-                     "coverage_label": "바닥 인식률", "reduced_span_cells": 1},
+                     "coverage_label": "바닥 인식률", "reduced_span_cells": 1,
+                     # 2026-10-20 의도된 추가: 기준면 파일이 있는 새 분석만 True(편차맵 캡션 "3m 국부 기준면 대비").
+                     # 옛 발행본에는 이 키가 없어 캡션이 예전 문구 그대로다
+                     "local_reference": False},
         "summary": {
             "n_cells": 4, "n_valid": 3,
             "grade_counts": {"pass": 2, "borderline": 1, "repair": 0,

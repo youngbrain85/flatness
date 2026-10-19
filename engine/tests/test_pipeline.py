@@ -542,3 +542,76 @@ def test_small_specimen_prunes_stray_fragment_from_outputs(tmp_path):
     rows = json.loads((tmp_path / "out" / "cells.json").read_text(encoding="utf-8"))
     stray_cell = next(r for r in rows if r["ix"] == 3 and r["iy"] == 0)   # x 1.5~2.0m 칸
     assert stray_cell["zone_id"] is None and stray_cell["value_mm"] is None
+
+
+# 바닥 기준면 개선(2026-10-20 스펙 §3): 편차 표시는 국부(3m) 기준이 기본, 전체 기준을 함께 낸다. 판정은 그대로
+def _sag_floor(depth=0.010, size=8.0):
+    p = flat_floor(size=(size, size), spacing=0.025, noise_sd=0.0005, seed=2)
+    h = size / 2
+    p[:, 2] -= depth * (1 - ((p[:, 0] - h) / h) ** 2) * (1 - ((p[:, 1] - h) / h) ** 2)
+    return p
+
+
+def test_residual_grid_v2_has_local_and_global_values(tmp_path):
+    write_binary_ply(_sag_floor(), tmp_path / "scan.ply")
+    stats = analyze_floor(tmp_path / "scan.ply", 1.0, CRIT, 5.0, tmp_path / "out")
+    g = json.loads((tmp_path / "out" / stats["residual_grid_path"]).read_text(encoding="utf-8"))
+    assert g["schema_version"] == 2
+    local = np.array([v for v in g["values"] if v is not None])
+    glob = np.array([v for v in g["values_global"] if v is not None])
+    assert len(g["values_global"]) == len(g["values"]) == g["cols"] * g["rows"]
+    assert np.abs(local).max() <= 25            # 국부: 처짐이 빠져 ±2.5mm 안(0.1mm 단위)
+    assert glob.max() - glob.min() >= 60         # 전체: 10mm 처짐이 그대로 보인다
+
+
+def test_points3d_and_deviation_png_use_local_reference(tmp_path, monkeypatch):
+    seen = {}
+    real = pl.render_deviation_map
+    monkeypatch.setattr(pl, "render_deviation_map",
+                        lambda res, grid, path: (seen.setdefault("dev", res), real(res, grid, path))[1])
+    write_binary_ply(_sag_floor(), tmp_path / "scan.ply")
+    stats = analyze_floor(tmp_path / "scan.ply", 1.0, CRIT, 5.0, tmp_path / "out")
+    assert np.nanmax(np.abs(seen["dev"])) < 0.0025   # 국부 기준 잔차가 편차맵 PNG 로 간다
+    _, _, dev_q = read_points3d((tmp_path / "out" / stats["points3d_paths"][0]).read_bytes())
+    has = dev_q > -32767
+    assert np.abs(dev_q[has]).max() <= 25            # 3D 점 편차도 국부 기준(구역 평면이면 ±60 안팎)
+
+
+def test_reference_surfaces_file_shape_and_frame(tmp_path):
+    # 4x3m 바닥, x 방향 1% 경사: 전체 기준면 마디 높이 = 0.01 x 마디 x (bbox 최저 z 기준, 0.1mm 정수)
+    write_binary_ply(flat_floor(size=(4.0, 3.0), spacing=0.02, tilt=(0.01, 0.0)), tmp_path / "scan.ply")
+    stats = analyze_floor(tmp_path / "scan.ply", 1.0, CRIT, 5.0, tmp_path / "out")
+    assert stats["reference_surfaces_path"] == "reference_surfaces.json"
+    s = json.loads((tmp_path / "out" / "reference_surfaces.json").read_text(encoding="utf-8"))
+    assert s["step_m"] == 0.25
+    assert len(s["local"]) == len(s["global"]) == s["cols"] * s["rows"]
+    assert s["cols"] >= 16 and s["rows"] >= 12
+    for j in (1, 6, 10):
+        for i in (1, 8, 14):
+            x = (i + 0.5) * 0.25
+            for key in ("local", "global"):
+                v = s[key][j * s["cols"] + i]
+                assert v is not None and abs(v - 0.01 * x * 10000) <= 5, (key, i, j, v)
+
+
+def test_reference_surfaces_null_off_floor(tmp_path):
+    # 가운데가 빈 바닥: 빈 자리 마디는 null
+    pts = flat_floor(size=(4.0, 3.0), spacing=0.02)
+    hole = (np.abs(pts[:, 0] - 2.0) < 0.6) & (np.abs(pts[:, 1] - 1.5) < 0.6)
+    write_binary_ply(pts[~hole], tmp_path / "scan.ply")
+    analyze_floor(tmp_path / "scan.ply", 1.0, CRIT, 5.0, tmp_path / "out")
+    s = json.loads((tmp_path / "out" / "reference_surfaces.json").read_text(encoding="utf-8"))
+    j, i = int(1.5 / 0.25), int(2.0 / 0.25)
+    assert s["local"][j * s["cols"] + i] is None and s["global"][j * s["cols"] + i] is None
+
+
+def test_reference_node_at_hole_edge_uses_floor_cells_of_its_block(tmp_path):
+    # 구멍 가장자리 마디: 묶음 가운데 칸은 구멍 안이지만 묶음에 바닥 칸이 있으면 그 칸들의 평균으로 채운다(구멍 둘레가 비지 않게).
+    # 구멍 |x−2| < 0.64: 마디 i=5 의 묶음(x 1.25~1.5)은 가운데 칸(x 1.375)이 구멍 안, 앞 두 칸(x 1.275·1.325)은 바닥
+    pts = flat_floor(size=(4.0, 3.0), spacing=0.02, tilt=(0.01, 0.0))
+    hole = (np.abs(pts[:, 0] - 2.0) < 0.64) & (np.abs(pts[:, 1] - 1.5) < 0.6)
+    write_binary_ply(pts[~hole], tmp_path / "scan.ply")
+    analyze_floor(tmp_path / "scan.ply", 1.0, CRIT, 5.0, tmp_path / "out")
+    s = json.loads((tmp_path / "out" / "reference_surfaces.json").read_text(encoding="utf-8"))
+    v = s["global"][6 * s["cols"] + 5]
+    assert v is not None and abs(v - 0.01 * 1.3 * 10000) <= 10
