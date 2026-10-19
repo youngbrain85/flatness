@@ -1,4 +1,6 @@
 @import "tailwindcss";
+/* 테스트 파일의 클래스 문자열이 운영 CSS 를 만들지 않게 스캔에서 뺀다(globals-css.test 가드) */
+@source not "../**/__tests__/**";
 
 /* 다크 C안 의미 토큰(스펙 §3). 이 표 밖의 색을 쓰지 않는다.
    캔버스는 CSS 토큰을 못 읽으므로 lib/domain/palette.ts 가 같은 값을 들고 있다(palette.test 가 대조). */

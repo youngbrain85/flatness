@@ -88,3 +88,14 @@ describe('globals.css @utility drafting-grid (본문 도면 격자)', () => {
     expect(defined).toContain('drafting-grid');
   });
 });
+
+// 후속(2026-10-18): Tailwind 자동 소스 탐지는 테스트 파일까지 읽는다. 그러면 테스트에만 있는 클래스
+// 문자열이 운영 CSS 를 만들고(가드 표본 sm:w-1/2 가 실제로 실렸다), 화면 코드에서 클래스가 빠져도
+// 같은 문자열을 쓰는 테스트 덕에 CSS 가 남아 회귀가 화면 대조로도 안 보인다. __tests__ 를 스캔에서 뺀다.
+describe('Tailwind 소스 스캔', () => {
+  it('@source not 으로 __tests__ 폴더를 스캔에서 뺀다', () => {
+    // 경로의 '/**/' 를 주석 걷어 내기가 주석으로 오인하므로 원본 줄을 본다(줄 맨 앞이라 주석 속 글자는 안 맞는다)
+    const raw = readFileSync(join(__dirname, '../globals.css'), 'utf8');
+    expect(raw).toMatch(/^@source not "\.\.\/\*\*\/__tests__\/\*\*";$/m);
+  });
+});
