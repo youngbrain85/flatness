@@ -18,7 +18,7 @@ import type { Bounds, OrbitState, ViewPreset } from '@/lib/viz/points3d/orbit';
 import { buildScaffold, layoutLabels } from '@/lib/viz/points3d/scaffold';
 import type { PlacedLabel } from '@/lib/viz/points3d/scaffold';
 import {
-  initialDragCount, nextDragCount, pointSizeRange, pointWorldSizeM, pxPerUnit,
+  POINT_SCALES, initialDragCount, nextDragCount, pointSizeRange, pointWorldSizeM, pxPerUnit, stepPointScale,
 } from '@/lib/viz/points3d/budget';
 import { pickNearest } from '@/lib/viz/points3d/pick';
 import { initialControlState, isGesturing, reduceControl } from '@/lib/viz/points3d/controls';
@@ -59,7 +59,7 @@ const LABEL_TRANSFORM: Record<'x' | 'y', Record<'tick' | 'name', string>> = {
 interface ViewSize { cssW: number; cssH: number; scale: number; bufW: number; bufH: number }
 interface Cursor { x: number; y: number }
 interface Readout { index: number; x: number; y: number; cssW: number; cssH: number }
-interface ViewParams { thresholdQ: number; exaggeration: number; themeName: ThemeName }
+interface ViewParams { thresholdQ: number; exaggeration: number; themeName: ThemeName; pointScale: number }
 
 // effect 안에서 만든 조작·그리기 루프를 JSX 핸들러가 부르는 창구
 interface Engine {
@@ -138,10 +138,14 @@ export function Points3dView({ data, defaultThresholdQ, isRegistered, onError }:
   const [thresholdQ, setThresholdQ] = useState(defaultThresholdQ);
   const [exaggeration, setExaggeration] = useState<number>(EXAGGERATIONS[0]);
   const [themeName, setThemeName] = useState<ThemeName>('dark');
+  // 점 크기 배율(2026-10-20 스펙). 1 = 지금 크기. 분석이 바뀌면 뷰어가 새로 마운트되어 1 로 돌아간다
+  const [pointScale, setPointScale] = useState<number>(1);
   const [labels, setLabels] = useState<PlacedLabel[]>([]);
   const [readout, setReadout] = useState<Readout | null>(null);
   const [restoring, setRestoring] = useState(false);   // 컨텍스트 손실 뒤 복구를 기다리는 중
-  const viewRef = useRef<ViewParams>({ thresholdQ: defaultThresholdQ, exaggeration: EXAGGERATIONS[0], themeName: 'dark' });
+  const viewRef = useRef<ViewParams>({
+    thresholdQ: defaultThresholdQ, exaggeration: EXAGGERATIONS[0], themeName: 'dark', pointScale: 1,
+  });
 
   const scaffold = useMemo(() => buildScaffold(data.meta.fit_bounds), [data]);
 
@@ -194,10 +198,11 @@ export function Points3dView({ data, defaultThresholdQ, isRegistered, onError }:
       const v = viewRef.current;
       const vp = viewProj(control.camera, size.cssW / size.cssH, full);
       // gl_PointSize 는 드로잉 버퍼 px 이다. 환산 계수에 CSS 높이가 아니라 버퍼 높이를 넘긴다
-      const [minPx, maxPx] = pointSizeRange(renderer.pointSizeLimit(), size.scale);
+      // 점 크기 배율은 점의 실제 크기와 최소 크기에 함께 곱한다(최소에 막혀 작게가 안 되는 일이 없게)
+      const [minPx, maxPx] = pointSizeRange(renderer.pointSizeLimit(), size.scale, v.pointScale);
       renderer.draw({
         viewProj: vp, exaggeration: v.exaggeration, thresholdQ: v.thresholdQ,
-        pointWorldM, pxPerUnit: pxPerUnit(size.bufH, FOVY), minPx, maxPx,
+        pointWorldM: pointWorldM * v.pointScale, pxPerUnit: pxPerUnit(size.bufH, FOVY), minPx, maxPx,
         drawCount: count, theme: POINTS3D_THEME[v.themeName],
       });
       lastViewProj = vp;
@@ -301,11 +306,11 @@ export function Points3dView({ data, defaultThresholdQ, isRegistered, onError }:
     };
   }, [data, scaffold]);
 
-  // 임계값·과장 배율·배경은 uniform 만 바꾸고 한 번 다시 그린다
+  // 임계값·과장 배율·배경·점 크기는 uniform 만 바꾸고 한 번 다시 그린다
   useEffect(() => {
-    viewRef.current = { thresholdQ, exaggeration, themeName };
+    viewRef.current = { thresholdQ, exaggeration, themeName, pointScale };
     engineRef.current?.requestDraw();
-  }, [thresholdQ, exaggeration, themeName]);
+  }, [thresholdQ, exaggeration, themeName, pointScale]);
 
   function onPointerDown(e: PointerEvent<HTMLCanvasElement>) {
     e.currentTarget.setPointerCapture?.(e.pointerId);   // jsdom 에는 없다
@@ -405,6 +410,22 @@ export function Points3dView({ data, defaultThresholdQ, isRegistered, onError }:
               {l.text}
             </span>
           ))}
+        </div>
+        {/* 점 크기(CloudCompare 3D 뷰 왼쪽 위 Default point size −/+ 와 같은 자리). 오버레이 중 이것만 누를 수 있다 */}
+        <div role="group" aria-label="점 크기"
+          className="pointer-events-auto absolute left-3 top-3 flex items-center gap-1 rounded px-2 py-1 text-xs leading-4"
+          style={{ color: theme.text, backgroundColor: overlayBg }}>
+          <span className="mr-1">점 크기</span>
+          <button type="button" aria-label="점 크기 줄이기" disabled={pointScale === POINT_SCALES[0]}
+            onClick={() => setPointScale((k) => stepPointScale(k, -1))}
+            className="min-h-11 min-w-11 rounded border text-base leading-none disabled:opacity-40"
+            style={{ borderColor: rgba(theme.line, theme.axisAlpha) }}>−</button>
+          <span data-testid="points3d-point-scale" aria-live="polite"
+            className="min-w-10 text-center font-mono tabular-nums">{`×${pointScale}`}</span>
+          <button type="button" aria-label="점 크기 키우기" disabled={pointScale === POINT_SCALES[POINT_SCALES.length - 1]}
+            onClick={() => setPointScale((k) => stepPointScale(k, 1))}
+            className="min-h-11 min-w-11 rounded border text-base leading-none disabled:opacity-40"
+            style={{ borderColor: rgba(theme.line, theme.axisAlpha) }}>+</button>
         </div>
         <ul data-testid="points3d-legend"
           className="pointer-events-none absolute right-3 top-3 flex flex-col gap-1 text-xs leading-4"

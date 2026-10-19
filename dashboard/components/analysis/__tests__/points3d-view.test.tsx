@@ -240,12 +240,13 @@ describe('Points3dView 화면', () => {
   });
 
   // 변이: primary 버튼을 둠(뷰당 primary 1개 규칙 위반)
-  it('버튼 8개가 전부 보조(normal) 변형이고 묶음 이름 3개는 눈썹 라벨, 시점·편차 과장은 role=group', () => {
+  it('도구 줄 버튼 8개가 전부 보조(normal) 변형이고(맵 위 점 크기 −/+ 를 더해 10개) 묶음 이름 3개는 눈썹 라벨, 시점·편차 과장은 role=group', () => {
     mount();
     const buttons = screen.getAllByRole('button');
-    expect(buttons.map((b) => b.textContent)).toEqual(['등각', '평면', '정면', '×1', '×10', '×50', '×100', '밝은 배경']);
+    expect(buttons.map((b) => b.textContent)).toEqual(['−', '+', '등각', '평면', '정면', '×1', '×10', '×50', '×100', '밝은 배경']);
     const normal = buttonClass('normal').split(/\s+/).filter(Boolean);
-    for (const b of buttons) {
+    // 점 크기 −/+ 는 맵 위 오버레이 버튼이라(뷰어 테마 색) 도구 줄의 보조 변형 대상이 아니다
+    for (const b of buttons.slice(2)) {
       const tokens = b.className.split(/\s+/);
       for (const t of normal) expect(tokens).toContain(t);
       expect(b).toHaveAttribute('type', 'button');
@@ -414,6 +415,52 @@ describe('Points3dView 렌더러 연결', () => {
     frame(0);
     expect(lastUniform(rec, 'uMaxPx')).toEqual([2]);
     expect(lastUniform(rec, 'uMinPx')).toEqual([2]);
+  });
+
+  // 점 크기 메뉴(2026-10-20 스펙): 맵 왼쪽 위 '점 크기 − ×1 +'. 지금 크기가 x1 이고 단계는 0.25~4.
+  // 변이: 배율을 점 크기(m)에 안 곱함, 최소 px 에 안 곱함, 다시 그리지 않음
+  it('점 크기 + 를 누르면 x1.5 가 되어 uPointWorldM 과 uMinPx 가 1.5 배로 다시 그려진다', () => {
+    stubSize(640, 480, 2);
+    const { rec } = mount();
+    frame(0);
+    const group = screen.getByRole('group', { name: '점 크기' });
+    expect(within(group).getByTestId('points3d-point-scale')).toHaveTextContent('×1');
+    expect(lastUniform(rec, 'uPointWorldM')[0]).toBeCloseTo(0.006875, 9);
+    expect(lastUniform(rec, 'uMinPx')).toEqual([3]);           // 1.5 CSS px x 버퍼 배율 2
+    fireEvent.click(within(group).getByRole('button', { name: '점 크기 키우기' }));
+    expect(rafQueue).toHaveLength(1);
+    frame(16);
+    expect(within(group).getByTestId('points3d-point-scale')).toHaveTextContent('×1.5');
+    expect(lastUniform(rec, 'uPointWorldM')[0]).toBeCloseTo(0.006875 * 1.5, 9);
+    expect(lastUniform(rec, 'uMinPx')).toEqual([4.5]);
+    expect(lastUniform(rec, 'uExag')).toEqual([1]);           // 다른 표시 값은 그대로
+  });
+
+  // 변이: 끝 단계에서 버튼을 끄지 않음, 최소 px 가 1 아래로 내려감
+  it('점 크기 − 를 세 번 누르면 x0.25 끝 단계라 − 가 꺼지고, 최소 px 는 1 아래로 내려가지 않는다', () => {
+    stubSize(640, 480, 1);
+    const { rec } = mount();
+    frame(0);
+    const minus = screen.getByRole('button', { name: '점 크기 줄이기' });
+    for (let i = 0; i < 3; i++) { fireEvent.click(minus); frame(16 * (i + 1)); }
+    expect(screen.getByTestId('points3d-point-scale')).toHaveTextContent('×0.25');
+    expect(minus).toBeDisabled();
+    expect(screen.getByRole('button', { name: '점 크기 키우기' })).toBeEnabled();
+    expect(lastUniform(rec, 'uPointWorldM')[0]).toBeCloseTo(0.006875 * 0.25, 9);
+    expect(lastUniform(rec, 'uMinPx')).toEqual([1]);
+  });
+
+  it('점 크기 메뉴는 맵 왼쪽 위에 있고 누를 수 있으며(오버레이 중 유일), 버튼은 44px 이상이고 바탕은 HUD 와 같다', () => {
+    mount();
+    const group = screen.getByRole('group', { name: '점 크기' });
+    const cls = group.className.split(/\s+/);
+    for (const c of ['absolute', 'left-3', 'top-3', 'pointer-events-auto']) expect(cls).toContain(c);
+    expect(group.closest('[data-testid="points3d-viewport"]')).not.toBeNull();
+    expect(group.style.backgroundColor).toBe(screen.getByTestId('points3d-hud').style.backgroundColor);
+    for (const b of within(group).getAllByRole('button')) {
+      expect(b.className.split(/\s+/)).toEqual(expect.arrayContaining(['min-h-11', 'min-w-11']));
+    }
+    expect(screen.getByRole('button', { name: '점 크기 키우기' })).toBeEnabled();
   });
 
   // 변이: 초기 시점이 등각이 아님, 종횡비를 CSS 크기에서 구하지 않음
