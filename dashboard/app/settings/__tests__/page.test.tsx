@@ -27,6 +27,7 @@ import { PageHeader } from '@/components/ui/page-header';
 import { CriteriaList } from '@/components/settings/criteria-list';
 import { ProfileForm } from '@/components/settings/profile-form';
 import { UncertaintyForm } from '@/components/settings/uncertainty-form';
+import { SupabaseErrorNotice } from '@/components/supabase-error';
 
 // 엘리먼트 트리를 재귀 탐색해 특정 컴포넌트/태그 타입이 쓰인 곳을 모두 모은다.
 function findAll(node: unknown, type: unknown, acc: { props: Record<string, unknown> }[] = []) {
@@ -49,7 +50,7 @@ function collectText(node: unknown, acc: string[] = []): string[] {
 
 // Supabase 쿼리 빌더 흉내: 체이닝은 자기 자신, await 대상이 되면(thenable) 정해 둔 결과로 resolve.
 // app_settings는 .maybeSingle()로 끝나므로 그 메서드만 진짜 Promise를 돌려준다.
-function chain(result: { data: unknown; error: null }) {
+function chain(result: { data: unknown; error: { message: string } | null }) {
   const obj: Record<string, unknown> = {
     select: () => obj, order: () => obj, eq: () => obj,
     maybeSingle: () => Promise.resolve(result),
@@ -59,12 +60,17 @@ function chain(result: { data: unknown; error: null }) {
 }
 
 // criteria / app_settings / sites 세 쿼리가 Promise.all로 나간다(profiles는 ensureProfile 목이 받는다).
-function stubSupabase(opts: { criteria?: unknown[]; setting?: { value: unknown } | null; sites?: unknown[] }) {
+function stubSupabase(opts: {
+  criteria?: unknown[]; setting?: { value: unknown } | null; sites?: unknown[];
+  /** 그 테이블 조회만 실패시킨다(데이터 null + error) */
+  errors?: Partial<Record<'criteria' | 'app_settings' | 'sites', string>>;
+}) {
+  const err = (t: 'criteria' | 'app_settings' | 'sites') => (opts.errors?.[t] ? { message: opts.errors[t] as string } : null);
   return {
     from: (table: string) => {
-      if (table === 'criteria') return chain({ data: opts.criteria ?? [], error: null });
-      if (table === 'app_settings') return chain({ data: opts.setting ?? null, error: null });
-      if (table === 'sites') return chain({ data: opts.sites ?? [], error: null });
+      if (table === 'criteria') return chain(err('criteria') ? { data: null, error: err('criteria') } : { data: opts.criteria ?? [], error: null });
+      if (table === 'app_settings') return chain(err('app_settings') ? { data: null, error: err('app_settings') } : { data: opts.setting ?? null, error: null });
+      if (table === 'sites') return chain(err('sites') ? { data: null, error: err('sites') } : { data: opts.sites ?? [], error: null });
       throw new Error(`예상치 못한 테이블: ${table}`);
     },
   };
@@ -89,6 +95,24 @@ describe('SettingsPage 가드', () => {
     vi.mocked(getRequestUser).mockResolvedValue(null);
     await expect(SettingsPage()).rejects.toThrow('NEXT_REDIRECT:/login');
     expect(redirect).toHaveBeenCalledWith('/login');
+  });
+});
+
+// 후속(2026-10-18): 저장된 U 를 읽지 못했는데 기본값(5/8)을 저장값처럼 보여 주면, 한 칸만 고쳐
+// 저장할 때 다른 칸이 기본값으로 덮인다. 판정 기준을 못 읽으면 '(0)' 빈 표가 사실처럼 보인다.
+// 다른 화면처럼 조회 오류 안내로 끊고 폼·표를 그리지 않는다.
+describe('SettingsPage 조회 실패', () => {
+  it.each(['app_settings', 'criteria', 'sites'] as const)('%s 조회가 실패하면 폼·표 대신 오류 안내만 그린다', async (table) => {
+    loggedIn({ errors: { [table]: `${table} 읽기 실패` } });
+    const el = await SettingsPage();
+
+    const [notice] = findAll(el, SupabaseErrorNotice);
+    expect(notice.props.message).toBe(`${table} 읽기 실패`);
+    expect(findAll(el, UncertaintyForm)).toHaveLength(0);
+    expect(findAll(el, ProfileForm)).toHaveLength(0);
+    expect(findAll(el, CriteriaList)).toHaveLength(0);
+    expect(findAll(el, EntryHeader)).toHaveLength(1);
+    expect((findAll(el, PageHeader)[0].props.crumbs as { label: string }[]).map((c) => c.label)).toEqual(['현장 목록', '설정']);
   });
 });
 
