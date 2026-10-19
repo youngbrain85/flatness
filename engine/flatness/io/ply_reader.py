@@ -11,6 +11,7 @@ def _parse_header(f):
     if f.readline().strip() != b"ply":
         raise ValueError("PLY 매직 누락")
     fmt, n_vertex, props, in_vertex, first_elem = None, None, [], False, None
+    y_up = False
     while True:
         line = f.readline()
         if not line:
@@ -20,6 +21,9 @@ def _parse_header(f):
             continue
         if tok[0] == "format":
             fmt = tok[1]
+        elif tok[0] == "comment" and "SiteScape" in line.decode("ascii", "replace"):
+            # SiteScape(iPhone LiDAR)는 ARKit 좌표라 y축이 위다. 엔진은 z가 위라고 보므로 돌려 읽는다.
+            y_up = True
         elif tok[0] == "element":
             if first_elem is None:
                 first_elem = tok[1]
@@ -43,12 +47,18 @@ def _parse_header(f):
     names = [p[0] for p in props]
     if not all(c in names for c in ("x", "y", "z")):
         raise ValueError("x/y/z property 없음")
-    return fmt, n_vertex, props
+    return fmt, n_vertex, props, y_up
+
+
+def _to_z_up(xyz):
+    """y축이 위인 좌표 (x, y, z)를 z축이 위인 (x, -z, y)로 돌린다(오른손 좌표계 유지)."""
+    return np.column_stack([xyz[:, 0], -xyz[:, 2], xyz[:, 1]])
 
 
 def read_ply_chunks(path, chunk_size=2_000_000):
     with open(path, "rb") as f:
-        fmt, n_vertex, props = _parse_header(f)
+        fmt, n_vertex, props, y_up = _parse_header(f)
+        fix = _to_z_up if y_up else (lambda a: a)
         if fmt == "ascii":
             cols = [i for i, p in enumerate(props) if p[0] in ("x", "y", "z")]
             order = [props[i][0] for i in cols]
@@ -61,9 +71,9 @@ def read_ply_chunks(path, chunk_size=2_000_000):
                 buf.append([float(v[sel[0]]), float(v[sel[1]]), float(v[sel[2]])])
                 done += 1
                 if len(buf) >= chunk_size:
-                    yield np.asarray(buf, dtype=np.float64); buf = []
+                    yield fix(np.asarray(buf, dtype=np.float64)); buf = []
             if buf:
-                yield np.asarray(buf, dtype=np.float64)
+                yield fix(np.asarray(buf, dtype=np.float64))
         else:
             dt = np.dtype([(p[0], "<" + p[1]) for p in props])  # 중복 property명은 유효 PLY가 아님
             done = 0
@@ -72,5 +82,5 @@ def read_ply_chunks(path, chunk_size=2_000_000):
                 rec = np.fromfile(f, dtype=dt, count=k)
                 if len(rec) < k:
                     raise ValueError("PLY 본문이 header 개수보다 짧음")
-                yield np.column_stack([rec["x"], rec["y"], rec["z"]]).astype(np.float64)
+                yield fix(np.column_stack([rec["x"], rec["y"], rec["z"]]).astype(np.float64))
                 done += k
