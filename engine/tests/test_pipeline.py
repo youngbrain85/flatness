@@ -510,3 +510,35 @@ def test_residual_grid_marks_missing_as_null(tmp_path):
     analyze_floor(tmp_path / "scan.ply", 1.0, CRIT, 5.0, tmp_path / "out")
     g = json.loads((tmp_path / "out" / "residual_grid.json").read_text(encoding="utf-8"))
     assert g["values"][20 * g["cols"] + 30] is None
+
+
+def _board_with_stray(stray_size):
+    # 0.6x0.6m 판(PLY 로 읽으면 5cm 서브셀 168칸) + x 1.5m 부터 떨어진 작은 파편. 같은 높이라 레벨은 하나다
+    board = flat_floor(size=(0.6, 0.6), spacing=0.005)
+    stray = flat_floor(size=stray_size, spacing=0.005) + np.array([1.5, 0.0, 0.0])
+    return np.vstack([board, stray])
+
+
+def test_small_specimen_threshold_sits_between_70_and_85_percent(tmp_path):
+    # 가장 큰 덩어리 비율(PLY float32 경로 실측): 파편 0.4x0.4 -> 168/240 = 70%(실패),
+    # 0.2x0.25 -> 168/197 = 85.3%(성공). 기준 80% 가 이 사이에 있어야 한다
+    write_binary_ply(_board_with_stray((0.4, 0.4)), tmp_path / "a.ply")
+    with pytest.raises(ValueError, match="판정 가능한 바닥 구역 없음"):
+        analyze_floor(tmp_path / "a.ply", 1.0, CRIT, 5.0, tmp_path / "oa")
+    write_binary_ply(_board_with_stray((0.2, 0.25)), tmp_path / "b.ply")
+    stats = analyze_floor(tmp_path / "b.ply", 1.0, CRIT, 5.0, tmp_path / "ob")
+    assert "small_specimen" in stats["warnings"]
+
+
+def test_small_specimen_prunes_stray_fragment_from_outputs(tmp_path):
+    # 파편(x 1.5~1.7, y 0~0.25)은 구역이 아니다: 잔차 격자에 값이 없고, 그 자리 셀은 구역 없음(zone_id None)
+    write_binary_ply(_board_with_stray((0.2, 0.25)), tmp_path / "b.ply")
+    analyze_floor(tmp_path / "b.ply", 1.0, CRIT, 5.0, tmp_path / "out")
+    g = json.loads((tmp_path / "out" / "residual_grid.json").read_text(encoding="utf-8"))
+    stray_vals = [g["values"][r * g["cols"] + c] for r in range(0, 5) for c in range(30, 34)]
+    assert stray_vals == [None] * len(stray_vals)
+    board_vals = [g["values"][r * g["cols"] + c] for r in range(0, 12) for c in range(0, 12)]
+    assert all(v is not None for v in board_vals)            # 판 자체는 값이 있다(파편만 지웠다)
+    rows = json.loads((tmp_path / "out" / "cells.json").read_text(encoding="utf-8"))
+    stray_cell = next(r for r in rows if r["ix"] == 3 and r["iy"] == 0)   # x 1.5~2.0m 칸
+    assert stray_cell["zone_id"] is None and stray_cell["value_mm"] is None

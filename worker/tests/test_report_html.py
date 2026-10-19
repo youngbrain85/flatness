@@ -72,10 +72,12 @@ def test_render_html_has_no_em_dash_and_escapes_title(tmp_path):
     assert "&lt;script&gt;" in html
 
 
-def _snapshot_with_deviation(tmp_path):
+def _snapshot_with_deviation(tmp_path, cell_m=None):
     db, cfg = FakeDB(), _cfg(tmp_path)
     _seed(db, cfg)
     db.analyses["an1"]["stats"]["deviation_paths"] = ["deviation.png"]
+    if cell_m is not None:
+        db.analyses["an1"]["stats"]["meta"]["cell_m"] = cell_m
     artifacts = cfg.data_dir / "artifacts" / "an1"
     for name in ("heatmap.png", "preview3d.png", "deviation.png"):
         (artifacts / name).write_bytes(b"\x89PNG-fake")
@@ -90,10 +92,17 @@ def test_render_html_includes_deviation_figure(tmp_path):
     assert "정밀 편차맵(10cm)" in html
     # 판정 무관 고지: 스펙이 요구한 문구 두 절을 모두 담아야 한다(대시보드 탭과 동일 취지).
     # 편차맵의 초록은 "침하", 판정 히트맵의 초록은 "적합"이라 색 의미가 반대다 - 등급 기준이
-    # 1m 판정 셀임을 함께 알려야 오독을 막는다.
+    # 몇 m 판정 셀인지(meta.cell_m)를 함께 알려야 오독을 막는다. 시드 분석은 1.0m 셀이다.
     assert "판정 등급 산출에는 사용되지 않으며" in html
-    assert "1m 판정 셀" in html
+    assert "1.0m 판정 셀 기준" in html
     assert "—" not in html                                  # 사용자 대면 문자열 U+2014 금지
+
+
+def test_deviation_caption_names_the_analysis_cell_size(tmp_path):
+    # 판정 셀 0.5m(2026-10-19~): 캡션이 '1m'로 박혀 있으면 같은 보고서의 분석 파라미터(판정 셀 0.5m)와 어긋난다
+    html = render_html(_snapshot_with_deviation(tmp_path, cell_m=0.5))
+    assert "0.5m 판정 셀 기준" in html
+    assert "1m 판정 셀" not in html and "1.0m 판정 셀" not in html
 
 
 def test_slope_analysis_is_not_rendered_as_a_flatness_section(tmp_path):

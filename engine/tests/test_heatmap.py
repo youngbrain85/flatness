@@ -17,3 +17,17 @@ def test_heatmap_empty_cells(tmp_path):
     out = tmp_path / "empty.png"
     render_heatmap([], [], out)
     assert out.stat().st_size > 0
+
+
+def test_heatmap_png_size_follows_floor_size_not_cell_count(tmp_path):
+    # 판정 셀 0.5m(2026-10-19): 그림 크기를 칸 수에 비례시키면 같은 바닥이 픽셀 4배·메모리 4배가 된다
+    # (50x40m 바닥 렌더 피크 +1.4GB, 리뷰 실측). 바닥 물리 크기에 비례해야 셀 크기와 무관하다
+    from PIL import Image
+
+    def run(cell_m, name):
+        n = int(round(20 / cell_m))
+        cells = [CellResult(ix, iy, 0.0, 0.0, 1.0, 3.0, 1.0, None, None, 1) for iy in range(n) for ix in range(n)]
+        render_heatmap(cells, ["pass"] * len(cells), tmp_path / name, cell_m=cell_m)
+        return Image.open(tmp_path / name).size
+
+    assert run(0.5, "half.png") == run(1.0, "one.png")

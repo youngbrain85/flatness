@@ -31,7 +31,8 @@ def render_heatmap(cells, grades, out_path, cell_m=1.0):
         img = np.full((ncy, ncx), _ORDER.index("na"), dtype=int)
         for c, g in zip(cells, grades):
             img[c.iy, c.ix] = _ORDER.index(g if g is not None else "na")
-    fig, ax = plt.subplots(figsize=(max(4, ncx * 0.6), max(3, ncy * 0.6)))
+    # 그림 크기는 바닥 물리 크기(m)에 비례한다. 칸 수에 비례시키면 0.5m 셀에서 같은 바닥이 픽셀·메모리 4배가 된다
+    fig, ax = plt.subplots(figsize=(max(4, ncx * cell_m * 0.6), max(3, ncy * cell_m * 0.6)))
     ax.imshow(img, cmap=ListedColormap([GRADE_COLORS[k] for k in _ORDER]),
               vmin=0, vmax=len(_ORDER) - 1, origin="lower",
               extent=[0, ncx * cell_m, 0, ncy * cell_m])
