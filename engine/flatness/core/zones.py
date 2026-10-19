@@ -1,11 +1,16 @@
-"""구역화 — 레벨 밴드 → 연결요소 → 구역별 로버스트 평면 잔차 (스펙 §5.1.3~4).
+"""구역화 — 높이 연속성 연결요소 → 구역별 로버스트 평면 잔차 (스펙 §5.1.3~4, 2026-10-20 개정).
 
 구역(연결요소)이 바닥의 실체다: 결함 구역이 RANSAC 인라이어에서 빠져
 측정에서 제외되는 선택 편향을 구역 단위 처리로 회피한다.
+
+2026-10-20 개정(바닥 기준면 개선 스펙 §1): 바닥 레벨을 높이 히스토그램 봉우리로 찾던 방식은 경사면에서
+봉우리가 없어 무너졌다(16m 2.5%·3% 구역 0개, 8m 3% 구역 3개). 이제 4방향 이웃 서브셀의 중간값 높이 차이가
+step_m 이하이면 같은 면으로 잇는다. 경사·완만한 휨은 한 면, 단차·가구 상판처럼 높이가 끊기는 곳에서 나뉜다.
 """
 from dataclasses import dataclass
 import numpy as np
-from scipy import ndimage
+from scipy.sparse import coo_matrix
+from scipy.sparse.csgraph import connected_components
 from flatness.core.plane import fit_plane_ransac
 
 
@@ -25,65 +30,43 @@ class ZoneMap:
     zones: list
 
 
-def build_zones(grid, levels, band_m=0.05, min_area_m2=1.0,
-                furniture_gap_m=0.3, furniture_max_m2=3.0, ghost_frac=0.2,
-                grow_iters=12):
+def _continuity_components(mz, step_m):
+    """이웃(4방향) 높이 차이가 step_m 이하인 유효 서브셀끼리 이은 연결요소 번호. 값 없는 칸은 -1."""
+    ny, nx = mz.shape
+    finite = np.isfinite(mz)
+    idx = np.arange(ny * nx).reshape(ny, nx)
+    with np.errstate(invalid="ignore"):
+        h = finite[:, :-1] & finite[:, 1:] & (np.abs(mz[:, :-1] - mz[:, 1:]) <= step_m)
+        v = finite[:-1, :] & finite[1:, :] & (np.abs(mz[:-1, :] - mz[1:, :]) <= step_m)
+    r = np.concatenate([idx[:, :-1][h], idx[:-1, :][v]])
+    c = np.concatenate([idx[:, 1:][h], idx[1:, :][v]])
+    graph = coo_matrix((np.ones(len(r), dtype=np.int8), (r, c)), shape=(ny * nx, ny * nx))
+    _, comp = connected_components(graph, directed=False)
+    comp = comp.reshape(ny, nx)
+    comp[~finite] = -1
+    return comp
+
+
+def build_zones(grid, min_area_m2=1.0, step_m=0.015,
+                furniture_gap_m=0.3, furniture_max_m2=3.0, ghost_frac=0.2):
     mz = grid.median_z
     labels = np.zeros(mz.shape, dtype=np.int32)
     zones = []
-    next_id = 1
     sub_area = grid.size_m * grid.size_m
-    for level in levels:
-        mask = (np.abs(mz - level) <= band_m) & (labels == 0)
-        lab, n = ndimage.label(mask)
-        for comp in range(1, n + 1):
-            m = lab == comp
-            n_sub = int(m.sum())
-            if n_sub * sub_area < min_area_m2:
-                continue  # 최소 면적 미달 파편 배제
-            labels[m] = next_id
-            zones.append(ZoneInfo(next_id, float(level), n_sub, n_sub * sub_area, "ok", None))
-            next_id += 1
+    comp = _continuity_components(mz, step_m)
+    valid = comp >= 0
+    sizes = np.bincount(comp[valid])
+    keep = [k for k in np.flatnonzero(sizes) if sizes[k] * sub_area >= min_area_m2]   # 최소 면적 미달 파편 배제
+    keep.sort(key=lambda k: (-sizes[k], k))   # 넓은 면부터 구역 번호(결정적)
+    for zone_id, k in enumerate(keep, start=1):
+        m = comp == k
+        labels[m] = zone_id
+        n_sub = int(sizes[k])
+        zones.append(ZoneInfo(zone_id, float(np.median(mz[m])), n_sub, n_sub * sub_area, "ok", None))
     residuals = np.full(mz.shape, np.nan, dtype=np.float32)
     if not zones:
         return ZoneMap(labels, zones), residuals
-    main = max(zones, key=lambda z: z.area_m2)  # 주 레벨 = 최대 면적 구역
-    # 평면 추종 영역 성장(티켓 13): 고정 높이 밴드가 놓친 경사 슬래브 영역 회복
-    from scipy.ndimage import binary_dilation
-    finite = np.isfinite(mz)
-    for _ in range(grow_iters):
-        changed = False
-        for z in zones:
-            if z.status != "ok":
-                continue
-            m = labels == z.zone_id
-            ys, xs = np.nonzero(m)
-            if len(xs) < 3:
-                continue
-            cx = (xs + 0.5) * grid.size_m
-            cy = (ys + 0.5) * grid.size_m
-            a, b, c = fit_plane_ransac(cx, cy, mz[ys, xs].astype(float))
-            # 고정 평면으로 인접 링을 소진될 때까지 흡수(내부 루프) —
-            # 링당 재피팅 없이 경사면 전체를 1~2 외부 반복에 수렴시킨다
-            # (2026-07-28 개정: 외부 반복당 1링 성장은 12회=0.6m 한계로 경사 테스트 미달 실측)
-            while True:
-                frontier = binary_dilation(m) & (labels == 0) & finite
-                fy, fx = np.nonzero(frontier)
-                if len(fx) == 0:
-                    break
-                pv = mz[fy, fx] - (a * (fx + 0.5) * grid.size_m + b * (fy + 0.5) * grid.size_m + c)
-                absorb = np.abs(pv) <= band_m
-                if not absorb.any():
-                    break
-                labels[fy[absorb], fx[absorb]] = z.zone_id
-                m = labels == z.zone_id
-                changed = True
-        if not changed:
-            break
-    for z in zones:  # 성장 반영 재집계
-        n_sub = int((labels == z.zone_id).sum())
-        z.n_subcells = n_sub
-        z.area_m2 = n_sub * sub_area
+    main = zones[0]  # 주 구역 = 가장 넓은 면
     for z in zones:
         m = labels == z.zone_id
         if z.zone_id != main.zone_id and z.level_m > main.level_m + furniture_gap_m \

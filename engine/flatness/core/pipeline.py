@@ -5,7 +5,6 @@ import numpy as np
 from flatness import ENGINE_VERSION
 from flatness.io.reader import iter_chunks, read_info
 from flatness.core.subcell import build_subcell_grid
-from flatness.core.levels import detect_levels
 from flatness.core.zones import build_zones
 from flatness.core.cells import evaluate_cells
 from flatness.core.pointsample import sample_points
@@ -45,13 +44,12 @@ def analyze_floor(path, scale_to_m, criterion, u_mm, out_dir,
     n_valid_sub = int(np.isfinite(grid.median_z).sum())
     if n_valid_sub < 10:
         raise ValueError("유효 서브셀 부족: 바닥 미검출")
-    levels = detect_levels(grid.median_z)
-    zmap, residuals = build_zones(grid, levels)
+    zmap, residuals = build_zones(grid)
     ok_zones = [z for z in zmap.zones if z.status == "ok"]
     small_specimen = False
     if not ok_zones:
         # 작은 시편(스펙 2·3 §4): 1㎡ 구역이 없어도 한 덩어리가 유효 서브셀 80% 이상이면 판정 구역으로 인정
-        zmap, residuals = build_zones(grid, levels, min_area_m2=0.0)
+        zmap, residuals = build_zones(grid, min_area_m2=0.0)
         ok_zones = [z for z in zmap.zones if z.status == "ok"]
         main = max(ok_zones, key=lambda z: z.n_subcells) if ok_zones else None
         if main is None or main.n_subcells < 0.8 * n_valid_sub:

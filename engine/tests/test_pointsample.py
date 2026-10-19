@@ -12,7 +12,6 @@ import math
 import struct
 
 import pytest
-from flatness.core.levels import detect_levels
 from flatness.core.zones import build_zones
 from tests.fixtures.synthetic import flat_floor, add_bump
 
@@ -311,7 +310,7 @@ def _sp_scene(pts, scale=1.0):
     """합성 점 → (info, grid, zmap, residuals). analyze_floor 의 1·2번째 패스와 같은 순서."""
     info = CloudInfo(len(pts), pts.min(axis=0).astype(np.float64), pts.max(axis=0).astype(np.float64))
     grid = build_subcell_grid(_sp_chunks(pts, 200_000), info, scale_to_m=scale)
-    zmap, residuals = build_zones(grid, detect_levels(grid.median_z))
+    zmap, residuals = build_zones(grid)
     return info, grid, zmap, residuals
 
 
