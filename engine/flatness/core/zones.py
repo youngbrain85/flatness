@@ -84,6 +84,26 @@ def _surfaces(mz, step_m, min_cells, max_count=None):
     return out
 
 
+def _enclosed_depressions(out, below, labels, zid, finite):
+    """out 중 평면 아래로 꺼지고(below) 사방이 같은 구역(zid)으로 둘러싸인 덩어리. 이런 덩어리는 바닥 결함(접시형 함몰)이라
+    구역에서 빼지 않는다(빼면 제 구역이 되어 자기 평면 기준으로 매끈해 보이고 판정 최댓값이 5cm 에서 막힌다, 재검토 실측).
+    격자 가장자리에 닿거나 둘레에 다른 구역·제외 칸이 있으면 둘러싸인 것이 아니다(경사로 옆 다른 레벨 등)."""
+    keep = np.zeros(out.shape, dtype=bool)
+    lab, n = ndimage.label(out & below)
+    if n == 0:
+        return keep
+    ny, nx = out.shape
+    for k, sl in enumerate(ndimage.find_objects(lab), start=1):
+        if sl[0].start == 0 or sl[1].start == 0 or sl[0].stop == ny or sl[1].stop == nx:
+            continue                                    # 격자 가장자리에 닿는다
+        big = (slice(sl[0].start - 1, sl[0].stop + 1), slice(sl[1].start - 1, sl[1].stop + 1))
+        cm = lab[big] == k
+        ring = ndimage.binary_dilation(cm) & ~cm & finite[big]
+        if ring.any() and bool(((labels[big] == zid) & ~out[big])[ring].all()):
+            keep[big] |= cm
+    return keep
+
+
 def build_zones(grid, min_area_m2=1.0, step_m=0.015, band_m=0.05,
                 furniture_gap_m=0.3, furniture_max_m2=3.0, ghost_frac=0.2, max_zones=None, max_rounds=3):
     """서브셀 격자 -> 구역(ZoneMap)과 구역 평면 잔차.
@@ -91,7 +111,9 @@ def build_zones(grid, min_area_m2=1.0, step_m=0.015, band_m=0.05,
     1) 이웃 높이차 step_m 이하로 이은 연결요소 중 면적 min_area_m2 이상·폭 있는 것을 구역으로 삼는다(넓은 것부터,
        max_zones 개까지 - 작은 시편 재시도는 가장 큰 하나만 본다).
     2) ok 구역마다 RANSAC 평면을 맞추고, 평면에서 band_m(5cm) 넘게 벗어난 칸은 구역에서 뺀다(완만한 더미·경사로로
-       이어진 다른 레벨. 옛 ±5cm 밴드의 제외 동작). 뺀 칸끼리 다시 이어 면이 되면 제 구역이 된다(최대 max_rounds 번).
+       이어진 다른 레벨. 옛 ±5cm 밴드의 제외 동작). 단 평면 아래로 꺼지고 사방이 같은 구역인 덩어리(접시형 함몰)는
+       바닥 결함이라 남긴다. 뺀 칸끼리 다시 이어 면이 되면 제 구역이 된다(최대 max_rounds 번). 뺀 뒤 구역의 칸 수·
+       면적·level_m(남은 칸 중앙값)을 다시 센다. 뺀 뒤 구역이 여러 조각이 되거나 1㎡ 아래로 줄 수 있다(판정은 라벨로 한다).
     3) 가구 상판(주 구역보다 furniture_gap_m 넘게 높고 furniture_max_m2 이하)·유령층(쌍봉 ghost_frac 초과)은 판정 제외.
     """
     mz = grid.median_z
@@ -137,12 +159,17 @@ def build_zones(grid, min_area_m2=1.0, step_m=0.015, band_m=0.05,
             fit(z)
             with np.errstate(invalid="ignore"):
                 out = m & (np.abs(residuals) > band_m)
+                below = residuals < -band_m
+            if out.any():
+                out &= ~_enclosed_depressions(out, below, labels, z.zone_id, np.isfinite(mz))
             if out.any():               # 평면에서 5cm 넘게 벗어난 칸은 이 구역이 아니다
                 labels[out] = 0
                 residuals[out] = np.nan
                 far |= out
-                z.n_subcells = int((labels == z.zone_id).sum())
+                kept = labels == z.zone_id
+                z.n_subcells = int(kept.sum())
                 z.area_m2 = z.n_subcells * sub_area
+                z.level_m = float(np.median(mz[kept]))
         zones.extend(new)
         if not far.any():
             break

@@ -654,3 +654,11 @@ def test_reference_nodes_carry_zone_ids(tmp_path):
     j = 6
     left, right = s["zones"][j * s["cols"] + 2], s["zones"][j * s["cols"] + 25]
     assert left is not None and right is not None and left != right
+
+
+def test_deep_gentle_depression_worst_is_not_capped_at_5cm(tmp_path):
+    # 재검토 실측: 깊이 80mm·반경 0.9m 접시형 함몰이 제 구역으로 떨어져 worst 가 80.4 -> 49.9mm 로 잘렸다
+    p = add_bump(flat_floor(size=(8.0, 8.0), spacing=0.025, seed=1), (4.0, 4.0), 0.9, -0.08)
+    write_binary_ply(p, tmp_path / "scan.ply")
+    stats = analyze_floor(tmp_path / "scan.ply", 1.0, CRIT, 5.0, tmp_path / "out")
+    assert stats["worst"]["value_mm"] >= 70.0

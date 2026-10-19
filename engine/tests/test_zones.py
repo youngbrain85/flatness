@@ -142,3 +142,27 @@ def test_max_zones_keeps_only_the_largest_surface():
     zmap, _ = build_zones(g, min_area_m2=0.0, max_zones=1)
     assert len(zmap.zones) == 1
     assert zmap.labels[2, 2] == 1 and zmap.labels[2, int(1.6 / g.size_m)] == 0
+
+
+def test_deep_enclosed_depression_stays_in_floor_zone():
+    # 재검토(2026-10-20): 깊이 8cm 접시형 함몰이 5cm 이탈 규칙으로 빠져 제 구역이 되면 자기 평면 기준으로 매끈해 보여
+    # 판정 최댓값이 50mm 에서 막혔다. 평면 아래로 꺼지고 사방이 같은 구역인 덩어리는 결함이라 구역에 남긴다
+    p = add_bump(flat_floor(size=(8.0, 8.0), spacing=0.025, seed=1), (4.0, 4.0), 0.9, -0.08)
+    g = _grid(p)
+    zmap, res = build_zones(g)
+    i = int(4.0 / g.size_m)
+    assert zmap.labels[i, i] == zmap.labels[5, 5] != 0
+    assert np.nanmin(res) <= -0.075
+
+
+def test_level_m_is_median_of_cells_kept_after_exclusion():
+    # 재검토: 구역에서 칸을 뺀 뒤 level_m 이 빼기 전 연결요소의 중앙값(0.073)으로 남아 결과표·PDF·가구 규칙이 틀어졌다
+    p = flat_floor(size=(8.0, 4.0), spacing=0.025, seed=2)
+    p[:, 2] = np.clip((p[:, 0] - 3.0) * 0.08, 0.0, 0.16)
+    g = _grid(p)
+    zmap, _ = build_zones(g)
+    low = zmap.labels[int(2.0 / g.size_m), int(1.0 / g.size_m)]
+    z = next(z for z in zmap.zones if z.zone_id == low)
+    kept = zmap.labels == low
+    assert abs(z.level_m - float(np.median(g.median_z[kept]))) < 1e-9
+    assert z.level_m < 0.03
