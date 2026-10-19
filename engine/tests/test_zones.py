@@ -1,5 +1,5 @@
 import numpy as np
-from tests.fixtures.synthetic import flat_floor
+from tests.fixtures.synthetic import add_bump, flat_floor
 from flatness.core.zones import build_zones
 from tests.test_subcell import _grid
 
@@ -104,3 +104,41 @@ def test_line_shaped_fragment_is_not_a_zone():
     zmap, _ = build_zones(g, min_area_m2=0.0)
     assert [z.status for z in zmap.zones] == ["ok"]
     assert (zmap.labels[0] == 0).all()          # 0번 줄(가장자리 띠)은 구역이 아니다
+
+
+# 리뷰(2026-10-20): 연속성 연결요소는 기울기가 칸당 1.5cm(30%) 미만이면 높이와 상관없이 잇는다. 옛 ±5cm 밴드가 빼던
+# 완만한 더미(자재·포대)와 두 레벨을 잇는 경사로가 판정 구역에 들어와 최댓값이 44→82mm 로 바뀌었다(리뷰 실측).
+# 구역 평면에서 5cm 넘게 벗어난 칸은 구역에서 빼고, 뺀 칸끼리 다시 이어 제 구역을 만든다(옛 제외 동작 복원)
+def test_gentle_mound_top_is_excluded_from_floor_zone():
+    p = add_bump(flat_floor(size=(8.0, 8.0), spacing=0.025, seed=1), (4.0, 4.0), 1.0, 0.12)
+    g = _grid(p)
+    zmap, res = build_zones(g)
+    ok = [z for z in zmap.zones if z.status == "ok"]
+    assert np.nanmax(np.abs(res)) <= 0.0505                 # 구역 평면에서 5cm 넘는 칸은 구역에 없다
+    i = int(4.0 / g.size_m)
+    assert zmap.labels[i, i] == 0                            # 더미 꼭대기는 구역이 아니다(1㎡ 미만이라 제 구역도 안 된다)
+    assert len(ok) == 1
+
+
+def test_ramp_between_two_levels_splits_the_levels_apart():
+    # x 0~3m z=0, 3~5m 8% 경사로(0→16cm), 5~8m z=16cm. 아래 면·위 면은 서로 다른 구역이고(경사로 가운데는 제 경사 평면의
+    # 구역이 될 수 있다 - 실측 3구역), 어느 구역도 제 평면에서 5cm 넘게 벗어난 칸을 품지 않는다
+    p = flat_floor(size=(8.0, 4.0), spacing=0.025, seed=2)
+    x = p[:, 0]
+    p[:, 2] = np.clip((x - 3.0) * 0.08, 0.0, 0.16)
+    g = _grid(p)
+    zmap, res = build_zones(g)
+    row = int(2.0 / g.size_m)
+    low, high = zmap.labels[row, int(1.0 / g.size_m)], zmap.labels[row, int(7.0 / g.size_m)]
+    assert low > 0 and high > 0 and low != high
+    assert np.nanmax(np.abs(res)) <= 0.0505
+
+
+def test_max_zones_keeps_only_the_largest_surface():
+    # 작은 시편 재시도는 가장 큰 덩어리 하나만 맞춘다(잡음 덩어리 수천 개에 RANSAC 을 돌리면 16초, 리뷰 실측)
+    board = flat_floor(size=(0.6, 0.6), spacing=0.005)
+    stray = flat_floor(size=(0.2, 0.25), spacing=0.005) + np.array([1.5, 0.0, 0.0])
+    g = _grid(np.vstack([board, stray]))
+    zmap, _ = build_zones(g, min_area_m2=0.0, max_zones=1)
+    assert len(zmap.zones) == 1
+    assert zmap.labels[2, 2] == 1 and zmap.labels[2, int(1.6 / g.size_m)] == 0

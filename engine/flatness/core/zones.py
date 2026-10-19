@@ -9,6 +9,7 @@ step_m 이하이면 같은 면으로 잇는다. 경사·완만한 휨은 한 면
 """
 from dataclasses import dataclass
 import numpy as np
+from scipy import ndimage
 from scipy.sparse import coo_matrix
 from scipy.sparse.csgraph import connected_components
 from flatness.core.plane import fit_plane_ransac
@@ -60,36 +61,49 @@ def _has_width(m):
     return bool(c[0, 0] * c[1, 1] - c[0, 1] ** 2 > 1e-9)
 
 
-def build_zones(grid, min_area_m2=1.0, step_m=0.015,
-                furniture_gap_m=0.3, furniture_max_m2=3.0, ghost_frac=0.2):
+def _surfaces(mz, step_m, min_cells, max_count=None):
+    """높이 연속성 연결요소 중 면이 되는 것(칸 수 min_cells 이상·폭 있음)을 넓은 것부터 (bbox, bbox 안 마스크, 칸 수)로.
+
+    연결요소마다 bbox 안에서만 마스크를 만든다(잡음 많은 작은 시편은 덩어리가 수천 개라 전체 격자 비교는 느리다)."""
+    comp = _continuity_components(mz, step_m)
+    valid = comp >= 0
+    if not valid.any():
+        return []
+    sizes = np.bincount(comp[valid])
+    cand = sorted((k for k in np.flatnonzero(sizes) if sizes[k] >= min_cells), key=lambda k: (-sizes[k], k))
+    boxes = ndimage.find_objects(comp + 1)   # 연결요소 k 의 bbox = boxes[k] (값 없는 칸 -1 -> 0 은 배경)
+    out = []
+    for k in cand:
+        sl = boxes[k]
+        m = comp[sl] == k
+        if not _has_width(m):
+            continue                          # 폭 없는(일직선·3칸 미만) 덩어리는 면이 아니다
+        out.append((sl, m, int(sizes[k])))
+        if max_count is not None and len(out) >= max_count:
+            break
+    return out
+
+
+def build_zones(grid, min_area_m2=1.0, step_m=0.015, band_m=0.05,
+                furniture_gap_m=0.3, furniture_max_m2=3.0, ghost_frac=0.2, max_zones=None, max_rounds=3):
+    """서브셀 격자 -> 구역(ZoneMap)과 구역 평면 잔차.
+
+    1) 이웃 높이차 step_m 이하로 이은 연결요소 중 면적 min_area_m2 이상·폭 있는 것을 구역으로 삼는다(넓은 것부터,
+       max_zones 개까지 - 작은 시편 재시도는 가장 큰 하나만 본다).
+    2) ok 구역마다 RANSAC 평면을 맞추고, 평면에서 band_m(5cm) 넘게 벗어난 칸은 구역에서 뺀다(완만한 더미·경사로로
+       이어진 다른 레벨. 옛 ±5cm 밴드의 제외 동작). 뺀 칸끼리 다시 이어 면이 되면 제 구역이 된다(최대 max_rounds 번).
+    3) 가구 상판(주 구역보다 furniture_gap_m 넘게 높고 furniture_max_m2 이하)·유령층(쌍봉 ghost_frac 초과)은 판정 제외.
+    """
     mz = grid.median_z
     labels = np.zeros(mz.shape, dtype=np.int32)
     zones = []
     sub_area = grid.size_m * grid.size_m
-    comp = _continuity_components(mz, step_m)
-    valid = comp >= 0
-    sizes = np.bincount(comp[valid])
-    keep = [k for k in np.flatnonzero(sizes) if sizes[k] * sub_area >= min_area_m2]   # 최소 면적 미달 파편 배제
-    keep = [k for k in keep if _has_width(comp == k)]   # 폭 없는(일직선·3칸 미만) 덩어리는 면이 아니다
-    keep.sort(key=lambda k: (-sizes[k], k))   # 넓은 면부터 구역 번호(결정적)
-    for zone_id, k in enumerate(keep, start=1):
-        m = comp == k
-        labels[m] = zone_id
-        n_sub = int(sizes[k])
-        zones.append(ZoneInfo(zone_id, float(np.median(mz[m])), n_sub, n_sub * sub_area, "ok", None))
+    min_cells = max(1, int(np.ceil(min_area_m2 / sub_area - 1e-9)))
     residuals = np.full(mz.shape, np.nan, dtype=np.float32)
-    if not zones:
-        return ZoneMap(labels, zones), residuals
-    main = zones[0]  # 주 구역 = 가장 넓은 면
-    for z in zones:
+    main = None
+
+    def fit(z):
         m = labels == z.zone_id
-        if z.zone_id != main.zone_id and z.level_m > main.level_m + furniture_gap_m \
-                and z.area_m2 <= furniture_max_m2:
-            z.status = "furniture"  # 가구 상판 의심: 판정 제외 (스펙 §5.1.3)
-            continue
-        if float(grid.bimodal[m].mean()) > ghost_frac:
-            z.status = "ghost"      # 구역 대부분이 이중층: 재스캔 필요
-            continue
         ys, xs = np.nonzero(m)
         # 구역 로컬 좌표로 피팅(대좌표 조건수 문제 회피 — origin 무관)
         cx = (xs + 0.5) * grid.size_m
@@ -97,5 +111,41 @@ def build_zones(grid, min_area_m2=1.0, step_m=0.015,
         a, b, c = fit_plane_ransac(cx, cy, mz[ys, xs].astype(float))
         z.plane_abc = (a, b, c)
         residuals[ys, xs] = (mz[ys, xs] - (a * cx + b * cy + c)).astype(np.float32)
+
+    source = mz
+    for _ in range(max_rounds):
+        found = _surfaces(source, step_m, min_cells, max_count=max_zones if not zones else None)
+        if not found:
+            break
+        new = []
+        for sl, m, n in found:
+            zid = len(zones) + len(new) + 1
+            labels[sl][m] = zid
+            new.append(ZoneInfo(zid, float(np.median(mz[sl][m])), n, n * sub_area, "ok", None))
+        if main is None:
+            main = new[0]  # 주 구역 = 가장 넓은 면
+        far = np.zeros(mz.shape, dtype=bool)
+        for z in new:
+            m = labels == z.zone_id
+            if z.zone_id != main.zone_id and z.level_m > main.level_m + furniture_gap_m \
+                    and z.area_m2 <= furniture_max_m2:
+                z.status = "furniture"  # 가구 상판 의심: 판정 제외 (스펙 §5.1.3)
+                continue
+            if float(grid.bimodal[m].mean()) > ghost_frac:
+                z.status = "ghost"      # 구역 대부분이 이중층: 재스캔 필요
+                continue
+            fit(z)
+            with np.errstate(invalid="ignore"):
+                out = m & (np.abs(residuals) > band_m)
+            if out.any():               # 평면에서 5cm 넘게 벗어난 칸은 이 구역이 아니다
+                labels[out] = 0
+                residuals[out] = np.nan
+                far |= out
+                z.n_subcells = int((labels == z.zone_id).sum())
+                z.area_m2 = z.n_subcells * sub_area
+        zones.extend(new)
+        if not far.any():
+            break
+        source = np.where(far, mz, np.nan)
     residuals[grid.bimodal] = np.nan  # 쌍봉 서브셀은 어느 구역이든 판정 제외
     return ZoneMap(labels, zones), residuals

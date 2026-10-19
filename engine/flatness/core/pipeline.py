@@ -50,7 +50,7 @@ def analyze_floor(path, scale_to_m, criterion, u_mm, out_dir,
     small_specimen = False
     if not ok_zones:
         # 작은 시편(스펙 2·3 §4): 1㎡ 구역이 없어도 한 덩어리가 유효 서브셀 80% 이상이면 판정 구역으로 인정
-        zmap, residuals = build_zones(grid, min_area_m2=0.0)
+        zmap, residuals = build_zones(grid, min_area_m2=0.0, max_zones=1)   # 가장 큰 덩어리만 맞춘다
         ok_zones = [z for z in zmap.zones if z.status == "ok"]
         main = max(ok_zones, key=lambda z: z.n_subcells) if ok_zones else None
         if main is None or main.n_subcells < 0.8 * n_valid_sub:
