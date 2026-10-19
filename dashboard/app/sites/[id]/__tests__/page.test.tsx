@@ -52,15 +52,18 @@ function stubSupabase(data: Record<string, Row[]>, opts: { failTable?: string; f
       const call: Call = { table, eq: [], in: [], is: [] };
       calls.push(call);
       let rows = data[table] ?? [];
+      // Supabase(PostgREST)처럼 한 번에 최대 1000행만 돌려준다. range(from, to)를 걸면 그 구간(양 끝 포함)
+      let window: [number, number] | null = null;
       const result = () => (table === opts.failTable || (opts.failSelect !== undefined && call.select === opts.failSelect)
         ? { data: null, error: { message: 'connection refused' } }
-        : { data: rows, error: null });
+        : { data: window ? rows.slice(window[0], window[1] + 1).slice(0, 1000) : rows.slice(0, 1000), error: null });
       const q: Record<string, unknown> = {
         select: (cols: string) => { call.select = cols; return q; },
         eq: (col: string, val: unknown) => { call.eq.push([col, val]); rows = rows.filter((r) => r[col] === val); return q; },
         in: (col: string, vals: unknown[]) => { call.in.push([col, vals]); rows = rows.filter((r) => vals.includes(r[col])); return q; },
         is: (col: string, val: unknown) => { call.is.push([col, val]); rows = rows.filter((r) => (r[col] ?? null) === val); return q; },
         order: () => q,
+        range: (from: number, to: number) => { window = [from, to]; return q; },
         maybeSingle: async () => {
           const r = result();
           return r.error ? r : { data: rows[0] ?? null, error: null };
@@ -171,6 +174,19 @@ describe('SiteDashboardPage 쿼리 배선', () => {
   it('스캔이 없으면 분석 조회를 보내지 않는다', async () => {
     const { calls } = await renderPage({ sites: [SITE], locations: [location('l1', 's1')], scans: [], reports: [] });
     expect(calls.map((c) => c.table)).toEqual(['sites', 'locations', 'scans', 'reports']);
+  });
+});
+
+// 후속(2026-10-18): Supabase 는 한 번에 최대 1000행만 돌려주고 넘치는 행은 오류 없이 잘라 낸다.
+// 분석 시도가 1000건을 넘는 현장에서 처리 중 KPI 가 조용히 줄면 안 된다(쪽을 넘겨 끝까지 받는다).
+describe('SiteDashboardPage 행 상한', () => {
+  it('분석 시도가 1000건을 넘어도 처리 중을 끝까지 센다', async () => {
+    const queued = Array.from({ length: 1200 }, (_, i) =>
+      analysis(`q${i}`, 'c1', { status: 'queued', created_at: '2026-09-02T10:00:00+00:00' }));
+    const { el } = await renderPage({
+      sites: [SITE], locations: [location('l1', 's1')], scans: [scan('c1', 'l1', '2026-09-01')], analyses: queued, reports: [],
+    });
+    expect((findAll(el, DashboardKpis)[0].props.kpi as DashKpi).inProgressCount).toBe(1200);
   });
 });
 

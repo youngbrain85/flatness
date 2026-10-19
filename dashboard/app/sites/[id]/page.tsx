@@ -5,6 +5,7 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
+import { selectIn } from '@/lib/supabase/select-all';
 import {
   buildSiteDashboard, type DashAnalysis, type DashCurrentAnalysis, type DashReport, type DashScan,
 } from '@/lib/domain/site-dashboard';
@@ -42,13 +43,16 @@ export default async function SiteDashboardPage({ params }: { params: Promise<{ 
   const locations = (locationsRes.data ?? []) as LocationRow[];
   const locationIds = locations.map((l) => l.id);
 
+  // 목록 조회는 selectIn 으로 id 를 조각내고 1000행 상한을 넘겨 끝까지 받는다(lib/supabase/select-all.ts)
   const [scansRes, reportsRes] = locationIds.length
     ? await Promise.all([
-        supabase.from('scans').select('id, location_id, surface, scanned_at, status, created_at')
-          .in('location_id', locationIds).is('deleted_at', null),
+        selectIn(locationIds, (ids, from, to) => supabase.from('scans')
+          .select('id, location_id, surface, scanned_at, status, created_at')
+          .in('location_id', ids).is('deleted_at', null).order('id').range(from, to)),
         // 보고서 수는 상태 무관(삭제 제외). 최근 5건과 생성 실패도 이 목록에서 고른다.
-        supabase.from('reports').select('id, location_id, title, status, gen_status, created_at')
-          .in('location_id', locationIds).is('deleted_at', null),
+        selectIn(locationIds, (ids, from, to) => supabase.from('reports')
+          .select('id, location_id, title, status, gen_status, created_at')
+          .in('location_id', ids).is('deleted_at', null).order('id').range(from, to)),
       ])
     : [NO_ROWS, NO_ROWS];
   const listError = scansRes.error ?? reportsRes.error;
@@ -59,12 +63,15 @@ export default async function SiteDashboardPage({ params }: { params: Promise<{ 
   const [currentRes, analysesRes] = scanIds.length
     ? await Promise.all([
         // 단계 C 회귀 차단: kind 필터가 없으면 같은 스캔의 구배 현재 분석이 판정 집계에 섞여 2배로 계상된다.
-        supabase.from('analyses').select('scan_id, status, overall_verdict, kind')
-          .in('scan_id', scanIds).eq('is_current', true).eq('kind', 'flatness').is('deleted_at', null),
+        selectIn(scanIds, (ids, from, to) => supabase.from('analyses')
+          .select('scan_id, status, overall_verdict, kind')
+          .in('scan_id', ids).eq('is_current', true).eq('kind', 'flatness').is('deleted_at', null)
+          .order('id').range(from, to)),
         // 처리 중(종류 무관 queued·processing)과 최근 시도 실패를 본다. 새 분석은 is_current=false로 들어가
         // 완료돼야 현재가 되므로(components/reanalyze-button.tsx) 이 조회에는 is_current·kind를 걸지 않는다.
-        supabase.from('analyses').select('scan_id, kind, status, created_at')
-          .in('scan_id', scanIds).is('deleted_at', null),
+        selectIn(scanIds, (ids, from, to) => supabase.from('analyses')
+          .select('scan_id, kind, status, created_at')
+          .in('scan_id', ids).is('deleted_at', null).order('id').range(from, to)),
       ])
     : [NO_ROWS, NO_ROWS];
   const analysisError = currentRes.error ?? analysesRes.error;
