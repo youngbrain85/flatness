@@ -71,12 +71,12 @@ def test_local_reference_falls_back_to_zone_plane_when_window_is_too_small():
 
 
 def test_local_reference_does_not_mix_zones():
-    # 8x8m 바닥 가운데 2x2m 를 15cm 판 구덩이(4cm 틈으로 분리): 두 면은 따로 맞춘다. 바닥 구역의 창이
-    # 구덩이 칸을 섞으면 구덩이 둘레 바닥 편차가 수십 mm 로 튄다
-    floor = flat_floor(size=(8.0, 8.0), spacing=0.02)
-    inside = (floor[:, 0] > 2.97) & (floor[:, 0] < 5.03) & (floor[:, 1] > 2.97) & (floor[:, 1] < 5.03)
-    pit = flat_floor(size=(1.96, 1.96), spacing=0.02) + np.array([3.02, 3.02, -0.15])
-    _, zmap, _, local_mm, _ = _local_res(np.vstack([floor[~inside], pit]))
+    # 4x4m 바닥(z=0)을 두 변에서 감싸는 폭 0.6m 의 L자 낮은 띠(15cm 아래, 4cm 틈). 띠의 창(3m)에는 바닥 칸이 더 많다.
+    # 창이 다른 구역 칸을 섞으면 1회차가 바닥 높이에 맞고 2회차가 띠 칸을 결함으로 빼 버려 띠 편차가 −150mm 가 된다
+    floor = flat_floor(size=(4.0, 4.0), spacing=0.02)
+    side = flat_floor(size=(0.6, 4.64), spacing=0.02) + np.array([4.04, 0.0, -0.15])
+    top = flat_floor(size=(4.0, 0.6), spacing=0.02) + np.array([0.0, 4.04, -0.15])
+    _, zmap, _, local_mm, _ = _local_res(np.vstack([floor, side, top]))
     assert len([z for z in zmap.zones if z.status == "ok"]) == 2
     assert np.nanmax(np.abs(local_mm)) < 1.0
 
