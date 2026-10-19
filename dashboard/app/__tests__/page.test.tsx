@@ -47,11 +47,17 @@ function chain(
     eq?: (col: string, val: unknown) => void; in?: (col: string, val: unknown) => void;
   },
 ) {
+  // Supabase(PostgREST)처럼 한 번에 최대 1000행만 돌려준다. range(from, to)를 걸면 그 구간(양 끝 포함)
+  let window: [number, number] | null = null;
+  const capped = () => (Array.isArray(result.data)
+    ? { ...result, data: (window ? result.data.slice(window[0], window[1] + 1) : result.data).slice(0, 1000) }
+    : result);
   const obj: Record<string, unknown> = {
     select: (cols: string) => { spies?.select?.(cols); return obj; }, order: () => obj, is: () => obj,
     eq: (col: string, val: unknown) => { spies?.eq?.(col, val); return obj; },
     in: (col: string, val: unknown) => { spies?.in?.(col, val); return obj; },
-    then: (resolve: (v: unknown) => void) => resolve(result),
+    range: (from: number, to: number) => { window = [from, to]; return obj; },
+    then: (resolve: (v: unknown) => void) => resolve(capped()),
   };
   return obj;
 }
@@ -86,6 +92,23 @@ function stubSupabase(opts: {
     },
   };
 }
+
+// 후속(2026-10-18): Supabase 는 한 번에 최대 1000행만 돌려주고 넘치는 행은 오류 없이 잘라 낸다.
+// 전 현장 스캔이 1000건을 넘어도 총계·현장 줄이 조용히 줄면 안 된다(쪽을 넘겨 끝까지 받는다).
+describe('HomePage 행 상한', () => {
+  it('스캔이 1000건을 넘어도 총계를 끝까지 센다', async () => {
+    const scans = Array.from({ length: 1200 }, (_, i) => ({ id: `c${i}`, scanned_at: '2026-09-01', location_id: 'l1' }));
+    vi.mocked(getRequestUser).mockResolvedValue(null);
+    vi.mocked(createClient).mockResolvedValue(stubSupabase({
+      sites: [{ id: 's1', name: '현장A', address: null, memo: null, created_at: '', updated_at: '' }],
+      locations: [{ id: 'l1', site_id: 's1' }], scans,
+    }) as never);
+
+    const el = await HomePage();
+
+    expect((findAll(el, SiteFinder)[0].props.totals as EntryTotals).scans).toBe(1200);
+  });
+});
 
 describe('HomePage 쿼리 배선 (단계 C 회귀 차단: I1)', () => {
   it('판정 집계(analyses 첫 조회)에 kind=flatness 필터를 건다', async () => {

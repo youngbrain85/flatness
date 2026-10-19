@@ -46,13 +46,19 @@ function chain(
   result: { data: unknown; error: { message: string } | null },
   spy?: (method: string, col: string, val: unknown) => void,
 ) {
+  // Supabase(PostgREST)처럼 한 번에 최대 1000행만 돌려준다. range(from, to)를 걸면 그 구간(양 끝 포함)
+  let window: [number, number] | null = null;
+  const capped = () => (Array.isArray(result.data)
+    ? { ...result, data: (window ? result.data.slice(window[0], window[1] + 1) : result.data).slice(0, 1000) }
+    : result);
   const obj: Record<string, unknown> = {
+    range: (from: number, to: number) => { window = [from, to]; return obj; },
     select: (cols?: string) => { spy?.('select', cols ?? '', undefined); return obj; },
     order: (col: string, opts?: unknown) => { spy?.('order', col, opts); return obj; },
     eq: (col: string, val: unknown) => { spy?.('eq', col, val); return obj; },
     in: (col: string, val: unknown) => { spy?.('in', col, val); return obj; },
     is: (col: string, val: unknown) => { spy?.('is', col, val); return obj; },
-    then: (resolve: (v: unknown) => void) => resolve(result),
+    then: (resolve: (v: unknown) => void) => resolve(capped()),
   };
   return obj;
 }
@@ -187,6 +193,17 @@ describe('LocationsPage 쿼리 배선 (단계 C 회귀 차단: I1)', () => {
     expect(selects).toHaveLength(1);
     const columns = (selects[0][1] as string).split(',').map((c) => c.trim());
     expect(columns).toEqual(expect.arrayContaining(['scan_id', 'status', 'overall_verdict']));
+  });
+
+  // 후속(2026-10-18): Supabase 는 한 번에 최대 1000행만 돌려준다 - 넘치는 스캔이 트리에서 조용히 빠지면 안 된다
+  it('스캔이 1000건을 넘어도 끝까지 모은다', async () => {
+    const scans = Array.from({ length: 1200 }, (_, i) => ({ ...SCAN, id: `sc${i}` }));
+    vi.mocked(createClient).mockResolvedValue(stub({ scans }) as never);
+
+    const el = await LocationsPage(props());
+
+    const [tree] = findAll(el, LocationTree);
+    expect((tree.props.scansByLocation as Map<string, unknown[]>).get('l1')).toHaveLength(1200);
   });
 
   it('같은 측정위치의 스캔은 조회 순서대로 모두 모은다', async () => {
