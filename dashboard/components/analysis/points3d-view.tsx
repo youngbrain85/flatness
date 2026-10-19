@@ -27,6 +27,7 @@ import { createRenderer } from '@/lib/viz/points3d/gl-renderer';
 import type { Renderer, SurfaceMesh } from '@/lib/viz/points3d/gl-renderer';
 import { buildSurfaceMesh, devForBasis, surfaceOffset } from '@/lib/viz/points3d/reference';
 import type { RefBasis, RefSurfaces } from '@/lib/viz/points3d/reference';
+import type { ResidualGrid } from '@/lib/viz/deviation-grid';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import { Stage } from '@/components/ui/stage';
@@ -133,12 +134,15 @@ export function Points3dLoadingFrame({ theme }: { theme: ThemeName }) {
   );
 }
 
-export function Points3dView({ data, defaultThresholdQ, isRegistered, onError, surfaces = null, hasReference = false }: {
+export function Points3dView({
+  data, defaultThresholdQ, isRegistered, onError, surfaces = null, residual = null, hasReference = false,
+}: {
   data: Points3dData;
   defaultThresholdQ: number;          // 엔진이 준 표시 임계값(0.1mm 정수, 10~300). 5의 배수로 맞추지 않는다
   isRegistered: boolean;              // 정합 병합 스캔인가
   onError(kind: 'webgl' | 'context'): void;
   surfaces?: RefSurfaces | null;      // reference_surfaces.json(없거나 못 받으면 null: 기준면 줄을 숨긴다)
+  residual?: ResidualGrid | null;     // residual_grid.json(전체 기준 점 편차의 출처. 없으면 기준면 줄을 숨긴다)
   hasReference?: boolean;             // 이 분석의 점 편차가 국부 기준인가(stats.reference_surfaces_path 가 있는 새 분석)
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -163,21 +167,33 @@ export function Points3dView({ data, defaultThresholdQ, isRegistered, onError, s
 
   const scaffold = useMemo(() => buildScaffold(data.meta.fit_bounds), [data]);
   // 고른 기준의 점 편차와 그 편차를 실은 점 자료(읽기 창·고르기가 쓴다). 국부면 받은 자료 그대로
+  const refReady = surfaces !== null && residual !== null && Array.isArray(residual.values_global);
   const activeData = useMemo<Points3dData>(() => {
-    const dev = surfaces ? devForBasis(data, surfaces, basis) : data.dev;
+    const dev = refReady ? devForBasis(data, surfaces!, residual!, basis) : data.dev;
     return dev === data.dev ? data : { ...data, dev };
-  }, [data, surfaces, basis]);
+  }, [data, surfaces, residual, basis, refReady]);
   const activeDataRef = useRef(activeData);
   // 보이는 기준면의 반투명 면(고른 기준면 위에 과장 차이를 얹는다)
   const meshes = useMemo<SurfaceMesh[]>(() => {
-    if (!surfaces) return [];
+    if (!refReady || !surfaces) return [];
     const offset = surfaceOffset(surfaces, data.meta.origin_m);
     return BASES.filter((b) => shown[b.id]).map((b) => ({
       verts: buildSurfaceMesh(surfaces, b.id, basis, offset),
       color: REF_SURFACE_COLOR[themeName][b.id], alpha: REF_SURFACE_ALPHA,
     }));
-  }, [surfaces, data, basis, shown, themeName]);
+  }, [surfaces, data, basis, shown, themeName, refReady]);
   const meshesRef = useRef(meshes);
+
+  // 기준 전환·기준면 보기: 점 편차 버퍼와 반투명 면만 바꾼다. 아래 렌더러 effect 보다 먼저 선언해 ref 를 먼저 맞춘다
+  // (effect 는 선언 순서로 돈다. 렌더러 effect 가 다시 돌 때 이미 새 값을 읽는다)
+  useEffect(() => {
+    activeDataRef.current = activeData;
+    engineRef.current?.setDev(activeData.dev);
+  }, [activeData]);
+  useEffect(() => {
+    meshesRef.current = meshes;
+    engineRef.current?.setSurfaces(meshes);
+  }, [meshes]);
 
   useEffect(() => { onErrorRef.current = onError; }, [onError]);
 
@@ -354,16 +370,6 @@ export function Points3dView({ data, defaultThresholdQ, isRegistered, onError, s
     };
   }, [data, scaffold]);
 
-  // 기준 전환·기준면 보기: 점 편차 버퍼와 반투명 면만 바꾼다
-  useEffect(() => {
-    activeDataRef.current = activeData;
-    engineRef.current?.setDev(activeData.dev);
-  }, [activeData]);
-  useEffect(() => {
-    meshesRef.current = meshes;
-    engineRef.current?.setSurfaces(meshes);
-  }, [meshes]);
-
   // 임계값·과장 배율·배경·점 크기는 uniform 만 바꾸고 한 번 다시 그린다
   useEffect(() => {
     viewRef.current = { thresholdQ, exaggeration, themeName, pointScale };
@@ -406,13 +412,13 @@ export function Points3dView({ data, defaultThresholdQ, isRegistered, onError, s
 
   // 고지 문구의 편차 기준: 새 분석은 3m 국부(전체로 바꾸면 바닥 전체), 옛 분석은 구역 기준 평면
   const basisPhrase = hasReference
-    ? BASES.find((b) => b.id === (surfaces ? basis : 'local'))!.phrase
+    ? BASES.find((b) => b.id === (refReady ? basis : 'local'))!.phrase
     : '구역 기준 평면';
 
   // 도구 줄(아트보드 Stage 85~104행): Stage 의 toolbar 로 스테이지 바로 아래에 붙는다. 맨 아래 줄은 고지 문구다
   const toolbar = (
     <>
-      {surfaces && (
+      {refReady && (
         <div role="group" aria-label="기준면" className={GROUP}>
           <span className={GROUP_NAME}>기준면</span>
           {BASES.map((b) => (
@@ -516,7 +522,7 @@ export function Points3dView({ data, defaultThresholdQ, isRegistered, onError, s
               {POINT_CLASS_LABEL[cls]}
             </li>
           ))}
-          {surfaces && BASES.filter((b) => shown[b.id]).map((b) => (
+          {refReady && BASES.filter((b) => shown[b.id]).map((b) => (
             <li key={`ref-${b.id}`} className="flex items-center gap-2">
               <span aria-hidden className="inline-block h-2.5 w-2.5 rounded-sm"
                 style={{ backgroundColor: REF_SURFACE_COLOR[themeName][b.id] }} />

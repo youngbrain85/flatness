@@ -37,7 +37,7 @@ const GL_CONSTANTS = {
   DEPTH_BUFFER_BIT: 0x0100, COLOR_BUFFER_BIT: 0x4000,
   LESS: 0x0201, LEQUAL: 0x0203,
   SRC_ALPHA: 0x0302, ONE_MINUS_SRC_ALPHA: 0x0303,
-  DEPTH_TEST: 0x0b71, BLEND: 0x0be2,
+  DEPTH_TEST: 0x0b71, BLEND: 0x0be2, POLYGON_OFFSET_FILL: 0x8037,
   UNSIGNED_BYTE: 0x1401, SHORT: 0x1402, UNSIGNED_SHORT: 0x1403, INT: 0x1404, FLOAT: 0x1406,
   ALIASED_POINT_SIZE_RANGE: 0x846d,
   ARRAY_BUFFER: 0x8892, STATIC_DRAW: 0x88e4,
@@ -57,7 +57,7 @@ const VOID_METHODS = [
   'uniform1i', 'uniform1f', 'uniform2f', 'uniform3f', 'uniform4f',
   'uniform1iv', 'uniform1fv', 'uniform2fv', 'uniform3fv', 'uniform4fv', 'uniformMatrix4fv',
   'viewport', 'clearColor', 'clearDepth', 'clear', 'enable', 'disable',
-  'depthFunc', 'depthMask', 'blendFunc', 'blendFuncSeparate', 'colorMask',
+  'depthFunc', 'depthMask', 'blendFunc', 'blendFuncSeparate', 'colorMask', 'polygonOffset',
   'drawArrays', 'flush', 'finish',
 ];
 

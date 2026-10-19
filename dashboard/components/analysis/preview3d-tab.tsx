@@ -17,6 +17,8 @@ import type { AnalysisRow, ScanRow, Stats } from '@/lib/domain/types';
 import { probeWebgl2 } from '@/lib/viz/points3d/gl-renderer';
 import { parseReferenceSurfaces } from '@/lib/viz/points3d/reference';
 import type { RefSurfaces } from '@/lib/viz/points3d/reference';
+import { parseResidualGrid } from '@/lib/viz/deviation-grid';
+import type { ResidualGrid } from '@/lib/viz/deviation-grid';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Stage } from '@/components/ui/stage';
@@ -77,27 +79,35 @@ export function Preview3dTab({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [request, dir]);
 
-  // 기준면(2026-10-20 바닥 기준면 개선): 새 분석은 reference_surfaces.json 을 받아 뷰어에 넘긴다. 뷰어 모드일 때만 받고,
-  // 결과는 받은 URL 로 묶어 분석이 바뀌면 옛 것을 쓰지 않는다. 못 받으면 null(뷰어는 기준면 줄을 숨긴다)
+  // 기준면(2026-10-20 바닥 기준면 개선): 새 분석은 reference_surfaces.json(면)과 residual_grid.json(전체 기준 점 편차의 출처)을
+  // 받아 뷰어에 넘긴다. 뷰어 모드일 때만 받고, 결과는 받은 URL 로 묶어 분석이 바뀌면 옛 것을 쓰지 않는다.
+  // 하나라도 못 받으면 null(뷰어는 기준면 줄을 숨긴다)
   const refPath = stats.reference_surfaces_path ?? null;
-  const refKey = mode === 'viewer' && dir !== null && refPath !== null ? artifactUrl(dir, refPath) : null;
-  const [ref, setRef] = useState<{ key: string; surfaces: RefSurfaces | null } | null>(null);
+  const gridPath = stats.residual_grid_path ?? null;
+  const refKey = mode === 'viewer' && dir !== null && refPath !== null && gridPath !== null
+    ? artifactUrl(dir, refPath) : null;
+  const gridKey = refKey !== null && dir !== null && gridPath !== null ? artifactUrl(dir, gridPath) : null;
+  const [ref, setRef] = useState<{ key: string; surfaces: RefSurfaces | null; residual: ResidualGrid | null } | null>(null);
   useEffect(() => {
-    if (!refKey) return;
+    if (!refKey || !gridKey) return;
     let cancelled = false;
-    (async () => {
-      let surfaces: RefSurfaces | null = null;
+    const get = async <T,>(url: string, parse: (j: unknown) => T | null): Promise<T | null> => {
       try {
-        const res = await fetch(refKey);
-        surfaces = res.ok ? parseReferenceSurfaces(await res.json()) : null;
+        const res = await fetch(url);
+        return res.ok ? parse(await res.json()) : null;
       } catch {
-        surfaces = null;   // 기준면은 보조 표시다. 못 받으면 점 뷰어만 그린다
+        return null;   // 기준면은 보조 표시다. 못 받으면 점 뷰어만 그린다
       }
-      if (!cancelled) setRef({ key: refKey, surfaces });
+    };
+    (async () => {
+      const [surfaces, residual] = await Promise.all([get(refKey, parseReferenceSurfaces), get(gridKey, parseResidualGrid)]);
+      if (!cancelled) setRef({ key: refKey, surfaces, residual });
     })();
     return () => { cancelled = true; };
-  }, [refKey]);
-  const surfaces = ref !== null && ref.key === refKey ? ref.surfaces : null;
+  }, [refKey, gridKey]);
+  const mine = ref !== null && ref.key === refKey ? ref : null;
+  const surfaces = mine && mine.residual ? mine.surfaces : null;
+  const residual = mine && mine.surfaces ? mine.residual : null;
 
   const onViewerError = useCallback((kind: 'webgl' | 'context') => {
     if (kind === 'webgl') setRendererFailed(true);
@@ -111,7 +121,7 @@ export function Preview3dTab({
     return (
       <Points3dView data={current.data} defaultThresholdQ={thresholdQ}
         isRegistered={scan.lineage === 'registered'} onError={onViewerError}
-        surfaces={surfaces} hasReference={refPath !== null} />
+        surfaces={surfaces} residual={residual} hasReference={refPath !== null} />
     );
   }
 

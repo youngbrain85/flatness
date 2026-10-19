@@ -441,10 +441,13 @@ export function createRenderer(
       gl.drawArrays(gl.POINTS, 0, Math.max(0, Math.min(n, Math.floor(frame.drawCount))));
 
       // (4) 반투명 기준면: 블렌딩 켬, 깊이 테스트는 그대로(점 뒤의 면은 가려진다), 깊이 쓰기 끔(면끼리 가리지 않게).
+      // 고른 기준면은 점의 깊이(기준 위치)와 같아 점 위에 얼룩지므로(z-fighting) 면을 살짝 뒤로 민다.
       // 끝나면 깊이 쓰기를 다시 켠다. 다음 프레임 (1) 의 깊이 지우기는 깊이 쓰기가 켜져 있어야 된다
       if (surf && heldSurfaces.length) {
         gl.enable(gl.BLEND);
         gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+        gl.enable(gl.POLYGON_OFFSET_FILL);
+        gl.polygonOffset(1, 1);
         gl.depthMask(false);
         gl.useProgram(surf.prog);
         gl.bindVertexArray(surf.vao);
@@ -459,6 +462,7 @@ export function createRenderer(
           first += count;
         }
         gl.depthMask(true);
+        gl.disable(gl.POLYGON_OFFSET_FILL);
       }
       gl.bindVertexArray(null);
     },

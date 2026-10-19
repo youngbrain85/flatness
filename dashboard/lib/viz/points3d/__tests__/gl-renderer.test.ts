@@ -913,8 +913,12 @@ describe('createRenderer: 점 편차 바꾸기·기준면', () => {
     expect(colors[1]).toEqual([1, 1, 1, expect.closeTo(0.2, 6)]);
     expect(valuesOf(rec.uniformCalls('uSurfExag').slice(-1)[0])).toEqual([50]);
     const before = (name: string) => lastBefore(rec, start + calls.indexOf(tri[0]), (c) => c.name === name);
-    expect(before('enable')?.args[0]).toBe(rec.gl.BLEND);
+    const enabledInPass = calls.slice(pointsAt, calls.indexOf(tri[0])).filter((c) => c.name === 'enable').map((c) => c.args[0]);
+    expect(enabledInPass).toEqual(expect.arrayContaining([rec.gl.BLEND, rec.gl.POLYGON_OFFSET_FILL]));
     expect(before('depthMask')?.args[0]).toBe(false);
+    // 고른 기준면은 점과 같은 깊이라 점 위에 얼룩진다(z-fighting). 면을 살짝 뒤로 민다
+    expect(before('polygonOffset')?.args.every((v) => (v as number) > 0)).toBe(true);
+    expect(calls.filter((c) => c.name === 'disable').slice(-1)[0].args[0]).toBe(rec.gl.POLYGON_OFFSET_FILL);
     expect(calls.filter((c) => c.name === 'depthMask').slice(-1)[0].args[0]).toBe(true);
   });
 

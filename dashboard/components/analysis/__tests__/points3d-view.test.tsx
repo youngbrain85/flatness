@@ -16,6 +16,7 @@ import type { Bounds } from '@/lib/viz/points3d/orbit';
 import { project } from '@/lib/viz/points3d/mat4';
 import { recordingGl } from '@/lib/viz/points3d/__tests__/gl-stub';
 import type { RefSurfaces } from '@/lib/viz/points3d/reference';
+import type { ResidualGrid } from '@/lib/viz/deviation-grid';
 import type { RecordingGl } from '@/lib/viz/points3d/__tests__/gl-stub';
 
 // ---- 데이터 ----
@@ -1302,7 +1303,13 @@ function surf(): RefSurfaces {
   return {
     stepM: 0.25, cols, rows, originM: [...ORIGIN] as [number, number, number],
     local: new Float32Array(cols * rows), global: new Float32Array(cols * rows).fill(0.002),
+    zones: new Int32Array(cols * rows).fill(1),
   };
+}
+// 4x3m 를 덮는 5cm 서브셀(80x60). 전체 기준 편차 = 모든 칸 12(0.1mm) -> P0·P2 의 전체 기준 편차 = 12
+function resid(): ResidualGrid {
+  const n = 80 * 60;
+  return { subcell_m: 0.05, cols: 80, rows: 60, values: Array(n).fill(0), values_global: Array(n).fill(12) };
 }
 
 describe('Points3dView 기준면', () => {
@@ -1315,7 +1322,7 @@ describe('Points3dView 기준면', () => {
 
   // 변이: 기본 기준이 전체, 고지 문구가 기준을 따르지 않음
   it('기준면 [국부][전체] 와 보기 버튼 둘을 두고, 국부가 눌린 채 고지 문구가 3m 국부 기준면을 말한다', () => {
-    mount({ surfaces: surf(), hasReference: true });
+    mount({ surfaces: surf(), residual: resid(), hasReference: true });
     const group = screen.getByRole('group', { name: '기준면' });
     expect(within(group).getAllByRole('button').map((b) => b.textContent))
       .toEqual(['국부', '전체', '국부 기준면 보기', '전체 기준면 보기']);
@@ -1326,13 +1333,13 @@ describe('Points3dView 기준면', () => {
 
   // 변이: 전체로 바꿔도 dev 를 다시 올리지 않음, 좌표까지 다시 올림, 센티널을 바꿈
   it('전체를 누르면 점 편차를 전체 기준으로 바꿔 dev 버퍼만 다시 올리고 한 번 다시 그린다', () => {
-    const { rec } = mount({ data: READOUT_DATA, surfaces: surf(), hasReference: true });
+    const { rec } = mount({ data: READOUT_DATA, surfaces: surf(), residual: resid(), hasReference: true });
     frame(0);
     const before = rec.callsOf('bufferData').length;
     fireEvent.click(screen.getByRole('button', { name: '전체' }));
     const uploads = rec.callsOf('bufferData').slice(before).map((c) => c.args[1]);
     expect(uploads).toHaveLength(1);
-    expect(Array.from(uploads[0] as Int16Array)).toEqual([12, -32768, -125]);
+    expect(Array.from(uploads[0] as Int16Array)).toEqual([12, -32768, 12]);
     expect(rafQueue).toHaveLength(1);
     expect(screen.getByTestId('points3d-notice').textContent).toContain('5cm 칸이 바닥 전체 기준면에서');
   });
@@ -1342,7 +1349,7 @@ describe('Points3dView 기준면', () => {
     stubSize(640, 480, 1);
     vi.spyOn(HTMLCanvasElement.prototype, 'getBoundingClientRect')
       .mockReturnValue({ left: 100, top: 50, width: 640, height: 480, right: 740, bottom: 530, x: 100, y: 50 } as DOMRect);
-    const { canvas } = mount({ data: READOUT_DATA, surfaces: surf(), hasReference: true });
+    const { canvas } = mount({ data: READOUT_DATA, surfaces: surf(), residual: resid(), hasReference: true });
     frame(0);
     fireEvent.click(screen.getByRole('button', { name: '전체' }));
     frame(16);
@@ -1355,7 +1362,7 @@ describe('Points3dView 기준면', () => {
 
   // 변이: 보기 버튼이 면을 넘기지 않음, 범례에 줄을 안 더함, 다시 눌러도 안 꺼짐
   it('국부 기준면 보기를 누르면 반투명 면을 그리고 범례에 한 줄을 더하며, 다시 누르면 끈다', () => {
-    const { rec } = mount({ surfaces: surf(), hasReference: true });
+    const { rec } = mount({ surfaces: surf(), residual: resid(), hasReference: true });
     frame(0);
     const show = screen.getByRole('button', { name: '국부 기준면 보기' });
     fireEvent.click(show);
@@ -1380,7 +1387,7 @@ describe('Points3dView 기준면: 과장된 위치에서 고르기', () => {
     stubSize(640, 480, 1);
     vi.spyOn(HTMLCanvasElement.prototype, 'getBoundingClientRect')
       .mockReturnValue({ left: 100, top: 50, width: 640, height: 480, right: 740, bottom: 530, x: 100, y: 50 } as DOMRect);
-    const { canvas } = mount({ data: READOUT_DATA, surfaces: surf(), hasReference: true });
+    const { canvas } = mount({ data: READOUT_DATA, surfaces: surf(), residual: resid(), hasReference: true });
     frame(0);
     fireEvent.click(screen.getByRole('button', { name: '전체' }));
     fireEvent.click(screen.getByRole('button', { name: '×100' }));

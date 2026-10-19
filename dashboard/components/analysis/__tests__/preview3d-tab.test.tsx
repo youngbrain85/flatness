@@ -686,16 +686,22 @@ describe('Preview3dTab 분석 전환 (§7.3: 상위가 key={analysis.id} 로 그
 describe('Preview3dTab 기준면', () => {
   const SURF_DOC = {
     step_m: 0.25, cols: 2, rows: 2, origin_m: [0, 0, 0], local: [0, 0, 0, 0], global: [20, 20, 20, 20],
+    zones: [1, 1, 1, 1],
   };
+  const GRID_DOC = { schema_version: 2, subcell_m: 0.05, cols: 2, rows: 1, values: [1, 2], values_global: [3, 4] };
   afterEach(() => { vi.unstubAllGlobals(); });
 
   // 변이: 기준면 파일을 받지 않음, 다른 경로로 받음, 받은 것을 뷰어에 넘기지 않음
-  it('stats.reference_surfaces_path 가 있으면 그 파일을 받아 뷰어에 기준면 줄을 그린다', async () => {
-    const f = vi.fn(async () => ({ ok: true, json: async () => SURF_DOC } as unknown as Response));
+  it('기준면 파일과 잔차 격자를 함께 받아 뷰어에 기준면 줄을 그린다', async () => {
+    const f = vi.fn(async (url: string) => ({
+      ok: true, json: async () => (String(url).endsWith('/residual_grid.json') ? GRID_DOC : SURF_DOC),
+    } as unknown as Response));
     vi.stubGlobal('fetch', f);
-    const stats = { ...statsOf(), reference_surfaces_path: 'reference_surfaces.json' } as Stats;
+    const stats = { ...statsOf(), reference_surfaces_path: 'reference_surfaces.json',
+      residual_grid_path: 'residual_grid.json' } as Stats;
     render(<Preview3dTab {...tabProps({ stats, load: READY_A })} />);
     expect(f).toHaveBeenCalledWith('/api/data/artifacts/an1/reference_surfaces.json');
+    expect(f).toHaveBeenCalledWith('/api/data/artifacts/an1/residual_grid.json');
     expect(await screen.findByRole('group', { name: '기준면' })).toBeInTheDocument();
     expect(screen.getByTestId('points3d-notice').textContent).toContain('3m 국부 기준면');
   });
@@ -708,5 +714,21 @@ describe('Preview3dTab 기준면', () => {
     expect(f).not.toHaveBeenCalled();
     expect(screen.queryByRole('group', { name: '기준면' })).toBeNull();
     expect(screen.getByTestId('points3d-notice').textContent).toContain('구역 기준 평면');
+  });
+});
+
+describe('Preview3dTab 기준면: 잔차 격자를 못 받으면', () => {
+  afterEach(() => { vi.unstubAllGlobals(); });
+  // 변이: 잔차 격자 없이 기준면 줄을 그림(전체 기준 점 편차를 낼 수 없다)
+  it('기준면 줄을 숨긴다', async () => {
+    const f = vi.fn(async (url: string) => (String(url).endsWith('/residual_grid.json')
+      ? ({ ok: false, json: async () => null } as unknown as Response)
+      : ({ ok: true, json: async () => ({ step_m: 0.25, cols: 1, rows: 1, origin_m: [0, 0, 0], local: [0], global: [0], zones: [1] }) } as unknown as Response)));
+    vi.stubGlobal('fetch', f);
+    const stats = { ...statsOf(), reference_surfaces_path: 'reference_surfaces.json',
+      residual_grid_path: 'residual_grid.json' } as Stats;
+    render(<Preview3dTab {...tabProps({ stats, load: READY_A })} />);
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    expect(screen.queryByRole('group', { name: '기준면' })).toBeNull();
   });
 });
