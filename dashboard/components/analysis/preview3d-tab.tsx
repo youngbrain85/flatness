@@ -81,7 +81,7 @@ export function Preview3dTab({
 
   // 기준면(2026-10-20 바닥 기준면 개선): 새 분석은 reference_surfaces.json(면)과 residual_grid.json(전체 기준 점 편차의 출처)을
   // 받아 뷰어에 넘긴다. 뷰어 모드일 때만 받고, 결과는 받은 URL 로 묶어 분석이 바뀌면 옛 것을 쓰지 않는다.
-  // 하나라도 못 받으면 null(뷰어는 기준면 줄을 숨긴다)
+  // 못 받은 것은 null 이다
   const refPath = stats.reference_surfaces_path ?? null;
   const gridPath = stats.residual_grid_path ?? null;
   const refKey = mode === 'viewer' && dir !== null && refPath !== null && gridPath !== null
@@ -105,9 +105,10 @@ export function Preview3dTab({
     })();
     return () => { cancelled = true; };
   }, [refKey, gridKey]);
+  // 둘 다 있어야 기준면 줄을 그린다(그 판단은 뷰어가 한다)
   const mine = ref !== null && ref.key === refKey ? ref : null;
-  const surfaces = mine && mine.residual ? mine.surfaces : null;
-  const residual = mine && mine.surfaces ? mine.residual : null;
+  const surfaces = mine?.surfaces ?? null;
+  const residual = mine?.residual ?? null;
 
   const onViewerError = useCallback((kind: 'webgl' | 'context') => {
     if (kind === 'webgl') setRendererFailed(true);
