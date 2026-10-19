@@ -166,3 +166,19 @@ def test_level_m_is_median_of_cells_kept_after_exclusion():
     kept = zmap.labels == low
     assert abs(z.level_m - float(np.median(g.median_z[kept]))) < 1e-9
     assert z.level_m < 0.03
+
+
+def test_depression_bordering_another_zone_is_not_enclosed():
+    # 둘레에 다른 구역(또는 뺀 칸)이 있으면 둘러싸인 함몰이 아니다(다른 레벨로 이어지는 낮은 면일 수 있다)
+    from flatness.core.zones import _enclosed_depressions
+    labels = np.ones((7, 7), dtype=np.int32)
+    out = np.zeros((7, 7), dtype=bool)
+    out[2:5, 2:5] = True                          # 가운데 3x3 이 평면 아래로 5cm 넘게 꺼졌다
+    below = out.copy()
+    finite = np.ones((7, 7), dtype=bool)
+    assert _enclosed_depressions(out, below, labels, 1, finite)[3, 3]       # 사방이 구역 1: 남긴다
+    labels[3, 5] = 2                              # 오른쪽 둘레 한 칸이 다른 구역
+    assert not _enclosed_depressions(out, below, labels, 1, finite).any()
+    labels[3, 5] = 1
+    out[3, 5] = True                              # 둘레 한 칸이 위로 솟아 뺀 칸
+    assert not _enclosed_depressions(out, below, labels, 1, finite)[3, 3]
