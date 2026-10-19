@@ -13,7 +13,8 @@ from flatness.core.walls import (build_column_grid, detect_wall_lines,
                                  project_wall_points, wall_grid, evaluate_wall)
 from flatness.core.plane import residual_grid
 from flatness.criteria import grade_cells
-from flatness.outputs.stats import build_stats, write_outputs
+from flatness.outputs.stats import (ALT_CELL_SIZES, build_stats, write_cells_alt,
+                                    write_outputs, write_residual_grid)
 from flatness.outputs.heatmap import render_heatmap
 from flatness.outputs.deviation import render_deviation_map
 from flatness.outputs.preview3d import render_preview3d
@@ -37,7 +38,7 @@ def _deg(rad):
 
 
 def analyze_floor(path, scale_to_m, criterion, u_mm, out_dir,
-                  subcell_m=0.05, cell_m=1.0, chunk_size=2_000_000):
+                  subcell_m=0.05, cell_m=0.5, chunk_size=2_000_000):
     info = read_info(path, chunk_size=chunk_size)
     grid = build_subcell_grid(iter_chunks(path, chunk_size=chunk_size),
                               info, scale_to_m, subcell_m)
@@ -93,6 +94,13 @@ def analyze_floor(path, scale_to_m, criterion, u_mm, out_dir,
                         zones=zones_out, coverage_pct=coverage)
     stats["auto_summary"] = generate_summary(stats)
     out_dir.mkdir(parents=True, exist_ok=True)
+    # 공식 판정(cell_m) 밖의 1·2m 셀은 화면 비교용이다(스펙 2·3 §1). 같은 잔차·구역으로 다시 셀만 나눈다
+    alt = {}
+    for size in ALT_CELL_SIZES:
+        alt_cells = evaluate_cells(residuals, grid, span_m=span, cell_m=size, zone_labels=zmap.labels)
+        alt[size] = (alt_cells, grade_cells(alt_cells, criterion, u_mm)[0])
+    stats["cells_alt_path"] = write_cells_alt(out_dir, alt)
+    stats["residual_grid_path"] = write_residual_grid(out_dir, residuals, subcell_m)
     worst = stats.get("worst")
     # 렌더 산출물(프리뷰/편차맵/히트맵)은 판정 결과와 무관한 보조 시각화다. 렌더가
     # 디스크·폰트 등 인프라 사유로 실패해도 이미 완성된 판정(stats)은 반드시 저장돼야

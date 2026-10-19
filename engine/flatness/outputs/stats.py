@@ -59,6 +59,33 @@ def _cell_row(c, g):
             "zone_id": c.zone_id}
 
 
+# 판정 셀 비교 크기(스펙 2·3 §1): 공식 판정은 0.5m, 1·2m 는 화면 비교용
+ALT_CELL_SIZES = (1.0, 2.0)
+CELLS_ALT_FILE = "cells_alt.json"
+RESIDUAL_GRID_FILE = "residual_grid.json"
+
+
+def write_cells_alt(out_dir, by_size):
+    """{셀 크기(m): (cells, grades)} -> cells_alt.json. 셀 행 모양은 cells.json 과 같다."""
+    doc = {"by_size": {str(float(size)): [_cell_row(c, g) for c, g in zip(cells, grades)]
+                       for size, (cells, grades) in by_size.items()}}
+    (out_dir / CELLS_ALT_FILE).write_text(json.dumps(doc, ensure_ascii=False), encoding="utf-8")
+    return CELLS_ALT_FILE
+
+
+def write_residual_grid(out_dir, residuals, subcell_m):
+    """판정에 쓴 서브셀 잔차(m) -> residual_grid.json (스펙 2·3 §2).
+
+    값은 0.1mm 정수, 값 없는 칸은 null, 행 우선이며 행 0 이 y 가 가장 작은 쪽이다(엔진 격자 그대로).
+    """
+    q = np.round(np.asarray(residuals, dtype=np.float64) * 10000.0).ravel()
+    values = [int(v) if np.isfinite(v) else None for v in q.tolist()]
+    doc = {"subcell_m": subcell_m, "cols": int(residuals.shape[1]), "rows": int(residuals.shape[0]),
+           "values": values}
+    (out_dir / RESIDUAL_GRID_FILE).write_text(json.dumps(doc, separators=(",", ":")), encoding="utf-8")
+    return RESIDUAL_GRID_FILE
+
+
 def write_outputs(out_dir, stats, cells, grades):
     out_dir.mkdir(parents=True, exist_ok=True)
     rows = [_cell_row(c, g) for c, g in zip(cells, grades)]

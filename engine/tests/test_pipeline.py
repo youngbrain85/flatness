@@ -461,3 +461,52 @@ def test_small_specimen_ignores_stray_fragment(tmp_path):
     stats = analyze_floor(tmp_path / "board.ply", 1.0, CRIT, 5.0, tmp_path / "out")
     assert "small_specimen" in stats["warnings"]
     assert [z["status"] for z in stats["zones"]] == ["ok"]
+
+
+# 판정 셀 0.5/1/2m(스펙 2·3 §1): 공식 판정은 0.5m, 1·2m 는 cells_alt.json 에 비교용으로 싣는다
+def test_official_cell_is_half_metre(tmp_path):
+    write_binary_ply(flat_floor(size=(3.0, 2.0), spacing=0.02), tmp_path / "scan.ply")
+    stats = analyze_floor(tmp_path / "scan.ply", 1.0, CRIT, 5.0, tmp_path / "out")
+    assert stats["meta"]["cell_m"] == 0.5
+    rows = json.loads((tmp_path / "out" / "cells.json").read_text(encoding="utf-8"))
+    assert max(r["ix"] for r in rows) >= 5 and max(r["iy"] for r in rows) >= 3  # 3m/0.5=6열, 2m/0.5=4행
+
+
+def test_cells_alt_holds_one_and_two_metre_results(tmp_path):
+    pts = add_bump(flat_floor(size=(4.0, 3.0), spacing=0.02), (1.0, 1.0), 0.3, -0.010)
+    write_binary_ply(pts, tmp_path / "scan.ply")
+    stats = analyze_floor(tmp_path / "scan.ply", 1.0, CRIT, 5.0, tmp_path / "out")
+    assert stats["cells_alt_path"] == "cells_alt.json"
+    alt = json.loads((tmp_path / "out" / "cells_alt.json").read_text(encoding="utf-8"))
+    assert sorted(alt["by_size"]) == ["1.0", "2.0"]
+    for size in (1.0, 2.0):  # 각 크기 결과는 그 크기로 따로 돌린 공식 cells.json 과 같다
+        analyze_floor(tmp_path / "scan.ply", 1.0, CRIT, 5.0, tmp_path / f"o{size}", cell_m=size)
+        solo = json.loads((tmp_path / f"o{size}" / "cells.json").read_text(encoding="utf-8"))
+        assert alt["by_size"][str(size)] == solo
+
+
+# 정밀 편차맵 화면 렌더용 5cm 잔차 격자(스펙 2·3 §2)
+def test_residual_grid_shape_units_and_row_direction(tmp_path):
+    # 3x2m 바닥, (0.5, 1.5)에 10mm 함몰: 행 0 이 y 최소이므로 최솟값은 행 ~30, 열 ~10 에 있다
+    pts = add_bump(flat_floor(size=(3.0, 2.0), spacing=0.02), (0.5, 1.5), 0.3, -0.010)
+    write_binary_ply(pts, tmp_path / "scan.ply")
+    stats = analyze_floor(tmp_path / "scan.ply", 1.0, CRIT, 5.0, tmp_path / "out")
+    assert stats["residual_grid_path"] == "residual_grid.json"
+    g = json.loads((tmp_path / "out" / "residual_grid.json").read_text(encoding="utf-8"))
+    assert g["subcell_m"] == 0.05
+    assert g["cols"] > g["rows"] and len(g["values"]) == g["cols"] * g["rows"]
+    vals = [v for v in g["values"] if v is not None]
+    assert all(isinstance(v, int) for v in vals)          # 0.1mm 정수
+    k = min(range(len(g["values"])), key=lambda i: g["values"][i] if g["values"][i] is not None else 0)
+    assert -110 <= g["values"][k] <= -80                    # 함몰 약 10mm = -100 (0.1mm 단위)
+    assert abs(k // g["cols"] - 30) <= 1 and abs(k % g["cols"] - 10) <= 1
+
+
+def test_residual_grid_marks_missing_as_null(tmp_path):
+    # 가운데가 빈 바닥: 빈 칸은 null 로 남는다
+    pts = flat_floor(size=(3.0, 2.0), spacing=0.02)
+    hole = (np.abs(pts[:, 0] - 1.5) < 0.3) & (np.abs(pts[:, 1] - 1.0) < 0.3)
+    write_binary_ply(pts[~hole], tmp_path / "scan.ply")
+    analyze_floor(tmp_path / "scan.ply", 1.0, CRIT, 5.0, tmp_path / "out")
+    g = json.loads((tmp_path / "out" / "residual_grid.json").read_text(encoding="utf-8"))
+    assert g["values"][20 * g["cols"] + 30] is None

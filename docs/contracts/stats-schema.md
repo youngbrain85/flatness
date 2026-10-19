@@ -98,13 +98,15 @@
 | `preview3d_paths` | O | — | — | `analyze_floor`에서만 추가(`core/pipeline.py:60-62`). `string[]`, 0~2개: 잔차가 전부 NaN이면 `[]`, 아니면 `["preview3d.png"]`, 최댓값 지점 1.5m 반경 내 점이 있으면 `["preview3d.png","preview3d_zoom.png"]`(`outputs/preview3d.py:19-49`). 렌더 자체가 예외로 실패해도 `[]`이며, 이때는 `preview3d_render_failed` 경고가 동반된다(§5) |
 | `deviation_paths` | O | O | — | 정밀 편차맵 파일명 목록(`string[]`). floor는 `[]` 또는 `["deviation.png"]`, wall은 `wall_id` 오름차순 `["deviation_wall1.png", ...]`이며 **스킵된 벽은 목록에 없다(결번)**. 잔차 유효값이 하나도 없으면 파일을 만들지 않아 목록에서 빠진다(`core/pipeline.py`·`outputs/deviation.py`). 렌더가 예외로 실패한 경우도 마찬가지로 해당 파일명이 목록에서 빠지며 `deviation_render_failed` 경고가 동반된다(§5). import 경로는 이 키 자체가 없으므로 소비자는 항상 "없으면 빈 목록"으로 다룬다. **판정과 무관한 보조 시각화**이며 등급·수치 필드에 영향을 주지 않는다 |
 | `points3d_paths` | O | — | — | `analyze_floor`에서만 추가. 3D 점군 뷰어용 점 파일명 목록(`string[]`): `["points3d.bin"]` 또는 `[]`. 다른 `*_paths` 키와 같은 규약이다: 파일 존재는 이 키로 판별하고, 소비자는 키가 없으면 빈 목록으로 다룬다(이 키가 생기기 전에 만든 분석 포함). 생성이 예외로 실패하면 `[]`이고 `points3d_render_failed` 경고가 동반된다(§5). 파일 형식은 §9. 이 파일명은 `preview3d_paths`에 넣지 않는다(보고서가 그 목록의 파일을 3D 프리뷰 그림으로 복사한다). **판정과 무관한 보조 시각화**다 |
+| `cells_alt_path` | O | — | — | `analyze_floor`에서만 추가(2026-10-19~). 값은 파일명 `"cells_alt.json"`. 공식 판정(`meta.cell_m`) 밖의 1m·2m 셀 결과를 화면 비교용으로 싣는다(§6). 판정·KPI·보고서는 공식 셀만 쓴다. 키가 없으면(옛 분석·wall·import) 화면은 셀 크기 전환을 숨긴다 |
+| `residual_grid_path` | O | — | — | `analyze_floor`에서만 추가(2026-10-19~). 값은 파일명 `"residual_grid.json"`. 판정에 쓴 서브셀 잔차 격자(§6). 키가 없으면 화면은 `deviation_paths`의 PNG를 보여 준다. **판정과 무관한 보조 시각화**다 |
 | `points3d_threshold_q` | 조건부 | — | — | int. 3D 점군 뷰어의 기본 표시 임계값, 0.1mm 단위 정수 = `int(round(criterion.pass_mm * 10))`(탑재된 바닥 기준의 `pass_mm` 6·7·10에 대응해 60·70·100). **점 파일이 만들어졌을 때만** 기록한다(`points3d_paths`가 `[]`이면 키 자체가 없다). 스팬 환산과 불확도 U를 적용하지 않는다. 판정에 쓰이지 않는 표시용 값이다 |
 | `walls` | — | O | — | `analyze_wall`에서만 추가(`core/pipeline.py:111`). §2.1 참고 |
 | `zones` (내용) | 구역 목록 채움 | 항상 `[]` | 항상 `[]` | 키 자체는 §1의 공통 키. wall/import는 `build_stats(..., zones=None)` 호출이라 `zones or []` → `[]`(`outputs/stats.py:47`) |
 | `meta.scale_to_m` | O | O | — | 사용자가 `--units`로 지정한 배율(예: mm=0.001). import는 CSV 값을 이미 m로 변환해 읽으므로 키 자체가 없음(`importer/colab_csv.py:35,48-49`) |
 | `meta.bbox_min` | O(3원소) | O(3원소) | — | `info.bbox_min * scale_to_m` 반올림 4자리(`core/pipeline.py:54,109`). import는 `CloudInfo`를 직접 만들지만 meta에 넣지 않음 |
 | `meta.source` | — | — | O(`"colab-import"`) | floor/wall meta에는 키 자체가 없음(→ 소비자는 `"source" in meta`로 판별, 없으면 LiDAR 원본) |
-| `meta.subcell_m` / `meta.cell_m` | O | O | O | 세 경로 모두 존재(분석 파라미터, 기본값 0.05/1.0) |
+| `meta.subcell_m` / `meta.cell_m` | O | O | O | 세 경로 모두 존재(분석 파라미터). 기본값은 floor 0.05/0.5(2026-10-19부터 공식 판정 셀 0.5m, 그전 분석은 1.0), wall 0.05/1.0 |
 | `meta.engine_version` | `ENGINE_VERSION`(`p4-0.5.0`) | `ENGINE_VERSION` | 고정 문자열 `"external-colab-v1"` | import는 실제 엔진 버전과 무관하게 별도 태그 사용(`importer/colab_csv.py:48`) — 소비자가 LiDAR 분석과 임포트 결과를 구분하는 또 다른 근거 |
 
 ### 2.1 `walls[]` 원소 (wall 전용, `core/pipeline.py:97-103` + `core/walls.py:175-177`)
@@ -251,6 +253,8 @@ w_fit = a * center_x + b * center_y + c   # a,b,c = walls[i].plane_abc
 | `preview3d_zoom.png` | floor(조건부) | 최댓값 지점 반경 1.5m 확대. 반경 내 점이 없으면 생성 안 됨 |
 | `deviation.png` | floor | 정밀 편차맵(10cm 해상도, 0mm 중심 대칭 연속 색상). 판정 히트맵과 별개의 보조 시각화 |
 | `deviation_wall{n}.png` | wall | 벽별 정밀 편차맵. `n`은 `wall_id`와 동일 채번 — **스킵된 벽은 파일 자체가 생성되지 않음(결번)** |
+| `cells_alt.json` | floor | `{"by_size": {"1.0": [셀 행...], "2.0": [셀 행...]}}`. 셀 행 모양은 `cells.json`과 같다. 같은 잔차·구역을 그 크기로 다시 나눠 판정한 비교용 결과 |
+| `residual_grid.json` | floor | `{"subcell_m": 0.05, "cols": n, "rows": m, "values": [...]}`. 서브셀 잔차를 0.1mm 정수로, 값 없는 칸은 `null`. 행 우선이며 행 0 이 y 가 가장 작은 쪽(엔진 격자 그대로). 좌표는 `meta.bbox_min` 기준 서브셀 격자다 |
 | `points3d.bin` | floor | 3D 점군 뷰어용 점 표본. 최대 50만 점, 점당 8바이트. 형식은 §9, 생성 여부는 `points3d_paths`로 판별 |
 
 > **정밀 편차맵 읽는 법**: 1m 판정 셀·5등급 이산색인 히트맵과 달리 10cm 격자의 원시 편차(mm)를 연속 색상으로 칠한다.
