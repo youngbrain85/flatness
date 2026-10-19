@@ -130,3 +130,14 @@ describe('drawDeviation', () => {
     expect(ops).toHaveLength(1);
   });
 });
+
+// residual_grid.json schema_version 2(2026-10-20 바닥 기준면 개선): values = 국부, values_global = 전체
+describe('parseResidualGrid v2', () => {
+  it('values_global 을 함께 읽고, 길이가 다르거나 값이 숫자·null 이 아니면 null', () => {
+    const g = { schema_version: 2, subcell_m: 0.05, cols: 2, rows: 1, values: [1, null], values_global: [5, null] };
+    expect(parseResidualGrid(g)?.values_global).toEqual([5, null]);
+    expect(parseResidualGrid({ ...g, values_global: [5] })).toBeNull();
+    expect(parseResidualGrid({ ...g, values_global: ['5', null] })).toBeNull();
+    expect(parseResidualGrid({ subcell_m: 0.05, cols: 1, rows: 1, values: [1] })?.values_global).toBeUndefined();
+  });
+});

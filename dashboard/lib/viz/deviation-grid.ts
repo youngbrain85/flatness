@@ -4,7 +4,15 @@
 // 아트보드와 다른 점(승인 스펙): 침하는 파랑(초록 아님), 색 범위 R 은 |값|의 98번째 백분위(최소 1mm)다.
 import { DEVIATION_RAMP, STAGE_AXIS_TEXT, STAGE_BG, STAGE_GRID } from '@/lib/domain/palette';
 
-export interface ResidualGrid { subcell_m: number; cols: number; rows: number; values: (number | null)[]; }
+/** residual_grid.json. schema_version 2(2026-10-20~): values = 3m 국부 기준, values_global = 바닥 전체 기준.
+ * values_global 이 없는 옛 파일(2026-10-19)의 values 는 구역 평면 기준이다. */
+export interface ResidualGrid {
+  subcell_m: number; cols: number; rows: number; values: (number | null)[];
+  schema_version?: number; values_global?: (number | null)[];
+}
+
+/** 편차 기준: 국부(3m 창) / 전체(바닥 전체 평면). */
+export type DeviationBasis = 'local' | 'global';
 
 /** 접은 격자. mm 는 행 우선(행 0 = y 최소), 값 없는 칸은 NaN. n 은 값 있는 칸 수, lo·hi 는 그 최소·최대(mm). */
 export interface FoldedGrid { cols: number; rows: number; sizeM: number; mm: Float64Array; n: number; lo: number; hi: number; }
@@ -24,8 +32,18 @@ export function parseResidualGrid(json: unknown): ResidualGrid | null {
   if (typeof g.subcell_m !== 'number' || !(g.subcell_m > 0) || !Number.isFinite(g.subcell_m)) return null;
   if (!posInt(g.cols) || !posInt(g.rows) || !Array.isArray(g.values)) return null;
   if (g.values.length !== g.cols * g.rows) return null;
-  for (const v of g.values) if (v !== null && (typeof v !== 'number' || !Number.isFinite(v))) return null;
+  const okValues = (vs: unknown[]) => vs.every((v) => v === null || (typeof v === 'number' && Number.isFinite(v)));
+  if (!okValues(g.values)) return null;
+  if (g.values_global !== undefined
+    && (!Array.isArray(g.values_global) || g.values_global.length !== g.values.length || !okValues(g.values_global))) {
+    return null;
+  }
   return g as ResidualGrid;
+}
+
+/** 고른 기준의 값으로 바꾼 격자. 전체 기준 값이 없으면(옛 파일) 그대로. */
+export function basisGrid(g: ResidualGrid, basis: DeviationBasis): ResidualGrid {
+  return basis === 'global' && g.values_global ? { ...g, values: g.values_global } : g;
 }
 
 /** factor x factor 묶음마다 값 있는 칸만 평균한다(mm). 가장자리 묶음은 남은 칸으로 만든다. */

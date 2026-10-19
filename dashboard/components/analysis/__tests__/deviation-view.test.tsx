@@ -107,3 +107,35 @@ describe('DeviationView 잔차 격자 캔버스', () => {
     await waitFor(() => expect(screen.getByAltText('정밀 편차맵(10cm)')).toBeInTheDocument());
   });
 });
+
+// 바닥 기준면 개선(2026-10-20): 국부(3m) 기준이 기본, 전체 기준으로 바꿔 볼 수 있다. 옛 격자는 구역 평면 기준
+describe('DeviationView 기준면 전환', () => {
+  afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
+  const v2 = {
+    schema_version: 2, subcell_m: 0.05, cols: 2, rows: 1, values: [-10, 20], values_global: [-300, 150],
+  };
+  function stub(json: unknown) {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => json } as unknown as Response)));
+  }
+
+  it('국부가 눌린 채 시작하고, 전체를 누르면 전체 기준 값으로 다시 센다', async () => {
+    stub(v2);
+    render(<DeviationView artifactsDir="artifacts/an1" paths={[]} isImport={false} residualGridPath="residual_grid.json" />);
+    await waitFor(() => expect(screen.getByTestId('deviation-hud')).toHaveTextContent('−1.0 ~ +2.0 mm'));
+    const group = screen.getByRole('group', { name: '기준면' });
+    expect(within(group).getAllByRole('button').map((b) => b.textContent)).toEqual(['국부', '전체']);
+    expect(within(group).getByRole('button', { name: '국부' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText(/3m 국부 기준면 대비/)).toBeInTheDocument();
+    fireEvent.click(within(group).getByRole('button', { name: '전체' }));
+    expect(screen.getByTestId('deviation-hud')).toHaveTextContent('−30.0 ~ +15.0 mm');
+    expect(screen.getByText(/바닥 전체 기준면 대비/)).toBeInTheDocument();
+  });
+
+  it('옛 격자(values_global 없음)는 전환이 없고 구역 평면 기준이라고 밝힌다', async () => {
+    stub({ subcell_m: 0.05, cols: 2, rows: 1, values: [-10, 20] });
+    render(<DeviationView artifactsDir="artifacts/an1" paths={[]} isImport={false} residualGridPath="residual_grid.json" />);
+    await waitFor(() => expect(screen.getByTestId('deviation-hud')).toHaveTextContent('5cm 격자'));
+    expect(screen.queryByRole('group', { name: '기준면' })).toBeNull();
+    expect(screen.getByText(/구역 평면 대비/)).toBeInTheDocument();
+  });
+});

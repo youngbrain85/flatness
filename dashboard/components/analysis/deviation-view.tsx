@@ -8,10 +8,10 @@ import { artifactUrl } from '@/lib/domain/paths';
 import { DEVIATION_RAMP } from '@/lib/domain/palette';
 import { canvasMonoFamily } from '@/lib/viz/heatmap';
 import {
-  RESOLUTION_FACTORS, colorRangeMm, deviationHud, drawDeviation, foldGrid, parseResidualGrid, rasterize,
+  RESOLUTION_FACTORS, basisGrid, colorRangeMm, deviationHud, drawDeviation, foldGrid, parseResidualGrid, rasterize,
   resolutionLabel,
 } from '@/lib/viz/deviation-grid';
-import type { ResidualGrid } from '@/lib/viz/deviation-grid';
+import type { DeviationBasis, ResidualGrid } from '@/lib/viz/deviation-grid';
 import { Button } from '@/components/ui/button';
 import { Stage } from '@/components/ui/stage';
 import { EYEBROW, PRESSED } from './result-parts';
@@ -29,6 +29,11 @@ export function deviationLabel(name: string): string {
 const BUFFER_SCALE_MAX = 2;   // 드로잉 버퍼 배율 = min(devicePixelRatio, 2)(히트맵·3D 뷰어와 같은 상한)
 // 색 막대: 램프 다섯 색을 0·25·50·75·100% 에 둔다(캔버스 칸 색과 같은 상수)
 const LEGEND_BAR = `linear-gradient(to right, ${DEVIATION_RAMP.map((c, i) => `${c} ${i * 25}%`).join(', ')})`;
+// 기준면 전환(2026-10-20 바닥 기준면 개선): 국부(3m 창)가 기본, 전체(바닥 전체 평면)로 바꿔 볼 수 있다
+const BASES: { id: DeviationBasis; label: string; note: string }[] = [
+  { id: 'local', label: '국부', note: '3m 국부 기준면 대비' },
+  { id: 'global', label: '전체', note: '바닥 전체 기준면 대비' },
+];
 
 // 받은 잔차 격자. key 는 이 결과를 받은 URL(분석이 바뀌면 옛 결과를 쓰지 않는다), grid 가 null 이면 못 받음
 type GridLoad = { key: string; grid: ResidualGrid | null };
@@ -65,7 +70,7 @@ export function DeviationView({ artifactsDir, paths, isImport, residualGridPath 
   if (gridKey) {
     const mine = load?.key === gridKey ? load : null;
     if (!mine) return <p className={MUTED}>정밀 편차맵 로딩 중...</p>;
-    if (mine.grid) return <ResidualCanvas grid={mine.grid} />;
+    if (mine.grid) return <ResidualCanvas key={mine.key} grid={mine.grid} />;   // 분석이 바뀌면 기준·해상도를 처음으로
     // 못 받았거나 모양이 다르면 아래 엔진 PNG 로 대체한다
   }
   if (!artifactsDir || paths.length === 0) {
@@ -109,8 +114,12 @@ export function DeviationView({ artifactsDir, paths, isImport, residualGridPath 
 function ResidualCanvas({ grid }: { grid: ResidualGrid }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [factor, setFactor] = useState<number>(RESOLUTION_FACTORS[0]);
-  const folded = useMemo(() => foldGrid(grid, factor), [grid, factor]);
-  const range = useMemo(() => colorRangeMm(grid), [grid]);
+  const [basis, setBasis] = useState<DeviationBasis>('local');
+  const hasGlobal = Array.isArray(grid.values_global);   // 없으면 옛 파일(구역 평면 기준)
+  const active = useMemo(() => basisGrid(grid, basis), [grid, basis]);
+  const folded = useMemo(() => foldGrid(active, factor), [active, factor]);
+  const range = useMemo(() => colorRangeMm(active), [active]);
+  const basisNote = hasGlobal ? BASES.find((b) => b.id === basis)!.note : '구역 평면 대비';
   const resLabel = resolutionLabel(grid.subcell_m, factor);
   const hud = deviationHud(folded, resLabel);
 
@@ -162,6 +171,16 @@ function ResidualCanvas({ grid }: { grid: ResidualGrid }) {
 
   const toolbar = (
     <>
+      {hasGlobal && (
+        <div role="group" aria-label="기준면" className="flex flex-wrap items-center gap-2">
+          <span className={EYEBROW}>기준면</span>
+          {BASES.map((b) => (
+            <Button key={b.id} aria-pressed={b.id === basis} className={PRESSED} onClick={() => setBasis(b.id)}>
+              {b.label}
+            </Button>
+          ))}
+        </div>
+      )}
       <div role="group" aria-label="표시 해상도" className="flex flex-wrap items-center gap-2">
         <span className={EYEBROW}>표시 해상도</span>
         {RESOLUTION_FACTORS.map((k) => (
@@ -172,7 +191,7 @@ function ResidualCanvas({ grid }: { grid: ResidualGrid }) {
         ))}
       </div>
       <p className="basis-full text-[13px] leading-[1.65] text-muted">
-        {`${resLabel} 격자의 원시 편차 분포입니다. 0mm가 중앙(짙은 남색)이고 붉을수록 융기, 파랄수록 침하이며 `
+        {`${basisNote} ${resLabel} 격자의 원시 편차 분포입니다. 0mm가 중앙(짙은 남색)이고 붉을수록 융기, 파랄수록 침하이며 `
           + '검게 비어 있는 곳은 데이터가 없는 구간입니다. 판정 등급 산출에는 사용되지 않으며, 등급은 히트맵 탭의 판정 셀 기준입니다.'}
       </p>
     </>
