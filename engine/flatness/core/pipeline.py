@@ -65,16 +65,21 @@ def analyze_floor(path, scale_to_m, criterion, u_mm, out_dir,
         zmap.zones = [main]
         ok_zones = [main]
         small_specimen = True
-    # 표시용 기준면 두 개(바닥 기준면 개선 스펙 §2). 판정은 아래처럼 구역 평면 잔차 그대로다(직선자는 직선 성분과 무관)
+    # 표시용 기준면 두 개(바닥 기준면 개선 스펙 §2). 판정은 아래처럼 구역 평면 잔차 그대로다(직선자는 직선 성분과 무관).
+    # 보조 계산이라 실패(메모리·맞춤 실패)해도 판정 저장을 막지 않는다: 편차 표시는 구역 평면 기준으로 내리고 경고를 남긴다
     ok_planes = {z.zone_id: z.plane_abc for z in ok_zones}
-    ref_local, sigma = local_reference(grid.median_z, zmap.labels, ok_planes, grid.size_m, fit_mask=~grid.bimodal)
     floor = np.isfinite(residuals)                       # ok 구역·쌍봉 아님(구역 평면 잔차와 같은 칸)
-    ga, gb, gc = global_plane(grid.median_z, floor, grid.size_m, sigma)
-    gy, gx = np.mgrid[0:grid.median_z.shape[0], 0:grid.median_z.shape[1]]
-    ref_global = np.where(np.isin(zmap.labels, list(ok_planes)),
-                          ga * (gx + 0.5) * grid.size_m + gb * (gy + 0.5) * grid.size_m + gc, np.nan)
-    res_local = np.where(floor, grid.median_z - ref_local, np.nan).astype(np.float32)
-    res_global = np.where(floor, grid.median_z - ref_global, np.nan).astype(np.float32)
+    try:
+        ref_local, sigma = local_reference(grid.median_z, zmap.labels, ok_planes, grid.size_m, fit_mask=~grid.bimodal)
+        ga, gb, gc = global_plane(grid.median_z, floor, grid.size_m, sigma)
+        gy, gx = np.mgrid[0:grid.median_z.shape[0], 0:grid.median_z.shape[1]]
+        ref_global = np.where(np.isin(zmap.labels, list(ok_planes)),
+                              ga * (gx + 0.5) * grid.size_m + gb * (gy + 0.5) * grid.size_m + gc, np.nan)
+        res_local = np.where(floor, grid.median_z - ref_local, np.nan).astype(np.float32)
+        res_global = np.where(floor, grid.median_z - ref_global, np.nan).astype(np.float32)
+    except Exception:
+        ref_local = ref_global = res_global = None
+        res_local = residuals
     span = criterion.span_m if criterion.span_m else 3.0
     cells = evaluate_cells(residuals, grid, span_m=span, cell_m=cell_m,
                            zone_labels=zmap.labels)
@@ -88,6 +93,8 @@ def analyze_floor(path, scale_to_m, criterion, u_mm, out_dir,
         warns.append("ghost_zone_excluded")
     if small_specimen:
         warns.append("small_specimen")
+    if ref_local is None:
+        warns.append("reference_surfaces_failed")
     ok_sub = sum(z.n_subcells for z in ok_zones)
     coverage = round(100.0 * ok_sub / n_valid_sub, 1)  # 바닥 인식 비율 (스펙 §5.1.3)
     if coverage < 70.0:
@@ -111,8 +118,9 @@ def analyze_floor(path, scale_to_m, criterion, u_mm, out_dir,
         alt[size] = (alt_cells, grade_cells(alt_cells, criterion, u_mm)[0])
     stats["cells_alt_path"] = write_cells_alt(out_dir, alt)
     stats["residual_grid_path"] = write_residual_grid(out_dir, res_local, res_global, subcell_m)
-    stats["reference_surfaces_path"] = write_reference_surfaces(out_dir, ref_local, ref_global, zmap.labels, subcell_m,
-                                                                origin_m=info.bbox_min * scale_to_m)
+    if ref_local is not None:
+        stats["reference_surfaces_path"] = write_reference_surfaces(out_dir, ref_local, ref_global, zmap.labels,
+                                                                    subcell_m, origin_m=info.bbox_min * scale_to_m)
     worst = stats.get("worst")
     # 렌더 산출물(프리뷰/편차맵/히트맵)은 판정 결과와 무관한 보조 시각화다. 렌더가
     # 디스크·폰트 등 인프라 사유로 실패해도 이미 완성된 판정(stats)은 반드시 저장돼야

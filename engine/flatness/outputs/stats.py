@@ -88,10 +88,12 @@ def write_residual_grid(out_dir, local, global_, subcell_m):
     """서브셀 편차(m) -> residual_grid.json schema_version 2 (바닥 기준면 개선 스펙 §3).
 
     values = 국부(3m) 기준 편차, values_global = 전체 기준면 편차. 0.1mm 정수, 값 없는 칸은 null,
-    행 우선이며 행 0 이 y 가 가장 작은 쪽이다(엔진 격자 그대로). values_global 이 없는 옛 파일은 구역 평면 기준이다.
+    행 우선이며 행 0 이 y 가 가장 작은 쪽이다(엔진 격자 그대로). values_global 이 없는 파일은 구역 평면 기준이다
+    (옛 분석, 또는 기준면 계산이 실패해 global_ 이 None 인 경우 - 그때 local 은 구역 평면 잔차다).
     """
-    doc = {"schema_version": 2, "subcell_m": subcell_m, "cols": int(local.shape[1]), "rows": int(local.shape[0]),
-           "values": _q01(local), "values_global": _q01(global_)}
+    doc = {"subcell_m": subcell_m, "cols": int(local.shape[1]), "rows": int(local.shape[0]), "values": _q01(local)}
+    if global_ is not None:
+        doc = {"schema_version": 2, **doc, "values_global": _q01(global_)}
     (out_dir / RESIDUAL_GRID_FILE).write_text(json.dumps(doc, separators=(",", ":")), encoding="utf-8")
     return RESIDUAL_GRID_FILE
 

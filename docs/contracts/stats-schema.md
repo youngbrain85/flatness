@@ -222,6 +222,7 @@ w_fit = a * center_x + b * center_y + c   # a,b,c = walls[i].plane_abc
 | `heatmap_render_failed` | 판정 히트맵(`heatmap.png`/`heatmap_wall{n}.png`) 렌더가 예외(디스크·폰트 등 인프라 사유)로 실패함. 판정 수치는 영향 없음 | floor·wall | `core/pipeline.py`(`render_heatmap` 호출부) |
 | `preview3d_render_failed` | 3D 프리뷰(`preview3d.png`) 렌더가 실패해 `preview3d_paths`가 `[]`로 저장됨. 판정 수치는 영향 없음 | floor | `core/pipeline.py`(`render_preview3d` 호출부) |
 | `deviation_render_failed` | 정밀 편차맵(`deviation.png`/`deviation_wall{n}.png`) 렌더가 실패해 해당 파일명이 `deviation_paths`에서 빠짐. 판정 수치는 영향 없음 | floor·wall | `core/pipeline.py`(`render_deviation_map` 호출부) |
+| `reference_surfaces_failed` | 표시용 기준면(국부·전체) 계산이 예외로 실패함. 편차 표시(정밀 편차맵 PNG·`residual_grid.json`·3D 점 편차)는 구역 평면 기준으로 내리고(`residual_grid.json` 은 `values_global` 없는 형식), `reference_surfaces.json`·`reference_surfaces_path` 는 만들지 않음. 판정 수치는 영향 없음(2026-10-20~) | floor | `core/pipeline.py`(`local_reference`·`global_plane` 호출부) |
 | `points3d_render_failed` | 3D 점군 뷰어용 점 파일(`points3d.bin`) 생성이 실패해 `points3d_paths`가 `[]`로 저장됨. 판정 수치는 영향 없음 | floor | `core/pipeline.py`(`sample_points`·`write_points3d` 호출부) |
 | `fused_mesh_smoothed` | 업로드 시 데이터 계보를 "융합 메시"로 선택한 스캔임 — 스캐너 앱이 표면을 다듬은 데이터라 실제 요철보다 양호한 결과가 나올 수 있음(스펙 §5.1.1) | floor·wall·import·slope 공통 — **엔진이 아니라 워커가 붙인다**(아래 참고) | `worker/flatworker/lineage.py` |
 

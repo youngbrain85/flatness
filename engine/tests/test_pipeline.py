@@ -624,3 +624,20 @@ def test_reference_surfaces_carry_absolute_origin(tmp_path):
     stats = analyze_floor(tmp_path / "scan.ply", 1.0, CRIT, 5.0, tmp_path / "out")
     s = json.loads((tmp_path / "out" / "reference_surfaces.json").read_text(encoding="utf-8"))
     assert np.allclose(s["origin_m"], stats["meta"]["bbox_min"], atol=1e-3)
+
+
+def test_reference_failure_does_not_block_judgment(tmp_path, monkeypatch):
+    # 리뷰(2026-10-20): 표시 전용 기준면 계산이 판정보다 앞에서 보호 없이 돌았다. 실패(메모리·맞춤 실패)해도 판정은 저장되고,
+    # 편차 표시는 구역 평면 기준(옛 형식 v1 격자)으로 내리며, 기준면 파일은 내지 않고 경고를 남긴다
+    def boom(*a, **k):
+        raise MemoryError("test")
+    monkeypatch.setattr(pl, "local_reference", boom)
+    write_binary_ply(add_bump(flat_floor(size=(4.0, 3.0), spacing=0.02), (2.0, 1.5), 0.3, -0.010), tmp_path / "scan.ply")
+    stats = analyze_floor(tmp_path / "scan.ply", 1.0, CRIT, 5.0, tmp_path / "out")
+    assert "reference_surfaces_failed" in stats["warnings"]
+    assert stats["n_valid"] > 0 and "reference_surfaces_path" not in stats
+    assert not (tmp_path / "out" / "reference_surfaces.json").exists()
+    g = json.loads((tmp_path / "out" / stats["residual_grid_path"]).read_text(encoding="utf-8"))
+    assert "values_global" not in g and "schema_version" not in g
+    assert min(v for v in g["values"] if v is not None) <= -80       # 구역 평면 기준 편차(함몰 10mm)
+    assert stats["points3d_paths"] == ["points3d.bin"]
