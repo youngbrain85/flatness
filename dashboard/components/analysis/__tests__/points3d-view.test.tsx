@@ -1371,3 +1371,25 @@ describe('Points3dView 기준면', () => {
     expect(screen.getByTestId('points3d-legend').textContent).not.toContain('국부 기준면');
   });
 });
+
+describe('Points3dView 기준면: 과장된 위치에서 고르기', () => {
+  // ×100 에서 점은 기준 + 100 x 편차 높이에 그려진다. 전체 기준이면 P0 편차 +1.2mm -> 0.1188m 위,
+  // 국부(받은) 편차 +3.2mm 였다면 0.3168m 위다. 고르기가 받은 편차로 위치를 세면 그려진 자리에서 점을 못 찾는다
+  // 변이: pickNearest 에 고른 기준이 아닌 받은 자료를 넘김
+  it('전체 기준·×100 에서 그려진 P0 위에 커서를 두면 P0 를 고른다', () => {
+    stubSize(640, 480, 1);
+    vi.spyOn(HTMLCanvasElement.prototype, 'getBoundingClientRect')
+      .mockReturnValue({ left: 100, top: 50, width: 640, height: 480, right: 740, bottom: 530, x: 100, y: 50 } as DOMRect);
+    const { canvas } = mount({ data: READOUT_DATA, surfaces: surf(), hasReference: true });
+    frame(0);
+    fireEvent.click(screen.getByRole('button', { name: '전체' }));
+    fireEvent.click(screen.getByRole('button', { name: '×100' }));
+    frame(16);
+    const shown: [number, number, number] = [P0[0], P0[1], 12 * 1e-4 * 99];
+    const p = project(viewProj(fitToBounds(READOUT_FIT, 'iso'), 640 / 480, FULL), shown, 640, 480)!;
+    fireEvent.pointerMove(canvas, mouse(100 + p.x, 50 + p.y));
+    frame(32);
+    const lines = Array.from(screen.getByTestId('points3d-readout').children).map((c) => c.textContent);
+    expect(lines.slice(3)).toEqual(['편차 +1.2 mm', 'FLAT']);
+  });
+});
