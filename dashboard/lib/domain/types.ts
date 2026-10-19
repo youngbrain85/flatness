@@ -128,6 +128,7 @@ export interface Stats {
   points3d_threshold_q?: number; // floor만(표시 임계값, 0.1mm 정수)
   cells_alt_path?: string;    // floor만(비교용 1·2m 판정 셀 파일명, 2026-10-19~)
   residual_grid_path?: string; // floor만(5cm 잔차 격자 파일명, 2026-10-19~)
+  reference_surfaces_path?: string; // floor만(국부·전체 기준면 격자 파일명, 2026-10-20~)
   walls?: WallInfo[];         // wall만
 }
 

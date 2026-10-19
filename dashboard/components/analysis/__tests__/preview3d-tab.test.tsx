@@ -681,3 +681,32 @@ describe('Preview3dTab 분석 전환 (§7.3: 상위가 key={analysis.id} 로 그
     expect(b.onRequestLoad).toHaveBeenCalledTimes(1);
   });
 });
+
+// 바닥 기준면 개선(2026-10-20): 새 분석은 reference_surfaces.json 을 받아 뷰어에 기준면 줄을 그린다
+describe('Preview3dTab 기준면', () => {
+  const SURF_DOC = {
+    step_m: 0.25, cols: 2, rows: 2, origin_m: [0, 0, 0], local: [0, 0, 0, 0], global: [20, 20, 20, 20],
+  };
+  afterEach(() => { vi.unstubAllGlobals(); });
+
+  // 변이: 기준면 파일을 받지 않음, 다른 경로로 받음, 받은 것을 뷰어에 넘기지 않음
+  it('stats.reference_surfaces_path 가 있으면 그 파일을 받아 뷰어에 기준면 줄을 그린다', async () => {
+    const f = vi.fn(async () => ({ ok: true, json: async () => SURF_DOC } as unknown as Response));
+    vi.stubGlobal('fetch', f);
+    const stats = { ...statsOf(), reference_surfaces_path: 'reference_surfaces.json' } as Stats;
+    render(<Preview3dTab {...tabProps({ stats, load: READY_A })} />);
+    expect(f).toHaveBeenCalledWith('/api/data/artifacts/an1/reference_surfaces.json');
+    expect(await screen.findByRole('group', { name: '기준면' })).toBeInTheDocument();
+    expect(screen.getByTestId('points3d-notice').textContent).toContain('3m 국부 기준면');
+  });
+
+  // 변이: 기준면 경로가 없어도 받으러 감(옛 분석에 404 요청)
+  it('기준면 경로가 없는 옛 분석은 받지 않고 기준면 줄도 없다', () => {
+    const f = vi.fn();
+    vi.stubGlobal('fetch', f);
+    render(<Preview3dTab {...tabProps({ load: READY_A })} />);
+    expect(f).not.toHaveBeenCalled();
+    expect(screen.queryByRole('group', { name: '기준면' })).toBeNull();
+    expect(screen.getByTestId('points3d-notice').textContent).toContain('구역 기준 평면');
+  });
+});

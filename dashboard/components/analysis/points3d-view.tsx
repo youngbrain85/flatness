@@ -9,8 +9,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent, PointerEvent } from 'react';
 import { flushSync } from 'react-dom';
 import {
-  EXAGGERATIONS, POINTS3D_THEME, POINT_CLASS_LABEL, THRESHOLD_Q_MAX, THRESHOLD_Q_MIN, THRESHOLD_Q_STEP,
-  fmtThresholdMm, hexToRgb01, readoutLines,
+  EXAGGERATIONS, POINTS3D_THEME, POINT_CLASS_LABEL, REF_SURFACE_ALPHA, REF_SURFACE_COLOR, THRESHOLD_Q_MAX,
+  THRESHOLD_Q_MIN, THRESHOLD_Q_STEP, fmtThresholdMm, hexToRgb01, readoutLines,
 } from '@/lib/domain/points3d';
 import type { PointClass, Points3dData, ThemeName } from '@/lib/domain/points3d';
 import { FOVY, fitToBounds, viewProj } from '@/lib/viz/points3d/orbit';
@@ -24,7 +24,9 @@ import { pickNearest } from '@/lib/viz/points3d/pick';
 import { initialControlState, isGesturing, reduceControl } from '@/lib/viz/points3d/controls';
 import type { ControlEvent } from '@/lib/viz/points3d/controls';
 import { createRenderer } from '@/lib/viz/points3d/gl-renderer';
-import type { Renderer } from '@/lib/viz/points3d/gl-renderer';
+import type { Renderer, SurfaceMesh } from '@/lib/viz/points3d/gl-renderer';
+import { buildSurfaceMesh, devForBasis, surfaceOffset } from '@/lib/viz/points3d/reference';
+import type { RefBasis, RefSurfaces } from '@/lib/viz/points3d/reference';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import { Stage } from '@/components/ui/stage';
@@ -39,6 +41,11 @@ const READOUT_BOX_H_PX = 100;
 const OVERLAY_BG_ALPHA = 0.6;    // HUD·조작 안내 바탕의 알파. 좁은 폭에서 축 라벨과 겹쳐도 글자가 읽히게 뷰어 배경색을 깐다
 
 const LEGEND: PointClass[] = ['flat', 'depression', 'protrusion', 'none'];
+// 기준면(2026-10-20 바닥 기준면 개선): 점 색·과장의 기준과 반투명 면 보기
+const BASES: { id: RefBasis; label: string; show: string; legend: string; phrase: string }[] = [
+  { id: 'local', label: '국부', show: '국부 기준면 보기', legend: '국부 기준면', phrase: '3m 국부 기준면' },
+  { id: 'global', label: '전체', show: '전체 기준면 보기', legend: '전체 기준면', phrase: '바닥 전체 기준면' },
+];
 const VIEW_PRESETS: { id: ViewPreset; label: string }[] = [
   { id: 'iso', label: '등각' },
   { id: 'top', label: '평면' },
@@ -67,6 +74,8 @@ interface Engine {
   hover(cursor: Cursor | null): void;     // 읽기 창용 커서 위치(null = 숨김)
   setPreset(preset: ViewPreset): void;    // 시점 버튼: 각도를 바꾸고 맞춤을 다시 한다
   requestDraw(): void;
+  setDev(dev: Int16Array): void;          // 기준 전환: 점 편차만 바꿔 올린다(카메라는 그대로)
+  setSurfaces(meshes: SurfaceMesh[]): void;
 }
 
 // 캔버스의 CSS 크기와 드로잉 버퍼 크기. jsdom 처럼 크기가 0 인 환경에서도 0 나눗셈이 없도록 1 이상으로 둔다.
@@ -124,11 +133,13 @@ export function Points3dLoadingFrame({ theme }: { theme: ThemeName }) {
   );
 }
 
-export function Points3dView({ data, defaultThresholdQ, isRegistered, onError }: {
+export function Points3dView({ data, defaultThresholdQ, isRegistered, onError, surfaces = null, hasReference = false }: {
   data: Points3dData;
   defaultThresholdQ: number;          // 엔진이 준 표시 임계값(0.1mm 정수, 10~300). 5의 배수로 맞추지 않는다
   isRegistered: boolean;              // 정합 병합 스캔인가
   onError(kind: 'webgl' | 'context'): void;
+  surfaces?: RefSurfaces | null;      // reference_surfaces.json(없거나 못 받으면 null: 기준면 줄을 숨긴다)
+  hasReference?: boolean;             // 이 분석의 점 편차가 국부 기준인가(stats.reference_surfaces_path 가 있는 새 분석)
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<Engine | null>(null);
@@ -140,6 +151,9 @@ export function Points3dView({ data, defaultThresholdQ, isRegistered, onError }:
   const [themeName, setThemeName] = useState<ThemeName>('dark');
   // 점 크기 배율(2026-10-20 스펙). 1 = 지금 크기. 분석이 바뀌면 뷰어가 새로 마운트되어 1 로 돌아간다
   const [pointScale, setPointScale] = useState<number>(1);
+  // 기준면: 점 색·과장의 기준(기본 국부)과 반투명 면 보기(기본 끔)
+  const [basis, setBasis] = useState<RefBasis>('local');
+  const [shown, setShown] = useState<Record<RefBasis, boolean>>({ local: false, global: false });
   const [labels, setLabels] = useState<PlacedLabel[]>([]);
   const [readout, setReadout] = useState<Readout | null>(null);
   const [restoring, setRestoring] = useState(false);   // 컨텍스트 손실 뒤 복구를 기다리는 중
@@ -148,6 +162,22 @@ export function Points3dView({ data, defaultThresholdQ, isRegistered, onError }:
   });
 
   const scaffold = useMemo(() => buildScaffold(data.meta.fit_bounds), [data]);
+  // 고른 기준의 점 편차와 그 편차를 실은 점 자료(읽기 창·고르기가 쓴다). 국부면 받은 자료 그대로
+  const activeData = useMemo<Points3dData>(() => {
+    const dev = surfaces ? devForBasis(data, surfaces, basis) : data.dev;
+    return dev === data.dev ? data : { ...data, dev };
+  }, [data, surfaces, basis]);
+  const activeDataRef = useRef(activeData);
+  // 보이는 기준면의 반투명 면(고른 기준면 위에 과장 차이를 얹는다)
+  const meshes = useMemo<SurfaceMesh[]>(() => {
+    if (!surfaces) return [];
+    const offset = surfaceOffset(surfaces, data.meta.origin_m);
+    return BASES.filter((b) => shown[b.id]).map((b) => ({
+      verts: buildSurfaceMesh(surfaces, b.id, basis, offset),
+      color: REF_SURFACE_COLOR[themeName][b.id], alpha: REF_SURFACE_ALPHA,
+    }));
+  }, [surfaces, data, basis, shown, themeName]);
+  const meshesRef = useRef(meshes);
 
   useEffect(() => { onErrorRef.current = onError; }, [onError]);
 
@@ -211,7 +241,7 @@ export function Points3dView({ data, defaultThresholdQ, isRegistered, onError }:
     }
     function pick() {
       if (cursor === null || lastViewProj === null) return;
-      const i = pickNearest(data, lastViewProj, viewRef.current.exaggeration,
+      const i = pickNearest(activeDataRef.current, lastViewProj, viewRef.current.exaggeration,
         size.cssW, size.cssH, cursor.x, cursor.y);
       setReadout(i === null ? null : { index: i, x: cursor.x, y: cursor.y, cssW: size.cssW, cssH: size.cssH });
     }
@@ -280,6 +310,24 @@ export function Points3dView({ data, defaultThresholdQ, isRegistered, onError }:
     canvas.addEventListener('wheel', onWheel, { passive: false });
 
     renderer.setData(data, scaffold);
+    // 기준 전환·기준면은 아래 effect 가 바꾼다. 이 effect 가 다시 돌면(점 자료가 바뀌면) 지금 고른 것을 다시 싣는다
+    let uploadedDev = data.dev;
+    let shownMeshes: SurfaceMesh[] = [];
+    function setDev(dev: Int16Array) {
+      if (dev === uploadedDev) return;
+      uploadedDev = dev;
+      renderer.setDev(dev);
+      setReadout(null);
+      requestDraw();
+    }
+    function setSurfaces(next: SurfaceMesh[]) {
+      if (!next.length && !shownMeshes.length) return;
+      shownMeshes = next;
+      renderer.setSurfaces(next);
+      requestDraw();
+    }
+    setDev(activeDataRef.current.dev);
+    setSurfaces(meshesRef.current);
     requestDraw();
     // 크기 변화는 ResizeObserver 로 따른다(jsdom 에는 없다). 버퍼 크기를 바꾸면 캔버스가 지워지므로
     // 다음 프레임을 기다리지 않고 그 자리에서 다시 그린다. 크기가 그대로면 아무것도 하지 않는다
@@ -294,7 +342,7 @@ export function Points3dView({ data, defaultThresholdQ, isRegistered, onError }:
       });
       observer.observe(canvas);
     }
-    engineRef.current = { input, hover, setPreset, requestDraw };
+    engineRef.current = { input, hover, setPreset, requestDraw, setDev, setSurfaces };
 
     return () => {
       engineRef.current = null;
@@ -305,6 +353,16 @@ export function Points3dView({ data, defaultThresholdQ, isRegistered, onError }:
       renderer.dispose();
     };
   }, [data, scaffold]);
+
+  // 기준 전환·기준면 보기: 점 편차 버퍼와 반투명 면만 바꾼다
+  useEffect(() => {
+    activeDataRef.current = activeData;
+    engineRef.current?.setDev(activeData.dev);
+  }, [activeData]);
+  useEffect(() => {
+    meshesRef.current = meshes;
+    engineRef.current?.setSurfaces(meshes);
+  }, [meshes]);
 
   // 임계값·과장 배율·배경·점 크기는 uniform 만 바꾸고 한 번 다시 그린다
   useEffect(() => {
@@ -346,9 +404,30 @@ export function Points3dView({ data, defaultThresholdQ, isRegistered, onError }:
     `${data.meta.n_points.toLocaleString('ko-KR')}점`,
   ].join(' · ');
 
+  // 고지 문구의 편차 기준: 새 분석은 3m 국부(전체로 바꾸면 바닥 전체), 옛 분석은 구역 기준 평면
+  const basisPhrase = hasReference
+    ? BASES.find((b) => b.id === (surfaces ? basis : 'local'))!.phrase
+    : '구역 기준 평면';
+
   // 도구 줄(아트보드 Stage 85~104행): Stage 의 toolbar 로 스테이지 바로 아래에 붙는다. 맨 아래 줄은 고지 문구다
   const toolbar = (
     <>
+      {surfaces && (
+        <div role="group" aria-label="기준면" className={GROUP}>
+          <span className={GROUP_NAME}>기준면</span>
+          {BASES.map((b) => (
+            <Button key={b.id} aria-pressed={basis === b.id} className={PRESSED} onClick={() => setBasis(b.id)}>
+              {b.label}
+            </Button>
+          ))}
+          {BASES.map((b) => (
+            <Button key={`show-${b.id}`} aria-pressed={shown[b.id]} className={PRESSED}
+              onClick={() => setShown((s) => ({ ...s, [b.id]: !s[b.id] }))}>
+              {b.show}
+            </Button>
+          ))}
+        </div>
+      )}
       <div role="group" aria-label="시점" className={GROUP}>
         <span className={GROUP_NAME}>시점</span>
         {VIEW_PRESETS.map((p) => (
@@ -377,7 +456,7 @@ export function Points3dView({ data, defaultThresholdQ, isRegistered, onError }:
         밝은 배경
       </Button>
       <p data-testid="points3d-notice" className={NOTE}>
-        {`점 색은 참고용 표시입니다. FLAT(평탄)은 점이 속한 5cm 칸이 구역 기준 평면에서 ±${thresholdText}mm 이내, DEPRESSION(침하)은 −${thresholdText}mm 미만, PROTRUSION(융기)은 +${thresholdText}mm 초과임을 뜻합니다. 판정 등급은 히트맵 탭의 직선자 틈새 기준이며 측정 방식이 다릅니다. 초록 점이 대부분인 칸이 경계·보수일 수 있고, 노랑·빨강 점이 많은 칸이 적합일 수 있습니다. 임계값을 바꿔도 판정과 보고서는 달라지지 않습니다.`}
+        {`점 색은 참고용 표시입니다. FLAT(평탄)은 점이 속한 5cm 칸이 ${basisPhrase}에서 ±${thresholdText}mm 이내, DEPRESSION(침하)은 −${thresholdText}mm 미만, PROTRUSION(융기)은 +${thresholdText}mm 초과임을 뜻합니다. 판정 등급은 히트맵 탭의 직선자 틈새 기준이며 측정 방식이 다릅니다. 초록 점이 대부분인 칸이 경계·보수일 수 있고, 노랑·빨강 점이 많은 칸이 적합일 수 있습니다. 임계값을 바꿔도 판정과 보고서는 달라지지 않습니다.`}
       </p>
       {isRegistered && (
         <p data-testid="points3d-merged-note" className={NOTE}>
@@ -437,6 +516,13 @@ export function Points3dView({ data, defaultThresholdQ, isRegistered, onError }:
               {POINT_CLASS_LABEL[cls]}
             </li>
           ))}
+          {surfaces && BASES.filter((b) => shown[b.id]).map((b) => (
+            <li key={`ref-${b.id}`} className="flex items-center gap-2">
+              <span aria-hidden className="inline-block h-2.5 w-2.5 rounded-sm"
+                style={{ backgroundColor: REF_SURFACE_COLOR[themeName][b.id] }} />
+              {b.legend}
+            </li>
+          ))}
         </ul>
         {/* 아래 줄: 왼쪽 HUD, 오른쪽 조작 안내. 폭이 좁으면 두 줄로 접힌다 */}
         <div className="pointer-events-none absolute inset-x-3 bottom-3 flex flex-wrap items-end justify-between gap-x-3 gap-y-1 text-xs leading-4">
@@ -454,7 +540,7 @@ export function Points3dView({ data, defaultThresholdQ, isRegistered, onError }:
               backgroundColor: rgba(theme.readoutBackground, theme.readoutAlpha),
               borderColor: rgba(theme.line, theme.axisAlpha),
             }}>
-            {readoutLines(data, readout.index, thresholdQ).map((line, i) => <div key={i}>{line}</div>)}
+            {readoutLines(activeData, readout.index, thresholdQ).map((line, i) => <div key={i}>{line}</div>)}
           </div>
         )}
         {restoring && (

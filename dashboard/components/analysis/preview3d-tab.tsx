@@ -15,6 +15,8 @@ import {
 import type { Points3dLoad, Preview3dInput, Webgl2Support } from '@/lib/domain/points3d';
 import type { AnalysisRow, ScanRow, Stats } from '@/lib/domain/types';
 import { probeWebgl2 } from '@/lib/viz/points3d/gl-renderer';
+import { parseReferenceSurfaces } from '@/lib/viz/points3d/reference';
+import type { RefSurfaces } from '@/lib/viz/points3d/reference';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Stage } from '@/components/ui/stage';
@@ -75,6 +77,28 @@ export function Preview3dTab({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [request, dir]);
 
+  // 기준면(2026-10-20 바닥 기준면 개선): 새 분석은 reference_surfaces.json 을 받아 뷰어에 넘긴다. 뷰어 모드일 때만 받고,
+  // 결과는 받은 URL 로 묶어 분석이 바뀌면 옛 것을 쓰지 않는다. 못 받으면 null(뷰어는 기준면 줄을 숨긴다)
+  const refPath = stats.reference_surfaces_path ?? null;
+  const refKey = mode === 'viewer' && dir !== null && refPath !== null ? artifactUrl(dir, refPath) : null;
+  const [ref, setRef] = useState<{ key: string; surfaces: RefSurfaces | null } | null>(null);
+  useEffect(() => {
+    if (!refKey) return;
+    let cancelled = false;
+    (async () => {
+      let surfaces: RefSurfaces | null = null;
+      try {
+        const res = await fetch(refKey);
+        surfaces = res.ok ? parseReferenceSurfaces(await res.json()) : null;
+      } catch {
+        surfaces = null;   // 기준면은 보조 표시다. 못 받으면 점 뷰어만 그린다
+      }
+      if (!cancelled) setRef({ key: refKey, surfaces });
+    })();
+    return () => { cancelled = true; };
+  }, [refKey]);
+  const surfaces = ref !== null && ref.key === refKey ? ref.surfaces : null;
+
   const onViewerError = useCallback((kind: 'webgl' | 'context') => {
     if (kind === 'webgl') setRendererFailed(true);
     else setContextLost(true);
@@ -86,7 +110,8 @@ export function Preview3dTab({
   if (mode === 'viewer' && current.status === 'ready' && thresholdQ !== null) {
     return (
       <Points3dView data={current.data} defaultThresholdQ={thresholdQ}
-        isRegistered={scan.lineage === 'registered'} onError={onViewerError} />
+        isRegistered={scan.lineage === 'registered'} onError={onViewerError}
+        surfaces={surfaces} hasReference={refPath !== null} />
     );
   }
 

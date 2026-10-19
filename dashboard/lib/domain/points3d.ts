@@ -247,6 +247,14 @@ export interface Points3dTheme {
   readoutAlpha: number;
 }
 
+/** 3D 기준면 색(2026-10-20 바닥 기준면 개선). 국부 = 흰색(밝은 배경에서는 짙은 회색), 전체 = 파랑.
+ * 초록은 FLAT(평탄) 점과 겹쳐 쓰지 않는다. 알파는 반투명 면의 불투명도다. */
+export const REF_SURFACE_COLOR: Record<ThemeName, Record<'local' | 'global', string>> = {
+  dark: { local: '#ffffff', global: '#4f8cff' },
+  light: { local: '#3a3f47', global: '#1f5fd6' },
+};
+export const REF_SURFACE_ALPHA = 0.22;
+
 export const POINTS3D_THEME: Record<ThemeName, Points3dTheme> = {
   // 검정 배경(기본)
   dark: {

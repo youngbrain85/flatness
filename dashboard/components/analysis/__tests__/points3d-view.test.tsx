@@ -15,6 +15,7 @@ import { fitToBounds, pan, rotate, viewProj } from '@/lib/viz/points3d/orbit';
 import type { Bounds } from '@/lib/viz/points3d/orbit';
 import { project } from '@/lib/viz/points3d/mat4';
 import { recordingGl } from '@/lib/viz/points3d/__tests__/gl-stub';
+import type { RefSurfaces } from '@/lib/viz/points3d/reference';
 import type { RecordingGl } from '@/lib/viz/points3d/__tests__/gl-stub';
 
 // ---- 데이터 ----
@@ -1291,5 +1292,82 @@ describe('Points3dView 입력 정규화', () => {
     fireEvent.pointerMove(canvas, mouse(140, 100));     // 버튼을 뗀 뒤의 이동은 회전이 아니다
     frame(32);
     expectMatrix(lastUniform(rec, 'uViewProj'), iso);
+  });
+});
+
+// ---- 기준면(2026-10-20 바닥 기준면 개선) ----
+// 점 파일과 같은 원점, 4x3m 를 덮는 25cm 마디(16x12). 국부 기준 0, 전체 기준 +2mm -> 전체 편차 = 국부 편차 − 20(0.1mm)
+function surf(): RefSurfaces {
+  const cols = 16, rows = 12;
+  return {
+    stepM: 0.25, cols, rows, originM: [...ORIGIN] as [number, number, number],
+    local: new Float32Array(cols * rows), global: new Float32Array(cols * rows).fill(0.002),
+  };
+}
+
+describe('Points3dView 기준면', () => {
+  // 변이: 기준면 자료가 없어도 기준면 줄을 그림(옛 분석에 동작 안 하는 버튼)
+  it('기준면 자료가 없으면 기준면 줄이 없다', () => {
+    mount();
+    expect(screen.queryByRole('group', { name: '기준면' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '국부 기준면 보기' })).toBeNull();
+  });
+
+  // 변이: 기본 기준이 전체, 고지 문구가 기준을 따르지 않음
+  it('기준면 [국부][전체] 와 보기 버튼 둘을 두고, 국부가 눌린 채 고지 문구가 3m 국부 기준면을 말한다', () => {
+    mount({ surfaces: surf(), hasReference: true });
+    const group = screen.getByRole('group', { name: '기준면' });
+    expect(within(group).getAllByRole('button').map((b) => b.textContent))
+      .toEqual(['국부', '전체', '국부 기준면 보기', '전체 기준면 보기']);
+    expect(within(group).getByRole('button', { name: '국부' })).toHaveAttribute('aria-pressed', 'true');
+    expect(within(group).getByRole('button', { name: '국부 기준면 보기' })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByTestId('points3d-notice').textContent).toContain('5cm 칸이 3m 국부 기준면에서 ±7mm 이내');
+  });
+
+  // 변이: 전체로 바꿔도 dev 를 다시 올리지 않음, 좌표까지 다시 올림, 센티널을 바꿈
+  it('전체를 누르면 점 편차를 전체 기준으로 바꿔 dev 버퍼만 다시 올리고 한 번 다시 그린다', () => {
+    const { rec } = mount({ data: READOUT_DATA, surfaces: surf(), hasReference: true });
+    frame(0);
+    const before = rec.callsOf('bufferData').length;
+    fireEvent.click(screen.getByRole('button', { name: '전체' }));
+    const uploads = rec.callsOf('bufferData').slice(before).map((c) => c.args[1]);
+    expect(uploads).toHaveLength(1);
+    expect(Array.from(uploads[0] as Int16Array)).toEqual([12, -32768, -125]);
+    expect(rafQueue).toHaveLength(1);
+    expect(screen.getByTestId('points3d-notice').textContent).toContain('5cm 칸이 바닥 전체 기준면에서');
+  });
+
+  // 변이: 읽기 창이 받은(국부) 편차를 그대로 씀
+  it('전체 기준에서는 읽기 창 편차도 전체 기준 값이다', () => {
+    stubSize(640, 480, 1);
+    vi.spyOn(HTMLCanvasElement.prototype, 'getBoundingClientRect')
+      .mockReturnValue({ left: 100, top: 50, width: 640, height: 480, right: 740, bottom: 530, x: 100, y: 50 } as DOMRect);
+    const { canvas } = mount({ data: READOUT_DATA, surfaces: surf(), hasReference: true });
+    frame(0);
+    fireEvent.click(screen.getByRole('button', { name: '전체' }));
+    frame(16);
+    const p = project(viewProj(fitToBounds(READOUT_FIT, 'iso'), 640 / 480, FULL), P0, 640, 480)!;
+    fireEvent.pointerMove(canvas, mouse(100 + p.x, 50 + p.y));
+    frame(32);
+    const lines = Array.from(screen.getByTestId('points3d-readout').children).map((c) => c.textContent);
+    expect(lines.slice(3)).toEqual(['편차 +1.2 mm', 'FLAT']);
+  });
+
+  // 변이: 보기 버튼이 면을 넘기지 않음, 범례에 줄을 안 더함, 다시 눌러도 안 꺼짐
+  it('국부 기준면 보기를 누르면 반투명 면을 그리고 범례에 한 줄을 더하며, 다시 누르면 끈다', () => {
+    const { rec } = mount({ surfaces: surf(), hasReference: true });
+    frame(0);
+    const show = screen.getByRole('button', { name: '국부 기준면 보기' });
+    fireEvent.click(show);
+    expect(show).toHaveAttribute('aria-pressed', 'true');
+    frame(16);
+    const tri = () => rec.callsOf('drawArrays').filter((c) => c.args[0] === rec.gl.TRIANGLES);
+    expect(tri().length).toBeGreaterThan(0);
+    expect(screen.getByTestId('points3d-legend').textContent).toContain('국부 기준면');
+    const drawn = tri().length;
+    fireEvent.click(show);
+    frame(32);
+    expect(tri().length).toBe(drawn);   // 끈 뒤 프레임에는 면을 그리지 않는다
+    expect(screen.getByTestId('points3d-legend').textContent).not.toContain('국부 기준면');
   });
 });
