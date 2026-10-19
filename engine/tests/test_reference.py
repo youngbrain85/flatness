@@ -123,3 +123,38 @@ def test_global_plane_does_not_tilt_across_a_2cm_step():
     r = (g.median_z[ys, xs] - (a * (xs + 0.5) * 0.05 + b * (ys + 0.5) * 0.05 + c)) * 1000
     assert np.abs(r[xs < 103]).max() < 1.0
     assert abs(np.median(r[xs >= 103]) + 20) < 1.0
+
+
+def test_degenerate_window_far_from_origin_falls_back_to_zone_plane():
+    # 리뷰 실측: 폭 2칸 띠에서 한 열이 맞춤에서 빠지면(쌍봉 등) 창의 맞춤 칸이 한 열(일직선)이다. 절대 격자 좌표
+    # (수십~수백 m)로 모멘트를 세면 cxx 가 0 이 아니라 부동소수 잡음이 되어 퇴화 판정을 빠져나가고, 기울기가 잡음/잡음이 된다.
+    # 열 3000 근처(150m)·z 2.5m 에서도 퇴화로 보고 구역 평면 값을 써야 한다
+    ny, nx = 61, 3010
+    mz = np.full((ny, nx), np.nan)
+    labels = np.zeros((ny, nx), dtype=np.int32)
+    cols = [3000, 3001]
+    yy = np.arange(ny)[:, None]
+    for c in cols:
+        mz[:, c] = 2.5 + 0.001 * (c + 0.5) * 0.05 + 0.002 * (yy[:, 0] + 0.5) * 0.05
+        labels[:, c] = 1
+    fit = np.ones((ny, nx), dtype=bool)
+    fit[:, 3001] = False                         # 바깥 열은 맞춤에서 뺀다
+    plane = (0.001, 0.002, 2.5)
+    ref, _ = local_reference(mz, labels, {1: plane}, 0.05, fit_mask=fit)
+    y = (np.arange(ny) + 0.5) * 0.05
+    expect = plane[0] * (3001 + 0.5) * 0.05 + plane[1] * y + plane[2]
+    assert np.allclose(ref[:, 3001], expect, atol=1e-6)
+
+
+def test_banded_window_equals_whole(monkeypatch):
+    # 큰 바닥은 행 띠로 나눠 계산한다(메모리). 띠 경계에서도 결과가 통째 계산과 같아야 한다
+    from flatness.core import reference as R
+    rng = np.random.default_rng(3)
+    ny, nx = 150, 90
+    yy, xx = np.mgrid[0:ny, 0:nx]
+    mz = 0.001 * xx * 0.05 + 0.0005 * np.sin(yy * 0.2) + rng.normal(0, 0.0005, (ny, nx))
+    labels = np.ones((ny, nx), dtype=np.int32)
+    whole, _ = R.local_reference(mz, labels, {1: (0.001, 0.0, 0.0)}, 0.05)
+    monkeypatch.setattr(R, "BAND_ROWS", 10)
+    banded, _ = R.local_reference(mz, labels, {1: (0.001, 0.0, 0.0)}, 0.05)
+    assert np.allclose(banded, whole, atol=1e-9)

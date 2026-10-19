@@ -16,6 +16,9 @@ MIN_TRIM_M = 0.003          # 국부 2회차에서 결함으로 뺄 최소 편�
 MIN_GLOBAL_THR_M = 0.005    # 전체 기준 RANSAC 인라이어 최소 문턱(옛 구역 평면과 같은 5mm)
 MIN_WINDOW_CELLS = 30       # 창 안 유효 칸이 이보다 적으면 구역 평면 값을 쓴다
 DEGENERATE_REL = 1e-3       # 창 안 칸들이 거의 일직선이면(det/(cxx·cyy) 미만) 구역 평면 값을 쓴다
+# 절대 하한: 창 칸 중심 좌표 공분산의 최소 고유값이 (서브셀 변)² x 이 값보다 작으면 일직선으로 본다.
+# 한 열은 0, 두 열은 0.25 다. 상대 판정만 쓰면 큰 좌표의 부동소수 잡음이 한 열 창을 통과시킨다(리뷰 실측 2026-10-20)
+DEGENERATE_MIN_VAR = 0.05
 RANSAC_MAX_CELLS = 200_000  # 전체 기준 가설 채점에 쓸 최대 칸 수(넘으면 고르게 솎는다)
 MSAC_ITERS = 500
 MSAC_SEED = 0
@@ -42,8 +45,10 @@ def _box(a, r):
     return s[y1][:, x1] - s[y0][:, x1] - s[y1][:, x0] + s[y0][:, x0]
 
 
-def _window_planes(z, w, xx, yy, r):
-    """가중(0/1) w 칸으로 각 칸 중심 창에 맞춘 평면의 그 칸 중심 높이. 칸 부족·퇴화는 NaN."""
+def _window_planes(z, w, xx, yy, r, size_m):
+    """가중(0/1) w 칸으로 각 칸 중심 창에 맞춘 평면의 그 칸 중심 높이. 칸 부족·퇴화는 NaN.
+
+    xx·yy·z 는 crop 원점·crop 중앙값 기준의 작은 값이어야 한다(큰 좌표의 모멘트 상쇄 오차를 피한다)."""
     zw = np.where(w, z, 0.0)
     wf = w.astype(np.float64)
     n = _box(wf, r)
@@ -60,15 +65,36 @@ def _window_planes(z, w, xx, yy, r):
         a = (cxz * cyy - cyz * cxy) / det
         b = (cyz * cxx - cxz * cxy) / det
         ref = mz + a * (xx - mx) + b * (yy - my)
-        bad = (n < MIN_WINDOW_CELLS) | ~(det > DEGENERATE_REL * cxx * cyy)
+        vx, vy, vxy = cxx / n, cyy / n, cxy / n
+        lam_min = (vx + vy) / 2 - np.sqrt(((vx - vy) / 2) ** 2 + vxy ** 2)   # 좌표 공분산의 최소 고유값
+        bad = ((n < MIN_WINDOW_CELLS) | ~(det > DEGENERATE_REL * cxx * cyy)
+               | ~(lam_min >= DEGENERATE_MIN_VAR * size_m * size_m))
     ref[bad] = np.nan
     return ref
+
+
+BAND_ROWS = 192   # 창 평면을 이 행 수씩(위아래 창 반경만큼 덧대어) 나눠 계산한다. 결과는 같고 임시 배열 메모리만 준다
+
+
+def _window_planes_banded(z, w, xx, yy, r, size_m):
+    """_window_planes 를 행 띠로 나눠 계산한다. 띠마다 위아래 r 행을 덧대므로 각 칸의 창 합은 통째 계산과 같다."""
+    h = z.shape[0]
+    if h <= BAND_ROWS + 2 * r:
+        return _window_planes(z, w, xx, yy, r, size_m)
+    out = np.empty(z.shape)
+    for y0 in range(0, h, BAND_ROWS):
+        y1 = min(h, y0 + BAND_ROWS)
+        a0, a1 = max(0, y0 - r), min(h, y1 + r)
+        part = _window_planes(z[a0:a1], w[a0:a1], xx[a0:a1], yy[a0:a1], r, size_m)
+        out[y0:y1] = part[y0 - a0:y1 - a0]
+    return out
 
 
 def local_reference(median_z, labels, zone_planes, size_m, win_m=3.0, fit_mask=None):
     """국부 기준면 높이(m)와 잡음 σ(m). zone_planes = {zone_id: (a, b, c)}(구역 평면, 서브셀 격자 원점 좌표).
 
     fit_mask 가 False 인 칸(쌍봉 등)은 맞춤에 쓰지 않지만 기준 높이는 받는다. 구역 밖은 NaN.
+    구역마다 bbox 로 잘라 crop 원점·crop 중앙값 기준 좌표로 맞춘다(메모리는 구역 crop 하나씩만 든다).
     """
     mz = np.asarray(median_z, dtype=np.float64)
     ny, nx = mz.shape
@@ -76,33 +102,40 @@ def local_reference(median_z, labels, zone_planes, size_m, win_m=3.0, fit_mask=N
     r = int(round(win_m / 2 / size_m))
     ref = np.full((ny, nx), np.nan)
     crops = []
-    for zid, (a, b, c) in zone_planes.items():
-        zone = labels == zid
-        ys, xs = np.nonzero(zone)
-        if ys.size == 0:
-            continue
-        sl = (slice(ys.min(), ys.max() + 1), slice(xs.min(), xs.max() + 1))
-        yy, xx = np.mgrid[sl[0], sl[1]].astype(np.float64)
-        xx = (xx + 0.5) * size_m
+    for zid, abc in zone_planes.items():
+        ys, xs = np.nonzero(labels == zid)
+        if ys.size:
+            crops.append((zid, abc, (slice(ys.min(), ys.max() + 1), slice(xs.min(), xs.max() + 1))))
+
+    def frame(zid, abc, sl):
+        zc = labels[sl] == zid
+        h, w = zc.shape
+        yy, xx = np.mgrid[0:h, 0:w].astype(np.float64)
+        xx = (xx + 0.5) * size_m          # crop 원점 기준(작은 값)
         yy = (yy + 0.5) * size_m
-        zc = zone[sl]
-        zplane = a * xx + b * yy + c
-        crops.append((sl, zc, xx, yy, zplane, fit[sl] & zc))
+        a, b, c = abc
+        gx = xx + sl[1].start * size_m    # 구역 평면은 서브셀 격자 원점 좌표다
+        gy = yy + sl[0].start * size_m
+        zplane = a * gx + b * gy + c
+        z = mz[sl]
+        z0 = float(np.nanmedian(z[zc])) if np.isfinite(z[zc]).any() else 0.0
+        return zc, xx, yy, zplane, z - z0, z0
+
     # 1회차: 구역 안 맞춤 칸 전부
-    first = []
-    for sl, zc, xx, yy, zplane, w in crops:
-        p1 = _window_planes(mz[sl], w, xx, yy, r)
-        p1 = np.where(np.isnan(p1), zplane, p1)
-        first.append(p1)
-        ref[sl][zc] = p1[zc]
+    for zid, abc, sl in crops:
+        zc, xx, yy, zplane, zr, z0 = frame(zid, abc, sl)
+        p1 = _window_planes_banded(zr, fit[sl] & zc, xx, yy, r, size_m) + z0
+        ref[sl][zc] = np.where(np.isnan(p1), zplane, p1)[zc]
     sigma = noise_sigma((mz - ref)[fit & np.isfinite(ref)])
     thr = max(MIN_TRIM_M, 3.0 * sigma)
     # 2회차: 1회차에서 크게 벗어난 칸(결함)을 빼고 다시 맞춘다
-    for (sl, zc, xx, yy, zplane, w), p1 in zip(crops, first):
-        keep = w & (np.abs(mz[sl] - p1) <= thr)
-        p2 = _window_planes(mz[sl], keep, xx, yy, r)
-        p2 = np.where(np.isnan(p2), zplane, p2)
-        ref[sl][zc] = p2[zc]
+    first = ref.copy()
+    for zid, abc, sl in crops:
+        zc, xx, yy, zplane, zr, z0 = frame(zid, abc, sl)
+        with np.errstate(invalid="ignore"):
+            keep = fit[sl] & zc & (np.abs(mz[sl] - first[sl]) <= thr)
+        p2 = _window_planes_banded(zr, keep, xx, yy, r, size_m) + z0
+        ref[sl][zc] = np.where(np.isnan(p2), zplane, p2)[zc]
     return ref, sigma
 
 
