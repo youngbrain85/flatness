@@ -201,9 +201,9 @@ def sample_points(chunks: Iterable[np.ndarray], info, scale_to_m: float, grid, z
     # 고르게 섞인 표본이 되고, 상한에서 자를 때도 한쪽만 잘리지 않는다
     hash63 = st_key & _HASH_MASK
     order = np.lexsort((st_rel[:, 2], st_rel[:, 1], st_rel[:, 0], hash63))[:max_points]
-    # 뷰어는 sample_cell_m 으로 점 크기를 잡는다. 점이 상한보다 훨씬 적어 표본 칸이 실제 점 간격보다 작으면
-    # 실제 점 간격 sqrt(점유 면적 / 출력 점 수) 로 키워 적는다(스펙 2·3 §4). 상한에 걸리면 두 값이 같다
-    shown_cell = max(s, float(np.sqrt(n_occ * grid.size_m * grid.size_m / max(1, len(order)))))
+    # 뷰어는 sample_cell_m 으로 점 크기를 잡는다. 실제 점 간격 sqrt(점유 면적 / 출력 점 수) 를 적는다(스펙 2·3 §4).
+    # 출력 점 수는 상한 이하라 이 값은 항상 표본 칸 변 s 이상이고, 상한에 걸리면 s 와 같다
+    shown_cell = float(np.sqrt(n_occ * grid.size_m * grid.size_m / max(1, len(order))))
     return PointSample(xyz_local=np.ascontiguousarray(st_rel[order]),
                        dev_q=np.ascontiguousarray(st_dev[order]),
                        origin_abs=np.array(lo, dtype=np.float64),

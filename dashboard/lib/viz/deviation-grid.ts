@@ -56,10 +56,13 @@ export function foldGrid(g: ResidualGrid, factor: number): FoldedGrid {
 
 /** 색 범위 R(mm): 원 격자 |값|의 98번째 백분위(nearest-rank), 최소 MIN_RANGE_MM. 해상도를 바꿔도 색 뜻이 같다. */
 export function colorRangeMm(g: ResidualGrid): number {
-  const abs: number[] = [];
-  for (const v of g.values) if (v !== null) abs.push(Math.abs(v));
-  if (!abs.length) return MIN_RANGE_MM;
-  abs.sort((a, b) => a - b);
+  let n = 0;
+  for (const v of g.values) if (v !== null) n += 1;
+  if (!n) return MIN_RANGE_MM;
+  const abs = new Float64Array(n);   // 형식 배열 정렬은 숫자 순이고 비교 함수 호출이 없다(큰 격자)
+  let i = 0;
+  for (const v of g.values) if (v !== null) abs[i++] = Math.abs(v);
+  abs.sort();
   const p = abs[Math.max(0, Math.ceil(P98 * abs.length) - 1)] * 0.1;
   return Math.max(MIN_RANGE_MM, p);
 }

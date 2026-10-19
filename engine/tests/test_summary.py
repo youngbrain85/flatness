@@ -118,3 +118,14 @@ def test_summary_mentions_small_specimen():
     # 시험판처럼 1㎡ 미만 시편은 종합의견에서도 그 사실을 알려야 한다(스펙 2·3 §4)
     t = generate_summary(_base_stats(warnings=["small_specimen"]))
     assert "1㎡" in t
+
+
+def test_small_specimen_all_na_explains_straightedge_instead_of_rescan():
+    # 43cm 시험판: 판정 불가의 원인은 스캔 품질이 아니라 직선자 최소 길이(1m)다 - 재스캔을 권하면 엇갈린 말이 된다
+    t = generate_summary(_base_stats(
+        n_valid=0, worst=None, warnings=["small_specimen"],
+        grade_counts={"pass": 0, "borderline": 0, "repair": 0, "rework": 0, "na": 1}))
+    assert "재스캔" not in t
+    assert "기준을 만족" not in t
+    assert "직선자 최소 길이(1m)" in t
+    assert "단위" in t   # 실제 바닥인데 단위를 잘못 골라 작아진 경우의 안내

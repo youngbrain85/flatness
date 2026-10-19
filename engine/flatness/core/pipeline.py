@@ -56,7 +56,8 @@ def analyze_floor(path, scale_to_m, criterion, u_mm, out_dir,
         main = max(ok_zones, key=lambda z: z.n_subcells) if ok_zones else None
         if main is None or main.n_subcells < 0.8 * n_valid_sub:
             raise ValueError("판정 가능한 바닥 구역 없음: 재스캔 또는 파라미터 확인 필요")
-        # 나머지 작은 덩어리(점군 잡음)는 구역에서 빼고 잔차도 지운다
+        # 나머지 작은 덩어리(점군 잡음)는 구역에서 빼고 잔차도 지운다. 가구·유령층으로 분류된 덩어리도 함께 빠지므로
+        # 이 경로에서는 furniture_excluded·ghost_zone_excluded 경고를 내지 않는다(판 하나만 보는 경우다)
         for z in zmap.zones:
             if z is not main:
                 gone = zmap.labels == z.zone_id

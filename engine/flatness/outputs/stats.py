@@ -79,7 +79,10 @@ def write_residual_grid(out_dir, residuals, subcell_m):
     값은 0.1mm 정수, 값 없는 칸은 null, 행 우선이며 행 0 이 y 가 가장 작은 쪽이다(엔진 격자 그대로).
     """
     q = np.round(np.asarray(residuals, dtype=np.float64) * 10000.0).ravel()
-    values = [int(v) if np.isfinite(v) else None for v in q.tolist()]
+    finite = np.isfinite(q)
+    vals = np.where(finite, q, 0.0).astype(np.int64).astype(object)   # 파이썬 int 객체(원소별 isfinite 호출 없이)
+    vals[~finite] = None
+    values = vals.tolist()
     doc = {"subcell_m": subcell_m, "cols": int(residuals.shape[1]), "rows": int(residuals.shape[0]),
            "values": values}
     (out_dir / RESIDUAL_GRID_FILE).write_text(json.dumps(doc, separators=(",", ":")), encoding="utf-8")
