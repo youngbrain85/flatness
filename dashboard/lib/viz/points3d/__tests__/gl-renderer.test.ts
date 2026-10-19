@@ -912,9 +912,9 @@ describe('createRenderer: 점 편차 바꾸기·기준면', () => {
     expect(colors[0][3]).toBeCloseTo(0.25);
     expect(colors[1]).toEqual([1, 1, 1, expect.closeTo(0.2, 6)]);
     expect(valuesOf(rec.uniformCalls('uSurfExag').slice(-1)[0])).toEqual([50]);
-    const before = (name: string, i: number) => lastBefore(rec, start + calls.indexOf(tri[0]), (c) => c.name === name);
-    expect(before('enable', 0)?.args[0]).toBe(rec.gl.BLEND);
-    expect(before('depthMask', 0)?.args[0]).toBe(false);
+    const before = (name: string) => lastBefore(rec, start + calls.indexOf(tri[0]), (c) => c.name === name);
+    expect(before('enable')?.args[0]).toBe(rec.gl.BLEND);
+    expect(before('depthMask')?.args[0]).toBe(false);
     expect(calls.filter((c) => c.name === 'depthMask').slice(-1)[0].args[0]).toBe(true);
   });
 

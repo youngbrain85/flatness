@@ -13,7 +13,8 @@ const ROOT = join(__dirname, '..'); // dashboard/
 
 // WebGL 접점과 순수 모듈. 스펙 §7.2 의 모듈 분해 그대로다(테스트 폴더 __tests__ 는 제외).
 const VIZ_DIR = 'lib/viz/points3d';
-const VIZ_FILES = ['budget.ts', 'controls.ts', 'gl-renderer.ts', 'mat4.ts', 'orbit.ts', 'pick.ts', 'scaffold.ts'];
+// reference.ts: 기준면(2026-10-20 바닥 기준면 개선) 읽기·보간·점 편차 기준 전환·반투명 면 그물
+const VIZ_FILES = ['budget.ts', 'controls.ts', 'gl-renderer.ts', 'mat4.ts', 'orbit.ts', 'pick.ts', 'reference.ts', 'scaffold.ts'];
 const OTHER_FILES = [
   'lib/domain/points3d.ts',
   'components/analysis/points3d-view.tsx',
@@ -51,11 +52,11 @@ function hits(needles: string[]): string[] {
 }
 
 describe('3D 점군 뷰어 리트머스 (판정 이중화 금지)', () => {
-  it('검사 대상 파일이 전부 있다: viz 폴더는 정확히 7개, 나머지 3개', () => {
+  it('검사 대상 파일이 전부 있다: viz 폴더는 정확히 8개, 나머지 3개', () => {
     // 파일 이름이 바뀌거나 모듈이 늘면 여기서 드러난다. 목록을 고치지 않고는 검사에서 빠질 수 없다.
     expect(vizSources()).toEqual(VIZ_FILES);
     expect(OTHER_FILES.filter((rel) => !existsSync(join(ROOT, rel)))).toEqual([]);
-    expect(targets()).toHaveLength(10);
+    expect(targets()).toHaveLength(11);
   });
 
   it('뷰어 코드에 판정 기준 필드 이름이 0건이다(주석 포함)', () => {
