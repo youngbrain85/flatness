@@ -4,7 +4,7 @@
 // 조회와 에러 가드는 옛 현장 상세(app/sites/[id]/page.tsx)에서 문장 그대로 옮겼다.
 import type { Metadata } from 'next';
 import { createClient } from '@/lib/supabase/server';
-import { selectIn } from '@/lib/supabase/select-all';
+import { selectAll, selectIn } from '@/lib/supabase/select-all';
 import { buildLocationTree } from '@/lib/domain/tree';
 import { LocationTree, type ScanWithCurrent } from '@/components/location-tree';
 import { NewLocationForm } from '@/components/new-location-form';
@@ -25,7 +25,7 @@ export default async function LocationsPage({ params }: { params: Promise<{ id: 
   const { id } = await params;
   const supabase = await createClient();
   const [locationsRes, photosRes] = await Promise.all([
-    supabase.from('locations').select('*').eq('site_id', id),
+    selectAll((from, to) => supabase.from('locations').select('*').eq('site_id', id).order('id').range(from, to)),
     supabase.from('photos').select('*').eq('site_id', id).order('created_at', { ascending: false }),
   ]);
   // 아래 `?? []`가 쿼리 실패를 조용히 흡수해 "측정위치가 없습니다"로 오인시키지
@@ -38,15 +38,15 @@ export default async function LocationsPage({ params }: { params: Promise<{ id: 
   const photos = (photosRes.data ?? []) as PhotoRow[];
   const locationIds = locations.map((l) => l.id);
   // selectIn: id 를 조각내고 1000행 상한을 넘겨 끝까지 받는다(lib/supabase/select-all.ts). 쪽을 넘겨도 행이
-  // 빠지거나 겹치지 않게 id 를 둘째 정렬 키로 건다. 조각마다 따로 정렬되므로 최근 순은 아래에서 다시 세운다.
+  // 빠지거나 겹치지 않게 id 를 둘째 정렬 키로 건다. 조각은 측정위치 단위라 한 측정위치의 스캔은 한 조각 안에서
+  // 최근 순이고, 아래 scansByLocation 은 측정위치별 순서만 쓴다.
   const scansRes = await selectIn<ScanRow>(locationIds, (ids, from, to) => supabase.from('scans').select('*')
     .in('location_id', ids).is('deleted_at', null)
     .order('scanned_at', { ascending: false }).order('id').range(from, to));
   if (scansRes.error) {
     return <div className={PAGE_MAIN}><SupabaseErrorNotice message={scansRes.error.message} /></div>;
   }
-  // 여러 조각을 이어 붙였으면 최근 측정일 순이 조각 단위로만 맞으므로 전체를 다시 정렬한다(안정 정렬)
-  const scans = [...(scansRes.data ?? [])].sort((a, b) => (a.scanned_at < b.scanned_at ? 1 : a.scanned_at > b.scanned_at ? -1 : 0));
+  const scans = scansRes.data ?? [];
   const scanIds = scans.map((s) => s.id);
   // 단계 C 회귀 차단: kind 필터가 없으면 같은 scan_id의 구배 현재분석이 Map을 덮어써
   // 조회 순서에 따라 배지가 비결정적으로 바뀐다. 트리는 평활도만 보여 기존 동작을 유지한다.

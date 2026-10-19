@@ -5,7 +5,7 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
-import { selectIn } from '@/lib/supabase/select-all';
+import { selectAll, selectIn } from '@/lib/supabase/select-all';
 import {
   buildSiteDashboard, type DashAnalysis, type DashCurrentAnalysis, type DashReport, type DashScan,
 } from '@/lib/domain/site-dashboard';
@@ -38,7 +38,8 @@ export default async function SiteDashboardPage({ params }: { params: Promise<{ 
   if (siteError) return errorView(siteError.message);
   if (!site) notFound();
 
-  const locationsRes = await supabase.from('locations').select('*').eq('site_id', id);
+  const locationsRes = await selectAll((from, to) => supabase.from('locations').select('*')
+    .eq('site_id', id).order('id').range(from, to));
   if (locationsRes.error) return errorView(locationsRes.error.message);
   const locations = (locationsRes.data ?? []) as LocationRow[];
   const locationIds = locations.map((l) => l.id);

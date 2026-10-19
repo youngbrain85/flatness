@@ -188,6 +188,12 @@ describe('SiteDashboardPage 행 상한', () => {
     });
     expect((findAll(el, DashboardKpis)[0].props.kpi as DashKpi).inProgressCount).toBe(1200);
   });
+
+  it('측정위치가 1000곳을 넘어도 끝까지 센다', async () => {
+    const locs = Array.from({ length: 1200 }, (_, i) => location(`l${i}`, 's1'));
+    const { el } = await renderPage({ sites: [SITE], locations: locs, scans: [], analyses: [], reports: [] });
+    expect((findAll(el, DashboardKpis)[0].props.kpi as DashKpi).locationCount).toBe(1200);
+  });
 });
 
 describe('SiteDashboardPage 화면 구성', () => {

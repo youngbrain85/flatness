@@ -43,7 +43,7 @@ function drawStageGrid(ctx: CanvasRenderingContext2D, w: number, h: number) {
 export function RegistrationOverlay({
   pathA, pathB, metaA, metaB, unitScaleA, unitScaleB, transform, onLoadFailed,
 }: {
-  /** 두 그림 중 하나라도 못 불러왔을 때 한 번 부른다 - 작업대가 확인 체크박스를 잠근다(리뷰 C1). */
+  /** 두 그림 중 하나라도 못 불러왔을 때 부른다(다시 그리다 실패하면 또 부른다) - 작업대가 확인 체크박스를 잠근다(리뷰 C1). */
   onLoadFailed?: () => void;
   pathA: string;
   pathB: string;

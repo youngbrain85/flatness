@@ -196,6 +196,15 @@ describe('LocationsPage 쿼리 배선 (단계 C 회귀 차단: I1)', () => {
   });
 
   // 후속(2026-10-18): Supabase 는 한 번에 최대 1000행만 돌려준다 - 넘치는 스캔이 트리에서 조용히 빠지면 안 된다
+  it('측정위치가 1000곳을 넘어도 끝까지 받는다(제목 카운터)', async () => {
+    const locations = Array.from({ length: 1200 }, (_, i) => ({ ...LOCATION, id: `l${i}` }));
+    vi.mocked(createClient).mockResolvedValue(stub({ locations, scans: [] }) as never);
+
+    const el = await LocationsPage(props());
+
+    expect(findAll(el, PageHeader)[0].props.counter).toBe(1200);
+  });
+
   it('스캔이 1000건을 넘어도 끝까지 모은다', async () => {
     const scans = Array.from({ length: 1200 }, (_, i) => ({ ...SCAN, id: `sc${i}` }));
     vi.mocked(createClient).mockResolvedValue(stub({ scans }) as never);

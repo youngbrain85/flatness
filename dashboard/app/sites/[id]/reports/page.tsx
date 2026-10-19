@@ -4,6 +4,7 @@
 // 만들기 규칙을 그대로 가져오되 범위를 이 현장의 측정위치로 좁힌다.
 import type { Metadata } from 'next';
 import { createClient } from '@/lib/supabase/server';
+import { selectAll, selectIn } from '@/lib/supabase/select-all';
 import { SupabaseErrorNotice } from '@/components/supabase-error';
 import { ReportTable, type ReportTableRow } from '@/components/report-table';
 import { LinkButton } from '@/components/ui/button';
@@ -28,7 +29,9 @@ export default async function SiteReportsPage({ params, searchParams }: {
 
   // 현장 범위(스펙 §5 14행): reports에는 site_id가 없다 - 이 현장의 측정위치 id를 먼저 읽고 보고서는 그 id
   // 안에서만 고른다. 측정위치 표기도 같은 행으로 만든다(목록 열은 아트보드대로 ' / ').
-  const { data: locData, error: locError } = await supabase.from('locations').select('*').eq('site_id', siteId);
+  // 목록 조회는 selectAll·selectIn 으로 1000행 상한을 넘겨 끝까지 받는다(lib/supabase/select-all.ts)
+  const { data: locData, error: locError } = await selectAll((from, to) => supabase.from('locations')
+    .select('*').eq('site_id', siteId).order('id').range(from, to));
   if (locError) {
     return <div className={PAGE_MAIN}><SupabaseErrorNotice message={locError.message} /></div>;
   }
@@ -46,15 +49,16 @@ export default async function SiteReportsPage({ params, searchParams }: {
   if (scopeIds.length > 0) {
     // 삭제(deleted_at) 제외·최신순은 옛 전체 목록과 같다. 현장 범위로 좁혀졌으므로 50건 상한은 두지 않는다 -
     // 대시보드 KPI '보고서 수'(삭제 제외, 상태 무관)와 이 화면의 (n)이 같은 수여야 한다.
-    const { data, error } = await supabase.from('reports')
+    const { data, error } = await selectIn<ReportListItem>(scopeIds, (ids, from, to) => supabase.from('reports')
       .select('id, location_id, title, status, pdf_path, gen_status, gen_error, created_at')
-      .in('location_id', scopeIds)
+      .in('location_id', ids)
       .is('deleted_at', null)
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false }).order('id').range(from, to));
     if (error) {
       return <div className={PAGE_MAIN}><SupabaseErrorNotice message={error.message} /></div>;
     }
-    reports = (data ?? []) as ReportListItem[];
+    // 측정위치 조각마다 최신순이라, 이어 붙인 뒤 전체를 다시 최신순으로 세운다(같으면 조회 순서 유지)
+    reports = [...(data ?? [])].sort((a, b) => (a.created_at < b.created_at ? 1 : a.created_at > b.created_at ? -1 : 0));
   }
 
   // 상태 판단은 서버에서 끝내고 표는 표시용 값만 받는다. reportIndicator(Task 4)는 대시보드 최근 보고서·

@@ -19,7 +19,12 @@ type Call = [table: string, op: string, ...args: unknown[]];
 // error를 주면 조회가 그 오류로 끝난다(오류 안내 경로 확인용).
 function table(name: string, rows: Row[], calls: Call[], error: { message: string } | null = null) {
   let current = rows;
+  // Supabase(PostgREST)처럼 한 번에 최대 1000행만 돌려준다. range(from, to)를 걸면 그 구간(양 끝 포함).
+  // range 는 calls 에 남기지 않는다(호출 순서 단언을 흔들지 않게)
+  let window: [number, number] | null = null;
+  const page = () => (window ? current.slice(window[0], window[1] + 1) : current).slice(0, 1000);
   const obj: Record<string, unknown> = {
+    range: (from: number, to: number) => { window = [from, to]; return obj; },
     select: (...a: unknown[]) => { calls.push([name, 'select', ...a]); return obj; },
     eq: (col: string, val: unknown) => {
       calls.push([name, 'eq', col, val]);
@@ -38,7 +43,7 @@ function table(name: string, rows: Row[], calls: Call[], error: { message: strin
     },
     order: (...a: unknown[]) => { calls.push([name, 'order', ...a]); return obj; },
     limit: (...a: unknown[]) => { calls.push([name, 'limit', ...a]); return obj; },
-    then: (resolve: (v: unknown) => void) => resolve({ data: error ? null : current, error }),
+    then: (resolve: (v: unknown) => void) => resolve({ data: error ? null : page(), error }),
   };
   return obj;
 }
@@ -90,6 +95,17 @@ async function renderPage(o: {
 function titles(): string[] {
   return within(screen.getByRole('table')).queryAllByRole('link').map((a) => a.textContent ?? '');
 }
+
+// 후속(2026-10-18): Supabase 는 한 번에 최대 1000행만 돌려준다. 대시보드 KPI '보고서 수'와 이 화면의 (n)이
+// 같은 수여야 하므로 이 화면도 1000건 너머까지 받는다.
+describe('SiteReportsPage 행 상한', () => {
+  it('보고서가 1000건을 넘어도 끝까지 받는다', async () => {
+    const many = Array.from({ length: 1200 }, (_, i) =>
+      report({ id: `r${i}`, location_id: 'l1', title: `보고서 ${i}`, created_at: '2026-09-03T10:00:00Z' }));
+    await renderPage({ reports: many });
+    expect(screen.getByText('(1200)')).toBeInTheDocument();
+  });
+});
 
 describe('SiteReportsPage 현장 범위 조회 (스펙 §11)', () => {
   it('이 현장의 측정위치를 먼저 읽고 그 id 안에서만, 삭제를 빼고, 최신순으로 보고서를 고른다', async () => {
