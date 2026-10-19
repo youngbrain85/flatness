@@ -305,6 +305,24 @@ describe('drawStageHeatmap (화면 등급 색, 2px 검정 틈, 최댓값 테두�
     ]);
   });
 
+  // 후속(2026-10-18, 3번 스펙 0.5m 판정 셀 대비): 축 숫자는 실제 격자선 간격(k칸 × 셀)이고,
+  // 마지막 숫자는 칸 묶음 끝(전체 길이)에 둔다 - 칸 묶음 밖에 찍히거나 값이 어긋나면 안 된다.
+  it('0.5m 셀에 열이 홀수면 마지막 x 숫자는 칸 묶음 끝의 실제 길이(1.5 m)다', () => {
+    const row = [cell(0, 0), cell(1, 0), cell(2, 0)];
+    const g3 = gridGeometry(row)!; // cols 3, rows 1
+    const l3: HeatmapLayout = { c: 40, x0: 100, y0: 50, gw: 120, gh: 40, side: true };
+    const axis = axisOps(paint({ cells: row, geom: g3, layout: l3, cellM: 0.5 })).map((o) => o.args);
+    // x(칸 묶음 아래 50+40+14 = 104): 0(100) · 1(2칸 뒤 180) · 끝 1.5 m(220 - measureText('1.5')/2 = 211).
+    // y: 0(90) · 끝 0.5(50)
+    expect(axis).toEqual([['0', 100, 104], ['1', 180, 104], ['1.5 m', 211, 104], ['0', 90, 90], ['0.5', 90, 50]]);
+  });
+
+  it('1m 를 나누어떨어지지 않는 셀(0.3m)은 격자선 간격(3칸 = 0.9m)대로 숫자를 쓰고 끝은 전체 길이다', () => {
+    const axis = axisOps(paint({ cellM: 0.3 })).map((o) => o.args);
+    // 2×2 칸 = 0.6m. 3칸 간격 선은 칸 묶음 안에 첫 선(0)만 있다. 끝 0.6 m 는 180 - 9 = 171
+    expect(axis).toEqual([['0', 100, 144], ['0.6 m', 171, 144], ['0', 90, 130], ['0.6', 90, 50]]);
+  });
+
   it('0.5m 셀의 격자선은 두 칸(80px)마다 그어 1m 간격을 지킨다', () => {
     const { ctx } = recording2d();
     const moves: [number, number][] = [];

@@ -190,18 +190,20 @@ export function drawStageHeatmap(ctx: CanvasRenderingContext2D, input: StageHeat
     ctx.lineWidth = 2;
     ctx.strokeRect(s.x + 2, s.y + 2, c - 4, c - 4);
   }
-  if (stepM === null) return;
-  // 축 숫자(m). x 는 아래, y 는 왼쪽. 마지막 x 숫자에만 단위를 붙이고 숫자는 다른 숫자처럼 선 가운데에 둔다
+  if (stepM === null || cellM === null) return;
+  // 축 숫자(m). x 는 아래, y 는 왼쪽. 마지막 x 숫자에만 단위를 붙이고 숫자는 다른 숫자처럼 선 가운데에 둔다.
+  // 숫자는 실제 격자선 간격(k칸 × cellM - 0.3m 셀이면 0.9m)이고, 끝 숫자는 칸 묶음 끝의 전체 길이다.
+  // 끝에서 반 간격보다 가까운 중간 숫자는 끝 숫자와 겹치므로 뺀다(1m 셀이면 예전과 같은 출력).
   ctx.fillStyle = STAGE_AXIS_TEXT;
   ctx.font = `11px ${fontFamily}`;
   ctx.textBaseline = 'middle';
   ctx.textAlign = 'center';
-  const nX = Math.round(geom.cols / k);
-  const nY = Math.round(geom.rows / k);
-  for (let q = 0; q < nX; q++) ctx.fillText(axisLabel(q * stepM), x0 + q * pitch, y0 + gh + 14);
-  const lastX = axisLabel(nX * stepM);
+  const gapM = k * cellM;
+  for (let q = 0; q * k <= geom.cols - k / 2; q++) ctx.fillText(axisLabel(q * gapM), x0 + q * pitch, y0 + gh + 14);
+  const lastX = axisLabel(geom.cols * cellM);
   ctx.textAlign = 'left';
-  ctx.fillText(`${lastX} m`, x0 + nX * pitch - ctx.measureText(lastX).width / 2, y0 + gh + 14);
+  ctx.fillText(`${lastX} m`, x0 + gw - ctx.measureText(lastX).width / 2, y0 + gh + 14);
   ctx.textAlign = 'right';
-  for (let q = 0; q <= nY; q++) ctx.fillText(axisLabel(q * stepM), x0 - 10, y0 + gh - q * pitch);
+  for (let q = 0; q * k <= geom.rows - k / 2; q++) ctx.fillText(axisLabel(q * gapM), x0 - 10, y0 + gh - q * pitch);
+  ctx.fillText(axisLabel(geom.rows * cellM), x0 - 10, y0);
 }
