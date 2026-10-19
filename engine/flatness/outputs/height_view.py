@@ -54,7 +54,8 @@ _TARGET_LONG_SIDE = 256          # PNG 해상도 = Z 조회 격자 해상도 (�
                                   # 512였다가 1차 리뷰 실측(모듈 docstring 표)으로 256으로
                                   # 낮췄다 - 512는 실사용 점 수에서 대부분 회색(NaN)이었다.
 HEIGHT_VIEW_CMAP = "viridis"     # 순차형 - 값이 전부 0 이상인 상대 높이용(E4)
-_NA_COLOR = "#e8e8e8"            # 데이터 없는 서브셀(NaN, 저밀도 마스크)
+_NA_COLOR = "#e8e8e8"            # 데이터 없는 서브셀(NaN, 저밀도 마스크) - 장식 없는 plain 그림용
+_INK = "#d6dbe4"                 # 화면용 그림의 글자·눈금(검정 스테이지 위, 스펙 2·3 §3)
 _MIN_RANGE = 1e-6                # 완전 평탄면에서 vmin==vmax 정규화 퇴화 방지
 
 _REQUIRED_META_KEYS = ("schema_version", "bbox_min", "bbox_max",
@@ -113,25 +114,29 @@ def render_height_view(grid, out_path, title="높이 뷰 (평면도)",
     ny, nx = img.shape
     size_m = grid.size_m
     ox, oy = float(grid.origin[0]), float(grid.origin[1])
-    cmap = matplotlib.colormaps[HEIGHT_VIEW_CMAP].with_extremes(bad=_NA_COLOR)
-    fig, ax = plt.subplots(figsize=_figsize(nx * size_m, ny * size_m))
-    im = ax.imshow(np.ma.masked_invalid(img), cmap=cmap, vmin=vmin, vmax=vmax,
-                   origin="lower", interpolation="nearest",
-                   extent=[ox, ox + nx * size_m, oy, oy + ny * size_m])
-    ax.set_xlabel(xlabel)
-    ax.set_ylabel(ylabel)
-    ax.set_title(title)
-    ax.set_aspect("equal")
-    if finite.any():
-        fig.colorbar(im, ax=ax, shrink=0.85, label=cbar_label)
-    else:
-        # 데이터가 하나도 없는데 컬러바를 그리면 폴백 범위(0~1)를 실제 값처럼
-        # 보여주는 거짓 표시가 된다(1차 리뷰 지적) - 컬러바 대신 주석으로 명시한다.
-        ax.text(0.5, 0.5, "유효 데이터 없음 - 점 밀도 부족", transform=ax.transAxes,
-               ha="center", va="center", fontsize=11, color="#c5221f",
-               bbox=dict(facecolor="white", alpha=0.85, edgecolor="none"))
-    fig.tight_layout()
-    fig.savefig(out_path, dpi=140)
+    # 화면 검정 스테이지 위에 얹는 그림이라 바탕과 값 없는 칸을 투명하게, 글자·눈금은 밝게 둔다(스펙 2·3 §3)
+    cmap = matplotlib.colormaps[HEIGHT_VIEW_CMAP].with_extremes(bad=(0, 0, 0, 0))
+    ink = {"text.color": _INK, "axes.labelcolor": _INK, "axes.edgecolor": _INK,
+           "xtick.color": _INK, "ytick.color": _INK}
+    with plt.rc_context(ink):
+        fig, ax = plt.subplots(figsize=_figsize(nx * size_m, ny * size_m))
+        im = ax.imshow(np.ma.masked_invalid(img), cmap=cmap, vmin=vmin, vmax=vmax,
+                       origin="lower", interpolation="nearest",
+                       extent=[ox, ox + nx * size_m, oy, oy + ny * size_m])
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel(ylabel)
+        ax.set_title(title)
+        ax.set_aspect("equal")
+        if finite.any():
+            fig.colorbar(im, ax=ax, shrink=0.85, label=cbar_label)
+        else:
+            # 데이터가 하나도 없는데 컬러바를 그리면 폴백 범위(0~1)를 실제 값처럼
+            # 보여주는 거짓 표시가 된다(1차 리뷰 지적) - 컬러바 대신 주석으로 명시한다.
+            ax.text(0.5, 0.5, "유효 데이터 없음 - 점 밀도 부족", transform=ax.transAxes,
+                    ha="center", va="center", fontsize=11, color="#ff8a80",
+                    bbox=dict(facecolor="black", alpha=0.6, edgecolor="none"))
+        fig.tight_layout()
+        fig.savefig(out_path, dpi=140, transparent=True)
     plt.close(fig)
     return out_path.name
 
@@ -163,7 +168,7 @@ def render_height_view_plain(grid, out_path):
         (grid.origin이 곧 bbox_min[:2]이므로 - 설계 결정 E3 - bbox_min을
         그대로 써도 된다. 별도 센터링이 필요 없다는 원칙이 여기서도 성립한다)
 
-    NaN 서브셀은 render_height_view와 동일하게 _NA_COLOR로 마스킹된다. 전부
+    NaN 서브셀은 _NA_COLOR로 마스킹된다(화면용 render_height_view는 투명). 전부
     NaN이어도(색상 없이) 파일은 만든다 - 이 이미지는 표시용이 아니라 좌표
     환산용이라 render_height_view 같은 "거짓 컬러바" 문제가 없다(컬러바
     자체가 없다).

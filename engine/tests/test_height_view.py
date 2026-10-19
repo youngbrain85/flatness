@@ -560,3 +560,20 @@ def test_render_height_view_plain_has_no_colorbar_or_text_chrome(tmp_path, monke
     render_height_view_plain(grid, tmp_path / "plain.png")
 
     assert calls == {"colorbar": 0, "text": 0}
+
+
+def test_render_height_view_background_and_missing_cells_are_transparent(tmp_path):
+    # 화면 검정 스테이지 위에 얹으므로 바탕·값 없는 칸이 투명해야 한다(스펙 2·3 §3)
+    pts = flat_floor(size=(4.0, 3.0), spacing=0.02)
+    hole = (np.abs(pts[:, 0] - 2.0) < 0.6) & (np.abs(pts[:, 1] - 1.5) < 0.6)
+    pts = pts[~hole]
+    info = _info(pts.min(axis=0), pts.max(axis=0), n_points=len(pts))
+    grid = build_subcell_grid([pts.astype(np.float32)], info, scale_to_m=1.0, subcell_m=0.05)
+    out = tmp_path / "height_view.png"
+    render_height_view(grid, out)
+    img = np.asarray(PIL.Image.open(out).convert("RGBA"))
+    assert img[0, 0, 3] == 0                                    # 그림 바탕(모서리)
+    assert (img[..., 3] == 0).mean() > 0.2                      # 바탕 + 가운데 빈 칸
+    h, w = img.shape[:2]
+    # 축 안 가운데(빈 칸)도 투명: 가운데 근처 픽셀 중 투명한 것이 있다
+    assert (img[h // 3: 2 * h // 3, w // 4: w // 2, 3] == 0).any()

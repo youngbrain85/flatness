@@ -556,7 +556,7 @@ floor/wall/import와 달리 `slope_stats.json`에는 `meta` 키 자체가 없어
 | `origin_m` | float[3] | 절대 좌표(float64). 표본 로컬 범위의 최솟값을 절대 좌표로 바꾼 값 = `origin_abs + min(xyz_local)` |
 | `extent_m` | float[3] | 표본의 축별 범위(m) = `max(xyz_local) − min(xyz_local)`. 0 이상 |
 | `deviation` | object | `{"unit_mm": 0.1, "not_floor": -32768, "no_deviation": -32767}` |
-| `sample_cell_m` | float | 표본 칸 변 `s`(m). 뷰어가 점 크기를 유도한다 |
+| `sample_cell_m` | float | 점 간격(m). 뷰어가 점 크기를 유도한다. 표본 칸 변 `s`와 실제 점 간격 `sqrt(점유 서브셀 면적 / 출력 점 수)` 중 큰 값이다(2026-10-19~). 상한에 걸리면 두 값이 같고, 점이 상한보다 훨씬 적으면 실제 점 간격이 된다(추출은 `s`로 하므로 전 점이 남는다) |
 | `fit_bounds` | object | `{"min": float[3], "max": float[3]}`. 편차 있는 점(`dev > -32767`)의 파일-로컬 범위. 편차 있는 점이 하나도 없으면 전체 범위(`min = [0,0,0]`, `max = extent_m`). 뷰어의 카메라 초기 맞춤과 격자 범위에 쓴다 |
 | `sampling` | object | `{"method": "cell min-hash stratified", "source_points": int, "cap": int}` |
 | `order` | string | `"hash"`. 점이 해시 값 오름차순으로 놓였다는 뜻. 앞에서 몇 개를 취해도 고른 표본이다 |
@@ -568,7 +568,7 @@ floor/wall/import와 달리 `slope_stats.json`에는 `meta` 키 자체가 없어
 ### 9.3 예시 메타 JSON
 
 ```json
-{"schema_version":1,"n_points":118342,"units":"m","origin_m":[254012.3371,4180044.9126,31.4802],"extent_m":[8.0012,6.0009,0.0719],"deviation":{"unit_mm":0.1,"not_floor":-32768,"no_deviation":-32767},"sample_cell_m":0.009797958971132712,"fit_bounds":{"min":[0.0,0.0,0.0],"max":[8.0012,6.0009,0.0719]},"sampling":{"method":"cell min-hash stratified","source_points":120701,"cap":500000},"order":"hash"}
+{"schema_version":1,"n_points":118342,"units":"m","origin_m":[254012.3371,4180044.9126,31.4802],"extent_m":[8.0012,6.0009,0.0719],"deviation":{"unit_mm":0.1,"not_floor":-32768,"no_deviation":-32767},"sample_cell_m":0.020139,"fit_bounds":{"min":[0.0,0.0,0.0],"max":[8.0012,6.0009,0.0719]},"sampling":{"method":"cell min-hash stratified","source_points":120701,"cap":500000},"order":"hash"}
 ```
 
 실제 파일에서는 이 문자열 뒤에 `8 + json_len`이 4의 배수가 될 만큼 공백이 붙는다.

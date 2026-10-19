@@ -399,7 +399,9 @@ def test_sample_fields_and_unit_scale():
     assert np.allclose(s.xyz_local.max(axis=0), [2.0, 1.5, 0.0], atol=1e-9)
     n_occ = int((grid.counts > 0).sum())
     assert isinstance(s.sample_cell_m, float)
-    assert s.sample_cell_m == pytest.approx(math.sqrt(n_occ * 0.05 * 0.05 / 500_000), rel=1e-12)
+    # 점이 상한보다 훨씬 적으면 표본 칸(약 2.4mm)이 실제 점 간격보다 작다. 뷰어는 이 값으로 점 크기를 잡으므로
+    # 실제 점 간격 sqrt(점유 면적 / 출력 점 수) 로 키워 적는다(스펙 2·3 §4). 추출 자체는 그대로라 전 점이 남는다
+    assert s.sample_cell_m == pytest.approx(math.sqrt(n_occ * 0.05 * 0.05 / 7676), rel=1e-12)
     # 전 점이 남으므로 출력은 원본 점 전체를 (해시, 로컬 x, y, z) 순으로 놓은 것과 바이트 단위로 같다.
     # 해시 입력은 scale_to_m 을 곱하기 전의 리더 좌표(mm)다
     rel = pts * 0.001 - info.bbox_min * 0.001
