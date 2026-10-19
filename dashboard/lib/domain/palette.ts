@@ -37,3 +37,7 @@ export const CELL_GAP_COLOR = '#000000';
 export const CELL_INK = '#0a0d1c';
 /** 구배 배수구 표시(데이터 색, = --color-drain) */
 export const DRAIN_COLOR = '#6fcdeb';
+
+/** 정밀 편차맵 데이터 색 5단(스펙 2·3 §2): −R 짙은 파랑 · −R/2 파랑 · 0 짙은 남색 · +R/2 주황 · +R 빨강.
+ * 초록은 쓰지 않는다(3D 뷰어 "평탄 = 초록"과 뜻이 겹치지 않게). 토큰이 아닌 데이터 색이라 globals.css 대조 대상이 아니다. */
+export const DEVIATION_RAMP = ['#2166ac', '#67a9cf', '#262c4a', '#f46d43', '#d73027'] as const;

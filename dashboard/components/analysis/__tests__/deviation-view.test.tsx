@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { DeviationView, deviationLabel } from '../deviation-view';
 
 describe('DeviationView (정밀 편차맵 탭)', () => {
@@ -58,5 +58,52 @@ describe('DeviationView (정밀 편차맵 탭)', () => {
     // 표시 해상도 줄은 2번 스펙 몫이라 없다
     expect(screen.queryByRole('group', { name: '표시 해상도' })).toBeNull();
     expect(container.innerHTML).not.toMatch(/\bcs-/);
+  });
+});
+
+// 정밀 편차맵 화면 렌더(스펙 2·3 §2, 아트보드 ScanDeviation 74~95행): residual_grid.json 을 캔버스로 그린다
+describe('DeviationView 잔차 격자 캔버스', () => {
+  afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
+  // 4열 x 2행(5cm): 행 0 = [-20, 0, 10, 30], 행 1 = [null, 5, 5, 5] (0.1mm)
+  const body = { subcell_m: 0.05, cols: 4, rows: 2, values: [-20, 0, 10, 30, null, 5, 5, 5] };
+  function stubGrid(ok = true, json: unknown = body) {
+    const f = vi.fn(async () => ({ ok, json: async () => json } as unknown as Response));
+    vi.stubGlobal('fetch', f);
+    return f;
+  }
+
+  it('5cm 가 눌린 채 그리고, HUD·범례(±R, R = |값| 98번째 백분위)를 보이며, 20cm 를 누르면 접어서 다시 센다', async () => {
+    const f = stubGrid();
+    render(<DeviationView artifactsDir="artifacts/an1" paths={['deviation.png']} isImport={false}
+      residualGridPath="residual_grid.json" />);
+    expect(f).toHaveBeenCalledWith('/api/data/artifacts/an1/residual_grid.json');
+    await waitFor(() => expect(screen.getByTestId('deviation-hud')).toHaveTextContent('5cm 격자 · 4 × 2칸 · −2.0 ~ +3.0 mm'));
+    const group = screen.getByRole('group', { name: '표시 해상도' });
+    expect(within(group).getAllByRole('button').map((b) => b.textContent)).toEqual(['5 cm', '10 cm', '20 cm']);
+    expect(within(group).getByRole('button', { name: '5 cm' })).toHaveAttribute('aria-pressed', 'true');
+    const legend = screen.getByTestId('deviation-legend');
+    expect(legend).toHaveTextContent('−3.0');
+    expect(legend).toHaveTextContent('+3.0');
+    expect(screen.getByRole('img', { name: /정밀 편차맵 평면도\. 5cm 격자/ })).toBeInTheDocument();
+    expect(screen.queryByAltText('정밀 편차맵(10cm)')).toBeNull();   // 엔진 PNG 는 쓰지 않는다
+    expect(screen.getByText(/5cm 격자의 원시 편차 분포입니다/)).toBeInTheDocument();
+
+    fireEvent.click(within(group).getByRole('button', { name: '20 cm' }));
+    expect(screen.getByTestId('deviation-hud')).toHaveTextContent('20cm 격자 · 1 × 1칸 · +0.5 ~ +0.5 mm');
+    expect(legend).toHaveTextContent('+3.0');   // 색 범위는 해상도와 무관(원 격자 기준)
+  });
+
+  it('격자를 못 받거나 모양이 다르면 엔진 PNG 로 대체한다', async () => {
+    stubGrid(false);
+    const { unmount } = render(<DeviationView artifactsDir="artifacts/an1" paths={['deviation.png']} isImport={false}
+      residualGridPath="residual_grid.json" />);
+    await waitFor(() => expect(screen.getByAltText('정밀 편차맵(10cm)')).toBeInTheDocument());
+    expect(screen.queryByRole('group', { name: '표시 해상도' })).toBeNull();
+    unmount();
+
+    stubGrid(true, { subcell_m: 0.05, cols: 2, rows: 2, values: [1] });
+    render(<DeviationView artifactsDir="artifacts/an1" paths={['deviation.png']} isImport={false}
+      residualGridPath="residual_grid.json" />);
+    await waitFor(() => expect(screen.getByAltText('정밀 편차맵(10cm)')).toBeInTheDocument());
   });
 });

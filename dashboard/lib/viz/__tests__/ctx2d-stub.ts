@@ -3,7 +3,7 @@
 // 칠하기·글자·선 호출마다 그 순간의 fillStyle·strokeStyle·lineWidth·font 를 남겨
 // "무엇을 · 어떤 색으로 · 어디에" 그렸는지를 실제 렌더 경로에서 관찰한다. 픽셀은 화면 대조가 맡는다.
 export interface PaintOp {
-  op: 'fillRect' | 'strokeRect' | 'fillText' | 'stroke' | 'fill';
+  op: 'fillRect' | 'strokeRect' | 'fillText' | 'stroke' | 'fill' | 'drawImage';
   style: string;
   lineWidth: number;
   font: string;
@@ -39,6 +39,9 @@ export function recording2d() {
     },
     fill() {
       ops.push({ op: 'fill', style: String(ctx.fillStyle), lineWidth: ctx.lineWidth, font: ctx.font, args: [] });
+    },
+    drawImage(_img: unknown, x: number, y: number, w: number, h: number) {
+      ops.push({ op: 'drawImage', style: '', lineWidth: ctx.lineWidth, font: ctx.font, args: [x, y, w, h] });
     },
     measureText(text: string) {
       return { width: text.length * 6 };

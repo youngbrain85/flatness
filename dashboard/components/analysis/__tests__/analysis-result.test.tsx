@@ -80,6 +80,21 @@ describe('AnalysisResult 정밀 편차맵 탭', () => {
     });
   });
 
+  it('stats.residual_grid_path 가 있으면 그 격자를 받아 캔버스로 그린다(스펙 2·3 §2)', async () => {
+    const grid = { subcell_m: 0.05, cols: 2, rows: 1, values: [10, -10] };
+    const f = vi.fn(async (url: string) => ({
+      ok: true, json: async () => (String(url).endsWith('/residual_grid.json') ? grid : []),
+    } as unknown as Response));
+    vi.stubGlobal('fetch', f);
+    const withGrid = { ...analysis, stats: { ...stats, residual_grid_path: 'residual_grid.json' } };
+
+    render(<AnalysisResult analysis={withGrid} scan={scan} photos={[]} />);
+    fireEvent.click(screen.getByRole('tab', { name: '정밀 편차맵' }));
+
+    await waitFor(() => expect(screen.getByTestId('deviation-hud')).toHaveTextContent('5cm 격자 · 2 × 1칸'));
+    expect(f).toHaveBeenCalledWith('/api/data/artifacts/an1/residual_grid.json');
+  });
+
   it('편차맵이 없는 분석에서는 안내 문구를 보여준다', async () => {
     stubCellsFetch();
     const without = { ...analysis, stats: { ...stats, deviation_paths: undefined } };
