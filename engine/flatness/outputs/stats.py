@@ -116,17 +116,18 @@ def _reference_nodes(ref, labels, k):
     return out
 
 
-def write_reference_surfaces(out_dir, ref_local, ref_global, labels, subcell_m):
+def write_reference_surfaces(out_dir, ref_local, ref_global, labels, subcell_m, origin_m):
     """두 기준면 높이(m, 서브셀 격자) -> reference_surfaces.json (바닥 기준면 개선 스펙 §3).
 
     마디 간격 step_m = 서브셀 x 5. 마디 (i, j) 위치 = ((i + 0.5) x step, (j + 0.5) x step), 좌표틀은 points3d 와 같은
     파일-로컬(x·y 원점 = 서브셀 격자 원점, z 원점 = bbox 최저 z). 높이는 0.1mm 정수, 바닥이 아닌 마디는 null.
+    origin_m = 그 원점의 절대 좌표(m, bbox 최소 x scale). 3D 뷰어는 points3d 의 origin_m 을 빼서 점 좌표틀에 놓는다.
     """
     k = REFERENCE_NODE_CELLS
     local = _reference_nodes(ref_local, labels, k)
     glob = _reference_nodes(ref_global, labels, k)
     doc = {"step_m": round(subcell_m * k, 6), "cols": int(local.shape[1]), "rows": int(local.shape[0]),
-           "local": _q01(local), "global": _q01(glob)}
+           "origin_m": [float(v) for v in origin_m], "local": _q01(local), "global": _q01(glob)}
     (out_dir / REFERENCE_SURFACES_FILE).write_text(json.dumps(doc, separators=(",", ":")), encoding="utf-8")
     return REFERENCE_SURFACES_FILE
 

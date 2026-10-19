@@ -111,7 +111,8 @@ def analyze_floor(path, scale_to_m, criterion, u_mm, out_dir,
         alt[size] = (alt_cells, grade_cells(alt_cells, criterion, u_mm)[0])
     stats["cells_alt_path"] = write_cells_alt(out_dir, alt)
     stats["residual_grid_path"] = write_residual_grid(out_dir, res_local, res_global, subcell_m)
-    stats["reference_surfaces_path"] = write_reference_surfaces(out_dir, ref_local, ref_global, zmap.labels, subcell_m)
+    stats["reference_surfaces_path"] = write_reference_surfaces(out_dir, ref_local, ref_global, zmap.labels, subcell_m,
+                                                                origin_m=info.bbox_min * scale_to_m)
     worst = stats.get("worst")
     # 렌더 산출물(프리뷰/편차맵/히트맵)은 판정 결과와 무관한 보조 시각화다. 렌더가
     # 디스크·폰트 등 인프라 사유로 실패해도 이미 완성된 판정(stats)은 반드시 저장돼야

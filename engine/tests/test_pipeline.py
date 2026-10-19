@@ -615,3 +615,12 @@ def test_reference_node_at_hole_edge_uses_floor_cells_of_its_block(tmp_path):
     s = json.loads((tmp_path / "out" / "reference_surfaces.json").read_text(encoding="utf-8"))
     v = s["global"][6 * s["cols"] + 5]
     assert v is not None and abs(v - 0.01 * 1.3 * 10000) <= 10
+
+
+def test_reference_surfaces_carry_absolute_origin(tmp_path):
+    # 3D 뷰어가 기준면을 점 좌표틀에 놓으려면 기준면 원점의 절대 좌표가 필요하다(points3d 의 origin_m 과 빼서 맞춘다)
+    pts = flat_floor(size=(2.0, 1.5), spacing=0.02) + np.array([100.0, 200.0, 3.0])
+    write_binary_ply(pts, tmp_path / "scan.ply")
+    stats = analyze_floor(tmp_path / "scan.ply", 1.0, CRIT, 5.0, tmp_path / "out")
+    s = json.loads((tmp_path / "out" / "reference_surfaces.json").read_text(encoding="utf-8"))
+    assert np.allclose(s["origin_m"], stats["meta"]["bbox_min"], atol=1e-3)
