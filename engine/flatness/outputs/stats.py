@@ -99,13 +99,15 @@ def write_residual_grid(out_dir, local, global_, subcell_m):
 
 
 def _reference_nodes(ref, labels, k):
-    """서브셀 기준 높이를 k x k 묶음 마디로 줄인다. 마디 값 = 묶음 가운데 칸 값, 가운데 칸이 비면(가장자리)
-    묶음 안에서 가장 많은 구역의 칸 평균(단차를 사이에 둔 두 면을 섞지 않는다). 바닥이 없는 묶음은 NaN."""
+    """서브셀 기준 높이를 k x k 묶음 마디로 줄인다 -> (마디 높이, 마디 구역 번호). 마디 값 = 묶음 가운데 칸 값,
+    가운데 칸이 비면(가장자리) 묶음 안에서 가장 많은 구역의 칸 평균(단차를 사이에 둔 두 면을 섞지 않는다).
+    바닥이 없는 묶음은 NaN·구역 0."""
     ny, nx = ref.shape
     rows, cols = -(-ny // k), -(-nx // k)
     cy = np.minimum(np.arange(rows) * k + k // 2, ny - 1)
     cx = np.minimum(np.arange(cols) * k + k // 2, nx - 1)
     out = ref[np.ix_(cy, cx)].astype(np.float64)
+    zone = np.where(np.isfinite(out), labels[np.ix_(cy, cx)], 0)
     pad = np.full((rows * k, cols * k), np.nan)
     pad[:ny, :nx] = ref
     has = np.isfinite(pad).reshape(rows, k, cols, k).any(axis=(1, 3))
@@ -114,8 +116,10 @@ def _reference_nodes(ref, labels, k):
         lab = labels[j * k:(j + 1) * k, i * k:(i + 1) * k]
         ok = np.isfinite(blk)
         ids, cnt = np.unique(lab[ok], return_counts=True)
-        out[j, i] = blk[ok & (lab == ids[np.argmax(cnt)])].mean()
-    return out
+        zid = ids[np.argmax(cnt)]
+        out[j, i] = blk[ok & (lab == zid)].mean()
+        zone[j, i] = zid
+    return out, zone
 
 
 def write_reference_surfaces(out_dir, ref_local, ref_global, labels, subcell_m, origin_m):
@@ -126,10 +130,11 @@ def write_reference_surfaces(out_dir, ref_local, ref_global, labels, subcell_m, 
     origin_m = 그 원점의 절대 좌표(m, bbox 최소 x scale). 3D 뷰어는 points3d 의 origin_m 을 빼서 점 좌표틀에 놓는다.
     """
     k = REFERENCE_NODE_CELLS
-    local = _reference_nodes(ref_local, labels, k)
-    glob = _reference_nodes(ref_global, labels, k)
+    local, zone = _reference_nodes(ref_local, labels, k)
+    glob, _ = _reference_nodes(ref_global, labels, k)
+    zones = [int(z) if z > 0 else None for z in zone.ravel().tolist()]   # 구역이 다른 마디 사이 칸은 그리지 않는다
     doc = {"step_m": round(subcell_m * k, 6), "cols": int(local.shape[1]), "rows": int(local.shape[0]),
-           "origin_m": [float(v) for v in origin_m], "local": _q01(local), "global": _q01(glob)}
+           "origin_m": [float(v) for v in origin_m], "local": _q01(local), "global": _q01(glob), "zones": zones}
     (out_dir / REFERENCE_SURFACES_FILE).write_text(json.dumps(doc, separators=(",", ":")), encoding="utf-8")
     return REFERENCE_SURFACES_FILE
 

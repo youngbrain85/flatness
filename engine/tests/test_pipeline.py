@@ -641,3 +641,16 @@ def test_reference_failure_does_not_block_judgment(tmp_path, monkeypatch):
     assert "values_global" not in g and "schema_version" not in g
     assert min(v for v in g["values"] if v is not None) <= -80       # 구역 평면 기준 편차(함몰 10mm)
     assert stats["points3d_paths"] == ["points3d.bin"]
+
+
+def test_reference_nodes_carry_zone_ids(tmp_path):
+    # 3D 기준면 그물이 단차를 잇는 벽처럼 그려지지 않게 마디마다 구역 번호를 싣는다(서로 다른 구역 마디 사이 칸은 건너뛴다)
+    a = flat_floor(size=(3.98, 3.0), spacing=0.02)
+    b = flat_floor(size=(4.0, 3.0), spacing=0.02) + np.array([4.02, 0.0, -0.15])
+    write_binary_ply(np.vstack([a, b]), tmp_path / "scan.ply")
+    analyze_floor(tmp_path / "scan.ply", 1.0, CRIT, 5.0, tmp_path / "out")
+    s = json.loads((tmp_path / "out" / "reference_surfaces.json").read_text(encoding="utf-8"))
+    assert len(s["zones"]) == s["cols"] * s["rows"]
+    j = 6
+    left, right = s["zones"][j * s["cols"] + 2], s["zones"][j * s["cols"] + 25]
+    assert left is not None and right is not None and left != right

@@ -12,7 +12,7 @@ from typing import Iterable
 import numpy as np
 
 MAX_POINTS = 500_000          # 점 수 상한(엔진 상수)
-OFF_SURFACE_M = 0.05          # 표면 이탈 판정 거리. zones.py:28 band_m 기본값과 같은 값
+OFF_SURFACE_M = 0.05          # 표면 이탈 판정 거리. zones.build_zones 의 band_m 기본값(구역 평면 이탈 5cm)과 같은 값
 DEV_UNIT_M = 1e-4             # 편차 정수 1단위 = 0.1mm
 DEV_NOT_FLOOR = -32768        # 센티널: 바닥 아님
 DEV_NO_DEVIATION = -32767     # 센티널: 바닥 구역 안이지만 잔차 없음
