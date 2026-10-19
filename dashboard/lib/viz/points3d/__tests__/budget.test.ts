@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   LOD_FAST_MS, LOD_FLOOR, LOD_SLOW_MS, LOD_START, MIN_POINT_CSS_PX, POINT_SIZE_FACTOR,
-  initialDragCount, nextDragCount, pointSizeRange, pointWorldSizeM, pxPerUnit,
+  POINT_SCALES, initialDragCount, nextDragCount, pointSizeRange, pointWorldSizeM, pxPerUnit, stepPointScale,
 } from '../budget';
 
 describe('상수', () => {
@@ -111,5 +111,25 @@ describe('LOD', () => {
       seen.push(c);
     }
     expect(seen).toEqual([25_000, 31_250, 39_063, 48_829, 61_036, 76_295, 95_369, 100_000, 100_000]);
+  });
+});
+
+// 점 크기 메뉴(2026-10-20 스펙): 지금 크기 = x1 기본, CloudCompare 의 Default point size -/+ 처럼 한 단계씩
+describe('점 크기 배율', () => {
+  it('단계는 x0.25 ~ x4 여덟 개이고 1 이 들어 있다', () => {
+    expect(POINT_SCALES).toEqual([0.25, 0.5, 0.75, 1, 1.5, 2, 3, 4]);
+  });
+  it('stepPointScale 은 한 단계씩 움직이고 끝에서는 그대로다', () => {
+    expect(stepPointScale(1, 1)).toBe(1.5);
+    expect(stepPointScale(1, -1)).toBe(0.75);
+    expect(stepPointScale(4, 1)).toBe(4);
+    expect(stepPointScale(0.25, -1)).toBe(0.25);
+  });
+  it('pointSizeRange 의 최소에도 배율을 곱하되 1 버퍼 px 아래로는 내려가지 않는다(최대는 그대로)', () => {
+    expect(pointSizeRange([1, 1024], 2, 2)).toEqual([6, 1024]);
+    expect(pointSizeRange([1, 1024], 2, 0.5)).toEqual([1.5, 1024]);
+    expect(pointSizeRange([1, 1024], 1, 0.25)).toEqual([1, 1024]);
+    expect(pointSizeRange([1, 4], 2, 4)).toEqual([4, 4]);
+    expect(pointSizeRange([1, 1024], 2)).toEqual([3, 1024]);   // 배율 생략 = x1(지금 크기)
   });
 });
