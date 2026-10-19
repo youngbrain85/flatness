@@ -1,6 +1,6 @@
 // 히트맵 탭(아트보드 docs/design/dark/ScanDone.dc.html 74~89행): 검정 스테이지 위 판정 셀 캔버스,
 // 오른쪽 위 범례·왼쪽 아래 HUD, 스테이지에 붙은 설명 줄(Stage toolbar). 칸을 누르면 그 칸의 상세를 설명 줄에 보인다.
-// - 판정 셀 크기 선택 줄(0.5·1·2m)과 크기별 수치는 3번 스펙 몫이라 그리지 않는다. 엔진의 셀(meta.cell_m)을 그린다.
+// - 판정 셀 크기(0.5·1·2m) 선택은 analysis-result.tsx 가 한다. 여기는 받은 셀과 그 크기(cellM)를 그린다.
 // - 칸 색은 엔진이 cells.json 에 적은 grade 를 화면 등급 색으로 칠할 뿐이다(브라우저는 등급을 계산하지 않는다).
 // - 캔버스 색은 lib/domain/palette.ts, DOM(범례 점·태그) 색은 같은 값의 등급 토큰(GradeDot·GradeBadge)이다.
 'use client';

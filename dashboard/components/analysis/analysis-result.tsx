@@ -1,23 +1,27 @@
 // 평활도 결과 구획(아트보드 docs/design/dark/ScanDone.dc.html 53~196행). 페이지는 감싸지 않고 이 컴포넌트가
 // <section> 을 통째로 그린다: h2 '평활도 결과' + 일시 · 엔진(+외부 결과) + 알약 탭 → 탭 본문(검정 스테이지)
 // → 판정 패널(KPI·등급 분포·적용 기준·경고·종합의견) → 구간별 결과표.
-// 판정 셀 크기 선택 줄(0.5·1·2m)은 3번 스펙 몫이라 그리지 않는다(스펙 §2). 엔진의 판정 셀 그대로 그린다.
+// 판정 셀 크기 선택 줄(0.5·1·2m, 아트보드 60~64행)은 히트맵 탭에서만 보인다. 바꾸면 히트맵·HUD 만 바뀌고 KPI·결과표·
+// 보고서는 공식 판정 셀(meta.cell_m) 그대로다(스펙 2·3 §1). 비교 셀(cells_alt.json)이 없는 분석은 줄을 숨긴다.
 'use client';
 import { useEffect, useId, useRef, useState } from 'react';
 import { ANALYSIS_KIND_LABEL } from '@/lib/domain/labels';
 import { artifactUrl } from '@/lib/domain/paths';
 import { loadFor, parsePoints3d, points3dFile } from '@/lib/domain/points3d';
 import type { Points3dLoad, Webgl2Support } from '@/lib/domain/points3d';
+import { cellSizeOptions, parseCellsAlt } from '@/lib/domain/cells';
+import type { CellsBySize } from '@/lib/domain/cells';
 import { isExternalImport } from '@/lib/domain/stats';
 import type { AnalysisRow, CellRow, PhotoRow, ScanRow, Stats } from '@/lib/domain/types';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { TabBar } from '@/components/ui/tab-bar';
 import { HeatmapView } from './heatmap-view';
 import { DeviationView } from './deviation-view';
 import { Preview3dTab } from './preview3d-tab';
 import { VerdictPanel } from './verdict-panel';
 import { ResultTable } from './result-table';
-import { CARD, resultMeta } from './result-parts';
+import { CARD, EYEBROW, NOTE, PRESSED, resultMeta } from './result-parts';
 import { PhotoGallery } from '@/components/photo-gallery';
 import { RefreshOnUpload } from '@/components/refresh-on-upload';
 
@@ -43,6 +47,9 @@ export function AnalysisResult({ analysis, scan, photos }: {
   const [tab, setTab] = useState<Tab>('heatmap');
   const [cells, setCells] = useState<CellRow[] | null>(null);
   const [cellsError, setCellsError] = useState<string | null>(null);
+  // 비교용 1·2m 셀(cells_alt.json)과 고른 크기(null = 공식 판정 셀). 못 받으면 null 로 두고 전환을 숨긴다
+  const [cellsAlt, setCellsAlt] = useState<CellsBySize | null>(null);
+  const [cellSize, setCellSize] = useState<string | null>(null);
   // 3D 점군 뷰어(2026-10-02 스펙 §7.3). 탭 본문은 조건부 렌더라 탭을 벗어나면 언마운트된다.
   // 탭 왕복 뒤에도 남아야 하는 세 가지(점 데이터, WebGL2 탐지 결과, 소프트웨어 렌더 선택)를 여기에 둔다.
   const [load, setLoad] = useState<Points3dLoad>({ status: 'idle' });
@@ -71,6 +78,30 @@ export function AnalysisResult({ analysis, scan, photos }: {
     })();
     return () => { cancelled = true; };
   }, [analysis.artifacts_dir]);
+
+  const cellsAltPath = stats.cells_alt_path ?? null;
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setCellsAlt(null);
+      setCellSize(null);
+      if (!analysis.artifacts_dir || !cellsAltPath) return;
+      try {
+        const res = await fetch(artifactUrl(analysis.artifacts_dir, cellsAltPath));
+        const parsed = res.ok ? parseCellsAlt(await res.json()) : null;
+        if (!cancelled) setCellsAlt(parsed);
+      } catch {
+        // 비교 셀은 보조 표시다. 못 받으면 전환 없이 공식 셀만 보인다
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [analysis.artifacts_dir, cellsAltPath]);
+
+  const officialM = stats.meta.cell_m ?? null;
+  const sizeOptions = officialM !== null && cellsAlt ? cellSizeOptions(officialM, cellsAlt) : [];
+  const picked = sizeOptions.find((o) => o.id === cellSize && !o.official) ?? null;
+  const heatmapCells = picked && cellsAlt ? cellsAlt[picked.key!] : cells;
+  const heatmapCellM = picked ? picked.cellM : officialM;
 
   const deviation = (stats.deviation_paths ?? []).filter(Boolean);
   const isImport = isExternalImport(analysis.engine_version, stats.meta);
@@ -131,20 +162,35 @@ export function AnalysisResult({ analysis, scan, photos }: {
     <section aria-labelledby={headingId} className="flex flex-col gap-3.5">
       {/* 머리: 제목·메타(왼쪽) + 알약 탭(오른쪽, 좁으면 아래로). 아트보드 ScanDone 54~73행 */}
       <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2.5">
-        <div className="flex min-w-0 flex-wrap items-baseline gap-x-3.5 gap-y-1">
-          <h2 id={headingId} className="font-heading text-[19px] font-semibold">{ANALYSIS_KIND_LABEL.flatness} 결과</h2>
-          <span className="font-mono text-xs tabular-nums text-muted">
-            {resultMeta(analysis.created_at, analysis.engine_version)}
-          </span>
-          {isImport && <Badge tone="external">외부 결과</Badge>}
+        <div className="flex min-w-0 flex-col gap-2.5">
+          <div className="flex min-w-0 flex-wrap items-baseline gap-x-3.5 gap-y-1">
+            <h2 id={headingId} className="font-heading text-[19px] font-semibold">{ANALYSIS_KIND_LABEL.flatness} 결과</h2>
+            <span className="font-mono text-xs tabular-nums text-muted">
+              {resultMeta(analysis.created_at, analysis.engine_version)}
+            </span>
+            {isImport && <Badge tone="external">외부 결과</Badge>}
+          </div>
+          {tab === 'heatmap' && sizeOptions.length > 1 && (
+            <div role="group" aria-label="판정 셀" className="flex flex-wrap items-center gap-2">
+              <span className={EYEBROW}>판정 셀</span>
+              {sizeOptions.map((o) => (
+                <Button key={o.id} aria-pressed={o.id === (picked?.id ?? String(officialM))}
+                  className={`${PRESSED} font-mono tabular-nums`} onClick={() => setCellSize(o.id)}>
+                  {o.label}
+                </Button>
+              ))}
+              <span className={NOTE}>{`판정·보고서는 ${officialM} m 셀 기준이며, 다른 크기는 히트맵 비교용입니다.`}</span>
+            </div>
+          )}
         </div>
         <TabBar label="결과 보기" tabs={TABS} active={tab} onChange={setTab} />
       </div>
 
       {tab === 'heatmap' && (
-        cells ? (
-          <HeatmapView surface={analysis.surface} cells={cells} walls={stats.walls} zones={stats.zones}
-            cellM={stats.meta.cell_m ?? null} />
+        heatmapCells ? (
+          // key: 크기를 바꾸면 칸 선택(상세 줄)을 새로 시작한다
+          <HeatmapView key={heatmapCellM ?? 'na'} surface={analysis.surface} cells={heatmapCells} walls={stats.walls}
+            zones={stats.zones} cellM={heatmapCellM} />
         ) : (
           <p className={MUTED}>{cellsError ?? '셀 데이터 로딩 중...'}</p>
         )

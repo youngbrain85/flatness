@@ -28,7 +28,7 @@ import type { Renderer } from '@/lib/viz/points3d/gl-renderer';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import { Stage } from '@/components/ui/stage';
-import { EYEBROW } from './result-parts';
+import { EYEBROW, PRESSED } from './result-parts';
 
 const BUFFER_SCALE_MAX = 2;      // 드로잉 버퍼 배율 = min(devicePixelRatio, 2)
 const INPUT_IDLE_MS = 200;       // 휠·키는 마지막 입력 뒤 이 시간이 지나면 조작이 끝난 것으로 본다
@@ -44,10 +44,6 @@ const VIEW_PRESETS: { id: ViewPreset; label: string }[] = [
   { id: 'top', label: '평면' },
   { id: 'front', label: '정면' },
 ];
-// 눌린 버튼(아트보드 Stage 의 도구 버튼): ink 채움 + ground 글자. Button 의 보조(normal) 변형이 가진 투명 바탕·글자색
-// 클래스와 특이도가 같은 클래스를 덧붙이면 순서에 따라 가려진다. aria-pressed variant 는 속성 선택자가 붙어
-// 특이도가 높고 Tailwind 가 뒤에 내보낸다. 공용 Button 은 고치지 않는다.
-const PRESSED = 'aria-pressed:border-ink aria-pressed:bg-ink aria-pressed:font-semibold aria-pressed:text-ground';
 const GROUP = 'flex flex-wrap items-center gap-2';
 const GROUP_NAME = EYEBROW;
 // 고지 문구·병합 안내는 도구 줄의 맨 아래 줄을 통째로 쓴다(아트보드 ScanDeviation 의 설명 줄과 같은 자리)

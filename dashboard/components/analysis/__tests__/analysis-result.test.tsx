@@ -111,7 +111,7 @@ describe('AnalysisResult 정밀 편차맵 탭', () => {
 });
 
 // 다크 T8: 결과 구획을 이 컴포넌트가 통째로 그린다(아트보드 ScanDone 53~196행) - h2 '평활도 결과' + 일시·엔진 +
-// 알약 탭 -> 탭 본문 -> KPI·카드 -> 구간별 결과표. 판정 셀 선택 줄(0.5·1·2m)은 3번 스펙 몫이라 없다.
+// 알약 탭 -> 탭 본문 -> KPI·카드 -> 구간별 결과표. 판정 셀 선택 줄(0.5·1·2m)은 cells_alt_path 가 없는 이 분석에는 없다.
 describe('AnalysisResult C안 결과 구획', () => {
   it('h2 와 메타·알약 탭 4개(히트맵 활성), KPI 와 구간별 결과표가 한 section 안에 있다', async () => {
     stubCellsFetch();
@@ -788,5 +788,70 @@ describe('AnalysisResult 가 3D 탭에 넘기는 적재 콜백 (탐침으로 직
     expect(screen.getByTestId('probe-support').textContent).toBe('software');
     expect(screen.getByTestId('probe-opted').textContent).toBe('true');
     await flush();
+  });
+});
+
+// 판정 셀 0.5/1/2m 전환(스펙 2·3 §1, 아트보드 ScanDone 60~64행): 히트맵·HUD 만 바뀌고 판정·결과표는 공식(0.5m) 그대로
+describe('AnalysisResult 판정 셀 크기 전환', () => {
+  const row = (ix: number, value: number): CellRow => ({
+    ix, iy: 0, center_x: ix + 0.25, center_y: 0.25, value_mm: value, span_used_m: 3, occupancy: 1,
+    grade: 'pass', worst_x: null, worst_y: null, zone_id: 1,
+  });
+  const official = [row(0, 1), row(1, 2), row(2, 3), row(3, 4)];
+  const twoM = [row(0, 9)];
+  const altStats: Stats = {
+    ...stats, cells_alt_path: 'cells_alt.json',
+    meta: { ...stats.meta, cell_m: 0.5 },
+    zones: [{ zone_id: 1, level_m: 0, area_m2: 1, status: 'ok', plane_abc: null }],
+  };
+  const altAnalysis: AnalysisRow = { ...analysis, stats: altStats };
+
+  function stubRoutes(altBody: unknown, altOk = true) {
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      if (String(url).endsWith('/cells_alt.json')) {
+        return { ok: altOk, json: async () => altBody } as unknown as Response;
+      }
+      return { ok: true, json: async () => official } as unknown as Response;
+    }));
+  }
+
+  it('0.5 m 가 눌린 채 시작하고, 2 m 를 누르면 히트맵 HUD 만 2m 셀로 바뀐다', async () => {
+    stubRoutes({ by_size: { '1.0': [row(0, 5), row(1, 6)], '2.0': twoM } });
+    render(<AnalysisResult analysis={altAnalysis} scan={scan} photos={[]} />);
+
+    const group = await screen.findByRole('group', { name: '판정 셀' });
+    const buttons = within(group).getAllByRole('button');
+    expect(buttons.map((b) => b.textContent)).toEqual(['0.5 m', '1 m', '2 m']);
+    expect(within(group).getByRole('button', { name: '0.5 m' })).toHaveAttribute('aria-pressed', 'true');
+    expect(within(group).getByText(/판정·보고서는 0\.5 m 셀 기준/)).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByTestId('heatmap-hud')).toHaveTextContent('0.5m 셀 · 4칸(유효 4)'));
+
+    fireEvent.click(within(group).getByRole('button', { name: '2 m' }));
+    expect(within(group).getByRole('button', { name: '2 m' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByTestId('heatmap-hud')).toHaveTextContent('2m 셀 · 1칸(유효 1) · 최댓값 9.00 mm');
+    // 구간별 결과표는 공식 셀(4칸) 그대로
+    expect(screen.getByText('4 / 4')).toBeInTheDocument();
+  });
+
+  it('파일을 못 받으면(응답 실패) 전환을 숨긴다', async () => {
+    stubRoutes({ by_size: { '1.0': [], '2.0': twoM } }, false);
+    render(<AnalysisResult analysis={altAnalysis} scan={scan} photos={[]} />);
+    await waitFor(() => expect(screen.getByTestId('heatmap-hud')).toHaveTextContent('0.5m 셀 · 4칸'));
+    expect(screen.queryByRole('group', { name: '판정 셀' })).toBeNull();
+  });
+
+  it('파일 모양이 다르면 전환을 숨긴다', async () => {
+    stubRoutes({ cells: [] });
+    render(<AnalysisResult analysis={altAnalysis} scan={scan} photos={[]} />);
+    await waitFor(() => expect(screen.getByTestId('heatmap-hud')).toHaveTextContent('0.5m 셀 · 4칸'));
+    expect(screen.queryByRole('group', { name: '판정 셀' })).toBeNull();
+  });
+
+  it('히트맵 탭이 아니면 전환을 그리지 않는다', async () => {
+    stubRoutes({ by_size: { '1.0': [], '2.0': twoM } });
+    render(<AnalysisResult analysis={altAnalysis} scan={scan} photos={[]} />);
+    await screen.findByRole('group', { name: '판정 셀' });
+    fireEvent.click(screen.getByRole('tab', { name: '현장 사진' }));
+    expect(screen.queryByRole('group', { name: '판정 셀' })).toBeNull();
   });
 });

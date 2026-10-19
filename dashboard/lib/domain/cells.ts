@@ -42,3 +42,41 @@ export function computeZoneStats(cells: CellRow[]): ZoneStats[] {
   // zone_id 오름차순, null(임포트)은 맨 뒤
   return result.sort((a, b) => (a.zone_id ?? Number.MAX_SAFE_INTEGER) - (b.zone_id ?? Number.MAX_SAFE_INTEGER));
 }
+
+// 판정 셀 0.5/1/2m(스펙 2·3 §1). 공식 판정은 meta.cell_m(cells.json)이고 cells_alt.json 은 같은 잔차를
+// 1·2m 로 다시 나눈 비교용 셀이다. 화면은 히트맵에만 쓴다(등급은 엔진이 적은 값 그대로).
+export type CellsBySize = Record<string, CellRow[]>;
+
+/** cells_alt.json {"by_size": {"1.0": CellRow[], ...}} 을 읽는다. 모양이 다르면 null(화면은 전환을 숨긴다). */
+export function parseCellsAlt(json: unknown): CellsBySize | null {
+  if (!json || typeof json !== 'object') return null;
+  const bySize = (json as { by_size?: unknown }).by_size;
+  if (!bySize || typeof bySize !== 'object' || Array.isArray(bySize)) return null;
+  const out: CellsBySize = {};
+  for (const [key, rows] of Object.entries(bySize)) {
+    const m = Number(key);
+    if (!Number.isFinite(m) || m <= 0 || !Array.isArray(rows)) return null;
+    out[key] = rows as CellRow[];
+  }
+  return out;
+}
+
+export interface CellSizeOption {
+  id: string;        // 크기 숫자 문자열("0.5", "1", "2")
+  label: string;     // 버튼 이름("0.5 m", 아트보드 ScanDone)
+  cellM: number;
+  official: boolean; // 공식 판정 크기(meta.cell_m)
+  key: string | null; // cells_alt 의 키(공식이면 null)
+}
+
+/** 판정 셀 선택지: 공식 크기 + 비교 크기, 작은 순. 비교 크기가 공식과 같으면 공식 하나만 둔다. */
+export function cellSizeOptions(officialM: number, alt: CellsBySize): CellSizeOption[] {
+  const opt = (cellM: number, key: string | null): CellSizeOption =>
+    ({ id: String(cellM), label: `${cellM} m`, cellM, official: key === null, key });
+  const opts = [opt(officialM, null)];
+  for (const key of Object.keys(alt)) {
+    const m = Number(key);
+    if (m !== officialM) opts.push(opt(m, key));
+  }
+  return opts.sort((a, b) => a.cellM - b.cellM);
+}

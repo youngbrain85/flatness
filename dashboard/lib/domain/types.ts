@@ -126,6 +126,8 @@ export interface Stats {
   deviation_paths?: string[]; // floor·벽 공통(정밀 편차맵 파일명, 임포트 결과에는 없음)
   points3d_paths?: string[]; // floor만(3D 점군 뷰어 파일명)
   points3d_threshold_q?: number; // floor만(표시 임계값, 0.1mm 정수)
+  cells_alt_path?: string;    // floor만(비교용 1·2m 판정 셀 파일명, 2026-10-19~)
+  residual_grid_path?: string; // floor만(5cm 잔차 격자 파일명, 2026-10-19~)
   walls?: WallInfo[];         // wall만
 }
 

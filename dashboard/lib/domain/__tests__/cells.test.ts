@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { computeZoneStats } from '../cells';
+import { cellSizeOptions, computeZoneStats, parseCellsAlt } from '../cells';
 import type { CellRow } from '../types';
 
 function cell(over: Partial<CellRow>): CellRow {
@@ -40,5 +40,33 @@ describe('computeZoneStats (구역별 결과표 집계 - 스펙 §5.1.7 구역�
   });
   it('빈 배열은 빈 결과', () => {
     expect(computeZoneStats([])).toEqual([]);
+  });
+});
+
+// 판정 셀 0.5/1/2m(스펙 2·3 §1): cells_alt.json 은 비교용 1·2m 셀이다. 모양이 다르면 null 이라 화면은 전환을 숨긴다
+describe('parseCellsAlt', () => {
+  it('by_size 의 크기별 셀 배열을 그대로 돌려준다', () => {
+    const one = [cell({ ix: 0, grade: 'pass', value_mm: 3 })];
+    expect(parseCellsAlt({ by_size: { '1.0': one, '2.0': [] } })).toEqual({ '1.0': one, '2.0': [] });
+  });
+  it('by_size 가 없거나 배열이 아닌 값이 있으면 null', () => {
+    expect(parseCellsAlt(null)).toBeNull();
+    expect(parseCellsAlt({})).toBeNull();
+    expect(parseCellsAlt({ by_size: [] })).toBeNull();
+    expect(parseCellsAlt({ by_size: { '1.0': 'x' } })).toBeNull();
+    expect(parseCellsAlt({ by_size: { abc: [] } })).toBeNull();
+  });
+});
+
+describe('cellSizeOptions', () => {
+  it('공식 크기 + 비교 크기를 작은 순으로, 이름은 "0.5 m" 꼴로', () => {
+    const opts = cellSizeOptions(0.5, { '2.0': [], '1.0': [] });
+    expect(opts.map((o) => [o.id, o.label, o.cellM, o.official])).toEqual([
+      ['0.5', '0.5 m', 0.5, true], ['1', '1 m', 1, false], ['2', '2 m', 2, false],
+    ]);
+  });
+  it('비교 크기가 공식 크기와 같으면 한 번만 둔다(공식 쪽)', () => {
+    expect(cellSizeOptions(1, { '1.0': [], '2.0': [] }).map((o) => [o.id, o.official]))
+      .toEqual([['1', true], ['2', false]]);
   });
 });
