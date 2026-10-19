@@ -5,18 +5,20 @@
 - 국부 기준면: 각 바닥 서브셀마다 같은 구역의 서브셀만으로 중심 win_m x win_m 창에 최소제곱 평면을 맞춰 그 칸 중심
   높이를 기준으로 삼는다. 2회 맞춤: 1회차 잔차가 max(3mm, 3σ) 를 넘는 칸(결함)을 빼고 다시 맞춘다. 처짐·드리프트 같은
   긴 휨은 빠지고 직선자가 보는 국부 요철만 남는다. 창 합은 누적합 표(summed-area table)로 O(1)에 구한다.
-- 전체 기준면: 바닥(ok 구역) 전체에 RANSAC 평면 하나. 전체 기울기·방 사이 높이 차·단차가 드러난다.
+- 전체 기준면: 바닥(ok 구역) 전체에 MSAC 평면 하나. 전체 기울기·방 사이 높이 차·단차가 드러난다.
+  인라이어 수만 세는 RANSAC 은 1.5~2cm 단차의 두 면을 문턱 띠로 비스듬히 걸치는 평면을 고를 수 있어(리뷰 실측
+  2026-10-20) 절단 제곱 손실(MSAC)로 점수를 매긴다. 한 면에 딱 붙는 평면이 이긴다.
 """
 import numpy as np
-
-from flatness.core.plane import fit_plane_ransac
 
 MAD_TO_SIGMA = 1.4826
 MIN_TRIM_M = 0.003          # 국부 2회차에서 결함으로 뺄 최소 편차
 MIN_GLOBAL_THR_M = 0.005    # 전체 기준 RANSAC 인라이어 최소 문턱(옛 구역 평면과 같은 5mm)
 MIN_WINDOW_CELLS = 30       # 창 안 유효 칸이 이보다 적으면 구역 평면 값을 쓴다
 DEGENERATE_REL = 1e-3       # 창 안 칸들이 거의 일직선이면(det/(cxx·cyy) 미만) 구역 평면 값을 쓴다
-RANSAC_MAX_CELLS = 200_000  # 전체 기준 RANSAC 가설 채점에 쓸 최대 칸 수(넘으면 고르게 솎는다)
+RANSAC_MAX_CELLS = 200_000  # 전체 기준 가설 채점에 쓸 최대 칸 수(넘으면 고르게 솎는다)
+MSAC_ITERS = 500
+MSAC_SEED = 0
 
 
 def noise_sigma(res):
@@ -104,15 +106,36 @@ def local_reference(median_z, labels, zone_planes, size_m, win_m=3.0, fit_mask=N
     return ref, sigma
 
 
+def _msac(cx, cy, z, thr):
+    """MSAC 평면: 세 칸 가설마다 Σ min(r², thr²) 이 가장 작은 평면. 결정적(시드 고정)."""
+    rng = np.random.default_rng(MSAC_SEED)
+    n = len(z)
+    A = np.column_stack([cx, cy, np.ones(n)])
+    best, best_cost = None, np.inf
+    cap = thr * thr
+    for _ in range(MSAC_ITERS):
+        i = rng.choice(n, 3, replace=False)
+        try:
+            abc = np.linalg.solve(A[i], z[i])
+        except np.linalg.LinAlgError:
+            continue   # 일직선 세 칸
+        cost = np.minimum((A @ abc - z) ** 2, cap).sum()
+        if cost < best_cost:
+            best, best_cost = abc, cost
+    if best is None:
+        raise ValueError("전체 기준면 맞춤 실패: 칸이 부족하거나 일직선")
+    return best
+
+
 def global_plane(median_z, mask, size_m, sigma):
-    """mask 칸 전체에 맞춘 평면 (a, b, c)(서브셀 격자 원점 좌표). RANSAC 문턱 max(5mm, 3σ), 인라이어 최소제곱."""
+    """mask 칸 전체에 맞춘 평면 (a, b, c)(서브셀 격자 원점 좌표). MSAC(문턱 max(5mm, 3σ)) 뒤 인라이어 최소제곱."""
     ys, xs = np.nonzero(mask)
     cx = (xs + 0.5) * size_m
     cy = (ys + 0.5) * size_m
     z = np.asarray(median_z, dtype=np.float64)[ys, xs]
     thr = max(MIN_GLOBAL_THR_M, 3.0 * sigma)
     step = max(1, int(np.ceil(len(z) / RANSAC_MAX_CELLS)))   # 큰 바닥은 가설 채점만 고르게 솎은 칸으로
-    a, b, c = fit_plane_ransac(cx[::step], cy[::step], z[::step], thresh_m=thr)
+    a, b, c = _msac(cx[::step], cy[::step], z[::step], thr)
     inl = np.abs(z - (a * cx + b * cy + c)) < thr
     A = np.column_stack([cx[inl], cy[inl], np.ones(int(inl.sum()))])
     abc, *_ = np.linalg.lstsq(A, z[inl], rcond=None)

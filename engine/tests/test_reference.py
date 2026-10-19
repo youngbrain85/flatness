@@ -105,3 +105,21 @@ def test_noise_sigma_is_robust_scale():
     r[:500] = 0.05                       # 결함 2.5% 는 잡음 추정을 흔들지 못한다
     assert abs(noise_sigma(r) - 0.002) < 0.0002
     assert noise_sigma(np.array([np.nan, np.nan])) == 0.0
+
+
+def test_global_plane_does_not_tilt_across_a_2cm_step():
+    # 리뷰 실측(2026-10-20): 64% 가 z=0, 36% 가 −20mm 인 두 면. 인라이어 수만 세는 RANSAC 은 ±5mm 띠로 두 면을
+    # 비스듬히 걸치는 평면(인라이어 8296 > 평탄면 8240)을 골라 평탄한 넓은 면이 −4.6~+13.9mm 로 기울어 보였다.
+    # MSAC(절단 제곱 손실)는 한 면에 딱 붙는 평면을 고른다
+    from flatness.core.subcell import SubcellGrid
+    ny, nx = 80, 160
+    yy, xx = np.mgrid[0:ny, 0:nx]
+    mz = (np.where(xx < 103, 0.0, -0.02) + 0.0005 * np.sin(xx * 0.3)).astype(np.float32)
+    g = SubcellGrid(0.05, np.zeros(2), (ny, nx), mz, np.full((ny, nx), 10, np.int32), np.zeros((ny, nx), bool))
+    zmap, res = build_zones(g)
+    ok = np.isfinite(res)
+    a, b, c = global_plane(g.median_z, ok, g.size_m, sigma=0.0005)
+    ys, xs = np.nonzero(ok)
+    r = (g.median_z[ys, xs] - (a * (xs + 0.5) * 0.05 + b * (ys + 0.5) * 0.05 + c)) * 1000
+    assert np.abs(r[xs < 103]).max() < 1.0
+    assert abs(np.median(r[xs >= 103]) + 20) < 1.0
