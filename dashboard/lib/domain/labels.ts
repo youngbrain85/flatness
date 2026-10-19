@@ -56,6 +56,8 @@ const WARNING_LABEL: Record<string, string> = {
   ghost_zone_excluded: '이중 표면 비율이 높은 구역 전체가 판정에서 제외되었습니다.',
   furniture_excluded: '가구 상판으로 추정되는 구역이 판정에서 제외되었습니다.',
   low_coverage: '바닥 인식률이 70% 미만입니다. 스캔 범위·가림을 확인하세요.',
+  small_specimen:
+    '1㎡ 미만의 작은 시편이라 가장 큰 연결 면 하나를 판정 구역으로 보았습니다. 판정 셀이 적어 정밀 편차맵 위주로 확인하세요.',
   reduced_span:
     '공간 제약으로 기준 스팬보다 짧은 직선자 길이를 사용해 허용치와 불확도를 선형 환산했습니다.',
   uncertainty_swallows_repair:

@@ -33,6 +33,9 @@ describe('warningLabel', () => {
       '3D 점군 데이터 생성에 실패했습니다. 판정 수치·등급에는 영향이 없습니다.',
     );
   });
+  it('작은 시편 경고는 1㎡ 미만 시편을 한 구역으로 판정했다고 알린다', () => {
+    expect(warningLabel('small_specimen')).toContain('1㎡');
+  });
   it('wall_{i}_skipped 개방 패턴을 매칭한다', () => {
     expect(warningLabel('wall_3_skipped')).toContain('3번 벽');
   });

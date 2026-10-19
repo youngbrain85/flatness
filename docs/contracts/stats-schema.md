@@ -210,6 +210,7 @@ w_fit = a * center_x + b * center_y + c   # a,b,c = walls[i].plane_abc
 | `ghost_zone_excluded` | 이중 표면 비율이 높은 구역 전체가 통째로 제외됨 | floor | `core/pipeline.py:41-42`, `core/zones.py:93-95`(`status="ghost"`) |
 | `furniture_excluded` | 가구 상판으로 추정되는 구역이 판정에서 제외됨 | floor | `core/pipeline.py:39-40`, `core/zones.py:87-91`(`status="furniture"`) |
 | `low_coverage` | 바닥 인식률(`coverage_pct`) < 70% | floor | `core/pipeline.py:45-46` |
+| `small_specimen` | 1㎡ 이상 구역이 없어 가장 큰 연결 덩어리(유효 서브셀 80% 이상)만 판정 구역으로 인정함. 나머지 작은 덩어리는 구역에서 빠짐 | floor | `core/pipeline.py`(`build_zones(min_area_m2=0)` 재시도) |
 | `reduced_span` | 공간 제약으로 셀의 유효 스팬이 기준 스팬보다 짧아 허용치·불확도를 선형 환산해 적용함 | floor·wall·import(셀 단위 공통) | `criteria.py:33-35` |
 | `uncertainty_swallows_repair` | 기준의 `pass_mm + u_mm >= rework_mm`이라 경계 판정 구간이 사실상 보수 구간을 흡수함(기준/불확도 조합 자체의 경고, 특정 셀과 무관) | floor·wall·import 공통 | `criteria.py:39-40` |
 | `uncertainty_swallows_pass` | `b1(=pe-U_eff) <= 0`이라 편차 0.0mm인 완벽한 표면조차 "적합"이 원리적으로 나올 수 없음(기준/불확도 조합 자체의 경고, 특정 셀과 무관 — `uncertainty_swallows_repair`와 별개 현상이며 동시에 뜰 수 있음) | floor·wall·import 공통 | `criteria.py:41-42` |

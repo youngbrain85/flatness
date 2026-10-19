@@ -47,8 +47,23 @@ def analyze_floor(path, scale_to_m, criterion, u_mm, out_dir,
     levels = detect_levels(grid.median_z)
     zmap, residuals = build_zones(grid, levels)
     ok_zones = [z for z in zmap.zones if z.status == "ok"]
+    small_specimen = False
     if not ok_zones:
-        raise ValueError("판정 가능한 바닥 구역 없음: 재스캔 또는 파라미터 확인 필요")
+        # 작은 시편(스펙 2·3 §4): 1㎡ 구역이 없어도 한 덩어리가 유효 서브셀 80% 이상이면 판정 구역으로 인정
+        zmap, residuals = build_zones(grid, levels, min_area_m2=0.0)
+        ok_zones = [z for z in zmap.zones if z.status == "ok"]
+        main = max(ok_zones, key=lambda z: z.n_subcells) if ok_zones else None
+        if main is None or main.n_subcells < 0.8 * n_valid_sub:
+            raise ValueError("판정 가능한 바닥 구역 없음: 재스캔 또는 파라미터 확인 필요")
+        # 나머지 작은 덩어리(점군 잡음)는 구역에서 빼고 잔차도 지운다
+        for z in zmap.zones:
+            if z is not main:
+                gone = zmap.labels == z.zone_id
+                zmap.labels[gone] = 0
+                residuals[gone] = np.nan
+        zmap.zones = [main]
+        ok_zones = [main]
+        small_specimen = True
     span = criterion.span_m if criterion.span_m else 3.0
     cells = evaluate_cells(residuals, grid, span_m=span, cell_m=cell_m,
                            zone_labels=zmap.labels)
@@ -60,6 +75,8 @@ def analyze_floor(path, scale_to_m, criterion, u_mm, out_dir,
         warns.append("furniture_excluded")
     if any(z.status == "ghost" for z in zmap.zones):
         warns.append("ghost_zone_excluded")
+    if small_specimen:
+        warns.append("small_specimen")
     ok_sub = sum(z.n_subcells for z in ok_zones)
     coverage = round(100.0 * ok_sub / n_valid_sub, 1)  # 바닥 인식 비율 (스펙 §5.1.3)
     if coverage < 70.0:

@@ -432,3 +432,32 @@ def test_wall_has_no_points3d(tmp_path):
         assert key not in stats
         assert key not in saved
     assert not (tmp_path / "out" / "points3d.bin").exists()
+
+
+# 사용자 시험판(2026-10-19, 스펙 2·3 §4): 43cm 판처럼 1㎡ 구역이 하나도 없어도 한 덩어리가 유효 서브셀
+# 대부분(80%↑)이면 그 덩어리를 판정 구역으로 인정하고 small_specimen 경고를 단다.
+def test_small_specimen_is_analyzed_with_warning(tmp_path):
+    pts = flat_floor(size=(0.4, 0.35), spacing=0.005)
+    write_binary_ply(pts, tmp_path / "board.ply")
+    stats = analyze_floor(tmp_path / "board.ply", 1.0, CRIT, 5.0, tmp_path / "out")
+    assert "small_specimen" in stats["warnings"]
+    assert (tmp_path / "out" / "cells.json").exists()
+
+
+def test_scattered_fragments_still_fail(tmp_path):
+    # 서로 떨어진 같은 크기 판 두 장: 가장 큰 덩어리가 유효 서브셀의 50% 라 시편으로 보지 않는다
+    a = flat_floor(size=(0.4, 0.4), spacing=0.005)
+    b = a + np.array([2.0, 0.0, 0.0])
+    write_binary_ply(np.vstack([a, b]), tmp_path / "frag.ply")
+    with pytest.raises(ValueError, match="판정 가능한 바닥 구역 없음"):
+        analyze_floor(tmp_path / "frag.ply", 1.0, CRIT, 5.0, tmp_path / "out")
+
+
+def test_small_specimen_ignores_stray_fragment(tmp_path):
+    # 판 옆 떨어진 작은 파편(점군 잡음)은 판정 구역이 아니다: 가장 큰 덩어리 하나만 구역으로 남는다
+    board = flat_floor(size=(0.4, 0.4), spacing=0.005)
+    stray = flat_floor(size=(0.05, 0.05), spacing=0.005) + np.array([0.8, 0.0, 0.0])
+    write_binary_ply(np.vstack([board, stray]), tmp_path / "board.ply")
+    stats = analyze_floor(tmp_path / "board.ply", 1.0, CRIT, 5.0, tmp_path / "out")
+    assert "small_specimen" in stats["warnings"]
+    assert [z["status"] for z in stats["zones"]] == ["ok"]

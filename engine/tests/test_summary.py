@@ -69,11 +69,11 @@ def _documented_warning_codes():
     m = re.search(r"## 5\. warnings 코드 사전(.*?)\n## 6\.", text, re.S)
     assert m, "stats-schema.md에서 §5 warnings 코드 사전 절을 찾지 못했습니다"
     codes = re.findall(r"^\|\s*`([a-z0-9_]+)`\s*\|", m.group(1), re.M)
-    # 13개 중 `fused_mesh_smoothed` 하나는 엔진이 아니라 워커가 붙이는 코드다
+    # 14개 중 `fused_mesh_smoothed` 하나는 엔진이 아니라 워커가 붙이는 코드다
     # (계보는 DB 메타데이터이고 엔진은 DB를 모른다 - §5 표 아래 주석 참고).
     # 아래 부분집합 단언은 그래도 성립한다: 엔진 _WARN_TEXT가 문서 사전의
     # 부분집합이면 되고, 워커 전용 코드는 그 여집합에 있으면 그만이다.
-    assert len(codes) == 13, "파싱 실패 의심(§5 리터럴 코드는 13개여야 함 - wall_{i}_skipped 패턴 행 제외)"
+    assert len(codes) == 14, "파싱 실패 의심(§5 리터럴 코드는 14개여야 함 - wall_{i}_skipped 패턴 행 제외)"
     return set(codes)
 
 
@@ -112,3 +112,9 @@ def test_render_failed_codes_are_documented_and_kept_out_of_summary_text():
         "deviation_render_failed", "points3d_render_failed",
     }
     assert render_failed.isdisjoint(_WARN_TEXT)
+
+
+def test_summary_mentions_small_specimen():
+    # 시험판처럼 1㎡ 미만 시편은 종합의견에서도 그 사실을 알려야 한다(스펙 2·3 §4)
+    t = generate_summary(_base_stats(warnings=["small_specimen"]))
+    assert "1㎡" in t

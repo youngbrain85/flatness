@@ -5,6 +5,7 @@ _WARN_TEXT = {
     "ghost_zone_excluded": "이중 표면 비율이 높은 구역이 통째로 제외되었습니다. 재스캔을 권장합니다.",
     "furniture_excluded": "가구 상판으로 의심되는 면이 판정에서 제외되었습니다.",
     "low_coverage": "바닥 인식률이 낮습니다. 스캔 범위와 장애물을 확인하세요.",
+    "small_specimen": "1㎡ 미만의 작은 시편이라 가장 큰 연결 면 하나를 판정 구역으로 보았습니다. 판정 셀이 적어 정밀 편차맵 위주로 확인하세요.",
     "plumbness_relative_to_z": "수직도는 스캔 좌표계의 z축 기준 상대 지표입니다(중력 보정 아님).",
     "uncertainty_swallows_repair": "측정 불확도가 보수 구간을 잠식하여 경계 판정이 확대되었습니다.",
     # 형제 경고(swallows_repair)가 이미 종합의견에 실리므로 함께 싣는다. 이쪽이 더
