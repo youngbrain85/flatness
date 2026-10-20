@@ -114,6 +114,17 @@ def test_deviation_caption_names_local_reference_only_for_new_analyses(tmp_path)
     assert "국부 기준면 대비" not in render_html(_snapshot_with_deviation(tmp_path / "old"))
 
 
+def test_deviation_caption_warns_wide_sags_look_shallow_only_for_local_reference(tmp_path):
+    # 스펙 §9: 1m 국부 창은 넓은 처짐을 흡수한다(깊이 10mm 함몰이 지름 2.5m 면 약 −3mm). 직선자 등급은 그 처짐을 잡으므로
+    # 등급과 지도가 어긋나 보인다 - PDF 에는 기준면 전환이 없어 대시보드의 '전체' 기준을 알린다. 옛 분석(구역 평면)에는 거짓이다
+    hint = "1m보다 넓은 처짐·함몰은 이 지도에서 얕게 보여 판정 등급과 어긋나 보일 수 있습니다"
+    new = render_html(_snapshot_with_deviation(tmp_path / "new", local_reference=True))
+    assert hint in new
+    assert "대시보드 편차맵의 '전체' 기준에서 볼 수 있습니다" in new
+    old = render_html(_snapshot_with_deviation(tmp_path / "old"))
+    assert "넓은 처짐" not in old and "'전체' 기준" not in old
+
+
 def test_slope_analysis_is_not_rendered_as_a_flatness_section(tmp_path):
     """구배 분석은 scans.surface가 'floor'라 걸러내지 않으면 '3.1 수평면(바닥)'에
     섞인다 - 구간·레벨·mm 편차가 전부 없어 머리글만 있는 빈 표가 박힌다.
