@@ -125,7 +125,7 @@ describe('DeviationView 기준면 전환', () => {
     const group = screen.getByRole('group', { name: '기준면' });
     expect(within(group).getAllByRole('button').map((b) => b.textContent)).toEqual(['국부', '전체']);
     expect(within(group).getByRole('button', { name: '국부' })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByText(/3m 국부 기준면 대비/)).toBeInTheDocument();
+    expect(screen.getByText(/1m 국부 기준면 대비/)).toBeInTheDocument();
     fireEvent.click(within(group).getByRole('button', { name: '전체' }));
     expect(screen.getByTestId('deviation-hud')).toHaveTextContent('−30.0 ~ +15.0 mm');
     expect(screen.getByText(/바닥 전체 기준면 대비/)).toBeInTheDocument();

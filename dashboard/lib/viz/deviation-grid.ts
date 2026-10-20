@@ -4,7 +4,7 @@
 // 아트보드와 다른 점(승인 스펙): 침하는 파랑(초록 아님), 색 범위 R 은 |값|의 98번째 백분위(최소 1mm)다.
 import { DEVIATION_RAMP, STAGE_AXIS_TEXT, STAGE_BG, STAGE_GRID } from '@/lib/domain/palette';
 
-/** residual_grid.json. schema_version 2(2026-10-20~): values = 3m 국부 기준, values_global = 바닥 전체 기준.
+/** residual_grid.json. schema_version 2(2026-10-20~): values = 국부 기준(2026-10-20 처음 3m, p4-0.7.1~ 1m), values_global = 바닥 전체 기준.
  * values_global 이 없는 옛 파일(2026-10-19)의 values 는 구역 평면 기준이다. */
 export interface ResidualGrid {
   subcell_m: number; cols: number; rows: number; values: (number | null)[];

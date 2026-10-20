@@ -44,7 +44,7 @@ const OVERLAY_BG_ALPHA = 0.6;    // HUD·조작 안내 바탕의 알파. 좁은 
 const LEGEND: PointClass[] = ['flat', 'depression', 'protrusion', 'none'];
 // 기준면(2026-10-20 바닥 기준면 개선): 점 색·과장의 기준과 반투명 면 보기
 const BASES: { id: RefBasis; label: string; show: string; legend: string; phrase: string }[] = [
-  { id: 'local', label: '국부', show: '국부 기준면 보기', legend: '국부 기준면', phrase: '3m 국부 기준면' },
+  { id: 'local', label: '국부', show: '국부 기준면 보기', legend: '국부 기준면', phrase: '1m 국부 기준면' },
   { id: 'global', label: '전체', show: '전체 기준면 보기', legend: '전체 기준면', phrase: '바닥 전체 기준면' },
 ];
 const VIEW_PRESETS: { id: ViewPreset; label: string }[] = [
@@ -410,7 +410,7 @@ export function Points3dView({
     `${data.meta.n_points.toLocaleString('ko-KR')}점`,
   ].join(' · ');
 
-  // 고지 문구의 편차 기준: 새 분석은 3m 국부(전체로 바꾸면 바닥 전체), 옛 분석은 구역 기준 평면
+  // 고지 문구의 편차 기준: 새 분석은 1m 국부(전체로 바꾸면 바닥 전체), 옛 분석은 구역 기준 평면
   const basisPhrase = hasReference
     ? BASES.find((b) => b.id === (refReady ? basis : 'local'))!.phrase
     : '구역 기준 평면';

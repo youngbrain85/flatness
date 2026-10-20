@@ -703,7 +703,7 @@ describe('Preview3dTab 기준면', () => {
     expect(f).toHaveBeenCalledWith('/api/data/artifacts/an1/reference_surfaces.json');
     expect(f).toHaveBeenCalledWith('/api/data/artifacts/an1/residual_grid.json');
     expect(await screen.findByRole('group', { name: '기준면' })).toBeInTheDocument();
-    expect(screen.getByTestId('points3d-notice').textContent).toContain('3m 국부 기준면');
+    expect(screen.getByTestId('points3d-notice').textContent).toContain('1m 국부 기준면');
   });
 
   // 변이: 기준면 경로가 없어도 받으러 감(옛 분석에 404 요청)

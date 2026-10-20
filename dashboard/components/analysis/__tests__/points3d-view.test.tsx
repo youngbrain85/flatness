@@ -1321,14 +1321,14 @@ describe('Points3dView 기준면', () => {
   });
 
   // 변이: 기본 기준이 전체, 고지 문구가 기준을 따르지 않음
-  it('기준면 [국부][전체] 와 보기 버튼 둘을 두고, 국부가 눌린 채 고지 문구가 3m 국부 기준면을 말한다', () => {
+  it('기준면 [국부][전체] 와 보기 버튼 둘을 두고, 국부가 눌린 채 고지 문구가 1m 국부 기준면을 말한다', () => {
     mount({ surfaces: surf(), residual: resid(), hasReference: true });
     const group = screen.getByRole('group', { name: '기준면' });
     expect(within(group).getAllByRole('button').map((b) => b.textContent))
       .toEqual(['국부', '전체', '국부 기준면 보기', '전체 기준면 보기']);
     expect(within(group).getByRole('button', { name: '국부' })).toHaveAttribute('aria-pressed', 'true');
     expect(within(group).getByRole('button', { name: '국부 기준면 보기' })).toHaveAttribute('aria-pressed', 'false');
-    expect(screen.getByTestId('points3d-notice').textContent).toContain('5cm 칸이 3m 국부 기준면에서 ±7mm 이내');
+    expect(screen.getByTestId('points3d-notice').textContent).toContain('5cm 칸이 1m 국부 기준면에서 ±7mm 이내');
   });
 
   // 변이: 전체로 바꿔도 dev 를 다시 올리지 않음, 좌표까지 다시 올림, 센티널을 바꿈
