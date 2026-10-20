@@ -125,7 +125,6 @@ def test_deviation_caption_warns_wide_sags_look_shallow_only_for_local_reference
     assert "넓은 처짐" not in old and "'전체' 기준" not in old
 
 
-
 def test_preview3d_caption_names_local_reference_only_for_new_analyses(tmp_path):
     # 스펙 §10: 정적 3D 프리뷰 PNG 도 1m 국부 기준 편차(엔진 render_preview3d(res_local))다. 옛 분석(기준면 파일 없음)은
     # 구역 평면 대비라 같은 문구를 쓰면 거짓이다. alt 는 라벨 그대로 둔다
@@ -135,6 +134,7 @@ def test_preview3d_caption_names_local_reference_only_for_new_analyses(tmp_path)
     old = render_html(_snapshot_with_deviation(tmp_path / "old"))
     assert "<figcaption>3D 프리뷰(전체)</figcaption>" in old
     assert "높이 축은" not in old
+
 
 def test_slope_analysis_is_not_rendered_as_a_flatness_section(tmp_path):
     """구배 분석은 scans.surface가 'floor'라 걸러내지 않으면 '3.1 수평면(바닥)'에
