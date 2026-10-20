@@ -3,9 +3,10 @@
 판정(직선자)과는 무관한 표시용 기준이다. 직선자 틈새는 직선 성분과 무관해 구역 평면 잔차로 그대로 계산한다.
 
 - 국부 기준면: 각 바닥 서브셀마다 같은 구역의 서브셀만으로 중심 win_m x win_m 창에 최소제곱 평면을 맞춰 그 칸 중심
-  높이를 기준으로 삼는다. 결함을 빼고 맞춘다: 결함에 강한 출발 기준(구역 평면 잔차의 25cm 블록 중앙값을 창 크기로 다시
-  중앙값)에서 max(3mm, 3σ) 넘게 벗어난 칸을 빼고 맞추고, 그 결과에서 다시 한 번 빼고 맞춘다(2회).
-  σ 는 칸 높이 잡음(이웃 칸 2차 차분 MAD)이다. 창 안 결함이 절반을 넘지 않으면 기준면은 결함이 아닌 면에 붙는다.
+  높이를 기준으로 삼는다. 결함을 빼고 맞춘다: 출발 기준에서 max(3mm, 3σ) 넘게 벗어난 칸을 빼고 맞추고, 그 결과에서
+  다시 한 번 빼고 맞춘다(2회). 출발 기준은 칸마다 후보 둘(거르지 않은 창 평균 평면, 구역 RANSAC 평면) 가운데 창 안에서
+  문턱 이내로 맞는 칸이 더 많은 것이다(RANSAC 처럼 합의가 큰 가설을 고른다). 넓은 결함이 창 평균을 끌어내리면 구역 평면이,
+  처짐·램프 끝처럼 구역 평면에서 휘어 나간 곳은 창 평균 평면이 이긴다. σ 는 칸 높이 잡음(이웃 칸 2차 차분 MAD)이다.
   창(1m)보다 긴 휨(처짐·드리프트·창보다 넓은 함몰)은 넓을수록 크게 약해진다(깊이 10mm 함몰 지름 1.2m −8.0mm,
   2.5m −2.9mm, 리뷰 실측). 넓은 것은 전체 기준면에서 본다. 창 합은 누적합 표(summed-area table)로 O(1)에 구한다.
 - 전체 기준면: 바닥(ok 구역) 전체에 MSAC 평면 하나(문턱 max(5mm, 3σ), σ 는 위의 칸 높이 잡음).
@@ -23,7 +24,6 @@ DEGENERATE_REL = 1e-3       # 창 안 칸들이 거의 일직선이면(det/(cxx�
 # 절대 하한: 창 칸 중심 좌표 공분산의 최소 고유값이 (서브셀 변)² x 이 값보다 작으면 일직선으로 본다.
 # 한 열은 0, 두 열은 0.25 다. 상대 판정만 쓰면 큰 좌표의 부동소수 잡음이 한 열 창을 통과시킨다(리뷰 실측 2026-10-20)
 DEGENERATE_MIN_VAR = 0.05
-START_BLOCK_M = 0.25        # 출발 기준의 블록 크기(25cm 블록 중앙값)
 RANSAC_MAX_CELLS = 200_000  # 전체 기준 가설 채점에 쓸 최대 칸 수(넘으면 고르게 솎는다)
 MSAC_ITERS = 500
 MSAC_SEED = 0
@@ -86,24 +86,17 @@ def _window_planes(z, w, xx, yy, r, size_m):
     return ref
 
 
-def _robust_start(zr, w, plane_r, size_m, win_m):
-    """결함에 강한 출발 기준(zr 과 같은 높이 기준). 구역 평면 잔차(zr − plane_r)를 START_BLOCK_M 블록마다 중앙값으로
-    줄이고, 각 블록 둘레 win_m 창의 블록 중앙값을 그 블록 칸에 준다. 창 안 결함 칸이 절반 아래면 결함에 끌리지 않는다.
-    w 가 False 인 칸은 세지 않는다. 블록이 다 비면 구역 평면(잔차 0)을 쓴다."""
-    import warnings
-    from scipy import ndimage
-    k = max(1, int(round(START_BLOCK_M / size_m)))
-    h, wd = zr.shape
-    bh, bw = -(-h // k), -(-wd // k)
-    pad = np.full((bh * k, bw * k), np.nan)
-    pad[:h, :wd] = np.where(w, zr - plane_r, np.nan)
-    m = max(1, int(round(win_m / 2 / (k * size_m))))
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", RuntimeWarning)      # 빈 블록·빈 창의 nanmedian 경고
-        blocks = np.nanmedian(pad.reshape(bh, k, bw, k).transpose(0, 2, 1, 3).reshape(bh, bw, k * k), axis=2)
-        med = ndimage.generic_filter(blocks, np.nanmedian, size=2 * m + 1, mode="constant", cval=np.nan)
-    med = np.where(np.isfinite(med), med, 0.0)
-    return plane_r + np.repeat(np.repeat(med, k, 0), k, 1)[:h, :wd]
+def _best_start(zr, w, xx, yy, r, size_m, thr, plane_r):
+    """칸마다 출발 후보 둘(거르지 않은 창 평균 평면, 구역 평면 plane_r) 중 그 칸 창 안에서 |zr − 후보| ≤ thr 인 칸이
+    더 많은 후보(같으면 창 평균 평면). 창 평균 평면만 쓰면 넓은 오목부가 창 평균을 끌어내려 벽 칸만 남았고(3x3m 바닥의
+    1.0x1.0m 오목부 바닥 −18.1mm, 참값 −20mm), 구역 평면만 쓰면 처짐·가파른 램프 끝처럼 구역 평면에서 휘어 나간 곳이
+    통째로 빠져 구역 평면으로 떨어졌다(10% 램프 최대 47mm, 리뷰 실측)."""
+    p0 = _window_planes_banded(zr, w, xx, yy, r, size_m)
+    avg = np.where(np.isnan(p0), plane_r, p0)
+    with np.errstate(invalid="ignore"):
+        n_avg = _box((w & (np.abs(zr - avg) <= thr)).astype(np.float64), r)
+        n_plane = _box((w & (np.abs(zr - plane_r) <= thr)).astype(np.float64), r)
+    return np.where(n_plane > n_avg, plane_r, avg)
 
 
 BAND_ROWS = 192   # 창 평면을 이 행 수씩(위아래 창 반경만큼 덧대어) 나눠 계산한다. 결과는 같고 임시 배열 메모리만 준다
@@ -160,7 +153,7 @@ def local_reference(median_z, labels, zone_planes, size_m, win_m=1.0, fit_mask=N
     for zid, abc, sl in crops:
         zc, xx, yy, zplane, zr, z0 = frame(zid, abc, sl)
         w = fit[sl] & zc
-        cur = _robust_start(zr, w, zplane - z0, size_m, win_m)
+        cur = _best_start(zr, w, xx, yy, r, size_m, thr, zplane - z0)
         for _ in range(2):              # 출발 기준·1회차 결과에서 결함 칸을 빼고 맞춘다
             with np.errstate(invalid="ignore"):
                 keep = w & (np.abs(zr - cur) <= thr)

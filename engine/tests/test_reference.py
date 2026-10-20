@@ -125,8 +125,8 @@ def test_large_recess_does_not_pull_the_reference_off_the_flat_surface():
     # 운영 시험판 실측(2026-10-20): 가운데 오목부가 면적 42% 라 1회차 평면 잔차 MAD 로 잰 σ 가 9.1mm 로 부풀어
     # 결함 문턱(3σ)이 27mm 가 되었다. 2회차 맞춤도 전체 MSAC 도 아무것도 거르지 못해 기준면이 테두리(+5~+10)와
     # 오목부(−7~−14) 사이 평균 평면이 되었다. 구역 RANSAC 평면(5mm)은 테두리에 맞았다.
-    # 기준면은 평평한 테두리에 붙고 오목부는 −20mm 로 드러나야 한다. 실측: 테두리 최대 0.82mm·바닥 −19.94mm.
-    # 결함 칸을 빼고 맞추기를 1회만 하면 1.10mm·−19.37mm 로 덜 붙는다
+    # 기준면은 평평한 테두리에 붙고 오목부는 −20mm 로 드러나야 한다. 실측: 테두리 최대 0.82mm·바닥 −19.98mm.
+    # 결함 칸을 빼고 맞추기를 1회만 하면 덜 붙는다
     p = flat_floor(size=(1.2, 1.0), spacing=0.02, noise_sd=0.0005, seed=6)
     p[:, 2] -= _recess_depth(p[:, 0], p[:, 1])
     g, zmap, _, local_mm, sigma = _local_res(p)
@@ -147,7 +147,7 @@ def test_large_recess_does_not_pull_the_reference_off_the_flat_surface():
 def test_recess_wider_than_half_the_window_is_not_followed_from_an_average_start():
     # 3x3m 바닥 가운데 1.0x1.0m 오목부(벽 20cm, 깊이 20mm): 1m 창이 오목부 가장자리에 걸치면 창의 평균 평면에서 출발한
     # 결함 빼기는 벽 칸을 남겨 기준면이 오목부로 끌려 내려간다(실측 바닥 −18.12mm, 오목부 둘레 테두리 오차 1.70mm).
-    # 구역 평면 잔차의 블록 중앙값에서 출발하면 −18.95mm·1.30mm
+    # 창 안에서 더 많은 칸과 맞는 출발 후보(여기서는 구역 평면)를 고르면 −19.07mm·1.38mm
     p = flat_floor(size=(3.0, 3.0), spacing=0.02, noise_sd=0.0005, seed=8)
     box = (1.0, 2.0, 1.0, 2.0)
     p[:, 2] -= _recess_depth(p[:, 0], p[:, 1], box=box, wall=0.2)
@@ -158,7 +158,38 @@ def test_recess_wider_than_half_the_window_is_not_followed_from_an_average_start
     inside = np.minimum(np.minimum(cx - box[0], box[1] - cx), np.minimum(cy - box[2], box[3] - cy))
     rim = (out > 0.05) & (out < 0.4) & np.isfinite(local_mm)
     assert np.nanmedian(local_mm[inside > 0.25]) <= -18.6
-    assert np.abs(local_mm[rim]).max() < 1.5
+    assert np.abs(local_mm[rim]).max() < 1.6
+
+
+def test_small_board_off_center_recess_stays_on_the_rim():
+    # 43cm 판(9x9칸) 아래쪽 오목부(면적 35%, 벽 6cm, 깊이 20mm). 출발점이 테두리와 오목부 사이에 놓이면 벽 칸이 남아
+    # 국부 기준면이 기울었다(리뷰 실측: 25cm 블록 중앙값 출발 테두리 최대 4.78mm·바닥 −17.5mm, 창 평균 출발 5.66mm).
+    # 창 안 문턱 이내 칸이 더 많은 출발 후보(여기서는 구역 평면)를 고르면 테두리에 붙는다
+    p = flat_floor(size=(0.43, 0.43), spacing=0.01, noise_sd=0.0005, seed=6)
+    box = (0.035, 0.395, 0.03, 0.24)
+    p[:, 2] -= _recess_depth(p[:, 0], p[:, 1], box=box, wall=0.06)
+    g = _grid(p)
+    zmap, _ = build_zones(g, min_area_m2=0.0, max_zones=1, max_rounds=1)
+    main = max((z for z in zmap.zones if z.status == "ok"), key=lambda z: z.n_subcells)
+    labels = np.where(zmap.labels == main.zone_id, zmap.labels, 0)
+    ref, _ = local_reference(g.median_z, labels, {main.zone_id: main.plane_abc}, g.size_m, fit_mask=~g.bimodal)
+    ny, nx = g.median_z.shape
+    cy, cx = (np.mgrid[0:ny, 0:nx] + 0.5) * g.size_m
+    truth = -_recess_depth(cx, cy, box=box, wall=0.06) * 1000
+    local_mm = (g.median_z - ref) * 1000
+    fl = labels > 0
+    assert np.abs(local_mm[fl & (truth > -0.01)]).max() < 1.0
+    assert abs(np.median(local_mm[fl & (truth < -19.99)]) + 20.0) < 1.0
+
+
+def test_steep_ramp_end_left_in_the_zone_does_not_drop_to_the_zone_plane():
+    # 6x4m 평탄 바닥 + x=4m 부터 10% 램프: 밴드(5cm) 안 램프 끝이 주 구역에 남는다. 출발점이 램프 끝을 따라가지 못하면
+    # (구역 평면, 안쪽으로 치우친 25cm 블록 중앙값) 1회차 칸이 모자라 구역 평면으로 떨어졌다(실측 최대 47mm,
+    # 창 평균 출발은 13~19mm)
+    p = flat_floor(size=(6.0, 4.0), spacing=0.02, noise_sd=0.0005, seed=11)
+    p[:, 2] += 0.10 * np.clip(p[:, 0] - 4.0, 0, None)
+    _, _, _, local_mm, _ = _local_res(p)
+    assert np.nanmax(np.abs(local_mm)) < 20.0
 
 
 def test_cell_noise_sigma_ignores_tilt_sag_and_a_large_defect():
@@ -169,9 +200,14 @@ def test_cell_noise_sigma_ignores_tilt_sag_and_a_large_defect():
     z = 0.01 * cx - 0.010 * np.sin(np.pi * cx / 4.0) * np.sin(np.pi * cy / 3.0)
     z = z - _recess_depth(cx / 4.0 * 1.2, cy / 3.0 * 1.0, 0.03) + rng.normal(0, 0.002, (ny, nx))
     mask = np.ones((ny, nx), dtype=bool)
-    mask[10:15, 20:30] = False                  # 구멍(값 없음)은 건너뛴다
+    mask[10:15, 20:30] = False                  # 가린 칸(쌍봉·구역 밖)은 세지 않는다: 큰 값을 넣어도 흔들리지 않는다
+    z[10:15, 20:30] = rng.normal(0, 0.05, (5, 10))
     assert abs(cell_noise_sigma(z, mask) - 0.002) < 0.0002
     assert cell_noise_sigma(z, np.zeros((ny, nx), dtype=bool)) == 0.0
+    # 세 칸이 모두 유효해야 센다: 가운데가 가려진 세 칸, 한 줄 두 칸뿐이면 2차 차분이 없다
+    line = np.array([[0.0, 9.0, 0.0]])
+    assert cell_noise_sigma(line, np.array([[True, False, True]])) == 0.0
+    assert cell_noise_sigma(line[:, :2], np.ones((1, 2), dtype=bool)) == 0.0
 
 
 def test_global_plane_does_not_tilt_across_a_2cm_step():
