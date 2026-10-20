@@ -100,7 +100,7 @@
 | `points3d_paths` | O | — | — | `analyze_floor`에서만 추가. 3D 점군 뷰어용 점 파일명 목록(`string[]`): `["points3d.bin"]` 또는 `[]`. 다른 `*_paths` 키와 같은 규약이다: 파일 존재는 이 키로 판별하고, 소비자는 키가 없으면 빈 목록으로 다룬다(이 키가 생기기 전에 만든 분석 포함). 생성이 예외로 실패하면 `[]`이고 `points3d_render_failed` 경고가 동반된다(§5). 파일 형식은 §9. 이 파일명은 `preview3d_paths`에 넣지 않는다(보고서가 그 목록의 파일을 3D 프리뷰 그림으로 복사한다). **판정과 무관한 보조 시각화**다 |
 | `cells_alt_path` | O | — | — | `analyze_floor`에서만 추가(2026-10-19~). 값은 파일명 `"cells_alt.json"`. 공식 판정(`meta.cell_m`) 밖의 1m·2m 셀 결과를 화면 비교용으로 싣는다(§6). 판정·KPI·보고서는 공식 셀만 쓴다. 키가 없으면(옛 분석·wall·import) 화면은 셀 크기 전환을 숨긴다 |
 | `residual_grid_path` | O | — | — | `analyze_floor`에서만 추가(2026-10-19~). 값은 파일명 `"residual_grid.json"`. 서브셀 편차 격자(§6). 2026-10-20~ schema_version 2: `values` = 국부 기준면 대비(p4-0.7.0 은 3m 창, p4-0.7.1~ 1m 창), `values_global` = 바닥 전체 기준면 대비. `values_global` 이 없는 옛 파일의 `values` 는 구역 평면 대비다. 키가 없으면 화면은 `deviation_paths`의 PNG를 보여 준다. **판정과 무관한 보조 시각화**다 |
-| `reference_surfaces_path` | O | — | — | `analyze_floor`에서만 추가(2026-10-20~). 값은 파일명 `"reference_surfaces.json"`. 국부·전체 기준면 높이 격자(§6). 3D 프리뷰가 기준면을 그리고 점 편차 기준을 바꾸는 데 쓴다. 키가 없으면(옛 분석) 화면은 기준면 전환을 숨긴다. **판정과 무관한 보조 시각화**다 |
+| `reference_surfaces_path` | O | — | — | `analyze_floor`에서만 추가(2026-10-20~). 값은 파일명 `"reference_surfaces.json"`. 국부·전체 기준면 높이 격자(§6). 3D 프리뷰가 반투명 기준면을 그리는 데 쓴다(전체 기준 점 편차는 이 파일이 아니라 `residual_grid.json` 의 `values_global`). 이 키가 있으면 편차 표시(`deviation.png`·`preview3d*.png`·`residual_grid.json` 의 `values`·`points3d.bin` 의 `dev`)가 1m 국부 기준면 대비라는 뜻이라, 화면·보고서는 편차맵 PNG 설명·정적 3D PNG 캡션·보고서 캡션에 그 기준을 밝힌다. 키가 없으면(옛 분석·기준면 계산 실패) 3D 프리뷰는 기준면 줄을 숨기고 기준 문구를 붙이지 않는다. **판정과 무관한 보조 시각화**다 |
 | `points3d_threshold_q` | 조건부 | — | — | int. 3D 점군 뷰어의 기본 표시 임계값, 0.1mm 단위 정수 = `int(round(criterion.pass_mm * 10))`(탑재된 바닥 기준의 `pass_mm` 6·7·10에 대응해 60·70·100). **점 파일이 만들어졌을 때만** 기록한다(`points3d_paths`가 `[]`이면 키 자체가 없다). 스팬 환산과 불확도 U를 적용하지 않는다. 판정에 쓰이지 않는 표시용 값이다 |
 | `walls` | — | O | — | `analyze_wall`에서만 추가(`core/pipeline.py:111`). §2.1 참고 |
 | `zones` (내용) | 구역 목록 채움 | 항상 `[]` | 항상 `[]` | 키 자체는 §1의 공통 키. wall/import는 `build_stats(..., zones=None)` 호출이라 `zones or []` → `[]`(`outputs/stats.py:47`) |
@@ -251,12 +251,12 @@ w_fit = a * center_x + b * center_y + c   # a,b,c = walls[i].plane_abc
 | `results.csv` | floor·wall·import | `cells.json`과 동일한 행을 CSV로(헤더 순서 아래 표와 동일) |
 | `heatmap.png` | floor·import | 단일 등급 히트맵 |
 | `heatmap_wall{n}.png` | wall | 벽별 히트맵. `n`은 `wall_id`와 동일 채번 — **결번 원인 2가지**: (a) 스킵된 벽(`wall_{n}_skipped` 경고 동반, `walls[]`에도 없음), (b) 판정은 성공했으나 렌더만 실패(`heatmap_render_failed` 경고 동반, `walls[]`에는 있음). 파일 존재로 스킵 여부를 추론하지 말고 `walls[]`와 `warnings`로 판별한다 |
-| `preview3d.png` | floor | 3D 편차 프리뷰(전체) |
-| `preview3d_zoom.png` | floor(조건부) | 최댓값 지점 반경 1.5m 확대. 반경 내 점이 없으면 생성 안 됨 |
+| `preview3d.png` | floor | 3D 편차 프리뷰(전체). 높이·색 = 서브셀 편차(mm). 2026-10-20~ 국부 기준면 대비(`deviation.png` 와 같은 배열), 그전은 구역 평면 대비 |
+| `preview3d_zoom.png` | floor(조건부) | 최댓값 지점 반경 1.5m 확대(편차 기준은 `preview3d.png` 와 같다). 반경 내 점이 없으면 생성 안 됨 |
 | `deviation.png` | floor | 정밀 편차맵(10cm 해상도, 0mm 중심 대칭 연속 색상). 2026-10-20~ 국부 기준면 대비(p4-0.7.1~ 1m 창, p4-0.7.0 은 3m 창, 그전은 구역 평면 대비). 판정 히트맵과 별개의 보조 시각화 |
 | `deviation_wall{n}.png` | wall | 벽별 정밀 편차맵. `n`은 `wall_id`와 동일 채번 — **스킵된 벽은 파일 자체가 생성되지 않음(결번)** |
 | `cells_alt.json` | floor | `{"by_size": {"1.0": [셀 행...], "2.0": [셀 행...]}}`. 셀 행 모양은 `cells.json`과 같다. 같은 잔차·구역을 그 크기로 다시 나눠 판정한 비교용 결과 |
-| `residual_grid.json` | floor | `{"schema_version": 2, "subcell_m": 0.05, "cols": n, "rows": m, "values": [...], "values_global": [...]}`. 서브셀 편차를 0.1mm 정수로, 값 없는 칸은 `null`. 행 우선이며 행 0 이 y 가 가장 작은 쪽(엔진 격자 그대로). 좌표는 `meta.bbox_min` 기준 서브셀 격자다. `values` = 1m 국부 기준면 대비(각 칸 중심 1m 창(p4-0.7.0 은 3m), 같은 구역 칸만, 결함 칸을 빼고 두 번 맞춘 최소제곱 평면), `values_global` = 바닥 전체(ok 구역) RANSAC 평면 대비. schema_version·values_global 이 없는 2026-10-19 파일은 `values` 가 구역 평면 대비다 |
+| `residual_grid.json` | floor | `{"schema_version": 2, "subcell_m": 0.05, "cols": n, "rows": m, "values": [...], "values_global": [...]}`. 서브셀 편차를 0.1mm 정수로, 값 없는 칸은 `null`. 행 우선이며 행 0 이 y 가 가장 작은 쪽(엔진 격자 그대로). 좌표는 `meta.bbox_min` 기준 서브셀 격자다. `values` = 1m 국부 기준면 대비(각 칸 중심 1m 창(p4-0.7.0 은 3m), 같은 구역 칸만, 결함 칸을 빼고 두 번 맞춘 최소제곱 평면), `values_global` = 바닥 전체(ok 구역) MSAC 평면 대비(문턱 max(5mm, 3σ) 로 점수를 매긴 뒤 인라이어 최소제곱, `core/reference.py` `global_plane`). schema_version·values_global 이 없는 2026-10-19 파일은 `values` 가 구역 평면 대비다 |
 | `reference_surfaces.json` | floor | `{"step_m": 0.25, "cols": n, "rows": m, "origin_m": [x, y, z], "local": [...], "global": [...], "zones": [...]}`. `zones` = 마디의 구역 번호(정수|null). 3D 뷰어는 구역이 다른 마디 사이 칸을 그리지 않는다(단차를 잇는 벽 방지). `origin_m` = 기준면 좌표틀 원점의 절대 좌표(bbox 최소 x scale, float64). 3D 뷰어는 `points3d.bin` 의 `origin_m` 을 빼서 점 좌표틀에 놓는다. 국부·전체 기준면 높이를 서브셀 5x5 묶음 마디(25cm)로. 마디 (i, j) 위치 = ((i+0.5)·step_m, (j+0.5)·step_m), 좌표틀은 `points3d.bin` 과 같은 파일-로컬(x·y 원점 = 서브셀 격자 원점 = bbox 최소, z 원점 = bbox 최저 z). 높이 0.1mm 정수, 바닥이 아닌 마디는 `null`. 마디 값 = 묶음 가운데 서브셀의 기준 높이(비면 묶음 안 가장 많은 구역 칸 평균) |
 | `points3d.bin` | floor | 3D 점군 뷰어용 점 표본. 최대 50만 점, 점당 8바이트. 형식은 §9, 생성 여부는 `points3d_paths`로 판별 |
 
@@ -529,8 +529,9 @@ floor/wall/import와 달리 `slope_stats.json`에는 `meta` 키 자체가 없어
 - 리더: `dashboard/lib/domain/points3d.ts`의 `parsePoints3d`, 엔진의 `read_points3d`(`outputs/points3d.py`).
 - 점별 편차 `dev`는 그 점이 속한 5cm 서브셀의 잔차(+ 융기 / − 침하)를 0.1mm 단위 정수로 적은 것이다. 점 자체의
   편차가 아니다. 정밀 편차맵이 쓰는 것과 같은 5cm 서브셀 잔차 배열에서 나온 값이다(편차맵은 2x2 평균해 10cm로 그린다).
-  2026-10-20~ 이 잔차는 국부 기준면 대비다(p4-0.7.1~ 1m 창, p4-0.7.0 은 3m 창, 그전은 구역 평면 대비). 뷰어는 전체 기준으로 바꿀 때 `reference_surfaces.json`
-  의 두 기준면 높이 차이(국부 − 전체)를 쌍선형 보간해 더한다.
+  2026-10-20~ 이 잔차는 국부 기준면 대비다(p4-0.7.1~ 1m 창, p4-0.7.0 은 3m 창, 그전은 구역 평면 대비). 뷰어는 전체 기준으로 바꿀 때 그 점이 든 5cm
+  서브셀의 `residual_grid.json` `values_global` 을 그대로 쓴다(`reference_surfaces.json` 기준면 높이를 보간하면 단차 근처에서 두 면이
+  섞여 2D 편차맵과 어긋났다).
 - 뷰어의 기본 표시 임계값은 이 파일이 아니라 stats의 `points3d_threshold_q`(§2)에 있다.
 
 ### 9.1 바이트 배치
