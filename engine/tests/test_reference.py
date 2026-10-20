@@ -53,7 +53,7 @@ def test_local_reference_keeps_a_10mm_depression():
 
 def test_defect_does_not_drag_the_local_reference():
     # 함몰(반경 0.3m, 깊이 10mm. 1m 창 안에 드는 크기)이 있어도 그 자리 기준면은 결함 없는 바닥과 0.5mm 이내다(실측 0.23mm).
-    # 2회차(결함 칸 빼고 다시 맞춤)가 없으면 함몰이 창 평균을 끌어내려 0.79mm 내려간다(실측). 창보다 넓은 함몰(반경 0.9m)은
+    # 결함 칸을 빼지 않고 맞추면 함몰이 창 평균을 끌어내려 0.79mm 내려간다(실측). 창보다 넓은 함몰(반경 0.9m)은
     # 창이 통째로 함몰 안이라 기준면이 따라 내려간다(실측 4.8mm, 스펙 §8: 1m보다 넓은 결함은 전체 기준에서 본다)
     # 함몰이 bbox 최저 z 를 바꿔 격자 높이 전체가 밀리므로, 떨어진 바닥 칸의 차이(같은 점·같은 잡음)로 그 밀림을 뺀다
     def run(p):
@@ -204,9 +204,11 @@ def test_cell_noise_sigma_ignores_tilt_sag_and_a_large_defect():
     z[10:15, 20:30] = rng.normal(0, 0.05, (5, 10))
     assert abs(cell_noise_sigma(z, mask) - 0.002) < 0.0002
     assert cell_noise_sigma(z, np.zeros((ny, nx), dtype=bool)) == 0.0
-    # 세 칸이 모두 유효해야 센다: 가운데가 가려진 세 칸, 한 줄 두 칸뿐이면 2차 차분이 없다
-    line = np.array([[0.0, 9.0, 0.0]])
-    assert cell_noise_sigma(line, np.array([[True, False, True]])) == 0.0
+    # 세 칸이 모두 유효해야 센다: 둘째 칸이 가려지면 남는 세 칸 묶음이 없다(가림을 무시하면 차분 −8·4, 가린 칸을 0 으로
+    # 채우면 10·−5 라 0 이 아니다),
+    # 한 줄 두 칸뿐이어도 2차 차분이 없다
+    line = np.array([[5.0, 9.0, 5.0, 5.0]])
+    assert cell_noise_sigma(line, np.array([[True, False, True, True]])) == 0.0
     assert cell_noise_sigma(line[:, :2], np.ones((1, 2), dtype=bool)) == 0.0
 
 
