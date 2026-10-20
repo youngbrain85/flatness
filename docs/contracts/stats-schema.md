@@ -5,7 +5,7 @@
 > 코드가 사실(fact)이지만, 그 상태 자체가 결함이며 해당 PR/커밋에서 문서를 함께 고쳐야 한다.
 >
 > **대상 독자**: 엔진 내부 구현을 모르는 프론트엔드(P3 대시보드)·보고서(P4)·워커 개발자.
-> **ENGINE_VERSION**: `engine/flatness/__init__.py`의 `ENGINE_VERSION` 상수(현재 `p4-0.7.0`). `stats.meta.engine_version`이
+> **ENGINE_VERSION**: `engine/flatness/__init__.py`의 `ENGINE_VERSION` 상수(현재 `p4-0.7.1`). `stats.meta.engine_version`이
 > 이 값을 그대로 담는다(단, §2의 "임포트 경로" 예외 참고). **§1~§7은 floor/wall/import 세 경로만 다룬다** -
 > 구배(slope) stats는 완전히 다른 스키마(`slope-stats-v1`)를 쓰고 `meta` 키 자체가 없어 `stats.meta.engine_version`
 > 경로가 존재하지 않는다. 구배 계약은 **§8**에서 별도로 다룬다. 구배 분석의 엔진 버전은 오직
@@ -99,7 +99,7 @@
 | `deviation_paths` | O | O | — | 정밀 편차맵 파일명 목록(`string[]`). floor는 `[]` 또는 `["deviation.png"]`, wall은 `wall_id` 오름차순 `["deviation_wall1.png", ...]`이며 **스킵된 벽은 목록에 없다(결번)**. 잔차 유효값이 하나도 없으면 파일을 만들지 않아 목록에서 빠진다(`core/pipeline.py`·`outputs/deviation.py`). 렌더가 예외로 실패한 경우도 마찬가지로 해당 파일명이 목록에서 빠지며 `deviation_render_failed` 경고가 동반된다(§5). import 경로는 이 키 자체가 없으므로 소비자는 항상 "없으면 빈 목록"으로 다룬다. **판정과 무관한 보조 시각화**이며 등급·수치 필드에 영향을 주지 않는다 |
 | `points3d_paths` | O | — | — | `analyze_floor`에서만 추가. 3D 점군 뷰어용 점 파일명 목록(`string[]`): `["points3d.bin"]` 또는 `[]`. 다른 `*_paths` 키와 같은 규약이다: 파일 존재는 이 키로 판별하고, 소비자는 키가 없으면 빈 목록으로 다룬다(이 키가 생기기 전에 만든 분석 포함). 생성이 예외로 실패하면 `[]`이고 `points3d_render_failed` 경고가 동반된다(§5). 파일 형식은 §9. 이 파일명은 `preview3d_paths`에 넣지 않는다(보고서가 그 목록의 파일을 3D 프리뷰 그림으로 복사한다). **판정과 무관한 보조 시각화**다 |
 | `cells_alt_path` | O | — | — | `analyze_floor`에서만 추가(2026-10-19~). 값은 파일명 `"cells_alt.json"`. 공식 판정(`meta.cell_m`) 밖의 1m·2m 셀 결과를 화면 비교용으로 싣는다(§6). 판정·KPI·보고서는 공식 셀만 쓴다. 키가 없으면(옛 분석·wall·import) 화면은 셀 크기 전환을 숨긴다 |
-| `residual_grid_path` | O | — | — | `analyze_floor`에서만 추가(2026-10-19~). 값은 파일명 `"residual_grid.json"`. 서브셀 편차 격자(§6). 2026-10-20~ schema_version 2: `values` = 3m 국부 기준면 대비, `values_global` = 바닥 전체 기준면 대비. `values_global` 이 없는 옛 파일의 `values` 는 구역 평면 대비다. 키가 없으면 화면은 `deviation_paths`의 PNG를 보여 준다. **판정과 무관한 보조 시각화**다 |
+| `residual_grid_path` | O | — | — | `analyze_floor`에서만 추가(2026-10-19~). 값은 파일명 `"residual_grid.json"`. 서브셀 편차 격자(§6). 2026-10-20~ schema_version 2: `values` = 국부 기준면 대비(p4-0.7.0 은 3m 창, p4-0.7.1~ 1m 창), `values_global` = 바닥 전체 기준면 대비. `values_global` 이 없는 옛 파일의 `values` 는 구역 평면 대비다. 키가 없으면 화면은 `deviation_paths`의 PNG를 보여 준다. **판정과 무관한 보조 시각화**다 |
 | `reference_surfaces_path` | O | — | — | `analyze_floor`에서만 추가(2026-10-20~). 값은 파일명 `"reference_surfaces.json"`. 국부·전체 기준면 높이 격자(§6). 3D 프리뷰가 기준면을 그리고 점 편차 기준을 바꾸는 데 쓴다. 키가 없으면(옛 분석) 화면은 기준면 전환을 숨긴다. **판정과 무관한 보조 시각화**다 |
 | `points3d_threshold_q` | 조건부 | — | — | int. 3D 점군 뷰어의 기본 표시 임계값, 0.1mm 단위 정수 = `int(round(criterion.pass_mm * 10))`(탑재된 바닥 기준의 `pass_mm` 6·7·10에 대응해 60·70·100). **점 파일이 만들어졌을 때만** 기록한다(`points3d_paths`가 `[]`이면 키 자체가 없다). 스팬 환산과 불확도 U를 적용하지 않는다. 판정에 쓰이지 않는 표시용 값이다 |
 | `walls` | — | O | — | `analyze_wall`에서만 추가(`core/pipeline.py:111`). §2.1 참고 |
@@ -108,7 +108,7 @@
 | `meta.bbox_min` | O(3원소) | O(3원소) | — | `info.bbox_min * scale_to_m` 반올림 4자리(`core/pipeline.py:54,109`). import는 `CloudInfo`를 직접 만들지만 meta에 넣지 않음 |
 | `meta.source` | — | — | O(`"colab-import"`) | floor/wall meta에는 키 자체가 없음(→ 소비자는 `"source" in meta`로 판별, 없으면 LiDAR 원본) |
 | `meta.subcell_m` / `meta.cell_m` | O | O | O | 세 경로 모두 존재(분석 파라미터). 기본값은 floor 0.05/0.5(2026-10-19부터 공식 판정 셀 0.5m, 그전 분석은 1.0), wall 0.05/1.0 |
-| `meta.engine_version` | `ENGINE_VERSION`(`p4-0.7.0`) | `ENGINE_VERSION` | 고정 문자열 `"external-colab-v1"` | import는 실제 엔진 버전과 무관하게 별도 태그 사용(`importer/colab_csv.py:48`) — 소비자가 LiDAR 분석과 임포트 결과를 구분하는 또 다른 근거 |
+| `meta.engine_version` | `ENGINE_VERSION`(`p4-0.7.1`) | `ENGINE_VERSION` | 고정 문자열 `"external-colab-v1"` | import는 실제 엔진 버전과 무관하게 별도 태그 사용(`importer/colab_csv.py:48`) — 소비자가 LiDAR 분석과 임포트 결과를 구분하는 또 다른 근거 |
 
 ### 2.1 `walls[]` 원소 (wall 전용, `core/pipeline.py:97-103` + `core/walls.py:175-177`)
 
@@ -253,14 +253,14 @@ w_fit = a * center_x + b * center_y + c   # a,b,c = walls[i].plane_abc
 | `heatmap_wall{n}.png` | wall | 벽별 히트맵. `n`은 `wall_id`와 동일 채번 — **결번 원인 2가지**: (a) 스킵된 벽(`wall_{n}_skipped` 경고 동반, `walls[]`에도 없음), (b) 판정은 성공했으나 렌더만 실패(`heatmap_render_failed` 경고 동반, `walls[]`에는 있음). 파일 존재로 스킵 여부를 추론하지 말고 `walls[]`와 `warnings`로 판별한다 |
 | `preview3d.png` | floor | 3D 편차 프리뷰(전체) |
 | `preview3d_zoom.png` | floor(조건부) | 최댓값 지점 반경 1.5m 확대. 반경 내 점이 없으면 생성 안 됨 |
-| `deviation.png` | floor | 정밀 편차맵(10cm 해상도, 0mm 중심 대칭 연속 색상). 2026-10-20~ 3m 국부 기준면 대비(그전은 구역 평면 대비). 판정 히트맵과 별개의 보조 시각화 |
+| `deviation.png` | floor | 정밀 편차맵(10cm 해상도, 0mm 중심 대칭 연속 색상). 2026-10-20~ 국부 기준면 대비(p4-0.7.1~ 1m 창, p4-0.7.0 은 3m 창, 그전은 구역 평면 대비). 판정 히트맵과 별개의 보조 시각화 |
 | `deviation_wall{n}.png` | wall | 벽별 정밀 편차맵. `n`은 `wall_id`와 동일 채번 — **스킵된 벽은 파일 자체가 생성되지 않음(결번)** |
 | `cells_alt.json` | floor | `{"by_size": {"1.0": [셀 행...], "2.0": [셀 행...]}}`. 셀 행 모양은 `cells.json`과 같다. 같은 잔차·구역을 그 크기로 다시 나눠 판정한 비교용 결과 |
-| `residual_grid.json` | floor | `{"schema_version": 2, "subcell_m": 0.05, "cols": n, "rows": m, "values": [...], "values_global": [...]}`. 서브셀 편차를 0.1mm 정수로, 값 없는 칸은 `null`. 행 우선이며 행 0 이 y 가 가장 작은 쪽(엔진 격자 그대로). 좌표는 `meta.bbox_min` 기준 서브셀 격자다. `values` = 3m 국부 기준면 대비(각 칸 중심 3m 창, 같은 구역 칸만, 결함 칸을 빼고 두 번 맞춘 최소제곱 평면), `values_global` = 바닥 전체(ok 구역) RANSAC 평면 대비. schema_version·values_global 이 없는 2026-10-19 파일은 `values` 가 구역 평면 대비다 |
+| `residual_grid.json` | floor | `{"schema_version": 2, "subcell_m": 0.05, "cols": n, "rows": m, "values": [...], "values_global": [...]}`. 서브셀 편차를 0.1mm 정수로, 값 없는 칸은 `null`. 행 우선이며 행 0 이 y 가 가장 작은 쪽(엔진 격자 그대로). 좌표는 `meta.bbox_min` 기준 서브셀 격자다. `values` = 1m 국부 기준면 대비(각 칸 중심 1m 창(p4-0.7.0 은 3m), 같은 구역 칸만, 결함 칸을 빼고 두 번 맞춘 최소제곱 평면), `values_global` = 바닥 전체(ok 구역) RANSAC 평면 대비. schema_version·values_global 이 없는 2026-10-19 파일은 `values` 가 구역 평면 대비다 |
 | `reference_surfaces.json` | floor | `{"step_m": 0.25, "cols": n, "rows": m, "origin_m": [x, y, z], "local": [...], "global": [...], "zones": [...]}`. `zones` = 마디의 구역 번호(정수|null). 3D 뷰어는 구역이 다른 마디 사이 칸을 그리지 않는다(단차를 잇는 벽 방지). `origin_m` = 기준면 좌표틀 원점의 절대 좌표(bbox 최소 x scale, float64). 3D 뷰어는 `points3d.bin` 의 `origin_m` 을 빼서 점 좌표틀에 놓는다. 국부·전체 기준면 높이를 서브셀 5x5 묶음 마디(25cm)로. 마디 (i, j) 위치 = ((i+0.5)·step_m, (j+0.5)·step_m), 좌표틀은 `points3d.bin` 과 같은 파일-로컬(x·y 원점 = 서브셀 격자 원점 = bbox 최소, z 원점 = bbox 최저 z). 높이 0.1mm 정수, 바닥이 아닌 마디는 `null`. 마디 값 = 묶음 가운데 서브셀의 기준 높이(비면 묶음 안 가장 많은 구역 칸 평균) |
 | `points3d.bin` | floor | 3D 점군 뷰어용 점 표본. 최대 50만 점, 점당 8바이트. 형식은 §9, 생성 여부는 `points3d_paths`로 판별 |
 
-> **정밀 편차맵 읽는 법**: 판정 셀(`meta.cell_m`)·5등급 이산색인 히트맵과 달리 10cm 격자의 원시 편차(mm)를 연속 색상으로 칠한다(2026-10-20~ 3m 국부 기준면 대비).
+> **정밀 편차맵 읽는 법**: 판정 셀(`meta.cell_m`)·5등급 이산색인 히트맵과 달리 10cm 격자의 원시 편차(mm)를 연속 색상으로 칠한다(2026-10-20~ 국부 기준면 대비, p4-0.7.1~ 1m 창).
 > 0mm가 중앙(연노랑), 붉을수록 융기(벽은 돌출), 초록일수록 침하(벽은 함몰)이며 스케일은 ±최대 절대편차로 대칭이다.
 > 데이터가 없는 셀은 회색(`#e8e8e8`)이다. **등급 산출에는 관여하지 않는다** — 이 파일이 없어도 stats의 판정 결과는 동일하다.
 > 생성 여부는 §2의 `deviation_paths`로 판별한다(파일 존재를 가정하지 않는다).
@@ -529,7 +529,7 @@ floor/wall/import와 달리 `slope_stats.json`에는 `meta` 키 자체가 없어
 - 리더: `dashboard/lib/domain/points3d.ts`의 `parsePoints3d`, 엔진의 `read_points3d`(`outputs/points3d.py`).
 - 점별 편차 `dev`는 그 점이 속한 5cm 서브셀의 잔차(+ 융기 / − 침하)를 0.1mm 단위 정수로 적은 것이다. 점 자체의
   편차가 아니다. 정밀 편차맵이 쓰는 것과 같은 5cm 서브셀 잔차 배열에서 나온 값이다(편차맵은 2x2 평균해 10cm로 그린다).
-  2026-10-20~ 이 잔차는 3m 국부 기준면 대비다(그전은 구역 평면 대비). 뷰어는 전체 기준으로 바꿀 때 `reference_surfaces.json`
+  2026-10-20~ 이 잔차는 국부 기준면 대비다(p4-0.7.1~ 1m 창, p4-0.7.0 은 3m 창, 그전은 구역 평면 대비). 뷰어는 전체 기준으로 바꿀 때 `reference_surfaces.json`
   의 두 기준면 높이 차이(국부 − 전체)를 쌍선형 보간해 더한다.
 - 뷰어의 기본 표시 임계값은 이 파일이 아니라 stats의 `points3d_threshold_q`(§2)에 있다.
 
