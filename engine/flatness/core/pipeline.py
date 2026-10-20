@@ -134,7 +134,7 @@ def analyze_floor(path, scale_to_m, criterion, u_mm, out_dir,
         stats["preview3d_paths"] = []
         render_warns.add("preview3d_render_failed")
     try:
-        # 정밀 편차맵(판정 무관 보조 시각화): 국부(3m) 기준 편차를 10cm로 접어 다시 그린다
+        # 정밀 편차맵(판정 무관 보조 시각화): 국부(1m) 기준 편차를 10cm로 접어 다시 그린다
         dev = render_deviation_map(res_local, grid, out_dir / "deviation.png")
         stats["deviation_paths"] = [dev] if dev else []
     except Exception:
