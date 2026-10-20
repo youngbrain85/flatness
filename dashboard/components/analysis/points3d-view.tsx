@@ -43,8 +43,10 @@ const OVERLAY_BG_ALPHA = 0.6;    // HUD·조작 안내 바탕의 알파. 좁은 
 
 const LEGEND: PointClass[] = ['flat', 'depression', 'protrusion', 'none'];
 // 기준면(2026-10-20 바닥 기준면 개선): 점 색·과장의 기준과 반투명 면 보기
-const BASES: { id: RefBasis; label: string; show: string; legend: string; phrase: string }[] = [
-  { id: 'local', label: '국부', show: '국부 기준면 보기', legend: '국부 기준면', phrase: '1m 국부 기준면' },
+// hint: 국부 창이 1m 라 넓은 처짐의 점이 FLAT 으로 칠해질 수 있다(스펙 §9) - 국부일 때만 '전체' 를 알린다
+const BASES: { id: RefBasis; label: string; show: string; legend: string; phrase: string; hint?: string }[] = [
+  { id: 'local', label: '국부', show: '국부 기준면 보기', legend: '국부 기준면', phrase: '1m 국부 기준면',
+    hint: "1m보다 넓은 처짐·함몰은 국부 기준에서 FLAT(초록)으로 보일 수 있으니 '전체' 기준으로 확인하세요." },
   { id: 'global', label: '전체', show: '전체 기준면 보기', legend: '전체 기준면', phrase: '바닥 전체 기준면' },
 ];
 const VIEW_PRESETS: { id: ViewPreset; label: string }[] = [
@@ -414,6 +416,8 @@ export function Points3dView({
   const basisPhrase = hasReference
     ? BASES.find((b) => b.id === (refReady ? basis : 'local'))!.phrase
     : '구역 기준 평면';
+  // 넓은 처짐 안내는 기준면 줄(누를 '전체')이 보일 때만
+  const basisHint = hasReference && refReady ? BASES.find((b) => b.id === basis)!.hint : undefined;
 
   // 도구 줄(아트보드 Stage 85~104행): Stage 의 toolbar 로 스테이지 바로 아래에 붙는다. 맨 아래 줄은 고지 문구다
   const toolbar = (
@@ -462,7 +466,7 @@ export function Points3dView({
         밝은 배경
       </Button>
       <p data-testid="points3d-notice" className={NOTE}>
-        {`점 색은 참고용 표시입니다. FLAT(평탄)은 점이 속한 5cm 칸이 ${basisPhrase}에서 ±${thresholdText}mm 이내, DEPRESSION(침하)은 −${thresholdText}mm 미만, PROTRUSION(융기)은 +${thresholdText}mm 초과임을 뜻합니다. 판정 등급은 히트맵 탭의 직선자 틈새 기준이며 측정 방식이 다릅니다. 초록 점이 대부분인 칸이 경계·보수일 수 있고, 노랑·빨강 점이 많은 칸이 적합일 수 있습니다. 임계값을 바꿔도 판정과 보고서는 달라지지 않습니다.`}
+        {`점 색은 참고용 표시입니다. FLAT(평탄)은 점이 속한 5cm 칸이 ${basisPhrase}에서 ±${thresholdText}mm 이내, DEPRESSION(침하)은 −${thresholdText}mm 미만, PROTRUSION(융기)은 +${thresholdText}mm 초과임을 뜻합니다.${basisHint ? ` ${basisHint}` : ''} 판정 등급은 히트맵 탭의 직선자 틈새 기준이며 측정 방식이 다릅니다. 초록 점이 대부분인 칸이 경계·보수일 수 있고, 노랑·빨강 점이 많은 칸이 적합일 수 있습니다. 임계값을 바꿔도 판정과 보고서는 달라지지 않습니다.`}
       </p>
       {isRegistered && (
         <p data-testid="points3d-merged-note" className={NOTE}>

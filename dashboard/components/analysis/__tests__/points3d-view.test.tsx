@@ -1331,6 +1331,30 @@ describe('Points3dView 기준면', () => {
     expect(screen.getByTestId('points3d-notice').textContent).toContain('5cm 칸이 1m 국부 기준면에서 ±7mm 이내');
   });
 
+  // 스펙 §9: 1m 국부 창은 넓은 처짐을 흡수해 그 점들이 FLAT 으로 칠해질 수 있다. 국부일 때만, 정의 문장 바로 뒤에 알린다.
+  // 변이: 전체에서도 붙음, 기준면 줄이 숨었는데도 붙음(누를 '전체' 가 없다), 옛 분석에 붙음, 자리가 정의 문장 뒤가 아님
+  it('국부일 때만 고지 문구가 넓은 처짐은 전체 기준으로 확인하라고 알린다', () => {
+    const hint = "1m보다 넓은 처짐·함몰은 국부 기준에서 FLAT(초록)으로 보일 수 있으니 '전체' 기준으로 확인하세요.";
+    const { unmount } = mount({ surfaces: surf(), residual: resid(), hasReference: true });
+    const notice = () => screen.getByTestId('points3d-notice').textContent!;
+    expect(notice()).toContain(`+7mm 초과임을 뜻합니다. ${hint} 판정 등급은`);
+    fireEvent.click(screen.getByRole('button', { name: '전체' }));
+    expect(notice()).not.toContain('넓은 처짐');
+    fireEvent.click(screen.getByRole('button', { name: '국부' }));
+    expect(notice()).toContain(hint);
+    unmount();
+
+    mount({ surfaces: null, residual: null, hasReference: true });   // 기준면 파일을 못 받음: 국부 문구지만 전환 줄이 없다
+    expect(notice()).toContain('1m 국부 기준면');
+    expect(notice()).not.toContain('넓은 처짐');
+  });
+
+  it('옛 분석(구역 기준 평면)의 고지 문구에는 넓은 처짐 안내가 없다', () => {
+    mount();
+    expect(screen.getByTestId('points3d-notice').textContent).toContain('구역 기준 평면');
+    expect(screen.getByTestId('points3d-notice').textContent).not.toContain('넓은 처짐');
+  });
+
   // 변이: 전체로 바꿔도 dev 를 다시 올리지 않음, 좌표까지 다시 올림, 센티널을 바꿈
   it('전체를 누르면 점 편차를 전체 기준으로 바꿔 dev 버퍼만 다시 올리고 한 번 다시 그린다', () => {
     const { rec } = mount({ data: READOUT_DATA, surfaces: surf(), residual: resid(), hasReference: true });

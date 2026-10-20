@@ -704,6 +704,8 @@ describe('Preview3dTab 기준면', () => {
     expect(f).toHaveBeenCalledWith('/api/data/artifacts/an1/residual_grid.json');
     expect(await screen.findByRole('group', { name: '기준면' })).toBeInTheDocument();
     expect(screen.getByTestId('points3d-notice').textContent).toContain('1m 국부 기준면');
+    // 스펙 §9: 새 분석의 국부 기준에는 넓은 처짐 안내가 붙는다
+    expect(screen.getByTestId('points3d-notice').textContent).toContain("1m보다 넓은 처짐·함몰은 국부 기준에서 FLAT(초록)으로");
   });
 
   // 변이: 기준면 경로가 없어도 받으러 감(옛 분석에 404 요청)
@@ -714,6 +716,7 @@ describe('Preview3dTab 기준면', () => {
     expect(f).not.toHaveBeenCalled();
     expect(screen.queryByRole('group', { name: '기준면' })).toBeNull();
     expect(screen.getByTestId('points3d-notice').textContent).toContain('구역 기준 평면');
+    expect(screen.getByTestId('points3d-notice').textContent).not.toContain('넓은 처짐');
   });
 });
 
@@ -730,5 +733,6 @@ describe('Preview3dTab 기준면: 잔차 격자를 못 받으면', () => {
     render(<Preview3dTab {...tabProps({ stats, load: READY_A })} />);
     await act(async () => { await Promise.resolve(); await Promise.resolve(); });
     expect(screen.queryByRole('group', { name: '기준면' })).toBeNull();
+    expect(screen.getByTestId('points3d-notice').textContent).not.toContain('넓은 처짐');   // 누를 '전체' 가 없다
   });
 });

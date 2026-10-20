@@ -131,11 +131,25 @@ describe('DeviationView 기준면 전환', () => {
     expect(screen.getByText(/바닥 전체 기준면 대비/)).toBeInTheDocument();
   });
 
+  // 스펙 §9: 1m 국부 창은 넓은 처짐을 흡수한다(깊이 10mm 함몰이 지름 2.5m 면 약 −3mm). 등급(직선자)과 지도가 어긋나 보이니
+  // 국부일 때만 '전체' 기준을 알린다. 전체 기준 설명에 붙으면 거짓이다
+  it('국부일 때만 넓은 처짐은 전체 기준으로 확인하라고 알린다', async () => {
+    stub(v2);
+    render(<DeviationView artifactsDir="artifacts/an1" paths={[]} isImport={false} residualGridPath="residual_grid.json" />);
+    await waitFor(() => expect(screen.getByTestId('deviation-hud')).toBeInTheDocument());
+    expect(screen.getByText(/1m보다 넓은 처짐·함몰은 국부 기준에서 얕게 보이므로 '전체' 기준으로 확인하세요\./))
+      .toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '전체' }));
+    expect(screen.getByText(/바닥 전체 기준면 대비/)).toBeInTheDocument();
+    expect(screen.queryByText(/넓은 처짐/)).toBeNull();
+  });
+
   it('옛 격자(values_global 없음)는 전환이 없고 구역 평면 기준이라고 밝힌다', async () => {
     stub({ subcell_m: 0.05, cols: 2, rows: 1, values: [-10, 20] });
     render(<DeviationView artifactsDir="artifacts/an1" paths={[]} isImport={false} residualGridPath="residual_grid.json" />);
     await waitFor(() => expect(screen.getByTestId('deviation-hud')).toHaveTextContent('5cm 격자'));
     expect(screen.queryByRole('group', { name: '기준면' })).toBeNull();
     expect(screen.getByText(/구역 평면 대비/)).toBeInTheDocument();
+    expect(screen.queryByText(/넓은 처짐/)).toBeNull();   // 누를 '전체' 가 없다
   });
 });

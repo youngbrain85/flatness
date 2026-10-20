@@ -29,9 +29,11 @@ export function deviationLabel(name: string): string {
 const BUFFER_SCALE_MAX = 2;   // 드로잉 버퍼 배율 = min(devicePixelRatio, 2)(히트맵·3D 뷰어와 같은 상한)
 // 색 막대: 램프 다섯 색을 0·25·50·75·100% 에 둔다(캔버스 칸 색과 같은 상수)
 const LEGEND_BAR = `linear-gradient(to right, ${DEVIATION_RAMP.map((c, i) => `${c} ${i * 25}%`).join(', ')})`;
-// 기준면 전환(2026-10-20 바닥 기준면 개선): 국부(1m 창)가 기본, 전체(바닥 전체 평면)로 바꿔 볼 수 있다
-const BASES: { id: DeviationBasis; label: string; note: string }[] = [
-  { id: 'local', label: '국부', note: '1m 국부 기준면 대비' },
+// 기준면 전환(2026-10-20 바닥 기준면 개선): 국부(1m 창)가 기본, 전체(바닥 전체 평면)로 바꿔 볼 수 있다.
+// hint: 국부 창이 1m 라 넓은 처짐은 얕게 보여 직선자 등급과 어긋나 보인다(스펙 §9) - 국부일 때만 '전체' 를 알린다
+const BASES: { id: DeviationBasis; label: string; note: string; hint?: string }[] = [
+  { id: 'local', label: '국부', note: '1m 국부 기준면 대비',
+    hint: "1m보다 넓은 처짐·함몰은 국부 기준에서 얕게 보이므로 '전체' 기준으로 확인하세요." },
   { id: 'global', label: '전체', note: '바닥 전체 기준면 대비' },
 ];
 
@@ -119,7 +121,8 @@ function ResidualCanvas({ grid }: { grid: ResidualGrid }) {
   const active = useMemo(() => basisGrid(grid, basis), [grid, basis]);
   const folded = useMemo(() => foldGrid(active, factor), [active, factor]);
   const range = useMemo(() => colorRangeMm(active), [active]);
-  const basisNote = hasGlobal ? BASES.find((b) => b.id === basis)!.note : '구역 평면 대비';
+  const base = hasGlobal ? BASES.find((b) => b.id === basis)! : null;   // 옛 파일은 전환이 없다
+  const basisNote = base ? base.note : '구역 평면 대비';
   const resLabel = resolutionLabel(grid.subcell_m, factor);
   const hud = deviationHud(folded, resLabel);
 
@@ -192,7 +195,8 @@ function ResidualCanvas({ grid }: { grid: ResidualGrid }) {
       </div>
       <p className="basis-full text-[13px] leading-[1.65] text-muted">
         {`${basisNote} ${resLabel} 격자의 원시 편차 분포입니다. 0mm가 중앙(짙은 남색)이고 붉을수록 융기, 파랄수록 침하이며 `
-          + '검게 비어 있는 곳은 데이터가 없는 구간입니다. 판정 등급 산출에는 사용되지 않으며, 등급은 히트맵 탭의 판정 셀 기준입니다.'}
+          + '검게 비어 있는 곳은 데이터가 없는 구간입니다. 판정 등급 산출에는 사용되지 않으며, 등급은 히트맵 탭의 판정 셀 기준입니다.'
+          + (base?.hint ? ` ${base.hint}` : '')}
       </p>
     </>
   );
