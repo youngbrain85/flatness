@@ -4,7 +4,7 @@ import numpy as np
 from tests.fixtures.synthetic import add_bump, flat_floor
 from tests.test_subcell import _grid
 from flatness.core.zones import build_zones
-from flatness.core.reference import global_plane, local_reference, noise_sigma
+from flatness.core.reference import cell_noise_sigma, global_plane, local_reference
 
 
 def _ok(zmap):
@@ -112,12 +112,66 @@ def test_global_plane_reveals_a_step_between_zones():
     assert abs(np.median(res[narrow]) + 150) < 2.0
 
 
-def test_noise_sigma_is_robust_scale():
+def _recess_depth(x, y, depth=0.020, box=(0.2, 1.0, 0.2, 0.8), wall=0.1):
+    """평평한 바닥의 오목부 깊이. box = 바깥 경계(x0, x1, y0, y1), 벽은 wall 폭 경사(이웃 칸 높이차 1.5cm 이하라
+    한 구역), 그 안은 depth 만큼 평평하게 낮다. 기본값은 1.2x1.0m 판 가운데 0.8x0.6m(면적 40%) 오목부(운영 시험판
+    FF-TestBoard Case 3 의 가운데 오목부 모양)."""
+    x0, x1, y0, y1 = box
+    d = np.minimum(np.minimum(x - x0, x1 - x), np.minimum(y - y0, y1 - y))
+    return depth * np.clip(d / wall, 0.0, 1.0)
+
+
+def test_large_recess_does_not_pull_the_reference_off_the_flat_surface():
+    # 운영 시험판 실측(2026-10-20): 가운데 오목부가 면적 42% 라 1회차 평면 잔차 MAD 로 잰 σ 가 9.1mm 로 부풀어
+    # 결함 문턱(3σ)이 27mm 가 되었다. 2회차 맞춤도 전체 MSAC 도 아무것도 거르지 못해 기준면이 테두리(+5~+10)와
+    # 오목부(−7~−14) 사이 평균 평면이 되었다. 구역 RANSAC 평면(5mm)은 테두리에 맞았다.
+    # 기준면은 평평한 테두리에 붙고 오목부는 −20mm 로 드러나야 한다. 실측: 테두리 최대 0.82mm·바닥 −19.94mm.
+    # 결함 칸을 빼고 맞추기를 1회만 하면 1.10mm·−19.37mm 로 덜 붙는다
+    p = flat_floor(size=(1.2, 1.0), spacing=0.02, noise_sd=0.0005, seed=6)
+    p[:, 2] -= _recess_depth(p[:, 0], p[:, 1])
+    g, zmap, _, local_mm, sigma = _local_res(p)
+    assert sigma < 0.002
+    ny, nx = g.median_z.shape
+    cy, cx = (np.mgrid[0:ny, 0:nx] + 0.5) * g.size_m
+    rim = ((cx < 0.15) | (cx > 1.05) | (cy < 0.15) | (cy > 0.85)) & np.isfinite(local_mm)
+    bottom = (cx > 0.35) & (cx < 0.85) & (cy > 0.35) & (cy < 0.65) & np.isfinite(local_mm)
+    assert np.abs(local_mm[rim]).max() < 1.0
+    assert abs(np.median(local_mm[bottom]) + 20.0) < 0.4
+    floor = np.isfinite(local_mm)
+    a, b, c = global_plane(g.median_z, floor, g.size_m, sigma)
+    glob_mm = (g.median_z - (a * cx + b * cy + c)) * 1000
+    assert np.abs(glob_mm[rim]).max() < 1.5
+    assert abs(np.median(glob_mm[bottom]) + 20.0) < 1.5
+
+
+def test_recess_wider_than_half_the_window_is_not_followed_from_an_average_start():
+    # 3x3m 바닥 가운데 1.0x1.0m 오목부(벽 20cm, 깊이 20mm): 1m 창이 오목부 가장자리에 걸치면 창의 평균 평면에서 출발한
+    # 결함 빼기는 벽 칸을 남겨 기준면이 오목부로 끌려 내려간다(실측 바닥 −18.12mm, 오목부 둘레 테두리 오차 1.70mm).
+    # 구역 평면 잔차의 블록 중앙값에서 출발하면 −18.95mm·1.30mm
+    p = flat_floor(size=(3.0, 3.0), spacing=0.02, noise_sd=0.0005, seed=8)
+    box = (1.0, 2.0, 1.0, 2.0)
+    p[:, 2] -= _recess_depth(p[:, 0], p[:, 1], box=box, wall=0.2)
+    g, _, _, local_mm, _ = _local_res(p)
+    ny, nx = g.median_z.shape
+    cy, cx = (np.mgrid[0:ny, 0:nx] + 0.5) * g.size_m
+    out = np.maximum(np.maximum(box[0] - cx, cx - box[1]), np.maximum(box[2] - cy, cy - box[3]))
+    inside = np.minimum(np.minimum(cx - box[0], box[1] - cx), np.minimum(cy - box[2], box[3] - cy))
+    rim = (out > 0.05) & (out < 0.4) & np.isfinite(local_mm)
+    assert np.nanmedian(local_mm[inside > 0.25]) <= -18.6
+    assert np.abs(local_mm[rim]).max() < 1.5
+
+
+def test_cell_noise_sigma_ignores_tilt_sag_and_a_large_defect():
+    # 칸 높이 잡음은 이웃 칸 2차 차분으로 잰다: 기울기는 0, 완만한 휨은 거의 0, 넓은 결함은 벽 칸에만 걸린다
     rng = np.random.default_rng(0)
-    r = rng.normal(0, 0.002, 20000)
-    r[:500] = 0.05                       # 결함 2.5% 는 잡음 추정을 흔들지 못한다
-    assert abs(noise_sigma(r) - 0.002) < 0.0002
-    assert noise_sigma(np.array([np.nan, np.nan])) == 0.0
+    ny, nx = 60, 80
+    cy, cx = (np.mgrid[0:ny, 0:nx] + 0.5) * 0.05
+    z = 0.01 * cx - 0.010 * np.sin(np.pi * cx / 4.0) * np.sin(np.pi * cy / 3.0)
+    z = z - _recess_depth(cx / 4.0 * 1.2, cy / 3.0 * 1.0, 0.03) + rng.normal(0, 0.002, (ny, nx))
+    mask = np.ones((ny, nx), dtype=bool)
+    mask[10:15, 20:30] = False                  # 구멍(값 없음)은 건너뛴다
+    assert abs(cell_noise_sigma(z, mask) - 0.002) < 0.0002
+    assert cell_noise_sigma(z, np.zeros((ny, nx), dtype=bool)) == 0.0
 
 
 def test_global_plane_does_not_tilt_across_a_2cm_step():

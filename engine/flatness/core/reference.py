@@ -3,10 +3,13 @@
 판정(직선자)과는 무관한 표시용 기준이다. 직선자 틈새는 직선 성분과 무관해 구역 평면 잔차로 그대로 계산한다.
 
 - 국부 기준면: 각 바닥 서브셀마다 같은 구역의 서브셀만으로 중심 win_m x win_m 창에 최소제곱 평면을 맞춰 그 칸 중심
-  높이를 기준으로 삼는다. 2회 맞춤: 1회차 잔차가 max(3mm, 3σ) 를 넘는 칸(결함)을 빼고 다시 맞춘다.
+  높이를 기준으로 삼는다. 결함을 빼고 맞춘다: 결함에 강한 출발 기준(구역 평면 잔차의 25cm 블록 중앙값을 창 크기로 다시
+  중앙값)에서 max(3mm, 3σ) 넘게 벗어난 칸을 빼고 맞추고, 그 결과에서 다시 한 번 빼고 맞춘다(2회).
+  σ 는 칸 높이 잡음(이웃 칸 2차 차분 MAD)이다. 창 안 결함이 절반을 넘지 않으면 기준면은 결함이 아닌 면에 붙는다.
   창(1m)보다 긴 휨(처짐·드리프트·창보다 넓은 함몰)은 넓을수록 크게 약해진다(깊이 10mm 함몰 지름 1.2m −8.0mm,
   2.5m −2.9mm, 리뷰 실측). 넓은 것은 전체 기준면에서 본다. 창 합은 누적합 표(summed-area table)로 O(1)에 구한다.
-- 전체 기준면: 바닥(ok 구역) 전체에 MSAC 평면 하나. 전체 기울기·방 사이 높이 차·단차가 드러난다.
+- 전체 기준면: 바닥(ok 구역) 전체에 MSAC 평면 하나(문턱 max(5mm, 3σ), σ 는 위의 칸 높이 잡음).
+  전체 기울기·방 사이 높이 차·단차가 드러난다.
   인라이어 수만 세는 RANSAC 은 1.5~2cm 단차의 두 면을 문턱 띠로 비스듬히 걸치는 평면을 고를 수 있어(리뷰 실측
   2026-10-20) 절단 제곱 손실(MSAC)로 점수를 매긴다. 한 면에 딱 붙는 평면이 이긴다.
 """
@@ -20,18 +23,27 @@ DEGENERATE_REL = 1e-3       # 창 안 칸들이 거의 일직선이면(det/(cxx�
 # 절대 하한: 창 칸 중심 좌표 공분산의 최소 고유값이 (서브셀 변)² x 이 값보다 작으면 일직선으로 본다.
 # 한 열은 0, 두 열은 0.25 다. 상대 판정만 쓰면 큰 좌표의 부동소수 잡음이 한 열 창을 통과시킨다(리뷰 실측 2026-10-20)
 DEGENERATE_MIN_VAR = 0.05
+START_BLOCK_M = 0.25        # 출발 기준의 블록 크기(25cm 블록 중앙값)
 RANSAC_MAX_CELLS = 200_000  # 전체 기준 가설 채점에 쓸 최대 칸 수(넘으면 고르게 솎는다)
 MSAC_ITERS = 500
 MSAC_SEED = 0
 
 
-def noise_sigma(res):
-    """잔차의 로버스트 표준편차 = MAD x 1.4826. 값이 없으면 0."""
-    r = np.asarray(res, dtype=np.float64)
-    r = r[np.isfinite(r)]
-    if r.size == 0:
+def cell_noise_sigma(median_z, mask):
+    """칸 높이 잡음 σ = 이웃 칸 2차 차분(z[i-1] − 2z[i] + z[i+1])의 MAD x 1.4826 / √6 (가로·세로 합침, 세 칸 모두 mask).
+
+    기울기는 2차 차분에서 0 이 되고 완만한 휨은 거의 0, 넓은 결함은 벽 칸에만 걸려 MAD 가 흔들리지 않는다.
+    1회차 평면 잔차의 MAD 는 결함이 넓으면 결함 자체를 잡음으로 재어 부풀었다(운영 시험판 9.1mm, 2차 차분 2.0mm).
+    값이 없으면 0."""
+    z = np.where(mask, np.asarray(median_z, dtype=np.float64), np.nan)
+    parts = []
+    for a in (z, z.T):
+        d2 = a[:, :-2] - 2.0 * a[:, 1:-1] + a[:, 2:]
+        parts.append(d2[np.isfinite(d2)])
+    d = np.concatenate(parts)
+    if d.size == 0:
         return 0.0
-    return float(MAD_TO_SIGMA * np.median(np.abs(r - np.median(r))))
+    return float(MAD_TO_SIGMA * np.median(np.abs(d - np.median(d))) / np.sqrt(6.0))
 
 
 def _box(a, r):
@@ -74,6 +86,26 @@ def _window_planes(z, w, xx, yy, r, size_m):
     return ref
 
 
+def _robust_start(zr, w, plane_r, size_m, win_m):
+    """결함에 강한 출발 기준(zr 과 같은 높이 기준). 구역 평면 잔차(zr − plane_r)를 START_BLOCK_M 블록마다 중앙값으로
+    줄이고, 각 블록 둘레 win_m 창의 블록 중앙값을 그 블록 칸에 준다. 창 안 결함 칸이 절반 아래면 결함에 끌리지 않는다.
+    w 가 False 인 칸은 세지 않는다. 블록이 다 비면 구역 평면(잔차 0)을 쓴다."""
+    import warnings
+    from scipy import ndimage
+    k = max(1, int(round(START_BLOCK_M / size_m)))
+    h, wd = zr.shape
+    bh, bw = -(-h // k), -(-wd // k)
+    pad = np.full((bh * k, bw * k), np.nan)
+    pad[:h, :wd] = np.where(w, zr - plane_r, np.nan)
+    m = max(1, int(round(win_m / 2 / (k * size_m))))
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)      # 빈 블록·빈 창의 nanmedian 경고
+        blocks = np.nanmedian(pad.reshape(bh, k, bw, k).transpose(0, 2, 1, 3).reshape(bh, bw, k * k), axis=2)
+        med = ndimage.generic_filter(blocks, np.nanmedian, size=2 * m + 1, mode="constant", cval=np.nan)
+    med = np.where(np.isfinite(med), med, 0.0)
+    return plane_r + np.repeat(np.repeat(med, k, 0), k, 1)[:h, :wd]
+
+
 BAND_ROWS = 192   # 창 평면을 이 행 수씩(위아래 창 반경만큼 덧대어) 나눠 계산한다. 결과는 같고 임시 배열 메모리만 준다
 
 
@@ -95,6 +127,7 @@ def local_reference(median_z, labels, zone_planes, size_m, win_m=1.0, fit_mask=N
     """국부 기준면 높이(m)와 잡음 σ(m). zone_planes = {zone_id: (a, b, c)}(구역 평면, 서브셀 격자 원점 좌표).
 
     fit_mask 가 False 인 칸(쌍봉 등)은 맞춤에 쓰지 않지만 기준 높이는 받는다. 구역 밖은 NaN.
+    σ = 구역 안 맞춤 칸의 칸 높이 잡음(cell_noise_sigma). 전체 기준면 문턱에도 쓴다.
     구역마다 bbox 로 잘라 crop 원점·crop 중앙값 기준 좌표로 맞춘다(메모리는 구역 crop 하나씩만 든다).
     """
     mz = np.asarray(median_z, dtype=np.float64)
@@ -122,21 +155,18 @@ def local_reference(median_z, labels, zone_planes, size_m, win_m=1.0, fit_mask=N
         z0 = float(np.nanmedian(z[zc])) if np.isfinite(z[zc]).any() else 0.0
         return zc, xx, yy, zplane, z - z0, z0
 
-    # 1회차: 구역 안 맞춤 칸 전부
-    for zid, abc, sl in crops:
-        zc, xx, yy, zplane, zr, z0 = frame(zid, abc, sl)
-        p1 = _window_planes_banded(zr, fit[sl] & zc, xx, yy, r, size_m) + z0
-        ref[sl][zc] = np.where(np.isnan(p1), zplane, p1)[zc]
-    sigma = noise_sigma((mz - ref)[fit & np.isfinite(ref)])
+    sigma = cell_noise_sigma(mz, fit & np.isin(labels, list(zone_planes)))
     thr = max(MIN_TRIM_M, 3.0 * sigma)
-    # 2회차: 1회차에서 크게 벗어난 칸(결함)을 빼고 다시 맞춘다
-    first = ref.copy()
     for zid, abc, sl in crops:
         zc, xx, yy, zplane, zr, z0 = frame(zid, abc, sl)
-        with np.errstate(invalid="ignore"):
-            keep = fit[sl] & zc & (np.abs(mz[sl] - first[sl]) <= thr)
-        p2 = _window_planes_banded(zr, keep, xx, yy, r, size_m) + z0
-        ref[sl][zc] = np.where(np.isnan(p2), zplane, p2)[zc]
+        w = fit[sl] & zc
+        cur = _robust_start(zr, w, zplane - z0, size_m, win_m)
+        for _ in range(2):              # 출발 기준·1회차 결과에서 결함 칸을 빼고 맞춘다
+            with np.errstate(invalid="ignore"):
+                keep = w & (np.abs(zr - cur) <= thr)
+            p = _window_planes_banded(zr, keep, xx, yy, r, size_m)
+            cur = np.where(np.isnan(p), zplane - z0, p)
+        ref[sl][zc] = (cur + z0)[zc]
     return ref, sigma
 
 
