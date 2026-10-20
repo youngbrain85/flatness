@@ -117,7 +117,7 @@ def test_deviation_caption_names_local_reference_only_for_new_analyses(tmp_path)
 def test_deviation_caption_warns_wide_sags_look_shallow_only_for_local_reference(tmp_path):
     # 스펙 §9: 1m 국부 창은 넓은 처짐을 흡수한다(깊이 10mm 함몰이 지름 2.5m 면 약 −3mm). 직선자 등급은 그 처짐을 잡으므로
     # 등급과 지도가 어긋나 보인다 - PDF 에는 기준면 전환이 없어 대시보드의 '전체' 기준을 알린다. 옛 분석(구역 평면)에는 거짓이다
-    hint = "1m보다 넓은 처짐·함몰은 이 지도에서 얕게 보여 판정 등급과 어긋나 보일 수 있습니다"
+    hint = "판정 셀 기준입니다. 1m보다 넓은 처짐·함몰은 이 지도에서 얕게 보여 판정 등급과 어긋나 보일 수 있습니다"  # 공백 하나로 붙는다
     new = render_html(_snapshot_with_deviation(tmp_path / "new", local_reference=True))
     assert hint in new
     assert "대시보드 편차맵의 '전체' 기준에서 볼 수 있습니다" in new

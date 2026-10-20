@@ -137,7 +137,8 @@ describe('DeviationView 기준면 전환', () => {
     stub(v2);
     render(<DeviationView artifactsDir="artifacts/an1" paths={[]} isImport={false} residualGridPath="residual_grid.json" />);
     await waitFor(() => expect(screen.getByTestId('deviation-hud')).toBeInTheDocument());
-    expect(screen.getByText(/1m보다 넓은 처짐·함몰은 국부 기준에서 얕게 보이므로 '전체' 기준으로 확인하세요\./))
+    // 앞 문장과 공백 하나로 붙는다
+    expect(screen.getByText(/판정 셀 기준입니다\. 1m보다 넓은 처짐·함몰은 국부 기준에서 얕게 보이므로 '전체' 기준으로 확인하세요\.$/))
       .toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '전체' }));
     expect(screen.getByText(/바닥 전체 기준면 대비/)).toBeInTheDocument();
