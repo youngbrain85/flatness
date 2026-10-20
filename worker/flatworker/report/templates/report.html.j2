@@ -431,7 +431,7 @@ pre.summary { white-space: pre-wrap; font-family: inherit; font-size: 10pt; marg
   {% for p in a.assets.preview3d %}
   <figure>
     <img src="{{ p.path | asset(report_id) }}" alt="{{ p.label }}" />
-    <figcaption>{{ p.label }}</figcaption>
+    <figcaption>{{ p.label }}{% if a.overview.local_reference %}: 높이 축은 1m 국부 기준면 대비 편차(mm)입니다.{% endif %}</figcaption>
   </figure>
   {% endfor %}
   {% if a.assets.histogram %}
