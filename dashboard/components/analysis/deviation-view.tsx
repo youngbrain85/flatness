@@ -29,7 +29,7 @@ export function deviationLabel(name: string): string {
 const BUFFER_SCALE_MAX = 2;   // 드로잉 버퍼 배율 = min(devicePixelRatio, 2)(히트맵·3D 뷰어와 같은 상한)
 // 색 막대: 램프 다섯 색을 0·25·50·75·100% 에 둔다(캔버스 칸 색과 같은 상수)
 const LEGEND_BAR = `linear-gradient(to right, ${DEVIATION_RAMP.map((c, i) => `${c} ${i * 25}%`).join(', ')})`;
-// 기준면 전환(2026-10-20 바닥 기준면 개선): 국부(3m 창)가 기본, 전체(바닥 전체 평면)로 바꿔 볼 수 있다
+// 기준면 전환(2026-10-20 바닥 기준면 개선): 국부(1m 창)가 기본, 전체(바닥 전체 평면)로 바꿔 볼 수 있다
 const BASES: { id: DeviationBasis; label: string; note: string }[] = [
   { id: 'local', label: '국부', note: '1m 국부 기준면 대비' },
   { id: 'global', label: '전체', note: '바닥 전체 기준면 대비' },

@@ -108,7 +108,7 @@ describe('DeviationView 잔차 격자 캔버스', () => {
   });
 });
 
-// 바닥 기준면 개선(2026-10-20): 국부(3m) 기준이 기본, 전체 기준으로 바꿔 볼 수 있다. 옛 격자는 구역 평면 기준
+// 바닥 기준면 개선(2026-10-20): 국부(1m) 기준이 기본, 전체 기준으로 바꿔 볼 수 있다. 옛 격자는 구역 평면 기준
 describe('DeviationView 기준면 전환', () => {
   afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
   const v2 = {

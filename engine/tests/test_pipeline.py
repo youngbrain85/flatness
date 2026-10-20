@@ -544,7 +544,7 @@ def test_small_specimen_prunes_stray_fragment_from_outputs(tmp_path):
     assert stray_cell["zone_id"] is None and stray_cell["value_mm"] is None
 
 
-# 바닥 기준면 개선(2026-10-20 스펙 §3): 편차 표시는 국부(3m) 기준이 기본, 전체 기준을 함께 낸다. 판정은 그대로
+# 바닥 기준면 개선(2026-10-20 스펙 §3): 편차 표시는 국부(1m, 스펙 §8) 기준이 기본, 전체 기준을 함께 낸다. 판정은 그대로
 def _sag_floor(depth=0.010, size=8.0):
     p = flat_floor(size=(size, size), spacing=0.025, noise_sd=0.0005, seed=2)
     h = size / 2

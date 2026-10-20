@@ -1,5 +1,5 @@
 // 3D 뷰어 기준면(2026-10-20 바닥 기준면 개선 스펙 §4). 순수 함수만 둔다(WebGL·DOM 무관).
-// - reference_surfaces.json: 25cm 마디 위 국부(3m 창)·전체(바닥 전체 평면) 기준면 높이(0.1mm 정수|null).
+// - reference_surfaces.json: 25cm 마디 위 국부(1m 창)·전체(바닥 전체 평면) 기준면 높이(0.1mm 정수|null).
 //   마디 (i, j) 위치 = ((i + 0.5) x step, (j + 0.5) x step), 좌표틀 원점의 절대 좌표 = origin_m.
 // - 점 파일(points3d.bin)의 편차는 국부 기준이다. 전체 기준으로 볼 때는 그 점이 든 5cm 서브셀의 values_global
 //   (residual_grid.json, 엔진 값 그대로)을 쓴다. 기준면 보간은 단차 근처에서 두 면을 섞어 2D 편차맵과 어긋났다.

@@ -11,7 +11,7 @@ export interface ResidualGrid {
   schema_version?: number; values_global?: (number | null)[];
 }
 
-/** 편차 기준: 국부(3m 창) / 전체(바닥 전체 평면). */
+/** 편차 기준: 국부(1m 창) / 전체(바닥 전체 평면). */
 export type DeviationBasis = 'local' | 'global';
 
 /** 접은 격자. mm 는 행 우선(행 0 = y 최소), 값 없는 칸은 NaN. n 은 값 있는 칸 수, lo·hi 는 그 최소·최대(mm). */
