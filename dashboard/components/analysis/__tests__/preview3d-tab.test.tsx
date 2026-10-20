@@ -29,6 +29,8 @@ const M7 = '이 브라우저 또는 기기에서는 WebGL2를 사용할 수 없�
 const M8 = '그래픽 컨텍스트가 끊겨 3D 점군 뷰를 표시할 수 없습니다. 다시 시도하세요.';
 const M9 = '3D 점군 데이터를 불러오는 중입니다.';
 const M10 = '엔진이 생성한 정적 3D 프리뷰 이미지입니다. 높이 축은 편차(mm)이며 실제 축 비율이 아닙니다.';
+// 스펙 §10: 새 분석(기준면 파일 있음)의 정적 PNG 는 1m 국부 기준 편차다
+const M10_LOCAL = '엔진이 생성한 정적 3D 프리뷰 이미지입니다. 높이 축은 1m 국부 기준면 대비 편차(mm)이며 실제 축 비율이 아닙니다.';
 // 없애기로 한 옛 문구(analysis-result.tsx 의 옛 3D 탭 본문)
 const OLD_CAPTION = '워커가 생성한 정적 3D 프리뷰입니다';
 const OLD_EMPTY = '3D 프리뷰가 없습니다';
@@ -325,6 +327,14 @@ describe('Preview3dTab 모드별 화면 (§7.11 분기표의 화면 열)', () =>
     expect(screen.getByText(M10)).toBeInTheDocument();
     expect(viewerCanvas()).toBeNull();
     expectNoLegacy(container);
+  });
+
+  // 변이: 기준면 파일이 있어도 옛 M10, 기준면 파일이 없어도 국부 M10
+  it('새 분석(기준면 파일 있음)의 정적 PNG 캡션은 1m 국부 기준면 대비라고 밝힌다', () => {
+    const stats = statsOf({ reference_surfaces_path: 'reference_surfaces.json' });
+    render(<Preview3dTab {...tabProps({ stats, support: 'software', optedIn: false })} />);
+    expect(screen.getByText(M10_LOCAL).tagName).toBe('FIGCAPTION');
+    expect(screen.queryByText(M10)).toBeNull();
   });
 
   it('software_prompt: 정적 PNG + Alert(info) M4 + "3D로 보기" 순서로 낸다. 다시 시도는 없다', () => {

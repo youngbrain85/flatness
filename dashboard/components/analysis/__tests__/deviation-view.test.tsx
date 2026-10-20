@@ -59,6 +59,21 @@ describe('DeviationView (정밀 편차맵 탭)', () => {
     expect(screen.queryByRole('group', { name: '표시 해상도' })).toBeNull();
     expect(container.innerHTML).not.toMatch(/\bcs-/);
   });
+
+  // 스펙 §10: 새 분석(기준면 파일 있음)의 엔진 PNG 도 1m 국부 기준 편차다. 격자를 못 받아 PNG 로 내려와도 기준을 밝힌다.
+  // 옛 분석·벽은 구역(벽) 평면 대비라 붙이면 거짓이다. 전환 버튼이 없으니 '전체' 안내(§9)는 붙이지 않는다
+  it('새 분석의 PNG 설명은 1m 국부 기준면 대비라고 밝히고, 옛 분석은 그대로다', () => {
+    const { unmount } = render(<DeviationView artifactsDir="artifacts/an1" paths={['deviation.png']} isImport={false}
+      hasReference />);
+    const note = screen.getByText(/판정 등급 산출에는 사용되지 않으며/).textContent!;
+    expect(note.startsWith('1m 국부 기준면 대비 10cm 격자의 원시 편차 분포입니다.')).toBe(true);
+    expect(note).not.toContain('넓은 처짐');
+    unmount();
+
+    render(<DeviationView artifactsDir="artifacts/an1" paths={['deviation.png']} isImport={false} />);
+    expect(screen.getByText(/판정 등급 산출에는 사용되지 않으며/).textContent!.startsWith('10cm 격자의 원시 편차 분포입니다.'))
+      .toBe(true);
+  });
 });
 
 // 정밀 편차맵 화면 렌더(스펙 2·3 §2, 아트보드 ScanDeviation 74~95행): residual_grid.json 을 캔버스로 그린다

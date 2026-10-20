@@ -80,6 +80,15 @@ describe('AnalysisResult 정밀 편차맵 탭', () => {
     });
   });
 
+  // 스펙 §10. 변이: hasReference 를 넘기지 않음(새 분석 PNG 가 기준을 밝히지 않는다)
+  it('기준면 파일이 있는 새 분석은 PNG 설명에 1m 국부 기준면 대비라고 밝힌다', async () => {
+    stubCellsFetch();
+    const withRef = { ...analysis, stats: { ...stats, reference_surfaces_path: 'reference_surfaces.json' } };
+    render(<AnalysisResult analysis={withRef} scan={scan} photos={[]} />);
+    fireEvent.click(screen.getByRole('tab', { name: '정밀 편차맵' }));
+    await waitFor(() => expect(screen.getByText(/1m 국부 기준면 대비 10cm 격자의 원시 편차 분포입니다/)).toBeInTheDocument());
+  });
+
   it('stats.residual_grid_path 가 있으면 그 격자를 받아 캔버스로 그린다(스펙 2·3 §2)', async () => {
     const grid = { subcell_m: 0.05, cols: 2, rows: 1, values: [10, -10] };
     const f = vi.fn(async (url: string) => ({

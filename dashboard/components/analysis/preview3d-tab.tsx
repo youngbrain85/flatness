@@ -34,6 +34,8 @@ const M6 = '3D 점군 데이터 형식을 읽을 수 없습니다. 지원하지 
 const M7 = '이 브라우저 또는 기기에서는 WebGL2를 사용할 수 없어 3D 점군 뷰를 표시할 수 없습니다.';
 const M8 = '그래픽 컨텍스트가 끊겨 3D 점군 뷰를 표시할 수 없습니다. 다시 시도하세요.';
 const M10 = '엔진이 생성한 정적 3D 프리뷰 이미지입니다. 높이 축은 편차(mm)이며 실제 축 비율이 아닙니다.';
+// 새 분석(기준면 파일 있음)의 정적 PNG 는 1m 국부 기준 편차다(2026-10-20 기준면 스펙 §10). 옛 분석은 M10 그대로
+const M10_LOCAL = '엔진이 생성한 정적 3D 프리뷰 이미지입니다. 높이 축은 1m 국부 기준면 대비 편차(mm)이며 실제 축 비율이 아닙니다.';
 
 const STACK = 'flex flex-col gap-3';
 const MUTED = 'text-sm text-muted';
@@ -139,7 +141,7 @@ export function Preview3dTab({
             className="block h-auto w-full max-w-[960px]" />
         ))}
       </Stage>
-      <figcaption className="text-[13px] leading-relaxed text-muted">{M10}</figcaption>
+      <figcaption className="text-[13px] leading-relaxed text-muted">{refPath !== null ? M10_LOCAL : M10}</figcaption>
     </figure>
   );
 

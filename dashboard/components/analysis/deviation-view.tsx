@@ -40,7 +40,7 @@ const BASES: { id: DeviationBasis; label: string; note: string; hint?: string }[
 // 받은 잔차 격자. key 는 이 결과를 받은 URL(분석이 바뀌면 옛 결과를 쓰지 않는다), grid 가 null 이면 못 받음
 type GridLoad = { key: string; grid: ResidualGrid | null };
 
-export function DeviationView({ artifactsDir, paths, isImport, residualGridPath = null }: {
+export function DeviationView({ artifactsDir, paths, isImport, residualGridPath = null, hasReference = false }: {
   artifactsDir: string | null;
   paths: string[];
   // 외부(Colab) 임포트 결과 여부 - 스펙 §8/계약 §2: 임포트 경로는 편차맵을 아예 생성하지
@@ -50,6 +50,8 @@ export function DeviationView({ artifactsDir, paths, isImport, residualGridPath 
   isImport: boolean;
   /** stats.residual_grid_path(바닥, 2026-10-19~). 없으면 엔진 PNG 를 보인다 */
   residualGridPath?: string | null;
+  /** stats.reference_surfaces_path 가 있는 새 분석(2026-10-20~)인가. 그 분석의 엔진 PNG 는 1m 국부 기준면 대비다(스펙 §10) */
+  hasReference?: boolean;
 }) {
   const gridKey = artifactsDir && residualGridPath ? artifactUrl(artifactsDir, residualGridPath) : null;
   const [load, setLoad] = useState<GridLoad | null>(null);
@@ -95,7 +97,7 @@ export function DeviationView({ artifactsDir, paths, isImport, residualGridPath 
     // 그림 고유 비율이라 aspect 는 기본('auto'), 최소 높이는 히트맵과 같은 440px(아트보드 ScanDeviation)
     <Stage minHeight={440} className="flex flex-col items-center justify-center gap-5 p-4" toolbar={
       <p className="text-[13px] leading-[1.65] text-muted">
-        10cm 격자의 원시 편차 분포입니다. 0mm가 중앙(연노랑)이고 붉을수록 융기(벽은 돌출),
+        {hasReference ? '1m 국부 기준면 대비 ' : ''}10cm 격자의 원시 편차 분포입니다. 0mm가 중앙(연노랑)이고 붉을수록 융기(벽은 돌출),
         초록일수록 침하(벽은 함몰)이며 회색은 데이터가 없는 구간입니다.
         판정 등급 산출에는 사용되지 않으며, 등급은 히트맵 탭의 판정 셀 기준입니다.
       </p>

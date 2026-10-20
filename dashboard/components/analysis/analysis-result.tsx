@@ -197,7 +197,7 @@ export function AnalysisResult({ analysis, scan, photos }: {
       )}
       {tab === 'deviation' && (
         <DeviationView artifactsDir={analysis.artifacts_dir} paths={deviation} isImport={isImport}
-          residualGridPath={stats.residual_grid_path ?? null} />
+          residualGridPath={stats.residual_grid_path ?? null} hasReference={Boolean(stats.reference_surfaces_path)} />
       )}
       {tab === 'preview3d' && (
         // key: 이 컴포넌트는 ?analysis= 로 분석을 바꿔도 같은 인스턴스가 재사용된다(page.tsx 에 key 가 없다).
