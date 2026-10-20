@@ -375,7 +375,7 @@ def _analysis_entry(bundle, assets):
             "coverage_pct": stats.get("coverage_pct"),
             "coverage_label": coverage_label(stats),
             "reduced_span_cells": stats.get("reduced_span_cells", 0),
-            # 바닥 기준면 개선(2026-10-20~): 기준면 파일이 있는 분석의 편차맵은 3m 국부 기준면 대비다
+            # 바닥 기준면 개선(2026-10-20~): 기준면 파일이 있는 분석의 편차맵은 1m 국부 기준면 대비다(스펙 §8)
             "local_reference": bool(stats.get("reference_surfaces_path")),
         },
         "summary": {

@@ -108,10 +108,10 @@ def test_deviation_caption_names_the_analysis_cell_size(tmp_path):
 
 
 def test_deviation_caption_names_local_reference_only_for_new_analyses(tmp_path):
-    # 바닥 기준면 개선(2026-10-20~): 새 분석의 편차맵은 3m 국부 기준면 대비다. 옛 분석(기준면 파일 없음)은 구역 평면 대비라
+    # 바닥 기준면 개선(2026-10-20~): 새 분석의 편차맵은 1m 국부 기준면 대비다(스펙 §8, 그전 3m). 옛 분석(기준면 파일 없음)은 구역 평면 대비라
     # 같은 문구를 쓰면 거짓이 된다
-    assert "3m 국부 기준면 대비" in render_html(_snapshot_with_deviation(tmp_path / "new", local_reference=True))
-    assert "3m 국부 기준면 대비" not in render_html(_snapshot_with_deviation(tmp_path / "old"))
+    assert "1m 국부 기준면 대비" in render_html(_snapshot_with_deviation(tmp_path / "new", local_reference=True))
+    assert "국부 기준면 대비" not in render_html(_snapshot_with_deviation(tmp_path / "old"))
 
 
 def test_slope_analysis_is_not_rendered_as_a_flatness_section(tmp_path):
