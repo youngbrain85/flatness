@@ -84,7 +84,7 @@ def test_slope_cells_json_roundtrip_is_lossless(tmp_path):
     for a, b in zip(cells, restored):
         _assert_cells_equal(a, b)
 
-    assert meta == {"schema_version": 2, "engine_version": "test-1.0",
+    assert meta == {"schema_version": 3, "engine_version": "test-1.0",
                     "cell_m": 2.0, "subcell_m": 0.05}
 
 
@@ -160,7 +160,7 @@ def test_schema_and_engine_version_are_recorded(tmp_path):
     import json
     raw = json.loads(path.read_text(encoding="utf-8"))
     assert raw["engine_version"] == "p4-0.5.0"
-    assert raw["schema_version"] == 2
+    assert raw["schema_version"] == 3
     assert raw["cell_m"] == 4.0
     assert raw["subcell_m"] == 0.05
     assert "NaN" not in path.read_text(encoding="utf-8")   # RFC 8259 위반 토큰이 없어야 한다
@@ -242,7 +242,7 @@ def test_load_slope_cells_rejects_missing_keys_with_korean_message(tmp_path):
 
 
 def test_load_slope_cells_rejects_unsupported_schema_version(tmp_path):
-    """schema_version이 이 엔진이 아는 값(2)이 아니면 한국어 ValueError로 거부한다."""
+    """schema_version이 이 엔진이 아는 값(2·3)이 아니면 한국어 ValueError로 거부한다."""
     path = tmp_path / "slope_cells_future.json"
     path.write_text(json.dumps({
         "schema_version": 99,
@@ -254,3 +254,17 @@ def test_load_slope_cells_rejects_unsupported_schema_version(tmp_path):
     with pytest.raises(ValueError) as exc_info:
         load_slope_cells(str(path))
     assert "schema_version" in str(exc_info.value)
+
+
+def test_load_schema_v2_file_without_plane_id(tmp_path):
+    """다면 기준평면 전(schema_version 2) 파일도 재판정할 수 있어야 한다 - plane_id 만 None 으로 채운다."""
+    path = tmp_path / "slope_cells_v2.json"
+    row = {"cx": 0, "cy": 0, "center_x": 1.0, "center_y": 1.0, "n_subcells": 1600,
+           "slope_pct": 2.0, "downhill_rad": math.pi, "rmse_m": 0.001, "se_pct": 0.01,
+           "width_m": 2.0, "height_m": 2.0, "ok": True, "zone_id": None}
+    path.write_text(json.dumps({"schema_version": 2, "engine_version": "old",
+                                "cell_m": 2.0, "subcell_m": 0.05, "cells": [row]}), encoding="utf-8")
+    cells, meta = load_slope_cells(str(path))
+    assert meta["schema_version"] == 2
+    assert cells[0].plane_id is None
+    assert cells[0].slope_pct == 2.0

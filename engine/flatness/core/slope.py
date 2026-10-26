@@ -31,10 +31,19 @@ class SlopeCell:
     height_m: float
     ok: bool
     zone_id: int | None = None   # 구역별 통계는 후속 단계. 스키마만 미리 뚫어 둔다
+    plane_id: int | None = None  # 다면 기준평면(multiplane) 번호 - 셀 서브셀 중 가장 많이 속한 평면. 다면 분석을 안 하면 None
 
 
-def compute_slope_cells(grid, cell_m=2.0, min_subcells=10):
+def _majority_plane(block_labels):
+    """셀 안 서브셀의 평면 번호(0 = 평면 밖) 중 가장 많은 것. 하나도 없으면 None."""
+    v = block_labels[block_labels > 0]
+    return int(np.bincount(v).argmax()) if v.size else None
+
+
+def compute_slope_cells(grid, cell_m=2.0, min_subcells=10, plane_labels=None):
     """서브셀 격자를 cell_m 격자로 묶어 셀마다 구배를 산출한다.
+
+    plane_labels: 서브셀 격자 모양의 다면 기준평면 번호(multiplane.MultiPlaneFit.labels). 주면 셀마다 plane_id 를 단다.
 
     min_subcells: 평면이 수치적으로 결정되려면 최소 이만큼의 유효 서브셀이 필요하다.
     3점이면 수학적으로는 평면이 정해지지만 잔차와 표준오차가 무의미해진다.
@@ -69,10 +78,12 @@ def compute_slope_cells(grid, cell_m=2.0, min_subcells=10):
             center_x = float(xs[min(nx - 1, (x0 + x1 - 1) // 2)])
             center_y = float(ys[min(ny - 1, (y0 + y1 - 1) // 2)])
             geom_ok = width_m >= cell_m / 2 and height_m >= cell_m / 2
+            pid = None if plane_labels is None else _majority_plane(plane_labels[y0:y1, x0:x1])
             if n < min_subcells or not geom_ok:
                 out.append(SlopeCell(cx, cy, center_x, center_y, n,
                                      float("nan"), float("nan"), float("nan"),
-                                     float("nan"), width_m, height_m, False))
+                                     float("nan"), width_m, height_m, False,
+                                     plane_id=pid))
                 continue
             jj, ii = np.nonzero(valid)
             px = xs[x0:x1][ii].astype(np.float64)
@@ -83,14 +94,16 @@ def compute_slope_cells(grid, cell_m=2.0, min_subcells=10):
             if sx <= 0.0 or sy <= 0.0:
                 out.append(SlopeCell(cx, cy, center_x, center_y, n,
                                      float("nan"), float("nan"), float("nan"),
-                                     float("nan"), width_m, height_m, False))
+                                     float("nan"), width_m, height_m, False,
+                                     plane_id=pid))
                 continue
             try:
                 a, b, c = fit_plane_ransac(px, py, pz)
             except ValueError:
                 out.append(SlopeCell(cx, cy, center_x, center_y, n,
                                      float("nan"), float("nan"), float("nan"),
-                                     float("nan"), width_m, height_m, False))
+                                     float("nan"), width_m, height_m, False,
+                                     plane_id=pid))
                 continue
             # 잔차는 인라이어가 아니라 셀 안의 모든 유효 서브셀에 대해 잰다.
             # 결함이 있으면 RMSE가 커지고 그만큼 불확도도 커져 보수적으로 판정된다.
@@ -106,7 +119,7 @@ def compute_slope_cells(grid, cell_m=2.0, min_subcells=10):
             downhill = math.atan2(-b, -a)
             out.append(SlopeCell(cx, cy, center_x, center_y, n,
                                  slope_pct, downhill, rmse, se_pct,
-                                 width_m, height_m, True))
+                                 width_m, height_m, True, plane_id=pid))
     return out
 
 
@@ -123,17 +136,52 @@ def _angle_diff(a, b):
     return d if d <= math.pi else 2 * math.pi - d
 
 
-def grade_slope_cells(cells, threshold, drain_points=None, cell_m=2.0):
-    """셀별 구배를 설계기준과 대조해 등급을 매긴다(스펙 5.2).
+def _grade_one(slope_pct, se_pct, downhill_rad, center_x, center_y, length_m,
+               threshold, drain_points):
+    """구배 하나(셀 또는 평면)를 설계기준과 대조한다 -> {grade, reason, dev_pct, dir_err_deg, correction_mm}.
 
     불확도를 더하고 빼는 방향에 주의한다. 적합은 불확도를 감안해도 확실히 안쪽일
     때만 주고(d + u), 재시공은 확실히 바깥일 때만 준다(d - u). 그 사이는 경계로
     남긴다 - 데이터가 단정을 허락하지 않는데 단정하면 안 된다.
+    length_m: 보정 높이차(correction_mm) 환산 길이.
     """
     design = float(threshold["design_pct"])
     pass_pct = float(threshold["pass_pct"])
     re_pct = float(threshold["re_pct"])
     dir_pass = float(threshold["dir_pass_deg"])
+    u = se_pct
+    if u > pass_pct:
+        return {"grade": GRADE_NA,
+                "reason": "측정 불확도가 허용치보다 커서 가릴 해상도가 없음",
+                "dev_pct": abs(slope_pct - design), "dir_err_deg": None,
+                "correction_mm": float("nan")}
+    d = abs(slope_pct - design)
+    # 양단 높이차로 환산: 구배 1%p = 길이의 1% = 길이(m)*10 mm.
+    correction_mm = d * length_m * 10.0
+    dir_err = None
+    if drain_points:
+        # 기대 방향: 중심에서 가장 가까운 배수구를 향하는 방향
+        best = min(drain_points,
+                   key=lambda p: (p[0] - center_x) ** 2 + (p[1] - center_y) ** 2)
+        expect = math.atan2(best[1] - center_y, best[0] - center_x)
+        dir_err = math.degrees(_angle_diff(downhill_rad, expect))
+        if dir_err > 90.0:
+            return {"grade": GRADE_REDO, "reason": "역구배(물이 배수구 반대로 흐름)",
+                    "dev_pct": d, "dir_err_deg": dir_err, "correction_mm": correction_mm}
+    if d - u > re_pct:
+        grade, reason = GRADE_REDO, "설계 구배와의 편차가 재시공 기준을 넘음"
+    elif d + u <= pass_pct and (dir_err is None or dir_err <= dir_pass):
+        grade, reason = GRADE_PASS, "크기·방향 모두 허용 안"
+    elif d - u > pass_pct or (dir_err is not None and dir_err > dir_pass):
+        grade, reason = GRADE_REPAIR, "허용을 벗어났으나 국소 보정 가능"
+    else:
+        grade, reason = GRADE_BORDER, "불확도 폭이 허용 경계를 걸쳐 단정 불가"
+    return {"grade": grade, "reason": reason, "dev_pct": d,
+            "dir_err_deg": dir_err, "correction_mm": correction_mm}
+
+
+def grade_slope_cells(cells, threshold, drain_points=None, cell_m=2.0):
+    """셀별 구배를 설계기준과 대조해 등급을 매긴다(스펙 5.2). 판정 규칙은 _grade_one."""
     out = []
     for c in cells:
         if not c.ok:
@@ -147,43 +195,25 @@ def grade_slope_cells(cells, threshold, drain_points=None, cell_m=2.0):
                         "dev_pct": float("nan"), "dir_err_deg": None,
                         "correction_mm": float("nan")})
             continue
-        u = c.se_pct
-        if u > pass_pct:
-            out.append({"cell": c, "grade": GRADE_NA,
-                        "reason": "측정 불확도가 허용치보다 커서 가릴 해상도가 없음",
-                        "dev_pct": abs(c.slope_pct - design), "dir_err_deg": None,
-                        "correction_mm": float("nan")})
-            continue
-        d = abs(c.slope_pct - design)
-        # 양단 높이차로 환산: 구배 1%p = 셀 길이의 1% = 길이(m)*10 mm.
-        # 셀의 실제 폭·높이(width_m/height_m)로 환산해야 한다 - 명목 cell_m을 쓰면
-        # 가장자리에서 다소 잘린 셀(문턱은 넘었지만 나온 cell_m보다 작은 셀)의
-        # 보정량이 과대 보고된다.
-        correction_mm = d * min(c.width_m, c.height_m) * 10.0
-        dir_err = None
-        if drain_points:
-            # 기대 방향: 셀 중심에서 가장 가까운 배수구를 향하는 방향
-            best = min(drain_points,
-                       key=lambda p: (p[0] - c.center_x) ** 2 + (p[1] - c.center_y) ** 2)
-            expect = math.atan2(best[1] - c.center_y, best[0] - c.center_x)
-            dir_err = math.degrees(_angle_diff(c.downhill_rad, expect))
-            if dir_err > 90.0:
-                out.append({"cell": c, "grade": GRADE_REDO,
-                            "reason": "역구배(물이 배수구 반대로 흐름)",
-                            "dev_pct": d, "dir_err_deg": dir_err,
-                            "correction_mm": correction_mm})
-                continue
-        if d - u > re_pct:
-            grade, reason = GRADE_REDO, "설계 구배와의 편차가 재시공 기준을 넘음"
-        elif d + u <= pass_pct and (dir_err is None or dir_err <= dir_pass):
-            grade, reason = GRADE_PASS, "크기·방향 모두 허용 안"
-        elif d - u > pass_pct or (dir_err is not None and dir_err > dir_pass):
-            grade, reason = GRADE_REPAIR, "허용을 벗어났으나 국소 보정 가능"
-        else:
-            grade, reason = GRADE_BORDER, "불확도 폭이 허용 경계를 걸쳐 단정 불가"
-        out.append({"cell": c, "grade": grade, "reason": reason, "dev_pct": d,
-                    "dir_err_deg": dir_err, "correction_mm": correction_mm})
+        # 보정 높이차는 셀의 실제 폭·높이(width_m/height_m)로 환산해야 한다 - 명목
+        # cell_m을 쓰면 가장자리에서 다소 잘린 셀(문턱은 넘었지만 나온 cell_m보다
+        # 작은 셀)의 보정량이 과대 보고된다.
+        g = _grade_one(c.slope_pct, c.se_pct, c.downhill_rad, c.center_x, c.center_y,
+                       min(c.width_m, c.height_m), threshold, drain_points)
+        out.append({"cell": c, **g})
     return out
+
+
+def grade_planes(planes, threshold, drain_points=None):
+    """다면 기준평면(multiplane.FloorPlane)별 구배를 셀과 같은 규칙으로 판정한다.
+
+    평면은 시공한 면 하나하나라 "설계한 경사로 면을 쳤는가"를 본다(셀 판정은 국부 불량을 본다).
+    보정 높이차는 평면을 내리막 방향으로 잰 길이(run_m)로 환산하고, 배수 방향은 평면 무게중심에서 본다.
+    """
+    return [{"plane": p, **_grade_one(p.slope_pct, p.se_pct, p.downhill_rad,
+                                      p.centroid_x, p.centroid_y, p.run_m,
+                                      threshold, drain_points)}
+            for p in planes]
 
 
 def slope_summary(graded):

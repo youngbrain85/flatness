@@ -110,7 +110,7 @@ def test_analyze_slope_wiring_produces_cells_json_and_intact_csv(tmp_path):
     cells_json_path = out / "slope_cells.json"
     assert cells_json_path.exists()
     cells_payload = json.loads(cells_json_path.read_text(encoding="utf-8"))
-    assert cells_payload["cell_m"] == 2.0          # CLI 기본 --cell과 일치(I1)
+    assert cells_payload["cell_m"] == 1.0          # CLI 기본 --cell과 일치(I1)
     assert cells_payload["subcell_m"] == 0.05
     assert len(cells_payload["cells"]) > 0
 
@@ -132,14 +132,14 @@ def test_analyze_slope_wiring_produces_cells_json_and_intact_csv(tmp_path):
     assert judged_ids == cells_ids   # 두 산출물이 (cx, cy) 키로 정확히 짝지어진다
     assert stats["artifacts"]["cells_json"] == str(cells_json_path)
 
-    # 3) CSV 헤더가 16열 정확한 순서로 살아있는가(BOM·기존 열 순서 보존, D1/Step5)
+    # 3) CSV 헤더가 17열 정확한 순서로 살아있는가(BOM·기존 열 순서 보존, D1/Step5. plane_id 는 끝에 추가)
     csv_bytes = (out / "slope_cells.csv").read_bytes()
     assert csv_bytes.startswith(b"\xef\xbb\xbf"), "BOM(utf-8-sig)이 없다"
     header = csv_bytes.decode("utf-8-sig").splitlines()[0].split(",")
     assert header == ["cx", "cy", "center_x_m", "center_y_m", "n_subcells",
                       "slope_pct", "downhill_deg", "dev_pct", "dir_err_deg",
                       "correction_mm", "rmse_mm", "se_pct", "grade", "reason",
-                      "width_m", "height_m"]
+                      "width_m", "height_m", "plane_id"]
 
 
 def test_analyze_slope_with_drain_records_direction_judged(tmp_path):
@@ -181,7 +181,8 @@ def test_analyze_slope_all_na_produces_valid_json_and_cli_does_not_crash(tmp_pat
         encoding="utf-8")
     out = tmp_path / "out"
 
-    rc = main(["analyze-slope", str(ply), "--units", "m",
+    # 0.5m 바닥이 조각 셀(cell_m/2 미만)이 되도록 격자를 2m로 고정한다(기본 1m면 0.5m가 유효 셀이 된다)
+    rc = main(["analyze-slope", str(ply), "--units", "m", "--cell", "2.0",
                "--criteria", str(crit), "--out", str(out)])
     assert rc == 0  # None 포맷팅이 안 됐으면 여기서 TypeError로 죽는다
 
@@ -210,3 +211,37 @@ def test_analyze_slope_refuses_to_guess_units(tmp_path, capsys):
                "--out", str(tmp_path / "o")])
     assert rc == 2
     assert "--units" in capsys.readouterr().out
+
+
+def test_analyze_slope_cli_planes(tmp_path):
+    """--planes K: 4면이 가운데로 모이는 바닥에서 평면 4개와 면 단위 판정·셀 plane_id 가 나와야 한다."""
+    import json
+    import numpy as np
+    from tests.fixtures.synthetic import flat_floor, write_binary_ply
+    from flatness.cli import main
+
+    pts = flat_floor(size=(8.0, 8.0), spacing=0.02, noise_sd=0.001)
+    pts[:, 2] += 0.015 * np.maximum(np.abs(pts[:, 0] - 4.0), np.abs(pts[:, 1] - 4.0))
+    ply = tmp_path / "drain4.ply"
+    write_binary_ply(pts, str(ply))
+    crit = tmp_path / "crit.json"
+    crit.write_text(json.dumps(
+        {"design_pct": 1.5, "pass_pct": 0.5, "re_pct": 1.5, "dir_pass_deg": 30.0}),
+        encoding="utf-8")
+    out = tmp_path / "out"
+
+    rc = main(["analyze-slope", str(ply), "--units", "m", "--criteria", str(crit),
+               "--out", str(out), "--planes", "4", "--drain=4,4"])
+    assert rc == 0
+    stats = json.loads((out / "slope_stats.json").read_text(encoding="utf-8"))
+    pl = stats["planes"]
+    assert pl["requested"] == 4 and pl["found"] == 4
+    for it in pl["items"]:
+        assert abs(it["slope_pct"] - 1.5) < 0.05
+        assert abs(it["area_m2"] - 16.0) < 1.0
+        assert it["grade"] == "적합"
+        assert it["dir_err_deg"] < 10.0          # 네 면 모두 가운데 배수구로 흐른다
+    for key in ("planes_json", "planes_csv", "planes_png"):
+        assert (out / stats["artifacts"][key].split("/")[-1]).exists()
+    cells = json.loads((out / "slope_cells.json").read_text(encoding="utf-8"))["cells"]
+    assert {c["plane_id"] for c in cells if c["ok"]} == {1, 2, 3, 4}
