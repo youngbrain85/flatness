@@ -9,7 +9,7 @@ from flatworker.artifacts import raw_scan_dir
 from flatworker.config import Config
 from flatworker.jobs import handle_analyze
 from flatworker.slope import (normalize_slope_stats, slope_context, slope_drain_points,
-                             slope_overall_verdict)
+                             slope_n_planes, slope_overall_verdict)
 from tests.fake_db import FakeDB
 from tests.synthetic_helpers import synthetic
 
@@ -268,3 +268,41 @@ def test_handle_analyze_slope_keeps_flatness_current_analysis(slope_env_real_cri
 
     assert env.db.current_analysis[("scan1", "flatness")] == "flat-analysis"
     assert env.db.current_analysis[("scan1", "slope")] == env.slope_analysis_id
+
+
+def test_slope_n_planes_reads_params():
+    assert slope_n_planes(None) is None
+    assert slope_n_planes({}) is None
+    assert slope_n_planes({"n_planes": 4}) == 4
+    for bad in (0, 21, 2.5, "4", True):
+        with pytest.raises(ValueError):
+            slope_n_planes({"n_planes": bad})
+
+
+def test_handle_analyze_passes_n_planes_to_engine(monkeypatch, slope_job_env):
+    """대시보드가 analyses.params.n_planes 에 넣은 기준평면 개수가 엔진까지 간다."""
+    db = slope_job_env.db
+    aid = slope_job_env.slope_analysis_id
+    db.analyses[aid]["params"] = {"n_planes": 4}
+    called = {}
+
+    def fake_analyze_slope(path, scale_to_m, threshold, out_dir, **kw):
+        called["n_planes"] = kw.get("n_planes")
+        return _stats(_counts(적합=4))
+
+    monkeypatch.setattr("flatworker.slope.analyze_slope", fake_analyze_slope)
+    handle_analyze(db, slope_job_env.cfg, {"analysis_id": aid})
+    assert called["n_planes"] == 4
+
+
+def test_handle_analyze_real_engine_with_planes(slope_job_env):
+    """실제 엔진으로 n_planes 를 주면 stats.planes 와 평면 산출물 경로(버킷 상대)가 저장된다."""
+    db = slope_job_env.db
+    aid = slope_job_env.slope_analysis_id
+    db.analyses[aid]["params"] = {"n_planes": 1}
+    handle_analyze(db, slope_job_env.cfg, {"analysis_id": aid})
+    a = db.analyses[aid]
+    assert a["status"] == "done"
+    assert a["stats"]["planes"]["found"] == 1
+    assert a["stats"]["artifacts"]["planes_json"] == f"artifacts/{aid}/slope_planes.json"
+    assert a["stats"]["artifacts"]["planes_png"] == f"artifacts/{aid}/slope_planes.png"

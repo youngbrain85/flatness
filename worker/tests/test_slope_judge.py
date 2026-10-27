@@ -514,3 +514,35 @@ def test_slope_judge_does_not_invent_lineage_warning_for_raw_scan(tmp_path):
     row = db.analyses[aid]
     assert "fused_mesh_smoothed" not in row["warnings"]
     assert "fused_mesh_smoothed" not in row["stats"]["warnings"]
+
+
+def test_slope_judge_rejudges_planes_when_analysis_has_planes(tmp_path):
+    """다면 기준평면으로 분석한 경우 배수구 재판정이 평면도 같은 좌표로 다시 판정하고,
+    평면 파일을 함께 다시 올려 다음 재판정도 이어지게 한다."""
+    import numpy as np
+    from flatness.core.multiplane import fit_floor_planes
+    from flatness.outputs.slope_planes import dump_slope_planes
+
+    db, cfg = FakeDB(), _cfg(tmp_path)
+    aid = _seed_judgeable_analysis(db, cfg, tmp_path)
+    s = 0.05
+    c = (np.arange(80) + 0.5) * s
+    X, _ = np.meshgrid(c, c)
+    fit = fit_floor_planes(0.02 * X, np.ones(X.shape, bool), s, 1)   # +x 로 오르는 2% 평면 하나(내리막 -x)
+    seed = tmp_path / "seed" / aid / "slope_planes.json"
+    dump_slope_planes(fit, str(seed), s, (0.0, 0.0))
+    storage = get_storage(cfg, db)
+    storage.upload(f"artifacts/{aid}/slope_planes.json", seed.read_bytes(), "application/json")
+    db.analyses[aid]["stats"]["artifacts"]["planes_json"] = f"artifacts/{aid}/slope_planes.json"
+
+    # 배수구가 평면 오른쪽(+x)이면 물이 반대로 흐른다 -> 평면은 역구배 재시공
+    handle_slope_judge(db, cfg, {"analysis_id": aid, "drain_points": [{"x": 10.0, "y": 2.0}]})
+    row = db.analyses[aid]
+    assert row["stats"]["planes"]["items"][0]["grade"] == "재시공"
+    assert row["stats"]["artifacts"]["planes_json"] == f"artifacts/{aid}/slope_planes.json"
+    assert storage.download(f"artifacts/{aid}/slope_planes.json")
+    assert storage.download(f"artifacts/{aid}/slope_planes.png")
+
+    # 왼쪽(-x)이면 내리막과 같은 방향 -> 적합
+    handle_slope_judge(db, cfg, {"analysis_id": aid, "drain_points": [{"x": -10.0, "y": 2.0}]})
+    assert db.analyses[aid]["stats"]["planes"]["items"][0]["grade"] == "적합"

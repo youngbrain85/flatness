@@ -20,6 +20,7 @@ import { isDirectionAwareCriteria } from '@/lib/domain/slope-direction';
 import type { SlopeCellResult } from '@/lib/domain/slope-judged';
 import { useJudgeStatus } from '@/lib/hooks/use-judge-status';
 import { SlopeHeatmapView } from './slope-heatmap-view';
+import { SlopePlanesPanel } from './slope-planes-panel';
 import { SlopeResultTable } from './slope-result-table';
 import { SlopeKpiGrid, SlopeSummaryCard, SlopeVerdictPanel, SlopeWarnings } from './slope-verdict-panel';
 import { CARD, CARD_HALF, CARD_ROW, resultMeta } from './result-parts';
@@ -204,6 +205,7 @@ export function SlopeResult({ analysis }: { analysis: AnalysisRow }) {
               </div>
             )}
           </div>
+          <SlopePlanesPanel stats={stats} />
         </>
       ) : (
         <>
@@ -270,6 +272,8 @@ export function SlopeResult({ analysis }: { analysis: AnalysisRow }) {
           )}
 
           <SlopeVerdictPanel stats={stats} judge={judge} drainPoints={drainPoints} directionAware={directionAware} />
+
+          <SlopePlanesPanel stats={stats} />
 
           <div className="flex flex-col gap-2.5">
             {/* 결과 구획 제목이 h2이므로 표 제목은 h3 */}

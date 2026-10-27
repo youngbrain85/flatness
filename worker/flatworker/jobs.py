@@ -241,6 +241,7 @@ def _handle_analyze_slope(db, cfg, analysis_id):
     """
     analysis, scan, criteria_row, threshold, drain_points = slope.slope_context(
         db, analysis_id)
+    n_planes = slope.slope_n_planes(analysis.get("params"))
     storage = get_storage(cfg, db)
     with staging_dir() as work:
         path = _fetch_raw(storage, scan, work)
@@ -249,7 +250,7 @@ def _handle_analyze_slope(db, cfg, analysis_id):
         scale_to_m = scan["unit_scale"]
         _, fields = slope.run_slope_analysis(
             path, scale_to_m, threshold, out_dir, drain_points,
-            analysis_id, criteria_row)
+            analysis_id, criteria_row, n_planes=n_planes)
         storage.upload_dir(f"artifacts/{analysis_id}", out_dir)
     # 계보 경고는 분석 종류와 무관하다 - 융합 메시로 스무딩된 표면은 평활도만이
     # 아니라 구배도 실제보다 양호하게 만든다. 평활도 경로만 고치면 여기서 샌다.
@@ -368,9 +369,19 @@ def handle_slope_judge(db, cfg, payload):
                 "구배 분석을 다시 실행하세요.")
         cell_m = meta["cell_m"]
         subcell_m = meta["subcell_m"]
+        # 다면 기준평면으로 분석했으면 평면도 같은 배수구로 다시 판정한다. 평면 파일도 out_dir 에 받아 둬야
+        # 다음 재판정에도 함께 올라간다(slope_cells.json 과 같은 이유)
+        planes_json_path = None
+        planes_key = (stats_prev.get("artifacts") or {}).get("planes_json")
+        if planes_key:
+            planes_json_path = out_dir / "slope_planes.json"
+            if not storage.download_to(planes_key, planes_json_path):
+                raise ValueError(f"평면 데이터 파일을 저장소에서 찾을 수 없습니다: {planes_key}")
+            planes_json_path = str(planes_json_path)
         judged_stats = judge_slope_cells(cells, threshold, out_dir,
                                          drain_points=drain_points,
-                                         cell_m=cell_m, subcell_m=subcell_m)
+                                         cell_m=cell_m, subcell_m=subcell_m,
+                                         planes_json_path=planes_json_path)
         storage.upload_dir(f"artifacts/{analysis_id}", out_dir)
 
     # Task 3 리뷰 Important-3: previous_drain_points의 출처는 params가 아니라

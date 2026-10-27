@@ -48,6 +48,8 @@ export function SlopeResultTable({ results, designPct, dirPassDeg }: {
   const rows = [...results].sort((a, b) => (
     a.cell.cy - b.cell.cy || a.cell.cx - b.cell.cx
   ));
+  // 다면 기준평면으로 분석한 경우에만 셀이 속한 평면 열을 보인다
+  const showPlane = rows.some((r) => typeof r.cell.plane_id === 'number');
 
   return (
     // 열이 8개라 최소 폭 960px(아트보드 ScanSlope). 좁은 화면은 상자 안에서만 가로로 스크롤한다
@@ -55,6 +57,7 @@ export function SlopeResultTable({ results, designPct, dirPassDeg }: {
       <thead className={tableClass.thead}>
         <tr>
           <th scope="col" className={tableClass.th}>위치(cx,cy)</th>
+          {showPlane && <th scope="col" className={tableClass.th}>평면</th>}
           <th scope="col" className={tableClass.thNum}>구배(%)</th>
           <th scope="col" className={tableClass.thNum}>설계 대비 편차(%)</th>
           <th scope="col" className={tableClass.th}>보정</th>
@@ -71,6 +74,11 @@ export function SlopeResultTable({ results, designPct, dirPassDeg }: {
           return (
             <tr key={`${r.cell.cx},${r.cell.cy}`} className={tableClass.row}>
               <td className={`${tableClass.td} font-mono font-medium tabular-nums`}>({r.cell.cx}, {r.cell.cy})</td>
+              {showPlane && (
+                <td className={`${tableClass.td} font-mono`}>
+                  {typeof r.cell.plane_id === 'number' ? `P${r.cell.plane_id}` : '-'}
+                </td>
+              )}
               <td className={tableClass.tdNum}>{fmtPct(r.cell.slope_pct)}</td>
               <td className={tableClass.tdNum}>{fmtPct(r.dev_pct)}</td>
               <td className={`${tableClass.td} whitespace-nowrap`}>{correction ?? '-'}</td>

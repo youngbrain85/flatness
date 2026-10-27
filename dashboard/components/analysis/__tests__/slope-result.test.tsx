@@ -684,3 +684,38 @@ describe('SlopeResult 결과 구획 보강', () => {
     }
   });
 });
+
+describe('SlopeResult - 다면 기준평면 결과', () => {
+  const planes = {
+    requested: 4, found: 2, thr_mm: 5,
+    items: [
+      { plane_id: 1, area_m2: 16, centroid: [2, 4], slope_pct: 1.5, downhill_deg: 0, rmse_mm: 1.5, inlier_pct: 100,
+        se_pct: 0.001, run_m: 4, grade: '적합', reason: '크기·방향 모두 허용 안', dev_pct: 0.01, dir_err_deg: 0,
+        correction_mm: 0.4 },
+      { plane_id: 2, area_m2: 12, centroid: [6, 4], slope_pct: 3.2, downhill_deg: 180, rmse_mm: 2.1, inlier_pct: 97,
+        se_pct: 0.002, run_m: 4, grade: '재시공', reason: '설계 구배와의 편차가 재시공 기준을 넘음', dev_pct: 1.7,
+        dir_err_deg: 0, correction_mm: 68 },
+    ],
+  };
+
+  it('평면별 표와 평면 지도를 그린다', () => {
+    const s = { ...stats, planes, artifacts: { ...stats.artifacts, planes_png: 'artifacts/a1/slope_planes.png' } };
+    render(<SlopeResult analysis={analysisWith(s, { n_planes: 4 })} />);
+    expect(screen.getByRole('heading', { level: 3, name: '기준평면별 결과' })).toBeInTheDocument();
+    expect(screen.getByText(/요청 4개 · 찾은 평면 2개/)).toBeInTheDocument();
+    expect(screen.getByText('P1')).toBeInTheDocument();
+    expect(screen.getByText('P2')).toBeInTheDocument();
+    expect(screen.getByText('3.20')).toBeInTheDocument();
+    expect(screen.getByAltText('다면 기준평면 지도')).toHaveAttribute('src', '/api/data/artifacts/a1/slope_planes.png');
+  });
+
+  it('planes 가 없으면 구획을 그리지 않는다', () => {
+    render(<SlopeResult analysis={analysisWith(stats)} />);
+    expect(screen.queryByRole('heading', { name: '기준평면별 결과' })).toBeNull();
+  });
+
+  it('planes 형식이 깨졌으면 조용히 빼지 않고 알린다', () => {
+    render(<SlopeResult analysis={analysisWith({ ...stats, planes: { requested: 4 } })} />);
+    expect(screen.getByText(/기준평면 결과 형식이 올바르지 않아/)).toBeInTheDocument();
+  });
+});

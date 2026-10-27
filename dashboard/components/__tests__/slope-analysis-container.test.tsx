@@ -179,3 +179,39 @@ describe('구배 분석 3조각 변이 실험 보강 (T7)', () => {
     expect(container.querySelector('section')).toHaveClass('flex-[1_1_420px]');
   });
 });
+
+describe('기준평면 개수 입력 (다면 기준평면)', () => {
+  it('개수를 넣으면 analyses.params.n_planes 로 분석을 등록한다', async () => {
+    const insertSpy = vi.fn();
+    vi.mocked(createClient).mockReturnValue(stubSupabase(() => {}, insertSpy) as never);
+    renderPage({ userId: 'u1', showButton: true });
+    await waitFor(() => expect(screen.getByText('실내 평바닥')).toBeInTheDocument());
+
+    fireEvent.change(within(screen.getByTestId('cards')).getByLabelText('기준평면 개수'), { target: { value: '4' } });
+    fireEvent.click(within(screen.getByTestId('title-row')).getByRole('button', { name: '구배 분석' }));
+
+    await waitFor(() => expect(refreshMock).toHaveBeenCalled());
+    expect(insertSpy).toHaveBeenCalledWith(expect.objectContaining({ kind: 'slope', params: { n_planes: 4 } }));
+  });
+
+  it('비워 두면 params 를 넣지 않는다(셀 판정만)', async () => {
+    const insertSpy = vi.fn();
+    vi.mocked(createClient).mockReturnValue(stubSupabase(() => {}, insertSpy) as never);
+    renderPage({ userId: 'u1', showButton: true });
+    await waitFor(() => expect(screen.getByText('실내 평바닥')).toBeInTheDocument());
+
+    fireEvent.click(within(screen.getByTestId('title-row')).getByRole('button', { name: '구배 분석' }));
+    await waitFor(() => expect(refreshMock).toHaveBeenCalled());
+    expect(insertSpy.mock.calls[0][0]).not.toHaveProperty('params');
+  });
+
+  it('범위 밖 값이면 안내하고 버튼을 막는다', async () => {
+    vi.mocked(createClient).mockReturnValue(stubSupabase() as never);
+    renderPage({ userId: 'u1', showButton: true });
+    await waitFor(() => expect(screen.getByText('실내 평바닥')).toBeInTheDocument());
+
+    fireEvent.change(within(screen.getByTestId('cards')).getByLabelText('기준평면 개수'), { target: { value: '0' } });
+    expect(screen.getByText('1~20 사이 정수로 입력하세요.')).toBeInTheDocument();
+    expect(within(screen.getByTestId('title-row')).getByRole('button', { name: '구배 분석' })).toBeDisabled();
+  });
+});
