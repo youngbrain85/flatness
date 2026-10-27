@@ -52,6 +52,25 @@ def test_verdict_ignores_na_when_others_exist():
     assert slope_overall_verdict(_stats(_counts(적합=5, 판정불가=20))) == "pass"
 
 
+def _with_planes(stats, *grades):
+    stats["planes"] = {"requested": len(grades), "found": len(grades), "thr_mm": 5.0,
+                       "items": [{"plane_id": i + 1, "grade": g} for i, g in enumerate(grades)]}
+    return stats
+
+
+def test_verdict_counts_plane_grades():
+    # 셀이 모두 적합이어도 면 전체가 설계 구배를 벗어나면 종합 판정에 드러나야 한다
+    assert slope_overall_verdict(_with_planes(_stats(_counts(적합=10)), "적합", "재시공")) == "rework"
+    assert slope_overall_verdict(_with_planes(_stats(_counts(적합=10)), "보수")) == "repair"
+    # 셀이 더 나쁘면 셀 쪽이 이긴다(가장 나쁜 등급)
+    assert slope_overall_verdict(_with_planes(_stats(_counts(재시공=1)), "적합")) == "rework"
+    assert slope_overall_verdict(_with_planes(_stats(_counts(적합=10)), "적합")) == "pass"
+    # 셀이 전부 판정불가여도 평면 판정이 있으면 그것으로 낸다
+    assert slope_overall_verdict(_with_planes(_stats(_counts(판정불가=5), coverage=0.0), "경계")) == "borderline"
+    # 평면이 판정불가뿐이면 판정을 만들어내지 않는다
+    assert slope_overall_verdict(_with_planes(_stats(_counts(판정불가=5), coverage=0.0), "판정불가")) is None
+
+
 def test_normalize_replaces_absolute_artifact_paths():
     # 엔진은 스테이징 절대경로를 넣는데 그 디렉터리는 잡이 끝나면 지워진다.
     # DB에는 스펙 §6.3 규약의 버킷-상대 문자열만 저장해야 한다.

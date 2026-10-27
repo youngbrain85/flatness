@@ -32,7 +32,7 @@ export function SlopePlanesPanel({ stats }: { stats: SlopeStats }) {
           <p className="text-sm text-muted">
             요청 {planes.requested}개 · 찾은 평면 {planes.found}개
             {planes.thr_mm !== null && ` · 평면 문턱 ${fmt(planes.thr_mm, 1, 'mm')}`}
-            {' '}- 바닥 전체에 맞춘 면마다 설계 구배와 비교했습니다(셀별 결과는 아래 표).
+            {' '}- 바닥 전체에 맞춘 면마다 설계 구배와 비교했습니다. 종합 판정은 평면과 셀 판정 중 가장 나쁜 등급입니다(셀별 결과는 아래 표).
           </p>
           {png && (
             <Stage className="flex items-center justify-center p-4">

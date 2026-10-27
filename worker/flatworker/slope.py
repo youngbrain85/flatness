@@ -20,8 +20,15 @@ _WORST_FIRST = ("재시공", "보수", "경계")
 
 
 def slope_overall_verdict(stats):
-    """구배 stats -> 종합 판정. 평활도 overall_verdict와 같은 우선순위 규칙."""
-    counts = (stats.get("summary") or {}).get("counts") or {}
+    """구배 stats -> 종합 판정. 평활도 overall_verdict와 같은 우선순위 규칙.
+
+    다면 기준평면으로 분석했으면(stats.planes) 평면 판정도 셀 판정과 함께 센다 - 셀은 다 적합인데 면 전체가
+    설계 구배에서 벗어난 경우(국부 셀 창으로는 안 보이는 긴 경사 오차)를 종합 판정이 놓치지 않게 한다.
+    """
+    counts = dict((stats.get("summary") or {}).get("counts") or {})
+    for item in ((stats.get("planes") or {}).get("items") or []):
+        grade = item.get("grade")
+        counts[grade] = counts.get(grade, 0) + 1
     if not any(counts.get(g, 0) for g in _VERDICT):
         return None
     for grade in _WORST_FIRST:
