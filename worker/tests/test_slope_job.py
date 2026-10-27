@@ -9,7 +9,7 @@ from flatworker.artifacts import raw_scan_dir
 from flatworker.config import Config
 from flatworker.jobs import handle_analyze
 from flatworker.slope import (normalize_slope_stats, slope_context, slope_drain_points,
-                             slope_overall_verdict)
+                             slope_n_planes, slope_overall_verdict)
 from tests.fake_db import FakeDB
 from tests.synthetic_helpers import synthetic
 
@@ -50,6 +50,25 @@ def test_verdict_is_none_when_nothing_decidable():
 
 def test_verdict_ignores_na_when_others_exist():
     assert slope_overall_verdict(_stats(_counts(적합=5, 판정불가=20))) == "pass"
+
+
+def _with_planes(stats, *grades):
+    stats["planes"] = {"requested": len(grades), "found": len(grades), "thr_mm": 5.0,
+                       "items": [{"plane_id": i + 1, "grade": g} for i, g in enumerate(grades)]}
+    return stats
+
+
+def test_verdict_counts_plane_grades():
+    # 셀이 모두 적합이어도 면 전체가 설계 구배를 벗어나면 종합 판정에 드러나야 한다
+    assert slope_overall_verdict(_with_planes(_stats(_counts(적합=10)), "적합", "재시공")) == "rework"
+    assert slope_overall_verdict(_with_planes(_stats(_counts(적합=10)), "보수")) == "repair"
+    # 셀이 더 나쁘면 셀 쪽이 이긴다(가장 나쁜 등급)
+    assert slope_overall_verdict(_with_planes(_stats(_counts(재시공=1)), "적합")) == "rework"
+    assert slope_overall_verdict(_with_planes(_stats(_counts(적합=10)), "적합")) == "pass"
+    # 셀이 전부 판정불가여도 평면 판정이 있으면 그것으로 낸다
+    assert slope_overall_verdict(_with_planes(_stats(_counts(판정불가=5), coverage=0.0), "경계")) == "borderline"
+    # 평면이 판정불가뿐이면 판정을 만들어내지 않는다
+    assert slope_overall_verdict(_with_planes(_stats(_counts(판정불가=5), coverage=0.0), "판정불가")) is None
 
 
 def test_normalize_replaces_absolute_artifact_paths():
@@ -268,3 +287,41 @@ def test_handle_analyze_slope_keeps_flatness_current_analysis(slope_env_real_cri
 
     assert env.db.current_analysis[("scan1", "flatness")] == "flat-analysis"
     assert env.db.current_analysis[("scan1", "slope")] == env.slope_analysis_id
+
+
+def test_slope_n_planes_reads_params():
+    assert slope_n_planes(None) is None
+    assert slope_n_planes({}) is None
+    assert slope_n_planes({"n_planes": 4}) == 4
+    for bad in (0, 21, 2.5, "4", True):
+        with pytest.raises(ValueError):
+            slope_n_planes({"n_planes": bad})
+
+
+def test_handle_analyze_passes_n_planes_to_engine(monkeypatch, slope_job_env):
+    """대시보드가 analyses.params.n_planes 에 넣은 기준평면 개수가 엔진까지 간다."""
+    db = slope_job_env.db
+    aid = slope_job_env.slope_analysis_id
+    db.analyses[aid]["params"] = {"n_planes": 4}
+    called = {}
+
+    def fake_analyze_slope(path, scale_to_m, threshold, out_dir, **kw):
+        called["n_planes"] = kw.get("n_planes")
+        return _stats(_counts(적합=4))
+
+    monkeypatch.setattr("flatworker.slope.analyze_slope", fake_analyze_slope)
+    handle_analyze(db, slope_job_env.cfg, {"analysis_id": aid})
+    assert called["n_planes"] == 4
+
+
+def test_handle_analyze_real_engine_with_planes(slope_job_env):
+    """실제 엔진으로 n_planes 를 주면 stats.planes 와 평면 산출물 경로(버킷 상대)가 저장된다."""
+    db = slope_job_env.db
+    aid = slope_job_env.slope_analysis_id
+    db.analyses[aid]["params"] = {"n_planes": 1}
+    handle_analyze(db, slope_job_env.cfg, {"analysis_id": aid})
+    a = db.analyses[aid]
+    assert a["status"] == "done"
+    assert a["stats"]["planes"]["found"] == 1
+    assert a["stats"]["artifacts"]["planes_json"] == f"artifacts/{aid}/slope_planes.json"
+    assert a["stats"]["artifacts"]["planes_png"] == f"artifacts/{aid}/slope_planes.png"

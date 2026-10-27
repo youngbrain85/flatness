@@ -36,7 +36,8 @@ function isValidSlopeCellRow(row: unknown): row is SlopeCellRow {
     && isNumberOrNull(r.rmse_m) && isNumberOrNull(r.se_pct)
     && isFiniteNumber(r.width_m) && isFiniteNumber(r.height_m)
     && typeof r.ok === 'boolean'
-    && (r.zone_id === null || isFiniteNumber(r.zone_id));
+    && (r.zone_id === null || isFiniteNumber(r.zone_id))
+    && (r.plane_id === undefined || r.plane_id === null || isFiniteNumber(r.plane_id));
 }
 
 /** slope_cells.json으로 파싱된 원시 객체가 실제로 그 형태인지 내용으로 판별한다.

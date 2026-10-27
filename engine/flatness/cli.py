@@ -30,14 +30,16 @@ def main(argv=None):
     ij.add_argument("--out", type=Path, required=True)
     ij.add_argument("--criteria", default="floor-kcs-exposed")
     ij.add_argument("--uncertainty-mm", type=float, default=5.0)
-    sl = sub.add_parser("analyze-slope", help="2m 격자 구배 산출·판정 (세부과업 4)")
+    sl = sub.add_parser("analyze-slope", help="1m 격자·다면 기준평면 구배 산출·판정 (세부과업 4)")
     sl.add_argument("path", help="점군 파일(ply/las/laz/xyz/txt/csv/pts)")
     sl.add_argument("--units", choices=sorted(_SCALES),
                     help="좌표 단위. 없으면 감지 결과만 보여주고 exit 2 (자동 확정 금지)")
     sl.add_argument("--criteria", required=True,
                     help="설계기준 JSON: design_pct·pass_pct·re_pct·dir_pass_deg")
     sl.add_argument("--out", required=True, help="산출물 디렉터리")
-    sl.add_argument("--cell", type=float, default=2.0, help="분석 격자 크기(m, 기본 2.0)")
+    sl.add_argument("--cell", type=float, default=1.0, help="분석 격자 크기(m, 기본 1.0)")
+    sl.add_argument("--planes", type=int, default=None,
+                    help="기준평면 개수. 주면 바닥 전체에 이 개수만큼 평면을 맞춰 면 단위로도 판정한다")
     sl.add_argument("--drain", action="append", default=None,
                     help="배수구 위치 X,Y (여러 번 지정 가능). 없으면 방향 판정을 건너뛴다. "
                          "음수 좌표는 옵션으로 오인되니 --drain=-5,4 처럼 '='를 붙여 지정하세요")
@@ -107,7 +109,7 @@ def main(argv=None):
                 drains.append((float(sx), float(sy)))
         from flatness.core.pipeline import analyze_slope
         stats = analyze_slope(args.path, _SCALES[args.units], threshold, args.out,
-                              cell_m=args.cell, drain_points=drains)
+                              cell_m=args.cell, drain_points=drains, n_planes=args.planes)
         s = stats["summary"]
         # 전 셀 판정불가면 mean/max_dev_pct가 None이다(stats.py build_stats와 같은 관례).
         mean_txt = "N/A" if s["mean_dev_pct"] is None else f"{s['mean_dev_pct']:.3f}%p"
@@ -118,6 +120,12 @@ def main(argv=None):
         for k, v in s["counts"].items():
             if v:
                 print(f"  {k}: {v}")
+        pl = stats.get("planes")
+        if pl:
+            print(f"  기준평면 {pl['found']}개 (요청 {pl['requested']}개, 문턱 {pl['thr_mm']}mm)")
+            for it in pl["items"]:
+                print(f"    P{it['plane_id']}: {it['area_m2']}㎡  구배 {it['slope_pct']:.3f}%"
+                      f"  내리막 {it['downhill_deg']}도  {it['grade']}")
         for w in stats.get("warnings", []):
             print(f"  주의: {w}")
         return 0

@@ -11,7 +11,7 @@
 'use client';
 import { createContext, useContext, type ReactNode } from 'react';
 import {
-  ReanalyzeAction, SlopeCriteriaField, useReanalyze, type ReanalyzeControl,
+  ReanalyzeAction, SlopeCriteriaField, SlopePlanesField, useReanalyze, type ReanalyzeControl,
 } from '@/components/reanalyze-button';
 import { Container } from '@/components/ui/container';
 import { ANALYSIS_KIND_LABEL } from '@/lib/domain/labels';
@@ -68,7 +68,7 @@ export function SlopeAnalysisAction() {
   return ctl ? <ReanalyzeAction ctl={ctl} /> : null;
 }
 
-// '구배 분석' 카드: 적용 기준(버튼이 켜져 있을 때만) → 진행 상태·이전 이력(children).
+// '구배 분석' 카드: 적용 기준·기준평면 개수(버튼이 켜져 있을 때만) → 진행 상태·이전 이력(children).
 // 이미 완료된 구배 결과·이력은 버튼 없이도 계속 보인다(컨트롤러 보강 확정 5).
 export function SlopeAnalysisCard({ className, children }: { className?: string; children?: ReactNode }) {
   const ctl = useContext(SlopeAnalysisContext);
@@ -76,6 +76,7 @@ export function SlopeAnalysisCard({ className, children }: { className?: string;
     <Container title={TITLE} className={className}>
       <div className="flex flex-col gap-4">
         {ctl && <SlopeCriteriaField ctl={ctl} />}
+        {ctl && <SlopePlanesField ctl={ctl} />}
         {children}
       </div>
     </Container>

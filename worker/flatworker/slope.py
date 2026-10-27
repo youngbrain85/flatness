@@ -20,8 +20,15 @@ _WORST_FIRST = ("재시공", "보수", "경계")
 
 
 def slope_overall_verdict(stats):
-    """구배 stats -> 종합 판정. 평활도 overall_verdict와 같은 우선순위 규칙."""
-    counts = (stats.get("summary") or {}).get("counts") or {}
+    """구배 stats -> 종합 판정. 평활도 overall_verdict와 같은 우선순위 규칙.
+
+    다면 기준평면으로 분석했으면(stats.planes) 평면 판정도 셀 판정과 함께 센다 - 셀은 다 적합인데 면 전체가
+    설계 구배에서 벗어난 경우(국부 셀 창으로는 안 보이는 긴 경사 오차)를 종합 판정이 놓치지 않게 한다.
+    """
+    counts = dict((stats.get("summary") or {}).get("counts") or {})
+    for item in ((stats.get("planes") or {}).get("items") or []):
+        grade = item.get("grade")
+        counts[grade] = counts.get(grade, 0) + 1
     if not any(counts.get(g, 0) for g in _VERDICT):
         return None
     for grade in _WORST_FIRST:
@@ -38,6 +45,23 @@ def slope_drain_points(params):
     """
     pts = (params or {}).get("drain_points") or []
     return [(float(p["x"]), float(p["y"])) for p in pts] or None
+
+
+MAX_PLANES = 20   # 대시보드 입력 상한과 같다(slope-analysis 기준평면 개수)
+
+
+def slope_n_planes(params):
+    """analyses.params.n_planes -> 엔진의 n_planes(기준평면 개수). 없으면 None(다면 기준평면 분석 안 함).
+
+    대시보드가 1~MAX_PLANES 정수만 넣지만, 행을 직접 고친 경우 등 잘못된 값이면 조용히 무시하지 않고
+    거부한다 - 무시하면 사용자가 지정한 평면 판정이 빠진 채 분석이 '성공'으로 끝난다.
+    """
+    v = (params or {}).get("n_planes")
+    if v is None:
+        return None
+    if isinstance(v, bool) or not isinstance(v, int) or not 1 <= v <= MAX_PLANES:
+        raise ValueError(f"기준평면 개수는 1~{MAX_PLANES} 정수여야 합니다: {v!r}")
+    return v
 
 
 def drain_points_from_stats(stats):
@@ -174,7 +198,7 @@ def build_slope_judge_fields(stats, analysis_id, old_params, previous_drain_poin
 
 
 def run_slope_analysis(path, scale_to_m, threshold, out_dir, drain_points,
-                       analysis_id, criteria_row):
+                       analysis_id, criteria_row, n_planes=None):
     """엔진(analyze_slope) 호출 + analyses 행에 반영할 필드 dict 계산.
 
     analyze_floor/analyze_wall의 `_finalize`를 재사용하지 않는다 - 그 함수의
@@ -187,7 +211,7 @@ def run_slope_analysis(path, scale_to_m, threshold, out_dir, drain_points,
     화면과 함께 정한다 - 억지로 문장을 지어내지 않는다).
     """
     stats = analyze_slope(path, scale_to_m, threshold, out_dir,
-                          drain_points=drain_points)
+                          drain_points=drain_points, n_planes=n_planes)
     fields = {
         "status": "done",
         "stats": normalize_slope_stats(stats, analysis_id),

@@ -32,7 +32,9 @@ from flatness.core.slope import SlopeCell
 # 파일 구조(필드 구성)가 바뀔 때만 올린다. 2 -> cell_m/subcell_m 최상위 키 추가
 # (Task 1 리뷰 I1). 이 워크트리 안에서만 존재하던 산출물이라 과거 버전과의
 # 하위 호환은 고려하지 않는다(실제 배포 전이므로 기존 파일이 없다).
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
+# 3 -> 셀마다 plane_id(다면 기준평면 번호) 추가. 2 파일은 plane_id 가 없을 뿐 나머지가 같아 그대로 읽는다(plane_id=None)
+_READABLE_VERSIONS = (2, 3)
 
 # not ok인 셀에서 nan이 나오는 필드. compute_slope_cells가 판정 불가 셀에
 # float("nan")을 채우는 바로 그 네 필드다(slope.py 참고).
@@ -137,11 +139,11 @@ def load_slope_cells(path):
             f"필수 항목 누락 {missing}. schema_version {SCHEMA_VERSION} 형식의 "
             "slope_cells.json이어야 재판정할 수 있습니다."
         )
-    if payload["schema_version"] != SCHEMA_VERSION:
+    if payload["schema_version"] not in _READABLE_VERSIONS:
         raise ValueError(
             f"지원하지 않는 셀 데이터 파일 버전입니다({path}): "
             f"schema_version={payload['schema_version']!r} "
-            f"(이 엔진이 지원하는 버전은 {SCHEMA_VERSION}입니다)."
+            f"(이 엔진이 지원하는 버전은 {list(_READABLE_VERSIONS)}입니다)."
         )
 
     cells = [_row_to_cell(row) for row in payload["cells"]]

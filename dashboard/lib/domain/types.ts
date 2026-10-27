@@ -162,14 +162,33 @@ export interface SlopeStats {
   direction_judged: boolean;
   drain_points: [number, number][] | null;
   warnings: string[];
+  // 다면 기준평면(analyses.params.n_planes 로 요청한 분석에만 있다). 엔진 judge_slope_cells 의 stats.planes
+  planes?: SlopePlanesSummary;
   // cells_json은 재판정(§7.3) 입력이자 이 태스크(브라우저 히트맵)의 데이터 소스다.
   // judged_json은 셀별 판정 결과(§7.2 결과표·히트맵 등급)의 데이터 소스다. 단계
   // C까지 만들어진 분석에는 두 키 모두 없다(브리프 D7) - 옵셔널로 둬서 화면이
   // 그 부재를 명시적으로 다루게 강제한다(CSV 근사 복원 금지).
-  artifacts: { cells_json?: string; judged_json?: string; cells_csv: string; map_png: string };
+  artifacts: {
+    cells_json?: string; judged_json?: string; cells_csv: string; map_png: string;
+    planes_json?: string; planes_csv?: string; planes_png?: string;
+  };
 }
 
-// ---- slope_cells.json (engine/flatness/outputs/slope_cells.py 왕복 직렬화, schema_version=2)
+// ---- 다면 기준평면 판정 (engine/flatness/core/pipeline.py _judge_planes 반환) ----
+// 바닥 전체에 사용자가 정한 개수만큼 맞춘 평면마다 셀과 같은 규칙으로 판정한 결과다.
+export interface SlopePlaneItem {
+  plane_id: number; area_m2: number | null; centroid: [number | null, number | null];
+  slope_pct: number | null; downhill_deg: number | null; rmse_mm: number | null;
+  inlier_pct: number | null; se_pct: number | null; run_m: number | null;
+  grade: SlopeGrade; reason: string; dev_pct: number | null;
+  dir_err_deg: number | null; correction_mm: number | null;
+}
+
+export interface SlopePlanesSummary {
+  requested: number; found: number; thr_mm: number | null; items: SlopePlaneItem[];
+}
+
+// ---- slope_cells.json (engine/flatness/outputs/slope_cells.py 왕복 직렬화, schema_version=2·3)
 // 재판정 입력이자 화면 히트맵 재구성 입력. 판정 결과(grade 등)는 담지 않는다(브리프 D1) -
 // SlopeCell 13필드(기하 정보)만 반올림 없이 담긴다. slope_pct/downhill_rad/rmse_m/se_pct는
 // ok=false 셀에서 엔진이 NaN -> null로 치환해 낸다(_NAN_FIELDS).
@@ -178,6 +197,8 @@ export interface SlopeCellRow {
   slope_pct: number | null; downhill_rad: number | null;
   rmse_m: number | null; se_pct: number | null;
   width_m: number; height_m: number; ok: boolean; zone_id: number | null;
+  // schema 3: 셀이 주로 속한 다면 기준평면 번호. 다면 분석이 아니면 null, schema 2 파일에는 키가 없다
+  plane_id?: number | null;
 }
 
 export interface SlopeCellsFile {
@@ -214,6 +235,8 @@ export interface JudgeInfo {
 }
 
 export interface SlopeParams {
+  // 구배 분석 시작 때 사용자가 정한 기준평면 개수(워커 slope_n_planes). 없으면 셀 판정만 한다
+  n_planes?: number;
   drain_points?: DrainPoint[];
   judge?: JudgeInfo;
 }

@@ -236,7 +236,7 @@ def analyze_wall(path, scale_to_m, criterion, u_mm, out_dir,
 
 
 def judge_slope_cells(cells, threshold, out_dir, cell_m, drain_points=None,
-                      subcell_m=0.05, cells_json_path=None):
+                      subcell_m=0.05, cells_json_path=None, planes_json_path=None):
     """이미 산출된 셀 벡터 + 배수구 좌표로 판정만 다시 한다(점군 미열람, 스펙 §7.3).
 
     analyze_slope의 판정~산출물 단계(grade -> summary -> csv -> png -> stats.json)를
@@ -268,6 +268,10 @@ def judge_slope_cells(cells, threshold, out_dir, cell_m, drain_points=None,
     값들을 담지 않으므로(재판정 때 다시 계산되는 파생값이라 입력에 같이 담으면
     이중 진실이 된다) 결과 전용 파일을 분리했다. 자세한 설계 근거는
     outputs/slope_judged.py 모듈 독스트링 참고.
+
+    planes_json_path(slope_planes.json)를 주면 다면 기준평면도 셀과 같은 규칙으로 판정해
+    stats["planes"]·slope_planes.csv·slope_planes.png 를 낸다(평면 = 시공한 면 단위 판정, 셀 = 국부 판정).
+    slope_cells.json 처럼 이 함수는 평면 파일을 다시 쓰지 않는다.
     """
     import csv
     import json
@@ -288,12 +292,12 @@ def judge_slope_cells(cells, threshold, out_dir, cell_m, drain_points=None,
     csv_path = os.path.join(out_dir, "slope_cells.csv")
     with open(csv_path, "w", newline="", encoding="utf-8-sig") as f:
         w = csv.writer(f)
-        # width_m/height_m은 열 끝에만 추가한다(D1 CSV 보강) - 기존 사용자가
+        # width_m/height_m·plane_id는 열 끝에만 추가한다(D1 CSV 보강) - 기존 사용자가
         # 엑셀로 열었을 때 앞쪽 열 위치가 바뀌면 안 된다.
         w.writerow(["cx", "cy", "center_x_m", "center_y_m", "n_subcells",
                     "slope_pct", "downhill_deg", "dev_pct", "dir_err_deg",
                     "correction_mm", "rmse_mm", "se_pct", "grade", "reason",
-                    "width_m", "height_m"])
+                    "width_m", "height_m", "plane_id"])
         for g in graded:
             c = g["cell"]
             w.writerow([c.cx, c.cy, round(c.center_x, 3), round(c.center_y, 3),
@@ -301,7 +305,8 @@ def judge_slope_cells(cells, threshold, out_dir, cell_m, drain_points=None,
                         _r(g["dev_pct"]), _r(g["dir_err_deg"]),
                         _r(g["correction_mm"]), _r(c.rmse_m * 1000 if c.ok else float("nan")),
                         _r(c.se_pct), g["grade"], g["reason"],
-                        round(c.width_m, 3), round(c.height_m, 3)])
+                        round(c.width_m, 3), round(c.height_m, 3),
+                        "" if c.plane_id is None else c.plane_id])
 
     # render_slope_map의 drain_points 계약은 {"x":, "y":} dict 목록이다(대시보드
     # Canvas 배수구 화면과 형태를 맞춘 render_slope_map 자체 인터페이스). 이 함수의
@@ -349,6 +354,11 @@ def judge_slope_cells(cells, threshold, out_dir, cell_m, drain_points=None,
              "artifacts": {"cells_json": cells_json_path,
                            "judged_json": judged_json_path,
                            "cells_csv": csv_path, "map_png": png_path}}
+    if planes_json_path is not None:
+        stats["planes"] = _judge_planes(planes_json_path, threshold, out_dir, drain_points, warnings)
+        stats["artifacts"]["planes_json"] = planes_json_path
+        stats["artifacts"]["planes_csv"] = os.path.join(out_dir, "slope_planes.csv")
+        stats["artifacts"]["planes_png"] = os.path.join(out_dir, "slope_planes.png")
     stats_path = os.path.join(out_dir, "slope_stats.json")
     with open(stats_path, "w", encoding="utf-8") as f:
         # allow_nan=False: 위 summary가 nan을 흘리면(회귀) 여기서 즉시 터진다.
@@ -358,9 +368,57 @@ def judge_slope_cells(cells, threshold, out_dir, cell_m, drain_points=None,
     return stats
 
 
+def _judge_planes(planes_json_path, threshold, out_dir, drain_points, warnings):
+    """slope_planes.json -> 평면 판정 -> slope_planes.csv·png. stats["planes"] 에 실을 dict 를 돌려준다.
+
+    warnings 에 평면 관련 경고를 덧붙인다(요청보다 적은 평면을 찾은 경우)."""
+    import csv
+    import os
+
+    from flatness.core.slope import grade_planes
+    from flatness.outputs.slope_planes import load_slope_planes, render_slope_planes
+
+    planes, meta = load_slope_planes(planes_json_path)
+    graded = grade_planes(planes, threshold, drain_points=drain_points)
+    if len(planes) < meta["requested"]:
+        warnings.append(f"평면 {meta['requested']}개를 요청했지만 {len(planes)}개만 찾았습니다. "
+                        "나머지는 1㎡ 미만이거나 다른 평면과 구분되지 않습니다.")
+    with open(os.path.join(out_dir, "slope_planes.csv"), "w", newline="", encoding="utf-8-sig") as f:
+        w = csv.writer(f)
+        w.writerow(["plane_id", "area_m2", "centroid_x_m", "centroid_y_m", "slope_pct", "downhill_deg",
+                    "dev_pct", "dir_err_deg", "correction_mm", "rmse_mm", "inlier_pct", "se_pct", "run_m",
+                    "grade", "reason"])
+        for g in graded:
+            p = g["plane"]
+            w.writerow([p.plane_id, round(p.area_m2, 2), round(p.centroid_x, 3), round(p.centroid_y, 3),
+                        _r(p.slope_pct), _deg(p.downhill_rad), _r(g["dev_pct"]), _r(g["dir_err_deg"]),
+                        _r(g["correction_mm"]), _r(p.rmse_m * 1000), _r(p.inlier_pct, 1), _r(p.se_pct),
+                        round(p.run_m, 3), g["grade"], g["reason"]])
+    render_slope_planes(meta["labels"], graded, os.path.join(out_dir, "slope_planes.png"),
+                        meta["subcell_m"], meta["origin_m"], drain_points=drain_points)
+
+    def num(v, nd=4):
+        return None if v is None or (isinstance(v, float) and math.isnan(v)) else round(float(v), nd)
+
+    items = [{"plane_id": g["plane"].plane_id, "area_m2": num(g["plane"].area_m2, 2),
+              "centroid": [num(g["plane"].centroid_x, 3), num(g["plane"].centroid_y, 3)],
+              "slope_pct": num(g["plane"].slope_pct), "downhill_deg": num(math.degrees(g["plane"].downhill_rad), 1),
+              "rmse_mm": num(g["plane"].rmse_m * 1000, 2), "inlier_pct": num(g["plane"].inlier_pct, 1),
+              "se_pct": num(g["plane"].se_pct), "run_m": num(g["plane"].run_m, 3),
+              "grade": g["grade"], "reason": g["reason"], "dev_pct": num(g["dev_pct"]),
+              "dir_err_deg": num(g["dir_err_deg"], 1), "correction_mm": num(g["correction_mm"], 1)}
+             for g in graded]
+    return {"requested": meta["requested"], "found": len(planes),
+            "thr_mm": num(meta["thr_m"] * 1000, 2), "items": items}
+
+
 def analyze_slope(path, scale_to_m, threshold, out_dir, subcell_m=0.05,
-                  cell_m=2.0, chunk_size=2_000_000, drain_points=None):
-    """점군 -> 2m 격자 구배 산출 -> slope_cells.json 저장 -> 판정 -> 산출물(csv/png/json).
+                  cell_m=1.0, chunk_size=2_000_000, drain_points=None, n_planes=None):
+    """점군 -> 1m 격자 구배 산출 -> slope_cells.json 저장 -> 판정 -> 산출물(csv/png/json).
+
+    n_planes(사용자가 정한 평면 개수)를 주면 바닥 전체 서브셀에 그 개수만큼 기준평면을 한 번에 맞춰
+    (core/multiplane.py) 평면 단위 판정을 함께 내고, 셀마다 속한 평면 번호(plane_id)를 단다.
+    바닥이 아닌 칸(쌍봉·가구 상판·유령층 구역)은 평면 맞춤에서 뺀다(평활도 구역화와 같은 기준).
 
     평활도(analyze_floor)와 같은 스캔을 쓰지만 집계 단위와 판정 철학이 다르다.
     평활도는 "평면에서 얼마나 벗어났나", 구배는 "설계한 경사대로인가"다.
@@ -378,7 +436,19 @@ def analyze_slope(path, scale_to_m, threshold, out_dir, subcell_m=0.05,
     info = read_info(path, chunk_size=chunk_size)
     grid = build_subcell_grid(iter_chunks(path, chunk_size=chunk_size),
                               info, scale_to_m, subcell_m)
-    cells = compute_slope_cells(grid, cell_m=cell_m)
+    planes_json_path = None
+    plane_labels = None
+    if n_planes:
+        from flatness.core.multiplane import fit_floor_planes
+        from flatness.outputs.slope_planes import FILE_NAME as PLANES_FILE, dump_slope_planes
+        zmap, _ = build_zones(grid)
+        excluded = np.isin(zmap.labels, [z.zone_id for z in zmap.zones if z.status != "ok"])
+        floor = np.isfinite(grid.median_z) & ~grid.bimodal & ~excluded
+        fit = fit_floor_planes(grid.median_z, floor, grid.size_m, int(n_planes), origin=grid.origin)
+        plane_labels = fit.labels
+        planes_json_path = os.path.join(out_dir, PLANES_FILE)
+        dump_slope_planes(fit, planes_json_path, subcell_m, grid.origin)
+    cells = compute_slope_cells(grid, cell_m=cell_m, plane_labels=plane_labels)
 
     # 재판정(§7.3) 입력. 점군을 다시 읽지 않고 이 파일만 읽어 판정하려면
     # 반올림 없는 원본 셀 벡터가 그대로 남아 있어야 한다(브리프 D1). cell_m·
@@ -390,4 +460,5 @@ def analyze_slope(path, scale_to_m, threshold, out_dir, subcell_m=0.05,
 
     return judge_slope_cells(cells, threshold, out_dir, cell_m,
                              drain_points=drain_points, subcell_m=subcell_m,
-                             cells_json_path=cells_json_path)
+                             cells_json_path=cells_json_path,
+                             planes_json_path=planes_json_path)

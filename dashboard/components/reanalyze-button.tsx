@@ -38,9 +38,10 @@ import { createClient } from '@/lib/supabase/client';
 import { enqueueJob } from '@/lib/domain/jobs';
 import { ANALYSIS_KIND_LABEL } from '@/lib/domain/labels';
 import { isDirectionAwareCriteria } from '@/lib/domain/slope-direction';
+import { MAX_PLANES, parsePlaneCount } from '@/lib/domain/slope-planes';
 import type { AnalysisKind, AnalysisStatus, CriteriaRow, SlopeThreshold, Surface } from '@/lib/domain/types';
 import { Button } from '@/components/ui/button';
-import { checkClass } from '@/components/ui/form';
+import { FormField, checkClass, inputClass } from '@/components/ui/form';
 
 interface Props {
   scanId: string;
@@ -85,6 +86,10 @@ export function useReanalyze({
   const [slopeCriteria, setSlopeCriteria] = useState<CriteriaRow[]>([]);
   const [slopeCriteriaId, setSlopeCriteriaId] = useState('');
   const [criteriaLoadError, setCriteriaLoadError] = useState<string | null>(null);
+  // 다면 기준평면 개수(구배 전용). 빈칸이면 지금처럼 셀 판정만 한다. 값은 analyses.params.n_planes 로
+  // 들어가고 워커가 엔진 n_planes 로 넘긴다(worker/flatworker/slope.py slope_n_planes)
+  const [planesText, setPlanesText] = useState('');
+  const nPlanes = kind === 'slope' ? parsePlaneCount(planesText) : null;
 
   useEffect(() => {
     if (kind !== 'slope' || !siteId) return;
@@ -147,11 +152,17 @@ export function useReanalyze({
       setError('적용 기준을 확인할 수 없습니다.');
       return;
     }
+    if (nPlanes === 'invalid') {
+      setBusy(false);
+      setError(`기준평면 개수는 1~${MAX_PLANES} 사이 정수로 입력하세요.`);
+      return;
+    }
 
     // 1) 새 분석 행 생성(kind를 명시한다 - DB 기본값에 기대면 나중에 기본값이
     // 바뀔 때 조용히 의미가 바뀐다)
     const { data: analysis, error: insErr } = await supabase.from('analyses').insert({
       scan_id: scanId, surface, kind, criteria_id: resolvedCriteriaId, status: 'queued', created_by: userId,
+      ...(nPlanes ? { params: { n_planes: nPlanes } } : {}),
     }).select('id').single();
     if (insErr || !analysis) {
       setBusy(false);
@@ -179,10 +190,10 @@ export function useReanalyze({
 
   return {
     scanId, kind, busy, error, inProgress, slopeCriteria, slopeCriteriaId, setSlopeCriteriaId,
-    criteriaLoadError, onClick,
+    criteriaLoadError, onClick, planesText, setPlanesText, planesInvalid: nPlanes === 'invalid',
     label: `${ANALYSIS_KIND_LABEL[kind]} 분석`,
     // 구배는 기준을 고르기 전에는 누를 수 없다(빈 criteria_id로 분석을 시작하지 않는다).
-    disabled: busy || inProgress || (kind === 'slope' && !slopeCriteriaId),
+    disabled: busy || inProgress || (kind === 'slope' && (!slopeCriteriaId || nPlanes === 'invalid')),
   };
 }
 
@@ -248,6 +259,24 @@ export function SlopeCriteriaField({ ctl }: { ctl: ReanalyzeControl }) {
         <p role="alert" className="text-[13px] text-err">{ctl.criteriaLoadError}</p>
       )}
     </>
+  );
+}
+
+// 다면 기준평면 개수 입력(구배 분석 카드, 적용 기준 아래). 빈칸 = 셀 판정만.
+export function SlopePlanesField({ ctl }: { ctl: ReanalyzeControl }) {
+  const id = useId();
+  if (ctl.kind !== 'slope') return null;
+  return (
+    <div className="max-w-xs">
+      <FormField label="기준평면 개수" htmlFor={id}
+        description={`바닥을 이루는 면 수(예: 배수구로 모이는 4면이면 4). 지정하면 바닥 전체에 그 수만큼 평면을 맞춰 면 단위로도 판정합니다. 비우면 1m 셀 판정만 합니다.`}
+        error={ctl.planesInvalid ? `1~${MAX_PLANES} 사이 정수로 입력하세요.` : undefined}>
+        <input id={id} type="number" inputMode="numeric" min={1} max={MAX_PLANES} step={1}
+          placeholder="비우면 셀 판정만" value={ctl.planesText}
+          onChange={(e) => ctl.setPlanesText(e.target.value)} disabled={ctl.busy || ctl.inProgress}
+          aria-invalid={ctl.planesInvalid || undefined} className={inputClass} />
+      </FormField>
+    </div>
   );
 }
 
